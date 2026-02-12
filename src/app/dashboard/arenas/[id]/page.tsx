@@ -1,0 +1,362 @@
+"use client"
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+    PlusCircle,
+    ArrowLeft,
+    Eye,
+    MoreVertical,
+    Edit,
+    Trash2,
+    Search
+} from "lucide-react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
+import { ArenaService } from "@/modules/arenas/services/arenaService";
+import { CourtService } from "@/modules/courts/services/courtService";
+import { CourtForm } from "@/modules/courts/components/CourtForm";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog"
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import Image from "next/image";
+import { cn } from "@/lib/utils";
+
+export default function ArenaDetailPage() {
+    const params = useParams();
+    const id = params.id as string;
+    const [arena, setArena] = useState<any>(null);
+    const [courts, setCourts] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [selectedSpace, setSelectedSpace] = useState<any>(null);
+    const [activeTab, setActiveTab] = useState<"espacos" | "cadastro">("espacos");
+    const [searchQuery, setSearchQuery] = useState("");
+
+    const loadData = async () => {
+        try {
+            const [arenaData, courtsData] = await Promise.all([
+                ArenaService.getArenaById(id),
+                CourtService.getCourtsByArena(id)
+            ]);
+            setArena(arenaData);
+            setCourts(courtsData);
+        } catch (error) {
+            toast.error("Erro ao carregar dados.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (id) loadData();
+    }, [id]);
+
+    const handleDeleteCourt = async (courtId: string) => {
+        if (confirm("Deseja realmente excluir esta quadra?")) {
+            try {
+                await CourtService.deleteCourt(courtId);
+                setCourts(courts.filter(c => c.id !== courtId));
+                toast.success("Quadra excluída!");
+            } catch (error) {
+                toast.error("Erro ao excluir quadra.");
+            }
+        }
+    }
+
+    if (isLoading) {
+        return (
+            <div className="space-y-6">
+                <Skeleton className="h-8 w-64" />
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                    {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-48 w-full" />)}
+                </div>
+            </div>
+        );
+    }
+
+    if (!arena) return <div>Arena não encontrada.</div>;
+
+    return (
+        <div className="space-y-8">
+            {/* Header Area */}
+            <div className="flex flex-col gap-1">
+                <h1 className="text-3xl font-black text-[#002B40] tracking-tight">Arena</h1>
+                <p className="text-[#002B40]/60 font-medium">Gerencie quadras, reservas e disponibilidades.</p>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex items-center border-b border-[#002B40]/10 gap-8">
+                <button
+                    onClick={() => setActiveTab("espacos")}
+                    className={cn(
+                        "pb-4 font-bold text-sm transition-all relative",
+                        activeTab === "espacos" ? "text-[#002B40]" : "text-[#002B40]/40"
+                    )}
+                >
+                    Espaços
+                    {activeTab === "espacos" && (
+                        <div className="absolute bottom-0 left-0 w-full h-0.5 bg-[#20B2AA]" />
+                    )}
+                </button>
+                <button
+                    onClick={() => setActiveTab("cadastro")}
+                    className={cn(
+                        "pb-4 font-bold text-sm transition-all relative",
+                        activeTab === "cadastro" ? "text-[#002B40]" : "text-[#002B40]/40"
+                    )}
+                >
+                    Cadastro
+                    {activeTab === "cadastro" && (
+                        <div className="absolute bottom-0 left-0 w-full h-0.5 bg-[#20B2AA]" />
+                    )}
+                </button>
+            </div>
+
+            {activeTab === "espacos" && (
+                <div className="space-y-6">
+                    {courts.length === 0 ? (
+                        <Card className="bg-white/50 border-dashed border-2 py-20 flex flex-col items-center justify-center">
+                            <PlusCircle className="h-12 w-12 text-[#002B40]/20 mb-4" />
+                            <p className="text-[#002B40]/40 font-medium text-lg">Nenhum espaço cadastrado aqui.</p>
+                        </Card>
+                    ) : (
+                        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                            {courts.map((court) => (
+                                <Card key={court.id} className="overflow-hidden border-none shadow-lg rounded-xl group relative">
+                                    <div className="aspect-[16/9] relative bg-muted">
+                                        <Image
+                                            src={court.image_url || "/placeholder-court.jpg"}
+                                            alt={court.name}
+                                            fill
+                                            className="object-cover group-hover:scale-105 transition-transform duration-500"
+                                        />
+                                    </div>
+                                    <CardContent className="p-0">
+                                        <div className="bg-[#FFC145] p-5 relative">
+                                            <div className="flex justify-between items-start mb-1">
+                                                <h4 className="font-bold text-[#002B40] text-lg">{court.name}</h4>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-[#002B40]/60 hover:bg-black/5">
+                                                            <MoreVertical className="h-4 w-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuItem asChild>
+                                                            <Link href={`/dashboard/arenas/${id}/spaces/${court.id}/edit`} className="w-full cursor-pointer flex items-center">
+                                                                <Edit className="mr-2 h-4 w-4" /> Editar
+                                                            </Link>
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteCourt(court.id)}>
+                                                            <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </div>
+
+                                            <div className="flex items-end justify-between">
+                                                <div>
+                                                    <div className="text-[#002B40] font-black text-2xl flex items-baseline gap-1">
+                                                        5 <span className="text-sm font-bold opacity-60">/ 12 reservas</span>
+                                                    </div>
+                                                    <span className="text-[#002B40] text-xs font-bold opacity-60 tracking-tight">hoje</span>
+                                                </div>
+                                                <button className="text-[#002B40]/60 hover:text-[#002B40] transition-colors">
+                                                    <Eye className="h-5 w-5" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </CardContent>
+                                    {court.status === 'inativo' && (
+                                        <div className="absolute top-2 right-2">
+                                            <Badge variant="secondary" className="bg-black/50 text-white backdrop-blur-sm">Inativo</Badge>
+                                        </div>
+                                    )}
+                                </Card>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {activeTab === "cadastro" && (
+                <div className="space-y-8">
+                    {/* Espaços List Card */}
+                    <Card className="p-8 border-none shadow-lg rounded-xl bg-white">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                            <div>
+                                <h3 className="text-2xl font-bold text-[#002B40]">Espaços Cadastrados</h3>
+                                <p className="text-[#002B40]/60">Gerencie quadras, reservas e disponibilidades.</p>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#002B40]/40" />
+                                    <Input
+                                        placeholder="Buscar espaço..."
+                                        className="pl-9 w-[240px] border-[#002B40]/10"
+                                        value={searchQuery}
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
+                                    />
+                                </div>
+                                <Button className="bg-[#FF6B00] hover:bg-[#E66000] text-white font-bold" asChild>
+                                    <Link href={`/dashboard/arenas/${id}/spaces/new`}>
+                                        Cadastrar Espaço +
+                                    </Link>
+                                </Button>
+                            </div>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="border-b border-[#002B40]/5">
+                                        <th className="py-4 font-bold text-xs uppercase tracking-wider text-[#002B40]/40">Nome</th>
+                                        <th className="py-4 font-bold text-xs uppercase tracking-wider text-[#002B40]/40">Tipo</th>
+                                        <th className="py-4 font-bold text-xs uppercase tracking-wider text-[#002B40]/40">Status</th>
+                                        <th className="py-4 font-bold text-xs uppercase tracking-wider text-[#002B40]/40">Coberta/Descoberta</th>
+                                        <th className="py-4 font-bold text-xs uppercase tracking-wider text-[#002B40]/40 text-right">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {courts.filter(c =>
+                                        c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                        c.type.toLowerCase().includes(searchQuery.toLowerCase())
+                                    ).map((court) => (
+                                        <tr key={court.id} className="border-b border-[#002B40]/5 hover:bg-[#F8FAFC] transition-colors">
+                                            <td className="py-4 font-bold text-[#002B40]">{court.name}</td>
+                                            <td className="py-4 text-[#002B40]/60 text-sm font-medium">
+                                                {court.sports?.map((s: any) => s.name).join(", ") || court.type}
+                                            </td>
+                                            <td className="py-4">
+                                                <Badge className={cn(
+                                                    "font-bold text-[10px] uppercase h-5",
+                                                    court.status === 'ativo' ? "bg-[#FFC145]/20 text-[#002B40] hover:bg-[#FFC145]/30 border-none" :
+                                                        court.status === 'Em manutenção' ? "bg-orange-100 text-orange-700 hover:bg-orange-100 border-none" :
+                                                            "bg-gray-100 text-gray-500 hover:bg-gray-100 border-none"
+                                                )}>
+                                                    {court.status}
+                                                </Badge>
+                                            </td>
+                                            <td className="py-4 text-[#002B40]/60 text-sm font-medium">
+                                                {court.is_covered ? "Coberto" : "Descoberto"}
+                                            </td>
+                                            <td className="py-4 text-right">
+                                                <div className="flex items-center justify-end gap-2">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        asChild
+                                                        className="h-8 w-8 text-[#002B40]/60 bg-[#F1F5F9] hover:bg-[#E2E8F0]"
+                                                    >
+                                                        <Link href={`/dashboard/arenas/${id}/spaces/${court.id}/edit`}>
+                                                            <Edit className="h-4 w-4" />
+                                                        </Link>
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        onClick={() => handleDeleteCourt(court.id)}
+                                                        className="h-8 w-8 text-[#FF6B00]/60 bg-[#FF6B00]/10 hover:bg-[#FF6B00]/20 hover:text-[#FF6B00]"
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        onClick={() => setSelectedSpace(court)}
+                                                        className="h-8 w-8 text-teal-600/60 bg-teal-50 hover:bg-teal-100 hover:text-teal-600"
+                                                    >
+                                                        <Eye className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                            {courts.length === 0 && (
+                                <div className="text-center py-20 text-[#002B40]/40">
+                                    Nenhum espaço cadastrado.
+                                </div>
+                            )}
+                        </div>
+                    </Card>
+                </div>
+            )}
+
+            {/* View Space Modal */}
+            <Dialog open={!!selectedSpace} onOpenChange={() => setSelectedSpace(null)}>
+                <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="text-2xl font-black text-[#002B40]">{selectedSpace?.name}</DialogTitle>
+                    </DialogHeader>
+                    {selectedSpace && (
+                        <div className="grid gap-6 py-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold uppercase text-[#002B40]/40 tracking-wider">Status</label>
+                                    <p className="font-bold text-[#002B40]">{selectedSpace.status}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold uppercase text-[#002B40]/40 tracking-wider">Tipo do espaço</label>
+                                    <p className="font-bold text-[#002B40]">{selectedSpace.type}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold uppercase text-[#002B40]/40 tracking-wider">Esporte</label>
+                                    <p className="font-bold text-[#002B40]">{selectedSpace.sports?.map((s: any) => s.name).join(", ")}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold uppercase text-[#002B40]/40 tracking-wider">Coberta/Descoberta</label>
+                                    <p className="font-bold text-[#002B40]">{selectedSpace.is_covered ? "Coberta" : "Descoberta"}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold uppercase text-[#002B40]/40 tracking-wider">Valor da reserva</label>
+                                    <p className="font-bold text-[#002B40]">R$ {selectedSpace.price.toFixed(2)}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold uppercase text-[#002B40]/40 tracking-wider">Tipo de reserva</label>
+                                    <p className="font-bold text-[#002B40]">{selectedSpace.booking_type === 'hourly' ? 'Por hora' : 'Único'}</p>
+                                </div>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-bold uppercase text-[#002B40]/40 tracking-wider">Dias disponíveis</label>
+                                <p className="text-sm font-medium text-[#002B40]/80">{selectedSpace.available_days?.join(", ")}</p>
+                            </div>
+                            {selectedSpace.observations && (
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold uppercase text-[#002B40]/40 tracking-wider">Observações</label>
+                                    <p className="text-sm font-medium text-[#002B40]/80">{selectedSpace.observations}</p>
+                                </div>
+                            )}
+                            <div className="flex gap-4 pt-4">
+                                <Button variant="outline" className="flex-1" onClick={() => setSelectedSpace(null)}>Fechar</Button>
+                                <Button className="flex-1 bg-[#FF6B00] hover:bg-[#E66000]" asChild>
+                                    <Link href={`/dashboard/arenas/${id}/spaces/${selectedSpace.id}/edit`}>
+                                        Editar
+                                    </Link>
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
+
+        </div>
+    );
+}

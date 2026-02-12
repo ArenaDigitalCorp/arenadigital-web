@@ -8,7 +8,7 @@
 **Arquitetura:** API-first  
 **Infraestrutura:** Serverless  
 
-O Arena Digital – Web é um sistema SaaS voltado exclusivamente para **gestores de arenas esportivas**, permitindo a administração completa de arenas, quadras, horários, usuários e indicadores operacionais.
+O Arena Digital – Web é um sistema SaaS voltado exclusivamente para **gestores de arenas esportivas**, permitindo a administração completa de arenas, quadras, espaços recreativos(salão de festas, churrasqueiras, etc), horários, usuários e indicadores operacionais.
 
 O acesso ao sistema ocorre por meio de login, disponível a partir da landing page pública do Arena Digital.
 
@@ -47,10 +47,13 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
 - Gestão de usuários (gestores e atletas)
 - Relatórios básicos
 - Configurações da arena
-
-### Fora do Escopo (MVP)
 - Pagamentos online
 - Integração com gateways
+- Gestão de produtos
+- Gestão de caixas
+- Gestão de estações
+
+### Fora do Escopo (MVP)
 - Marketplace
 - Multi-idioma
 - White-label
@@ -65,6 +68,7 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
 - Logout
 - Proteção de rotas autenticadas
 - Controle de acesso por perfil (RBAC)
+- Esqueci minha senha (recuperação de senha)
 
 ---
 
@@ -80,21 +84,31 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
 
 ### 5.3 Gestão de Arenas
 - Cadastro de arena
-- Edição de dados da arena
-- Ativação/desativação
-- Informações gerais:
   - Nome
-  - Endereço
-  - Horário de funcionamento
+  - Status (Aberto / Fechado / Fechado Temporariamente)
+  - Esportes (Futebol, Vôlei, Beach Tennis, Paddle, Tênis, Futevôlei, etc)
+  - Dias de funcionamento e horário
+  - Endereço (Cep, Cidade, Estado, Bairro, Rua, Número, Complemento)
+  - Telefone
+  - Email
+- Edição de dados da arena
+- Nome da Moeda Digital
 
 ---
 
 ### 5.4 Gestão de Quadras
 - Cadastro de quadras
-- Tipo de quadra (futebol, paddle, tênis, etc.)
+- Tipo de quadra (beach tennis, volei, futevolei, futebol, paddle, tênis, etc.)
 - Capacidade
-- Status (ativa/inativa)
+- Status (Ativa / Inativa / Em manutenção)
 - Associação com arena
+- Preço da quadra atribuido a dia e horario
+- Atributos da quadra
+  - Coberta
+  - Descoberta
+  - Areia
+  - Grama
+  - Piso Sintético
 
 ---
 
@@ -103,6 +117,14 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
 - Visualização de agenda por quadra
 - Bloqueio de horários
 - Visualização de reservas feitas por atletas
+- Possibilidade de cancelar reservas
+- Possibilidade de alterar reservas
+- Possibilidade de prorrogar reservas
+- Possibilidade de remarcar reservas  
+- Possibilidade de adicionar créditos a atletas
+- Possibilidade de remover créditos de atletas
+- Possibilidade marcar agendamento avulso e recorrente
+- Atribuir uma reserva a uma pessoa responsável e a um grupo (opcional)  
 
 ---
 
@@ -111,6 +133,7 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
 - Associação de atletas à arena
 - Gestão de gestores secundários
 - Definição de permissões
+- Possibilidade de convidar atletas para a arena
 
 ---
 
@@ -118,6 +141,60 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
 - Uso das quadras por período
 - Horários mais utilizados
 - Quantidade de reservas
+
+---
+
+### 5.8 Gestão de Estações (Bar - Loja)
+- Cadastro de estações
+- Edição de dados da estação
+- Ativação/desativação
+- Informações gerais:
+  - Nome
+  - Status (Ativo / Em manutenção / Desativado)
+  - Tipo (Bar / Loja / Outros)
+- Associação com arena
+- Uma Estação pode ter mais de uma caixa
+
+---
+
+### 5.8.1 Gestão de Caixas
+- Cadastro de caixas
+- Cada caixa está vinculado a uma estação
+- Edição de dados da caixa
+- Ativação/desativação
+- Dentro do caixa é possível lançar itens de consumo (produtos e serviços)
+- No caixa posso lançar uma comanda que contem itens de consumo
+  - Abrir nova comanda:
+    - Seleciono o cliente
+    - Seleciono os itens (Listagem de itens de consumo daquela Arena)
+    - Seleciono a quantidade
+
+---
+
+### 5.8.2 Registrar Pagamento
+- Para registrar o pagamento, visualizo todas as comandas abertas dentro de um determinado caixa
+- Com a comanda selecionada, visualizo os itens, quantidade por iten, valor unitário e valor total
+- Posso registrar o pagamento da comanda
+- Para registrar o pagamento:
+  - Seleciono o método de pagamento
+  - Informo o valor pago
+  - Informo a forma de pagamento
+  - Informo Observação (se houver)
+  - Confirmo o pagamento
+- Após confirmar o pagamento, a comanda é fechada
+
+---
+
+### 5.9 Gestão de Produtos
+- Cadastro de produtos
+- Edição de dados do produto
+- Ativação/desativação
+- Informações gerais:
+  - Nome
+  - Tipo (Alimentação / Bebida / Vestimenta / Acessório)
+  - Status (Em Estoque / Em Falta)
+  - Valor (valor unitário)
+- Associação com arena
 
 ---
 
