@@ -169,4 +169,43 @@ export class ArenaService {
         const data = await response.json();
         return data.url;
     }
+    static async getFirstArenaByOrganizationUser(userId: string) {
+        // 1. Find the organization owned by the user
+        const { data: orgs, error: orgError } = await supabase
+            .from('organizations')
+            .select('id')
+            .eq('owner_id', userId)
+            .limit(1);
+
+        if (orgError) {
+            console.error('Error fetching organization:', orgError);
+            throw orgError;
+        }
+
+        if (!orgs || orgs.length === 0) {
+            console.warn('No organization found for user:', userId);
+            return null;
+        }
+
+        const organizationId = orgs[0].id;
+
+        // 2. Find the first arena linked to this organization
+        const { data: arenas, error: arenaError } = await supabase
+            .from('arenas')
+            .select('*')
+            .eq('organization_id', organizationId)
+            .limit(1);
+
+        if (arenaError) {
+            console.error('Error fetching arena for organization:', arenaError);
+            throw arenaError;
+        }
+
+        if (!arenas || arenas.length === 0) {
+            console.warn('No arena found for organization:', organizationId);
+            return null;
+        }
+
+        return arenas[0];
+    }
 }

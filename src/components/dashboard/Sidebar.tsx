@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { Logo } from "@/components/shared/Logo";
 import { useSidebar } from "@/contexts/SidebarContext";
 
@@ -34,6 +35,7 @@ const sidebarItems = [
 export function Sidebar({ className }: { className?: string }) {
     const pathname = usePathname();
     const { isCollapsed, toggleSidebar } = useSidebar();
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
     return (
         <div className={cn(
@@ -108,16 +110,45 @@ export function Sidebar({ className }: { className?: string }) {
                                 variant="ghost"
                                 className={cn(
                                     "w-full transition-colors flex items-center",
-                                    isCollapsed ? "justify-center px-0" : "justify-between text-white/70 hover:text-white hover:bg-white/10"
+                                    isCollapsed ? "justify-center px-0" : "justify-between text-white/70 hover:text-white hover:bg-white/10",
+                                    (pathname.includes("/settings")) && "text-[#FFC145] bg-white/5"
                                 )}
+                                onClick={() => !isCollapsed && setIsSettingsOpen(!isSettingsOpen)}
                                 title={isCollapsed ? "Configurações" : ""}
                             >
                                 <div className="flex items-center">
                                     <Settings className={cn("h-5 w-5", !isCollapsed && "mr-3")} />
                                     {!isCollapsed && <span className="font-medium text-sm">Configurações</span>}
                                 </div>
-                                {!isCollapsed && <ChevronDown className="h-4 w-4 opacity-50" />}
+                                {!isCollapsed && (
+                                    <ChevronDown
+                                        className={cn(
+                                            "h-4 w-4 opacity-50 transition-transform duration-200",
+                                            isSettingsOpen && "transform rotate-180"
+                                        )}
+                                    />
+                                )}
                             </Button>
+
+                            {/* Settings Submenu */}
+                            {!isCollapsed && isSettingsOpen && (
+                                <div className="mt-1 ml-4 space-y-1 border-l border-white/10 pl-2">
+                                    <Button
+                                        variant="ghost"
+                                        asChild
+                                        className={cn(
+                                            "w-full justify-start h-9 text-sm font-normal",
+                                            pathname.startsWith("/dashboard/settings/products")
+                                                ? "text-[#FFC145] bg-white/5"
+                                                : "text-white/60 hover:text-white hover:bg-white/5"
+                                        )}
+                                    >
+                                        <Link href="/dashboard/settings/products">
+                                            Produtos
+                                        </Link>
+                                    </Button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
