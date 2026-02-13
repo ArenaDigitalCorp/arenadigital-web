@@ -42,21 +42,12 @@ export default function Page() {
                                 socialButtonsBlockButton: "bg-white border-none",
                                 socialButtonsBlockButtonText: "text-gray-900 font-medium",
                                 alert: "bg-red-500/10 border-red-500/20 text-red-200",
+                                formFieldAction: "text-[#FF6B00] hover:text-[#E66000] font-medium text-sm no-underline hover:underline",
                             },
                         }}
                         routing="path"
                         path="/sign-in"
                     />
-                </div>
-
-                {/* Footer Link */}
-                <div className="mt-6">
-                    <Link
-                        href="/forgot-password"
-                        className="text-white/80 hover:text-white underline text-sm"
-                    >
-                        Esqueci minha senha
-                    </Link>
                 </div>
             </div>
         </div>

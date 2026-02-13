@@ -23,12 +23,12 @@ export default function LandingPage() {
             Simplifique agendamentos, controle pagamentos e fidelize atletas com a plataforma mais moderna do mercado.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <SignUpButton mode="modal">
-              <Button size="lg" className="h-12 px-8 text-lg">
-                Criar Conta Grátis
+            <Link href="/sign-in">
+              <Button size="lg" className="h-14 px-10 text-lg bg-[#FF6B00] hover:bg-[#E66000] text-white font-bold rounded-xl shadow-xl shadow-[#FF6B00]/20 transition-all">
+                Entrar na Plataforma
               </Button>
-            </SignUpButton>
-            <Button size="lg" variant="outline" className="h-12 px-8 text-lg">
+            </Link>
+            <Button size="lg" variant="outline" className="h-14 px-10 text-lg border-[#002B40]/10 text-[#002B40] hover:bg-gray-100 rounded-xl">
               Ver Demonstração
             </Button>
           </div>
@@ -96,11 +96,11 @@ export default function LandingPage() {
               <p className="text-lg opacity-90 mb-8 max-w-2xl mx-auto">
                 Junte-se a centenas de gestores que já modernizaram suas arenas com o Arena Digital.
               </p>
-              <SignUpButton mode="modal">
-                <Button size="lg" variant="secondary" className="h-12 px-8 text-lg font-semibold">
-                  Começar Gratuitamente
+              <Link href="/sign-in">
+                <Button size="lg" variant="secondary" className="h-14 px-10 text-lg font-bold bg-white text-[#FF6B00] hover:bg-gray-100 rounded-xl shadow-xl">
+                  Acessar Agora
                 </Button>
-              </SignUpButton>
+              </Link>
             </div>
 
             {/* Decorative background elements */}
@@ -114,7 +114,11 @@ export default function LandingPage() {
       <footer className="border-t py-12 bg-background">
         <div className="container mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="flex items-center gap-2">
-            <span className="text-xl font-bold">Arena Digital</span>
+            <img
+              src="/logo_arena_front_bgbranco.png"
+              alt="Arena Digital Logo"
+              className="h-8 w-auto object-contain"
+            />
           </div>
           <p className="text-sm text-muted-foreground">
             © {new Date().getFullYear()} Arena Digital. Todos os direitos reservados.

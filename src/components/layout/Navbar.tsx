@@ -8,9 +8,11 @@ export function Navbar() {
         <header className="fixed top-0 w-full border-b bg-background/80 backdrop-blur-md z-50">
             <div className="container mx-auto px-4 h-16 flex items-center justify-between">
                 <Link href="/" className="flex items-center gap-2">
-                    <span className="text-xl font-bold bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent">
-                        Arena Digital
-                    </span>
+                    <img
+                        src="/logo_arena_front_bgbranco.png"
+                        alt="Arena Digital"
+                        className="h-10 w-auto object-contain"
+                    />
                 </Link>
 
                 <nav className="hidden md:flex items-center gap-6">
@@ -28,15 +30,10 @@ export function Navbar() {
                 <div className="flex items-center gap-4">
                     <SignedOut>
                         <Link href="/sign-in">
-                            <Button variant="ghost" size="sm">
+                            <Button className="h-10 px-6 bg-[#FF6B00] hover:bg-[#E66000] text-white font-bold rounded-lg shadow-lg shadow-[#FF6B00]/20 transition-all">
                                 Entrar
                             </Button>
                         </Link>
-                        <SignUpButton mode="modal">
-                            <Button size="sm">
-                                Começar Grátis
-                            </Button>
-                        </SignUpButton>
                     </SignedOut>
                     <SignedIn>
                         <Link href="/dashboard">

@@ -32,7 +32,7 @@ const sidebarItems = [
     { icon: Users, label: "Atletas", href: "/dashboard/athletes" },
 ];
 
-export function Sidebar({ className }: { className?: string }) {
+export function Sidebar({ className, onNavItemClick }: { className?: string, onNavItemClick?: () => void }) {
     const pathname = usePathname();
     const { isCollapsed, toggleSidebar } = useSidebar();
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -54,7 +54,7 @@ export function Sidebar({ className }: { className?: string }) {
                             variant="ghost"
                             size="icon"
                             onClick={toggleSidebar}
-                            className="text-white/50 hover:text-white hover:bg-white/10"
+                            className="text-white/50 hover:text-white hover:bg-white/10 md:flex hidden"
                         >
                             {isCollapsed ? (
                                 <Menu className="h-6 w-6" />
@@ -92,6 +92,7 @@ export function Sidebar({ className }: { className?: string }) {
                                         isActive && isCollapsed && "text-[#FFC145] bg-white/10"
                                     )}
                                     asChild
+                                    onClick={onNavItemClick}
                                 >
                                     <Link href={item.href} title={isCollapsed ? item.label : ""}>
                                         <item.icon className={cn(
@@ -142,6 +143,7 @@ export function Sidebar({ className }: { className?: string }) {
                                                 ? "text-[#FFC145] bg-white/5"
                                                 : "text-white/60 hover:text-white hover:bg-white/5"
                                         )}
+                                        onClick={onNavItemClick}
                                     >
                                         <Link href="/dashboard/settings/products">
                                             Produtos
