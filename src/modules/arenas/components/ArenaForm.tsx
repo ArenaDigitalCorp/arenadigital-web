@@ -40,8 +40,15 @@ const arenaFormSchema = z.object({
     email: z.string().email().optional().or(z.literal('')),
     description: z.string().optional(),
     banner_url: z.string().optional(),
-    address: z.any().optional(),
+    address: z.string().min(2, "O logradouro é obrigatório."),
+    number: z.string().optional(),
+    complement: z.string().optional(),
+    city: z.string().optional(),
+    state: z.string().max(2, "UF deve ter no máximo 2 caracteres.").optional(),
     zip_code: z.string().optional(),
+    facebook: z.string().optional(),
+    instagram: z.string().optional(),
+    tiktok: z.string().optional(),
     opening_hours: z.any().optional(),
 })
 
@@ -90,6 +97,13 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
             banner_url: initialData?.banner_url || "",
             zip_code: initialData?.zip_code || "",
             address: typeof initialData?.address === 'string' ? initialData.address : initialData?.address?.street || "",
+            number: initialData?.number || "",
+            complement: initialData?.complement || "",
+            city: initialData?.city || "",
+            state: initialData?.state || "",
+            facebook: initialData?.facebook || "",
+            instagram: initialData?.instagram || "",
+            tiktok: initialData?.tiktok || "",
             opening_hours: initialData?.opening_hours || {
                 weekdays: { start: "06:00", end: "23:00" },
                 weekends: { start: "06:00", end: "23:00" }
@@ -231,19 +245,48 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
                             )}
                         />
 
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div className="md:col-span-3">
+                                <FormField
+                                    control={form.control}
+                                    name="address"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Logradouro</FormLabel>
+                                            <FormControl>
+                                                <Input placeholder="Rua, Avenida, etc." {...field} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
+                            <div className="md:col-span-1">
+                                <FormField
+                                    control={form.control}
+                                    name="number"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Número</FormLabel>
+                                            <FormControl>
+                                                <Input placeholder="123" {...field} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
+                        </div>
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <FormField
                                 control={form.control}
-                                name="address" // Assuming simple string for now or we need a complex address field? 
-                                // Schema check: address is 'any' in service, but form schema didn't have it?
-                                // Let's add 'address' (string) to schema for now or keep it simple.
-                                // The design showed "Endereço" and "CEP".
-                                // I will add a simple text input for address for now.
+                                name="complement"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Endereço</FormLabel>
+                                        <FormLabel>Complemento</FormLabel>
                                         <FormControl>
-                                            <Input placeholder="Informe o endereço" {...field} value={field.value?.street || field.value || ''} onChange={e => field.onChange(e.target.value)} />
+                                            <Input placeholder="Sala, Bloco, etc." {...field} />
                                         </FormControl>
                                         <FormMessage />
                                     </FormItem>
@@ -251,17 +294,95 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
                             />
                             <FormField
                                 control={form.control}
-                                name="zip_code" // Not in schema yet, handling flexibly
+                                name="zip_code"
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>CEP</FormLabel>
                                         <FormControl>
-                                            <Input placeholder="Informe o CEP" {...field} />
+                                            <Input placeholder="00000-000" {...field} />
                                         </FormControl>
                                         <FormMessage />
                                     </FormItem>
                                 )}
                             />
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div className="md:col-span-3">
+                                <FormField
+                                    control={form.control}
+                                    name="city"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Cidade</FormLabel>
+                                            <FormControl>
+                                                <Input placeholder="Informe a cidade" {...field} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
+                            <div className="md:col-span-1">
+                                <FormField
+                                    control={form.control}
+                                    name="state"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Estado</FormLabel>
+                                            <FormControl>
+                                                <Input placeholder="UF" {...field} maxLength={2} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="pt-4 border-t border-gray-100">
+                            <h3 className="text-lg font-semibold text-[#002B40] mb-4">Redes Sociais</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <FormField
+                                    control={form.control}
+                                    name="facebook"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Facebook</FormLabel>
+                                            <FormControl>
+                                                <Input placeholder="Link ou @usuario" {...field} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="instagram"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Instagram</FormLabel>
+                                            <FormControl>
+                                                <Input placeholder="Link ou @usuario" {...field} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="tiktok"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>TikTok</FormLabel>
+                                            <FormControl>
+                                                <Input placeholder="Link ou @usuario" {...field} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
                         </div>
 
                         {/* Opening Hours - Placeholder for now as complex object */}

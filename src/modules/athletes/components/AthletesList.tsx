@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from "react"
 import {
     Search,
-    Pencil,
     Trash2,
     ChevronLeft,
     ChevronRight,
@@ -123,9 +122,6 @@ export function AthletesList({ arenaId }: AthletesListProps) {
                                             </TableCell>
                                             <TableCell className="text-right">
                                                 <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-[#FF6B00] hover:text-[#E66000] hover:bg-[#FF6B00]/10">
-                                                        <Pencil className="h-4 w-4" />
-                                                    </Button>
                                                     <Button variant="ghost" size="icon" className="h-8 w-8 text-[#FF6B00] hover:text-[#E66000] hover:bg-[#FF6B00]/10">
                                                         <Trash2 className="h-4 w-4" />
                                                     </Button>

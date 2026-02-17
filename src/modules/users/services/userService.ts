@@ -104,4 +104,19 @@ export class UserService {
 
         return data;
     }
+
+    static async getUserByEmail(email: string) {
+        const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('email', email)
+            .maybeSingle();
+
+        if (error) {
+            console.error('Error fetching user by email:', error);
+            throw error;
+        }
+
+        return data;
+    }
 }

@@ -29,6 +29,7 @@ const sidebarItems = [
     { icon: CreditCard, label: "Financeiro", href: "/dashboard/finance" },
     { icon: Store, label: "Estações", href: "/dashboard/stations" },
     { icon: Trophy, label: "Programa de fidelidade", href: "/dashboard/loyalty" },
+    { icon: Activity, label: "Rotativo", href: "/dashboard/rotativo" },
     { icon: Users, label: "Atletas", href: "/dashboard/athletes" },
 ];
 

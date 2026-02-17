@@ -12,6 +12,13 @@ export interface ArenaInput {
     description?: string;
     banner_url?: string;
     zip_code?: string;
+    number?: string;
+    complement?: string;
+    city?: string;
+    state?: string;
+    facebook?: string;
+    instagram?: string;
+    tiktok?: string;
     nome_moeda_virtual?: string;
 }
 

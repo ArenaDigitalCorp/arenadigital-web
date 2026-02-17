@@ -15,6 +15,7 @@ import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { NewSendModal } from "@/modules/loyalty/components/NewSendModal"
 import { NewRedemptionModal } from "@/modules/loyalty/components/NewRedemptionModal"
+import Link from "next/link"
 
 export default function FidelityPage() {
     const { user } = useUser()
@@ -134,13 +135,15 @@ export default function FidelityPage() {
                         Faça a gestão da sua moeda de fidelidade.
                     </p>
                 </div>
-                <Button
-                    variant="outline"
-                    className="border-[#FF6B00] text-[#FF6B00] hover:bg-[#FF6B00] hover:text-white gap-2 px-6 py-6 h-auto text-base rounded-lg font-semibold transition-all"
-                >
-                    Ver extrato
-                    <History className="h-5 w-5" />
-                </Button>
+                <Link href="/dashboard/loyalty/statement">
+                    <Button
+                        variant="outline"
+                        className="border-[#FF6B00] text-[#FF6B00] hover:bg-[#FF6B00] hover:text-white gap-2 px-6 py-6 h-auto text-base rounded-lg font-semibold transition-all"
+                    >
+                        Ver extrato
+                        <History className="h-5 w-5" />
+                    </Button>
+                </Link>
             </div>
 
             {/* Main Content Grid */}
@@ -274,9 +277,11 @@ export default function FidelityPage() {
                             })
                         )}
                         <div className="p-4 text-center">
-                            <Button variant="link" className="text-[#FF6B00] font-semibold hover:no-underline">
-                                Ver tudo
-                            </Button>
+                            <Link href="/dashboard/loyalty/top-athletes">
+                                <Button variant="link" className="text-[#FF6B00] font-semibold hover:no-underline">
+                                    Ver tudo
+                                </Button>
+                            </Link>
                         </div>
                     </CardContent>
                 </Card>

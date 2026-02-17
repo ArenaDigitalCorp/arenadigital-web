@@ -198,3 +198,39 @@ export async function getTopAthletesAction() {
         return { success: false, error: error.message || "Erro ao buscar top atletas" }
     }
 }
+export async function getAthletesWithBalanceAction(page = 1, pageSize = 10, query?: string) {
+    try {
+        const { userId: clerkId } = await auth()
+        if (!clerkId) return { success: false, error: "Não autorizado" }
+
+        const dbUser = await UserService.getUserByClerkId(clerkId)
+        if (!dbUser) return { success: false, error: "Usuário não encontrado" }
+
+        const arena = await ArenaService.getFirstArenaByOrganizationUser(dbUser.id)
+        if (!arena) return { success: false, error: "Arena não encontrada" }
+
+        const result = await LoyaltyService.getAthletesWithBalance(arena.id, page, pageSize, query)
+        return { success: true, ...result }
+    } catch (error: any) {
+        console.error("Error in getAthletesWithBalanceAction:", error)
+        return { success: false, error: error.message || "Erro ao buscar atletas" }
+    }
+}
+export async function getStatementAction(page = 1, pageSize = 10, filters?: { athleteName?: string, startDate?: string, endDate?: string }) {
+    try {
+        const { userId: clerkId } = await auth()
+        if (!clerkId) return { success: false, error: "Não autorizado" }
+
+        const dbUser = await UserService.getUserByClerkId(clerkId)
+        if (!dbUser) return { success: false, error: "Usuário não encontrado" }
+
+        const arena = await ArenaService.getFirstArenaByOrganizationUser(dbUser.id)
+        if (!arena) return { success: false, error: "Arena não encontrada" }
+
+        const result = await LoyaltyService.getStatement(arena.id, page, pageSize, filters)
+        return { success: true, ...result }
+    } catch (error: any) {
+        console.error("Error in getStatementAction:", error)
+        return { success: false, error: error.message || "Erro ao buscar extrato" }
+    }
+}

@@ -34,6 +34,10 @@ interface Booking {
     end_time: string;
     status: 'confirmed' | 'cancelled' | 'pending';
     price?: number;
+    sports?: {
+        id: string;
+        name: string;
+    };
 }
 
 export default function CourtCalendarPage() {
@@ -368,6 +372,59 @@ export default function CourtCalendarPage() {
     );
 }
 
+const getSportStyles = (sportName: string) => {
+    const normalizedName = sportName.toLowerCase();
+
+    if (normalizedName.includes('beach tennis')) {
+        return {
+            bg: 'bg-[#FFF7ED]',
+            border: 'border-[#FB923C]',
+            text: 'text-[#C2410C]',
+            textSecondary: 'text-[#C2410C]/60'
+        };
+    }
+    if (normalizedName.includes('futev') || normalizedName.includes('futevôlei')) {
+        return {
+            bg: 'bg-[#EFF6FF]',
+            border: 'border-[#60A5FA]',
+            text: 'text-[#1D4ED8]',
+            textSecondary: 'text-[#1D4ED8]/60'
+        };
+    }
+    if (normalizedName.includes('vôlei') || normalizedName.includes('volei')) {
+        return {
+            bg: 'bg-[#FEFCE8]',
+            border: 'border-[#FACC15]',
+            text: 'text-[#A16207]',
+            textSecondary: 'text-[#A16207]/60'
+        };
+    }
+    if (normalizedName.includes('tênis') || normalizedName.includes('tenis')) {
+        return {
+            bg: 'bg-[#F0FDF4]',
+            border: 'border-[#4ADE80]',
+            text: 'text-[#15803D]',
+            textSecondary: 'text-[#15803D]/60'
+        };
+    }
+    if (normalizedName.includes('padel')) {
+        return {
+            bg: 'bg-[#FAF5FF]',
+            border: 'border-[#C084FC]',
+            text: 'text-[#7E22CE]',
+            textSecondary: 'text-[#7E22CE]/60'
+        };
+    }
+
+    // Default
+    return {
+        bg: 'bg-[#F1F5F9]',
+        border: 'border-[#94A3B8]',
+        text: 'text-[#334155]',
+        textSecondary: 'text-[#334155]/60'
+    };
+};
+
 function TimeSlot({ date, hour, booking, available, court, className, onClick }: { date: Date, hour: number, booking?: Booking, available: boolean, court: Court, className?: string, onClick?: () => void }) {
     if (!available) {
         return (
@@ -382,18 +439,24 @@ function TimeSlot({ date, hour, booking, available, court, className, onClick }:
         const isStart = hour === startH;
         const isEnd = hour === endH - 1;
 
+        const sportStyles = getSportStyles(booking.sports?.name || court.sports?.[0]?.name || '');
+
         return (
             <div className={cn("px-1", className)} onClick={onClick}>
                 <div className={cn(
-                    "w-full h-full bg-[#F3E5C6] flex flex-col items-center justify-center gap-0.5 cursor-pointer hover:brightness-95 transition-all border-l-4 border-[#D9B575]",
+                    "w-full h-full flex flex-col items-center justify-center gap-0.5 cursor-pointer hover:brightness-95 transition-all border-l-4",
+                    sportStyles.bg,
+                    sportStyles.border,
                     isStart ? "rounded-t pt-2" : "border-t-transparent",
                     isEnd ? "rounded-b pb-2" : "border-b-transparent"
                 )}>
                     {isStart && (
                         <>
-                            <span className="text-[9px] font-black uppercase text-[#8C6D34] tracking-wider leading-none">Reservado</span>
-                            <span className="text-[11px] font-bold text-[#59441F] text-center line-clamp-1 px-1">{booking.athlete_name}</span>
-                            <span className="text-[9px] font-bold text-[#8C6D34] leading-none">{court.sports?.[0]?.name || 'Esporte'}</span>
+                            <span className={cn("text-[9px] font-black uppercase tracking-wider leading-none", sportStyles.textSecondary)}>Reservado</span>
+                            <span className={cn("text-[11px] font-bold text-center line-clamp-1 px-1", sportStyles.text)}>
+                                {booking.athlete_name} {booking.price !== undefined && `| R$ ${booking.price}`}
+                            </span>
+                            <span className={cn("text-[9px] font-bold leading-none", sportStyles.textSecondary)}>{booking.sports?.name || court.sports?.[0]?.name || 'Esporte'}</span>
                         </>
                     )}
                 </div>

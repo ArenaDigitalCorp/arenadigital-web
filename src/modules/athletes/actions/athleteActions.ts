@@ -33,6 +33,12 @@ export async function linkAthlete(formData: {
             return { success: false, error: "Arena não vinculada ao gestor. Certifique-se de que sua arena está cadastrada." };
         }
 
+        // 1.1 Check if email already exists
+        const existingUser = await UserService.getUserByEmail(formData.email);
+        if (existingUser) {
+            return { success: false, error: "Este e-mail já está cadastrado no sistema." };
+        }
+
         // 2. Create User in Clerk
         // Note: Using await clerk since createClerkClient might return a promise or the client depending on version
         const client = await clerk;

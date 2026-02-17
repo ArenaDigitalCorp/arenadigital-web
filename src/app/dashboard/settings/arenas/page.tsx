@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PlusCircle, MapPin, Edit, Trash2, Phone, Mail, ArrowLeft } from "lucide-react";
+import { MapPin, Edit, Trash2, Phone, Mail, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArenaService } from "@/modules/arenas/services/arenaService";
@@ -67,12 +67,6 @@ export default function SettingsArenasPage() {
                         Edite as informações das suas arenas cadastradas.
                     </p>
                 </div>
-                <Link href="/dashboard/arenas/new">
-                    <Button className="bg-[#FF6B00] hover:bg-[#E66000] text-white gap-2 font-bold">
-                        <PlusCircle className="h-4 w-4" />
-                        Nova Arena
-                    </Button>
-                </Link>
             </div>
 
             {arenas.length === 0 ? (
