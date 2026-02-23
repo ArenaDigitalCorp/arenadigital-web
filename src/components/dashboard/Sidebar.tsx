@@ -159,6 +159,22 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                         asChild
                                         className={cn(
                                             "w-full justify-start h-9 text-sm font-normal",
+                                            (pathname.startsWith("/dashboard/settings/arenas") || isEditingArena)
+                                                ? "text-[#FFC145] bg-white/5"
+                                                : "text-white/60 hover:text-white hover:bg-white/5"
+                                        )}
+                                        onClick={onNavItemClick}
+                                    >
+                                        <Link href="/dashboard/settings/arenas">
+                                            Arena
+                                        </Link>
+                                    </Button>
+
+                                    <Button
+                                        variant="ghost"
+                                        asChild
+                                        className={cn(
+                                            "w-full justify-start h-9 text-sm font-normal",
                                             pathname.startsWith("/dashboard/settings/products")
                                                 ? "text-[#FFC145] bg-white/5"
                                                 : "text-white/60 hover:text-white hover:bg-white/5"
@@ -175,14 +191,14 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                         asChild
                                         className={cn(
                                             "w-full justify-start h-9 text-sm font-normal",
-                                            (pathname.startsWith("/dashboard/settings/arenas") || isEditingArena)
+                                            pathname.startsWith("/dashboard/settings/users")
                                                 ? "text-[#FFC145] bg-white/5"
                                                 : "text-white/60 hover:text-white hover:bg-white/5"
                                         )}
                                         onClick={onNavItemClick}
                                     >
-                                        <Link href="/dashboard/settings/arenas">
-                                            Arena
+                                        <Link href="/dashboard/settings/users">
+                                            Usuários
                                         </Link>
                                     </Button>
                                 </div>
