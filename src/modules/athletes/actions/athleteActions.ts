@@ -70,7 +70,8 @@ export async function linkAthlete(formData: {
         // 5. Link to Arena
         await AthleteService.linkToArena({
             id_arena: arena.id,
-            id_atleta: atleta.id
+            id_atleta: atleta.id,
+            origem: 'web'
         });
 
         // 6. Link to Sport

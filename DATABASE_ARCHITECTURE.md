@@ -33,9 +33,13 @@ As Arenas representam os estabelecimentos cadastrados no sistema.
 - **Como o App Mobile deve buscar Arenas:**
   Para listar as arenas considerando a distância do usuário, o App deve invocar a **RPC** `search_arenas_by_proximity(user_lat, user_lng, max_distance_meters)`. Essa função do Supabase retorna a lista de arenas 'ativo' ordenadas pela proximidade real. O payload inclui o valor de `dist_meters`, o array `sports` de modalidades e o array `comodidades`. Para apresentar a localidade (Cidade/Estado), o App usará o `municipio_id` retornado pela RPC para fazer um join posterior com a tabela `municipios` e `estados`.
 
-### 2.1.1. Arenas Favoritas (`atleta_arena_favoritos`)
-Mantém o registro das arenas que um atleta favoritou no aplicativo.
-- **Funcionalidade no App:** O atleta pode favoritar/desfavoritar uma arena para acesso rápido.
+### 2.1.1. Arenas Favoritas (`atleta_arena_favoritos`) e Vínculos (`arenas_atleta`)
+Mantém o registro das arenas que um atleta favoritou no aplicativo e os vínculos entre arenas e atletas.
+- **Funcionalidade no App:** O atleta pode favoritar/desfavoritar uma arena para acesso rápido (salvo em `atleta_arena_favoritos`). Além disso, ao favoritar, o sistema também cria uma vinculação caso não exista na tabela principal de vínculos (`arenas_atleta`).
+- **Tabela `arenas_atleta` (Vínculo Principal):**
+  - Vincula um atleta a uma arena.
+  - **`origem` (Enum: `web`, `aplicativo`):** Identifica se o vínculo foi criado pelo gestor da arena convidando o atleta (`web`) ou se o atleta buscou a arena e a marcou como favorita (`aplicativo`). Quando favoritar no aplicativo, o valor preenchido deve ser `aplicativo`.
+- **Tabela `atleta_arena_favoritos`: (Apenas Favoritos)**
 - **Tabela `atleta_arena_favoritos`:**
   - `id` (uuid, primary key)
   - `id_atleta` (uuid, foreign key para `atleta.id`)
