@@ -14,12 +14,13 @@ export interface ArenaInput {
     zip_code?: string;
     number?: string;
     complement?: string;
-    city?: string;
-    state?: string;
+    municipio_id?: number;
     facebook?: string;
     instagram?: string;
     tiktok?: string;
     nome_moeda_virtual?: string;
+    neighborhood?: string;
+    location?: any;
 }
 
 export class ArenaService {

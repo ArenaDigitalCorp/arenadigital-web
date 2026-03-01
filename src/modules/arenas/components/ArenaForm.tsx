@@ -26,9 +26,15 @@ import { toast } from "sonner"
 import { ArenaService } from "@/modules/arenas/services/arenaService"
 import { useRouter } from "next/navigation"
 import { ImageUpload } from "@/components/ui/image-upload"
+import { supabase } from "@/shared/database/supabaseClient"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { Check, ChevronsUpDown } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { SportService, Sport } from "@/modules/courts/services/sportService"
 import { useEffect, useState } from "react"
 import { Textarea } from "@/components/ui/textarea"
+import { Switch } from "@/components/ui/switch"
 
 const arenaFormSchema = z.object({
     name: z.string().min(2, {
@@ -41,18 +47,40 @@ const arenaFormSchema = z.object({
     description: z.string().optional(),
     banner_url: z.string().optional(),
     address: z.string().min(2, "O logradouro é obrigatório."),
+    neighborhood: z.string().optional(),
     number: z.string().optional(),
     complement: z.string().optional(),
-    city: z.string().optional(),
-    state: z.string().max(2, "UF deve ter no máximo 2 caracteres.").optional(),
+    municipio_id: z.number({ message: "O município é obrigatório" }),
     zip_code: z.string().optional(),
     facebook: z.string().optional(),
     instagram: z.string().optional(),
     tiktok: z.string().optional(),
-    opening_hours: z.any().optional(),
+    opening_hours: z.record(
+        z.string(),
+        z.object({
+            isOpen: z.boolean(),
+            start: z.string(),
+            end: z.string(),
+        })
+    ).optional(),
 })
 
 type ArenaFormValues = z.infer<typeof arenaFormSchema>
+
+export const DAYS_OF_WEEK = [
+    { value: "0", label: "Domingo" },
+    { value: "1", label: "Segunda-feira" },
+    { value: "2", label: "Terça-feira" },
+    { value: "3", label: "Quarta-feira" },
+    { value: "4", label: "Quinta-feira" },
+    { value: "5", label: "Sexta-feira" },
+    { value: "6", label: "Sábado" },
+];
+
+export const DEFAULT_OPENING_HOURS = DAYS_OF_WEEK.reduce((acc, day) => {
+    acc[day.value] = { isOpen: true, start: "06:00", end: "23:00" };
+    return acc;
+}, {} as Record<string, { isOpen: boolean; start: string; end: string }>);
 
 interface ArenaFormProps {
     initialData?: any
@@ -73,6 +101,12 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
     const [bannerFile, setBannerFile] = useState<File | null>(null)
     const [isUploading, setIsUploading] = useState(false)
 
+    const [estados, setEstados] = useState<any[]>([])
+    const [municipios, setMunicipios] = useState<any[]>([])
+    const [selectedEstadoId, setSelectedEstadoId] = useState<number | null>(null)
+    const [isEstadoOpen, setIsEstadoOpen] = useState(false)
+    const [isMunicipioOpen, setIsMunicipioOpen] = useState(false)
+
     useEffect(() => {
         async function loadSports() {
             try {
@@ -82,8 +116,41 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
                 console.error("Failed to load sports:", error)
             }
         }
+        async function loadEstados() {
+            try {
+                const { data } = await supabase.from('estados').select('*').order('nome')
+                if (data) setEstados(data)
+
+                if (initialData?.municipio_id) {
+                    const { data: munData } = await supabase.from('municipios').select('*').eq('codigo_ibge', initialData.municipio_id).single()
+                    if (munData) {
+                        setSelectedEstadoId(munData.codigo_uf)
+                        setTimeout(() => form.setValue("municipio_id", initialData.municipio_id), 100)
+                    }
+                }
+            } catch (error) {
+                console.error("Failed to load states:", error)
+            }
+        }
         loadSports()
-    }, [])
+        loadEstados()
+    }, [initialData?.municipio_id])
+
+    useEffect(() => {
+        async function loadMunicipios() {
+            if (!selectedEstadoId) {
+                setMunicipios([])
+                return
+            }
+            try {
+                const { data } = await supabase.from('municipios').select('*').eq('codigo_uf', selectedEstadoId).order('nome')
+                if (data) setMunicipios(data)
+            } catch (error) {
+                console.error("Failed to load cities:", error)
+            }
+        }
+        loadMunicipios()
+    }, [selectedEstadoId])
 
     const form = useForm<ArenaFormValues>({
         resolver: zodResolver(arenaFormSchema) as any,
@@ -97,19 +164,74 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
             banner_url: initialData?.banner_url || "",
             zip_code: initialData?.zip_code || "",
             address: typeof initialData?.address === 'string' ? initialData.address : initialData?.address?.street || "",
+            neighborhood: initialData?.neighborhood || "",
             number: initialData?.number || "",
             complement: initialData?.complement || "",
-            city: initialData?.city || "",
-            state: initialData?.state || "",
+            municipio_id: typeof initialData?.municipio_id === 'number' ? initialData.municipio_id : undefined,
             facebook: initialData?.facebook || "",
             instagram: initialData?.instagram || "",
             tiktok: initialData?.tiktok || "",
-            opening_hours: initialData?.opening_hours || {
-                weekdays: { start: "06:00", end: "23:00" },
-                weekends: { start: "06:00", end: "23:00" }
-            }
+            opening_hours: (initialData?.opening_hours && !initialData.opening_hours.weekdays)
+                ? initialData.opening_hours
+                : DEFAULT_OPENING_HOURS
         },
     })
+
+    async function fetchAddressByCep(cep: string) {
+        const cleanCep = cep.replace(/\D/g, '');
+        if (cleanCep.length !== 8) return;
+
+        try {
+            const res = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+            const data = await res.json();
+
+            if (data.erro) {
+                toast.error("CEP não encontrado.");
+                return;
+            }
+
+            form.setValue("address", data.logradouro, { shouldValidate: true, shouldDirty: true });
+            form.setValue("neighborhood", data.bairro, { shouldValidate: true, shouldDirty: true });
+
+            // Tentar setar estado e cidade pelo UF e IBGE
+            const estadoEncontrado = estados.find(e => e.uf === data.uf);
+            if (estadoEncontrado) {
+                setSelectedEstadoId(estadoEncontrado.codigo_uf);
+
+                // Precisamos buscar os municipios desse estado para setar a cidade
+                const { data: muns } = await supabase.from('municipios').select('*').eq('codigo_uf', estadoEncontrado.codigo_uf);
+                if (muns) {
+                    setMunicipios(muns); // atualiza estado local
+                    const cidadeEncontrada = muns.find(m => m.codigo_ibge.toString() === data.ibge);
+                    if (cidadeEncontrada) {
+                        form.setValue("municipio_id", parseInt(data.ibge), { shouldValidate: true, shouldDirty: true });
+                    }
+                }
+            }
+        } catch (error) {
+            console.error("Erro ao buscar CEP:", error);
+            toast.error("Falha ao comunicar com ViaCEP.");
+        }
+    }
+
+    async function getCoordinatesFromAddress(addressData: { street: string, number: string, neighborhood: string, city: string, state: string }) {
+        const query = `${addressData.street}, ${addressData.number}, ${addressData.city}, ${addressData.state}, Brasil`;
+        const encodedQuery = encodeURIComponent(query);
+        try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodedQuery}&format=json&limit=1`, {
+                headers: {
+                    'Accept-Language': 'pt-BR'
+                }
+            });
+            const geoData = await res.json();
+            if (geoData && geoData.length > 0) {
+                return `POINT(${geoData[0].lon} ${geoData[0].lat})`;
+            }
+        } catch (error) {
+            console.error("Erro ao obter coordenadas Nominatim:", error);
+        }
+        return null;
+    }
 
     async function onSubmit(values: any) {
         try {
@@ -154,15 +276,37 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
 
             const data = { ...values, banner_url: bannerUrl } as ArenaFormValues
 
-            if (initialData) {
-                await ArenaService.updateArena(initialData.id, data as any)
-                toast.success("Arena atualizada com sucesso!")
-            } else {
-                await ArenaService.createArena({ ...data, owner_id: ownerId } as any)
-                toast.success("Arena criada com sucesso!")
+            // Tentar obter geolocalização se houver endereco e municipio preenchido
+            let locationPoint = null;
+            if (values.address && values.municipio_id) {
+                const munInfo = municipios.find(m => m.codigo_ibge === values.municipio_id);
+                const ufInfo = estados.find(e => e.codigo_uf === selectedEstadoId);
+
+                if (munInfo && ufInfo) {
+                    locationPoint = await getCoordinatesFromAddress({
+                        street: values.address,
+                        number: values.number || "",
+                        neighborhood: values.neighborhood || "",
+                        city: munInfo.nome,
+                        state: ufInfo.uf
+                    });
+                }
             }
-            router.push("/dashboard/arenas")
-            router.refresh()
+
+            const payload: any = { ...data };
+            if (locationPoint) {
+                payload.location = locationPoint;
+            }
+            if (initialData) {
+                await ArenaService.updateArena(initialData.id, payload)
+                toast.success("Arena atualizada com sucesso!")
+                router.refresh()
+            } else {
+                await ArenaService.createArena({ ...payload, owner_id: ownerId })
+                toast.success("Arena criada com sucesso!")
+                router.push("/dashboard/settings/arena") // Assumindo que a criação também vai para settings/arena, ou pode recarregar a página
+                router.refresh()
+            }
         } catch (error: any) {
             console.error('Error saving arena:', error)
             toast.error(`Erro ao salvar: ${error.message || "Ocorreu um erro inesperado."}`)
@@ -245,98 +389,209 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
                             )}
                         />
 
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                            <div className="md:col-span-3">
-                                <FormField
-                                    control={form.control}
-                                    name="address"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Logradouro</FormLabel>
-                                            <FormControl>
-                                                <Input placeholder="Rua, Avenida, etc." {...field} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                            </div>
-                            <div className="md:col-span-1">
-                                <FormField
-                                    control={form.control}
-                                    name="number"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Número</FormLabel>
-                                            <FormControl>
-                                                <Input placeholder="123" {...field} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <FormField
-                                control={form.control}
-                                name="complement"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Complemento</FormLabel>
-                                        <FormControl>
-                                            <Input placeholder="Sala, Bloco, etc." {...field} />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                            <FormField
-                                control={form.control}
-                                name="zip_code"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>CEP</FormLabel>
-                                        <FormControl>
-                                            <Input placeholder="00000-000" {...field} />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                            <div className="md:col-span-3">
-                                <FormField
-                                    control={form.control}
-                                    name="city"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Cidade</FormLabel>
-                                            <FormControl>
-                                                <Input placeholder="Informe a cidade" {...field} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                            </div>
-                            <div className="md:col-span-1">
-                                <FormField
-                                    control={form.control}
-                                    name="state"
-                                    render={({ field }) => (
+                        <div className="pt-4 border-t border-gray-100 mt-6">
+                            <h3 className="text-lg font-semibold text-[#002B40] mb-4">Endereço</h3>
+                            <div className="flex flex-col gap-5">
+                                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                                    <div className="md:col-span-1">
+                                        <FormField
+                                            control={form.control}
+                                            name="zip_code"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>CEP</FormLabel>
+                                                    <FormControl>
+                                                        <Input
+                                                            placeholder="00000-000"
+                                                            {...field}
+                                                            onBlur={(e) => {
+                                                                field.onBlur();
+                                                                if (e.target.value) {
+                                                                    fetchAddressByCep(e.target.value);
+                                                                }
+                                                            }}
+                                                        />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    </div>
+                                    <div className="md:col-span-2">
                                         <FormItem>
                                             <FormLabel>Estado</FormLabel>
-                                            <FormControl>
-                                                <Input placeholder="UF" {...field} maxLength={2} />
-                                            </FormControl>
+                                            <Popover open={isEstadoOpen} onOpenChange={setIsEstadoOpen}>
+                                                <PopoverTrigger asChild>
+                                                    <FormControl>
+                                                        <Button
+                                                            variant="outline"
+                                                            role="combobox"
+                                                            aria-expanded={isEstadoOpen}
+                                                            className={cn("w-full justify-between h-9", !selectedEstadoId && "text-muted-foreground")}
+                                                        >
+                                                            {selectedEstadoId
+                                                                ? estados.find((est) => est.codigo_uf === selectedEstadoId)?.nome
+                                                                : "Selecionar estado"}
+                                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                        </Button>
+                                                    </FormControl>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-[300px] p-0">
+                                                    <Command>
+                                                        <CommandInput placeholder="Buscar estado..." />
+                                                        <CommandList>
+                                                            <CommandEmpty>Nenhum estado encontrado.</CommandEmpty>
+                                                            <CommandGroup>
+                                                                {estados.map((estado) => (
+                                                                    <CommandItem
+                                                                        key={estado.codigo_uf}
+                                                                        value={estado.nome}
+                                                                        onSelect={() => {
+                                                                            setSelectedEstadoId(estado.codigo_uf)
+                                                                            form.setValue("municipio_id", undefined as any)
+                                                                            setIsEstadoOpen(false)
+                                                                        }}
+                                                                    >
+                                                                        <Check
+                                                                            className={cn(
+                                                                                "mr-2 h-4 w-4",
+                                                                                estado.codigo_uf === selectedEstadoId ? "opacity-100" : "opacity-0"
+                                                                            )}
+                                                                        />
+                                                                        {estado.nome}
+                                                                    </CommandItem>
+                                                                ))}
+                                                            </CommandGroup>
+                                                        </CommandList>
+                                                    </Command>
+                                                </PopoverContent>
+                                            </Popover>
                                             <FormMessage />
                                         </FormItem>
-                                    )}
-                                />
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <FormField
+                                            control={form.control}
+                                            name="municipio_id"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Cidade</FormLabel>
+                                                    <Popover open={isMunicipioOpen} onOpenChange={setIsMunicipioOpen}>
+                                                        <PopoverTrigger asChild>
+                                                            <FormControl>
+                                                                <Button
+                                                                    variant="outline"
+                                                                    role="combobox"
+                                                                    aria-expanded={isMunicipioOpen}
+                                                                    className={cn("w-full justify-between h-9", !field.value && "text-muted-foreground")}
+                                                                    disabled={!selectedEstadoId}
+                                                                >
+                                                                    {field.value
+                                                                        ? municipios.find((mun) => mun.codigo_ibge === field.value)?.nome
+                                                                        : "Selecionar cidade"}
+                                                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                                </Button>
+                                                            </FormControl>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-[400px] p-0">
+                                                            <Command>
+                                                                <CommandInput placeholder="Buscar cidade..." />
+                                                                <CommandList>
+                                                                    <CommandEmpty>Nenhuma cidade encontrada.</CommandEmpty>
+                                                                    <CommandGroup>
+                                                                        {municipios.map((municipio) => (
+                                                                            <CommandItem
+                                                                                key={municipio.codigo_ibge}
+                                                                                value={municipio.nome}
+                                                                                onSelect={() => {
+                                                                                    form.setValue("municipio_id", municipio.codigo_ibge)
+                                                                                    setIsMunicipioOpen(false)
+                                                                                }}
+                                                                            >
+                                                                                <Check
+                                                                                    className={cn(
+                                                                                        "mr-2 h-4 w-4",
+                                                                                        municipio.codigo_ibge === field.value ? "opacity-100" : "opacity-0"
+                                                                                    )}
+                                                                                />
+                                                                                {municipio.nome}
+                                                                            </CommandItem>
+                                                                        ))}
+                                                                    </CommandGroup>
+                                                                </CommandList>
+                                                            </Command>
+                                                        </PopoverContent>
+                                                    </Popover>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                                    <div className="md:col-span-1">
+                                        <FormField
+                                            control={form.control}
+                                            name="neighborhood"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Bairro</FormLabel>
+                                                    <FormControl>
+                                                        <Input placeholder="Bairro" {...field} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    </div>
+                                    <div className="md:col-span-3">
+                                        <FormField
+                                            control={form.control}
+                                            name="address"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Logradouro</FormLabel>
+                                                    <FormControl>
+                                                        <Input placeholder="Rua, Avenida, etc." {...field} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    </div>
+                                    <div className="md:col-span-1">
+                                        <FormField
+                                            control={form.control}
+                                            name="number"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Número</FormLabel>
+                                                    <FormControl>
+                                                        <Input placeholder="123" {...field} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-4">
+                                    <FormField
+                                        control={form.control}
+                                        name="complement"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Complemento</FormLabel>
+                                                <FormControl>
+                                                    <Input placeholder="Sala, Bloco, etc." {...field} />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                </div>
                             </div>
                         </div>
 
@@ -385,52 +640,89 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
                             </div>
                         </div>
 
-                        {/* Opening Hours - Placeholder for now as complex object */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <FormField
-                                control={form.control}
-                                name="opening_hours"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Dias de funcionamento</FormLabel>
-                                        <Select
-                                            onValueChange={(val) => {
-                                                // Minimal implementation: Update the whole object or just a part?
-                                                // For now, let's just pretend we handle 'todos'.
-                                                // Ideally detailed schedule requires more UI.
-                                                // We'll just preserve existing value or set simple default.
-                                                field.onChange({ ...field.value, type: val })
-                                            }}
-                                            defaultValue={field.value?.type || "todos"}
-                                        >
-                                            <FormControl>
-                                                <SelectTrigger><SelectValue placeholder="Selecione os dias" /></SelectTrigger>
-                                            </FormControl>
-                                            <SelectContent>
-                                                <SelectItem value="todos">Todos os dias</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                            <FormField
-                                control={form.control}
-                                name="opening_hours"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Horário de funcionamento</FormLabel>
-                                        <FormControl>
-                                            <Input
-                                                placeholder="06:00 às 23:00"
-                                                value={field.value?.display || "06:00 às 23:00"}
-                                                onChange={(e) => field.onChange({ ...field.value, display: e.target.value })}
-                                            />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
+                        {/* Opening Hours */}
+                        <div className="pt-4 border-t border-gray-100 mt-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-lg font-semibold text-[#002B40]">Dias de funcionamento</h3>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                        const currentHours = form.getValues("opening_hours") || {};
+                                        // Pick the first day that is open to copy its schedule
+                                        const sourceDay = DAYS_OF_WEEK.find(d => currentHours[d.value]?.isOpen);
+                                        if (sourceDay && currentHours[sourceDay.value]) {
+                                            const { start, end } = currentHours[sourceDay.value];
+                                            const newHours = { ...currentHours };
+                                            DAYS_OF_WEEK.forEach(d => {
+                                                if (newHours[d.value]?.isOpen) {
+                                                    newHours[d.value] = { ...newHours[d.value], start, end };
+                                                }
+                                            });
+                                            form.setValue("opening_hours", newHours, { shouldDirty: true });
+                                            toast.success("Horários replicados para todos os dias abertos!");
+                                        } else {
+                                            toast.error("Ative pelo menos um dia e configure o horário antes de replicar.");
+                                        }
+                                    }}
+                                >
+                                    Replicar para todos
+                                </Button>
+                            </div>
+
+                            <div className="flex flex-col gap-4">
+                                {DAYS_OF_WEEK.map((day) => (
+                                    <FormField
+                                        key={day.value}
+                                        control={form.control}
+                                        name={`opening_hours.${day.value}`}
+                                        render={({ field }) => {
+                                            const value = field.value || { isOpen: false, start: "06:00", end: "23:00" }
+                                            return (
+                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-gray-50 rounded-lg border">
+                                                    <div className="flex items-center gap-3 mb-3 sm:mb-0 min-w-[150px]">
+                                                        <Switch
+                                                            checked={value.isOpen}
+                                                            onCheckedChange={(checked) => field.onChange({ ...value, isOpen: checked })}
+                                                        />
+                                                        <span className="font-medium text-sm">{day.label}</span>
+                                                    </div>
+
+                                                    {value.isOpen ? (
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-sm text-gray-500">Abre:</span>
+                                                                <Input
+                                                                    type="time"
+                                                                    className="w-[110px]"
+                                                                    value={value.start}
+                                                                    onChange={(e) => field.onChange({ ...value, start: e.target.value })}
+                                                                />
+                                                            </div>
+                                                            <span className="text-gray-400">-</span>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-sm text-gray-500">Fecha:</span>
+                                                                <Input
+                                                                    type="time"
+                                                                    className="w-[110px]"
+                                                                    value={value.end}
+                                                                    onChange={(e) => field.onChange({ ...value, end: e.target.value })}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-sm text-gray-400 italic">Fechado</div>
+                                                    )}
+                                                </div>
+                                            )
+                                        }}
+                                    />
+                                ))}
+                            </div>
+                            {form.formState.errors.opening_hours && (
+                                <p className="text-sm text-red-500 mt-2">{form.formState.errors.opening_hours.message as string}</p>
+                            )}
                         </div>
 
                         <FormField

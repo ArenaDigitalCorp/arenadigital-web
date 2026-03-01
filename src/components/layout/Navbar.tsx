@@ -18,7 +18,7 @@ export function Navbar() {
             <div className="container mx-auto px-4 h-16 flex items-center justify-between">
                 <Link href="/" className="flex items-center gap-2">
                     <img
-                        src="/img/logo_arena_white.png"
+                        src="/logo_arena.png"
                         alt="Arena Digital"
                         className="h-12 w-auto object-contain"
                     />
@@ -50,7 +50,7 @@ export function Navbar() {
                         </SignedOut>
                         <SignedIn>
                             <Link href="/dashboard">
-                                <Button size="sm" variant="outline" className="text-white border-white/20 hover:bg-white/10">
+                                <Button size="sm" variant="outline" className="bg-transparent text-white border-white/20 hover:bg-white/10">
                                     Ir para Dashboard
                                 </Button>
                             </Link>
@@ -88,7 +88,7 @@ export function Navbar() {
                         <SignedIn>
                             <div className="flex items-center justify-between px-2">
                                 <Link href="/dashboard" onClick={toggleMobileMenu}>
-                                    <Button variant="outline" className="h-11 text-white border-white/20 hover:bg-white/10">
+                                    <Button variant="outline" className="h-11 bg-transparent text-white border-white/20 hover:bg-white/10">
                                         Ir para Dashboard
                                     </Button>
                                 </Link>
