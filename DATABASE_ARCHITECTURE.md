@@ -62,7 +62,21 @@ O usuário do app é um "Atleta". Ele terá um perfil próprio, configurando pri
 - **Como o App Mobile deve buscar Atletas:**
   No módulo de pesquisa, ao buscar atletas, a cláusula `where compartilha_info = true` é **obrigatória**.
 
-### 2.3. Times (A desenvolver)
+### 2.3. Comodidades (`comodidades` e `arena_comodidades`)
+As arenas possuem comodidades e facilidades que podem ser oferecidas para os atletas (ex: Churrasqueira, Wifi, Salão de Festas).
+- **Funcionalidade no App:** O aplicativo listará as comodidades no perfil da Arena e, futuramente, poderá usá-las em filtros de busca avançada.
+- **Tabela `comodidades`:**
+  - `id` (uuid, primary key)
+  - `name` (text, unique) - Nome da comodidade.
+- **Tabela `arena_comodidades`:**
+  - Tabela de junção para mapeamento N:N entre `arenas` e `comodidades`.
+  - `arena_id` (uuid, foreign key para `arenas.id`)
+  - `comodidade_id` (uuid, foreign key para `comodidades.id`)
+  - **Primary Key Composta:** (`arena_id`, `comodidade_id`) com delete cascade para ambas origens.
+- **Como o App Mobile consultará as Comodidades:**
+  Acessando a relação de `arena_comodidades` na query de busca de detalhes da arena.
+
+### 2.4. Times (A desenvolver)
 A estrutura de *Times* (Equipes, Panelinhas) ainda será construída. 
 - **Previsão:** Deve haver uma tabela de `times` e uma de vínculo `atleta_time`. Será mapeado posteriormente, seguindo o padrão relacional estabelecido.
 

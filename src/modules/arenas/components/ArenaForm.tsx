@@ -32,6 +32,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Check, ChevronsUpDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { SportService, Sport } from "@/modules/courts/services/sportService"
+import { ComodidadeService, Comodidade } from "@/modules/arenas/services/comodidadeService"
 import { useEffect, useState } from "react"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
@@ -42,6 +43,7 @@ const arenaFormSchema = z.object({
     }),
     status: z.enum(["ativo", "inativo", "Em manutenção"]),
     sports: z.array(z.string()).optional(),
+    comodidades: z.array(z.string()).optional(),
     phone: z.string().optional(),
     email: z.string().email().optional().or(z.literal('')),
     description: z.string().optional(),
@@ -98,6 +100,7 @@ const mapStatusFromDB = (status: string): "ativo" | "inativo" | "Em manutenção
 export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
     const router = useRouter()
     const [sports, setSports] = useState<Sport[]>([])
+    const [comodidades, setComodidades] = useState<Comodidade[]>([])
     const [bannerFile, setBannerFile] = useState<File | null>(null)
     const [isUploading, setIsUploading] = useState(false)
 
@@ -114,6 +117,14 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
                 setSports(sportsData)
             } catch (error) {
                 console.error("Failed to load sports:", error)
+            }
+        }
+        async function loadComodidades() {
+            try {
+                const comodidadesData = await ComodidadeService.getComodidades()
+                setComodidades(comodidadesData)
+            } catch (error) {
+                console.error("Failed to load comodidades:", error)
             }
         }
         async function loadEstados() {
@@ -133,6 +144,7 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
             }
         }
         loadSports()
+        loadComodidades()
         loadEstados()
     }, [initialData?.municipio_id])
 
@@ -158,6 +170,7 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
             name: initialData?.name || "",
             status: mapStatusFromDB(initialData?.status),
             sports: initialData?.sports?.map((s: any) => s.id || s) || [], // Handle object or ID
+            comodidades: initialData?.comodidades?.map((c: any) => c.id || c) || [],
             phone: initialData?.phone || "",
             email: initialData?.email || "",
             description: initialData?.description || "",
@@ -380,6 +393,37 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
                                                 />
                                                 <label htmlFor={sport.id} className="text-sm font-medium leading-none cursor-pointer">
                                                     {sport.name}
+                                                </label>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+
+                        <FormField
+                            control={form.control}
+                            name="comodidades"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Comodidades</FormLabel>
+                                    <div className="grid grid-cols-2 gap-2 border rounded-md p-3 max-h-[120px] overflow-y-auto">
+                                        {comodidades.map((comodidade) => (
+                                            <div key={comodidade.id} className="flex items-center space-x-2">
+                                                <Checkbox
+                                                    id={comodidade.id}
+                                                    checked={field.value?.includes(comodidade.id)}
+                                                    onCheckedChange={(checked) => {
+                                                        const current = field.value || []
+                                                        const next = checked
+                                                            ? [...current, comodidade.id]
+                                                            : current.filter((id: string) => id !== comodidade.id)
+                                                        field.onChange(next)
+                                                    }}
+                                                />
+                                                <label htmlFor={comodidade.id} className="text-sm font-medium leading-none cursor-pointer">
+                                                    {comodidade.name}
                                                 </label>
                                             </div>
                                         ))}

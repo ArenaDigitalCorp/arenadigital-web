@@ -4,6 +4,7 @@ export interface ArenaInput {
     name: string;
     status: 'active' | 'inactive' | 'maintenance';
     sports?: string[]; // IDs of sports
+    comodidades?: string[]; // IDs of comodidades
     owner_id: string; // Internal UUID
     address?: any;
     phone?: string;
@@ -25,8 +26,8 @@ export interface ArenaInput {
 
 export class ArenaService {
     static async createArena(input: ArenaInput) {
-        // Extract sports to handle separately
-        const { sports, ...arenaData } = input;
+        // Extract sports and comodidades to handle separately
+        const { sports, comodidades, ...arenaData } = input;
 
         const { data: arena, error } = await supabase
             .from('arenas')
@@ -55,6 +56,22 @@ export class ArenaService {
             }
         }
 
+        // Insert comodidades if provided
+        if (comodidades && comodidades.length > 0) {
+            const arenaComodidades = comodidades.map(comodidadeId => ({
+                arena_id: arena.id,
+                comodidade_id: comodidadeId
+            }));
+
+            const { error: comodidadesError } = await supabase
+                .from('arena_comodidades')
+                .insert(arenaComodidades);
+
+            if (comodidadesError) {
+                console.error('Error linking comodidades:', comodidadesError);
+            }
+        }
+
         return arena;
     }
 
@@ -65,6 +82,9 @@ export class ArenaService {
                 *,
                 sports_relation:arena_sports(
                     sport:sports(*)
+                ),
+                comodidades_relation:arena_comodidades(
+                    comodidade:comodidades(*)
                 )
             `)
             .eq('owner_id', ownerId)
@@ -77,7 +97,8 @@ export class ArenaService {
 
         return data.map(arena => ({
             ...arena,
-            sports: (arena.sports_relation as any[])?.map(s => s.sport) || []
+            sports: (arena.sports_relation as any[])?.map(s => s.sport) || [],
+            comodidades: (arena.comodidades_relation as any[])?.map(c => c.comodidade) || []
         }));
     }
 
@@ -100,12 +121,13 @@ export class ArenaService {
 
         return {
             ...data,
-            sports: (data.sports_relation as any[])?.map(s => s.sport) || []
+            sports: (data.sports_relation as any[])?.map(s => s.sport) || [],
+            comodidades: (data.comodidades_relation as any[])?.map(c => c.comodidade) || []
         };
     }
 
     static async updateArena(id: string, input: Partial<ArenaInput>) {
-        const { sports, ...arenaData } = input;
+        const { sports, comodidades, ...arenaData } = input;
 
         const { data, error } = await supabase
             .from('arenas')
@@ -139,6 +161,30 @@ export class ArenaService {
 
                 if (sportsError) {
                     console.error('Error updating sports:', sportsError);
+                }
+            }
+        }
+
+        if (comodidades) {
+            // Delete old associations
+            await supabase
+                .from('arena_comodidades')
+                .delete()
+                .eq('arena_id', id);
+
+            // Add new associations
+            if (comodidades.length > 0) {
+                const arenaComodidades = comodidades.map(comodidadeId => ({
+                    arena_id: id,
+                    comodidade_id: comodidadeId
+                }));
+
+                const { error: comodidadesError } = await supabase
+                    .from('arena_comodidades')
+                    .insert(arenaComodidades);
+
+                if (comodidadesError) {
+                    console.error('Error updating comodidades:', comodidadesError);
                 }
             }
         }
