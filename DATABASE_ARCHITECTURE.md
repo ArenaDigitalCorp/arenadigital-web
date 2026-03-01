@@ -31,7 +31,7 @@ As Arenas representam os estabelecimentos cadastrados no sistema.
   - **Financeiro:** `nome_moeda_virtual` (Usado no programa de fidelidade).
 
 - **Como o App Mobile deve buscar Arenas:**
-  Para listar as arenas considerando a distância do usuário, o App deve invocar a **RPC** `search_arenas_by_proximity(user_lat, user_lng, max_distance_meters)`. Essa função do Supabase retorna a lista de arenas 'ativo' ordenadas pela proximidade real, incluindo no payload o valor de `dist_meters`. Para apresentar a localidade (Cidade/Estado), o App usará o `municipio_id` retornado pela RPC para fazer um join posterior com a tabela `municipios` e `estados`.
+  Para listar as arenas considerando a distância do usuário, o App deve invocar a **RPC** `search_arenas_by_proximity(user_lat, user_lng, max_distance_meters)`. Essa função do Supabase retorna a lista de arenas 'ativo' ordenadas pela proximidade real. O payload inclui o valor de `dist_meters`, o array `sports` de modalidades e o array `comodidades`. Para apresentar a localidade (Cidade/Estado), o App usará o `municipio_id` retornado pela RPC para fazer um join posterior com a tabela `municipios` e `estados`.
 
 ### 2.1.1. Arenas Favoritas (`atleta_arena_favoritos`)
 Mantém o registro das arenas que um atleta favoritou no aplicativo.
@@ -74,7 +74,7 @@ As arenas possuem comodidades e facilidades que podem ser oferecidas para os atl
   - `comodidade_id` (uuid, foreign key para `comodidades.id`)
   - **Primary Key Composta:** (`arena_id`, `comodidade_id`) com delete cascade para ambas origens.
 - **Como o App Mobile consultará as Comodidades:**
-  Acessando a relação de `arena_comodidades` na query de busca de detalhes da arena.
+  Acessando a relação de `arena_comodidades` na query de busca de detalhes da arena, ou utilizando o array `comodidades` retornado pela RPC `search_arenas_by_proximity` para fins de filtragem local no frontend.
 
 ### 2.4. Times (A desenvolver)
 A estrutura de *Times* (Equipes, Panelinhas) ainda será construída. 
