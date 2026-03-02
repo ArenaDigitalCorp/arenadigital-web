@@ -12,7 +12,7 @@ import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { cn } from "@/lib/utils"
 
-export default function FidelityStatementPage() {
+export default function FidelityStatementPage({ params }: { params: { arenaId: string } }) {
     const router = useRouter()
     const [search, setSearch] = useState("")
     const [startDate, setStartDate] = useState("")
@@ -27,7 +27,7 @@ export default function FidelityStatementPage() {
     const loadStatement = useCallback(async () => {
         try {
             setIsLoading(true)
-            const result = await getStatementAction(page, pageSize, {
+            const result = await getStatementAction(params.arenaId, page, pageSize, {
                 athleteName: search,
                 startDate: startDate ? new Date(startDate + 'T00:00:00').toISOString() : undefined,
                 endDate: endDate ? new Date(endDate + 'T23:59:59').toISOString() : undefined

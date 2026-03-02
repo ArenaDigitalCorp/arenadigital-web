@@ -3,6 +3,7 @@
 import { useUser } from "@clerk/nextjs";
 import { useEffect, useState } from "react";
 import { UserService } from "@/modules/users/services/userService";
+import { toast } from "sonner"; // IMPORT TOAST
 
 export function useUserSync() {
     const { user, isLoaded } = useUser();
@@ -14,11 +15,18 @@ export function useUserSync() {
             if (isLoaded && user) {
                 try {
                     const arenaName = user.unsafeMetadata?.arenaName as string | undefined;
+                    const cpf = user.unsafeMetadata?.cpf as string | undefined;
+                    const phone = user.unsafeMetadata?.phone as string | undefined;
+                    const addressData = user.unsafeMetadata?.addressData as any | undefined;
+
                     const syncedUser = await UserService.syncUser(
                         user.id,
                         user.primaryEmailAddress?.emailAddress || "",
                         user.fullName || "",
-                        arenaName
+                        arenaName,
+                        cpf,
+                        phone,
+                        addressData
                     );
 
                     // Clear metadata after successful sync to prevent duplicates
@@ -27,7 +35,10 @@ export function useUserSync() {
                             await user.update({
                                 unsafeMetadata: {
                                     ...user.unsafeMetadata,
-                                    arenaName: null
+                                    arenaName: null,
+                                    cpf: null,
+                                    phone: null,
+                                    addressData: null
                                 }
                             });
                         } catch (metaError) {
@@ -36,8 +47,9 @@ export function useUserSync() {
                     }
 
                     setDbUser(syncedUser);
-                } catch (error) {
+                } catch (error: any) {
                     console.error("Failed to sync user:", error);
+                    toast.error(`Falha ao sincronizar usuário: ${error.message || JSON.stringify(error)}`);
                 } finally {
                     setIsLoading(false);
                 }

@@ -12,6 +12,7 @@ export async function createArenaUserAction(arenaId: string, data: any) {
             emailAddress: [data.email],
             password: data.senha || data.password,
             firstName: data.name,
+            skipPasswordChecks: true,
         };
 
         if (data.login) {

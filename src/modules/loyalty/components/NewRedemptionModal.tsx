@@ -23,12 +23,13 @@ interface Athlete {
 }
 
 interface NewRedemptionModalProps {
+    arenaId: string;
     isOpen: boolean;
     onClose: () => void;
     onSuccess: () => void;
 }
 
-export function NewRedemptionModal({ isOpen, onClose, onSuccess }: NewRedemptionModalProps) {
+export function NewRedemptionModal({ arenaId, isOpen, onClose, onSuccess }: NewRedemptionModalProps) {
     const [search, setSearch] = useState("")
     const [athletes, setAthletes] = useState<Athlete[]>([])
     const [selectedAthlete, setSelectedAthlete] = useState<Athlete | null>(null)
@@ -55,7 +56,7 @@ export function NewRedemptionModal({ isOpen, onClose, onSuccess }: NewRedemption
         searchTimeout.current = setTimeout(async () => {
             try {
                 // Fetch all athletes for the arena to filter in frontend (accent-insensitive)
-                const result = await searchAthletesAction()
+                const result = await searchAthletesAction(arenaId)
                 if (result.success && result.data) {
                     const normalizedSearch = normalizeString(value);
                     const filtered = (result.data as Athlete[]).filter(athlete =>
@@ -84,6 +85,7 @@ export function NewRedemptionModal({ isOpen, onClose, onSuccess }: NewRedemption
         try {
             setIsSaving(true)
             const result = await createRedemptionTransactionAction({
+                arenaId,
                 id_atleta: selectedAthlete.id,
                 valor: Number(quantity),
                 descricao: description

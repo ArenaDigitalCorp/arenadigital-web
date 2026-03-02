@@ -31,12 +31,13 @@ interface Athlete {
 }
 
 interface NewSendModalProps {
+    arenaId: string;
     isOpen: boolean;
     onClose: () => void;
     onSuccess: () => void;
 }
 
-export function NewSendModal({ isOpen, onClose, onSuccess }: NewSendModalProps) {
+export function NewSendModal({ arenaId, isOpen, onClose, onSuccess }: NewSendModalProps) {
     const [search, setSearch] = useState("")
     const [athletes, setAthletes] = useState<Athlete[]>([])
     const [selectedAthlete, setSelectedAthlete] = useState<Athlete | null>(null)
@@ -64,7 +65,7 @@ export function NewSendModal({ isOpen, onClose, onSuccess }: NewSendModalProps) 
         searchTimeout.current = setTimeout(async () => {
             try {
                 // Fetch all athletes for the arena to filter in frontend (accent-insensitive)
-                const result = await searchAthletesAction()
+                const result = await searchAthletesAction(arenaId)
                 if (result.success && result.data) {
                     const normalizedSearch = normalizeString(value);
                     const filtered = (result.data as Athlete[]).filter(athlete =>
@@ -93,6 +94,7 @@ export function NewSendModal({ isOpen, onClose, onSuccess }: NewSendModalProps) 
         try {
             setIsSaving(true)
             const result = await createCreditTransactionAction({
+                arenaId,
                 id_atleta: selectedAthlete.id,
                 valor: Number(quantity),
                 validade: validity,

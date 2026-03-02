@@ -14,12 +14,9 @@ export async function createRotativoAction(formData: any) {
         const dbUser = await UserService.getUserByClerkId(clerkId)
         if (!dbUser) return { success: false, error: "Usuário não encontrado" }
 
-        const arena = await ArenaService.getFirstArenaByOrganizationUser(dbUser.id)
-        if (!arena) return { success: false, error: "Arena não encontrada" }
-
         await RotativoService.createRotativo({
             ...formData,
-            id_arena: arena.id
+            id_arena: formData.arenaId
         })
 
         revalidatePath('/dashboard/rotativo')
@@ -30,7 +27,7 @@ export async function createRotativoAction(formData: any) {
     }
 }
 
-export async function getRotativosAction(date: string) {
+export async function getRotativosAction(arenaId: string, date: string) {
     try {
         const { userId: clerkId } = await auth()
         if (!clerkId) return { success: false, error: "Não autorizado" }
@@ -38,10 +35,7 @@ export async function getRotativosAction(date: string) {
         const dbUser = await UserService.getUserByClerkId(clerkId)
         if (!dbUser) return { success: false, error: "Usuário não encontrado" }
 
-        const arena = await ArenaService.getFirstArenaByOrganizationUser(dbUser.id)
-        if (!arena) return { success: false, error: "Arena não encontrada" }
-
-        const data = await RotativoService.getRotativosByDate(arena.id, date)
+        const data = await RotativoService.getRotativosByDate(arenaId, date)
         return { success: true, data }
     } catch (error: any) {
         console.error("Error in getRotativosAction:", error)

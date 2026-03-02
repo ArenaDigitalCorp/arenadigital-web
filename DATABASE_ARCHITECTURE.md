@@ -10,6 +10,7 @@ Este documento descreve a arquitetura atual do banco de dados (Supabase) utiliza
 
 O banco de dados é gerido via **Supabase** (PostgreSQL) com migrações em SQL puro (`supabase/migrations/*.sql`).
 A autenticação primária é gerida por um provedor externo (Clerk), que é sincronizado com a tabela public.`users` (onde o `clerk_user_id` é salvo). No App Mobile, isso significa que ao fazer login/cadastro com Clerk, o usuário deverá estar vinculado à tabela principal de usuários e posteriormente ao seu perfil de **Atleta**.
+> **Nota para Gestores:** Além dos dados de autenticação e nome, a tabela `users` também armazena o `cpf`, fornecido no momento do cadastro do gestor na plataforma Web. O telefone é armazenado diretamente no registro da respectiva `arena`.
 
 ---
 
@@ -38,7 +39,7 @@ Mantém o registro das arenas que um atleta favoritou no aplicativo e os víncul
 - **Funcionalidade no App:** O atleta pode favoritar/desfavoritar uma arena para acesso rápido (salvo em `atleta_arena_favoritos`). Além disso, ao favoritar, o sistema também cria uma vinculação caso não exista na tabela principal de vínculos (`arenas_atleta`).
 - **Tabela `arenas_atleta` (Vínculo Principal):**
   - Vincula um atleta a uma arena.
-  - **`origem` (Enum: `web`, `aplicativo`):** Identifica se o vínculo foi criado pelo gestor da arena convidando o atleta (`web`) ou se o atleta buscou a arena e a marcou como favorita (`aplicativo`). Quando favoritar no aplicativo, o valor preenchido deve ser `aplicativo`.
+  - **`origem` (Enum: `web`, `aplicativo`):** Identifica se o vínculo foi criado pelo gestor da arena convidando o atleta (`web`) ou se o atleta buscou a arena e a marcou como favorita (`aplicativo`). Quando favoritar no aplicativo, o valor preenchido deve ser `aplicativo`. Se o usuário desfavoritar pelo aplicativo, o registro será removido de ambas tabelas (`atleta_arena_favoritos` e `arenas_atleta`).
 - **Tabela `atleta_arena_favoritos`: (Apenas Favoritos)**
 - **Tabela `atleta_arena_favoritos`:**
   - `id` (uuid, primary key)

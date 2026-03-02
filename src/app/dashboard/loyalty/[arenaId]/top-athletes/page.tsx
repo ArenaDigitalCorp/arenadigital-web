@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { getAthletesWithBalanceAction } from "@/modules/loyalty/actions/loyaltyActions"
 import { cn } from "@/lib/utils"
 
-export default function TopAthletesPage() {
+export default function TopAthletesPage({ params }: { params: { arenaId: string } }) {
     const router = useRouter()
     const [search, setSearch] = useState("")
     const [athletes, setAthletes] = useState<any[]>([])
@@ -22,7 +22,7 @@ export default function TopAthletesPage() {
     const loadAthletes = useCallback(async () => {
         try {
             setIsLoading(true)
-            const result = await getAthletesWithBalanceAction(page, pageSize, search)
+            const result = await getAthletesWithBalanceAction(params.arenaId, page, pageSize, search)
             if (result.success && 'data' in result) {
                 setAthletes(result.data as any[])
                 setTotalPages(result.totalPages as number || 1)

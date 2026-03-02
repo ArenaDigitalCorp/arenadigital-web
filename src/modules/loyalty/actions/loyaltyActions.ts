@@ -6,7 +6,7 @@ import { ArenaService } from "@/modules/arenas/services/arenaService"
 import { LoyaltyService } from "@/modules/loyalty/services/loyaltyService"
 import { revalidatePath } from "next/cache"
 
-export async function updateCurrencyName(name: string) {
+export async function updateCurrencyName(arenaId: string, name: string) {
     try {
         const { userId: clerkId } = await auth()
         if (!clerkId) {
@@ -18,12 +18,7 @@ export async function updateCurrencyName(name: string) {
             return { success: false, error: "Usuário não encontrado" }
         }
 
-        const arena = await ArenaService.getFirstArenaByOrganizationUser(dbUser.id)
-        if (!arena) {
-            return { success: false, error: "Arena não encontrada" }
-        }
-
-        await ArenaService.updateArena(arena.id, {
+        await ArenaService.updateArena(arenaId, {
             nome_moeda_virtual: name
         })
 
@@ -35,7 +30,7 @@ export async function updateCurrencyName(name: string) {
     }
 }
 
-export async function getLatestCreditsAction() {
+export async function getLatestCreditsAction(arenaId: string) {
     try {
         const { userId: clerkId } = await auth()
         if (!clerkId) return { success: false, error: "Não autorizado" }
@@ -43,10 +38,7 @@ export async function getLatestCreditsAction() {
         const dbUser = await UserService.getUserByClerkId(clerkId)
         if (!dbUser) return { success: false, error: "Usuário não encontrado" }
 
-        const arena = await ArenaService.getFirstArenaByOrganizationUser(dbUser.id)
-        if (!arena) return { success: false, error: "Arena não encontrada" }
-
-        const credits = await LoyaltyService.getLatestCredits(arena.id)
+        const credits = await LoyaltyService.getLatestCredits(arenaId)
         return { success: true, data: credits }
     } catch (error: any) {
         console.error("Error in getLatestCreditsAction:", error)
@@ -54,7 +46,7 @@ export async function getLatestCreditsAction() {
     }
 }
 
-export async function getLatestRedemptionsAction() {
+export async function getLatestRedemptionsAction(arenaId: string) {
     try {
         const { userId: clerkId } = await auth()
         if (!clerkId) return { success: false, error: "Não autorizado" }
@@ -62,10 +54,7 @@ export async function getLatestRedemptionsAction() {
         const dbUser = await UserService.getUserByClerkId(clerkId)
         if (!dbUser) return { success: false, error: "Usuário não encontrado" }
 
-        const arena = await ArenaService.getFirstArenaByOrganizationUser(dbUser.id)
-        if (!arena) return { success: false, error: "Arena não encontrada" }
-
-        const redemptions = await LoyaltyService.getLatestRedemptions(arena.id)
+        const redemptions = await LoyaltyService.getLatestRedemptions(arenaId)
         return { success: true, data: redemptions }
     } catch (error: any) {
         console.error("Error in getLatestRedemptionsAction:", error)
@@ -73,7 +62,7 @@ export async function getLatestRedemptionsAction() {
     }
 }
 
-export async function searchAthletesAction(query?: string) {
+export async function searchAthletesAction(arenaId: string, query?: string) {
     try {
         const { userId: clerkId } = await auth()
         if (!clerkId) return { success: false, error: "Não autorizado" }
@@ -81,10 +70,7 @@ export async function searchAthletesAction(query?: string) {
         const dbUser = await UserService.getUserByClerkId(clerkId)
         if (!dbUser) return { success: false, error: "Usuário não encontrado" }
 
-        const arena = await ArenaService.getFirstArenaByOrganizationUser(dbUser.id)
-        if (!arena) return { success: false, error: "Arena não encontrada" }
-
-        const athletes = await LoyaltyService.searchArenaAthletes(arena.id, query)
+        const athletes = await LoyaltyService.searchArenaAthletes(arenaId, query)
         return { success: true, data: athletes }
     } catch (error: any) {
         console.error("Error in searchAthletesAction:", error)
@@ -93,6 +79,7 @@ export async function searchAthletesAction(query?: string) {
 }
 
 export async function createCreditTransactionAction(data: {
+    arenaId: string;
     id_atleta: string;
     valor: number;
     validade: string;
@@ -104,9 +91,6 @@ export async function createCreditTransactionAction(data: {
 
         const dbUser = await UserService.getUserByClerkId(clerkId)
         if (!dbUser) return { success: false, error: "Usuário não encontrado" }
-
-        const arena = await ArenaService.getFirstArenaByOrganizationUser(dbUser.id)
-        if (!arena) return { success: false, error: "Arena não encontrada" }
 
         let data_vencimento: string | null = null;
         const now = new Date();
@@ -130,7 +114,7 @@ export async function createCreditTransactionAction(data: {
         }
 
         await LoyaltyService.createTransaction({
-            id_arena: arena.id,
+            id_arena: data.arenaId,
             id_atleta: data.id_atleta,
             valor: data.valor,
             tipo: 'crédito',
@@ -148,6 +132,7 @@ export async function createCreditTransactionAction(data: {
 }
 
 export async function createRedemptionTransactionAction(data: {
+    arenaId: string;
     id_atleta: string;
     valor: number;
     descricao?: string;
@@ -159,11 +144,8 @@ export async function createRedemptionTransactionAction(data: {
         const dbUser = await UserService.getUserByClerkId(clerkId)
         if (!dbUser) return { success: false, error: "Usuário não encontrado" }
 
-        const arena = await ArenaService.getFirstArenaByOrganizationUser(dbUser.id)
-        if (!arena) return { success: false, error: "Arena não encontrada" }
-
         await LoyaltyService.createTransaction({
-            id_arena: arena.id,
+            id_arena: data.arenaId,
             id_atleta: data.id_atleta,
             valor: data.valor,
             tipo: 'resgate',
@@ -180,7 +162,7 @@ export async function createRedemptionTransactionAction(data: {
     }
 }
 
-export async function getTopAthletesAction() {
+export async function getTopAthletesAction(arenaId: string) {
     try {
         const { userId: clerkId } = await auth()
         if (!clerkId) return { success: false, error: "Não autorizado" }
@@ -188,17 +170,14 @@ export async function getTopAthletesAction() {
         const dbUser = await UserService.getUserByClerkId(clerkId)
         if (!dbUser) return { success: false, error: "Usuário não encontrado" }
 
-        const arena = await ArenaService.getFirstArenaByOrganizationUser(dbUser.id)
-        if (!arena) return { success: false, error: "Arena não encontrada" }
-
-        const topAthletes = await LoyaltyService.getTopAthletes(arena.id)
+        const topAthletes = await LoyaltyService.getTopAthletes(arenaId)
         return { success: true, data: topAthletes }
     } catch (error: any) {
         console.error("Error in getTopAthletesAction:", error)
         return { success: false, error: error.message || "Erro ao buscar top atletas" }
     }
 }
-export async function getAthletesWithBalanceAction(page = 1, pageSize = 10, query?: string) {
+export async function getAthletesWithBalanceAction(arenaId: string, page = 1, pageSize = 10, query?: string) {
     try {
         const { userId: clerkId } = await auth()
         if (!clerkId) return { success: false, error: "Não autorizado" }
@@ -206,17 +185,14 @@ export async function getAthletesWithBalanceAction(page = 1, pageSize = 10, quer
         const dbUser = await UserService.getUserByClerkId(clerkId)
         if (!dbUser) return { success: false, error: "Usuário não encontrado" }
 
-        const arena = await ArenaService.getFirstArenaByOrganizationUser(dbUser.id)
-        if (!arena) return { success: false, error: "Arena não encontrada" }
-
-        const result = await LoyaltyService.getAthletesWithBalance(arena.id, page, pageSize, query)
+        const result = await LoyaltyService.getAthletesWithBalance(arenaId, page, pageSize, query)
         return { success: true, ...result }
     } catch (error: any) {
         console.error("Error in getAthletesWithBalanceAction:", error)
         return { success: false, error: error.message || "Erro ao buscar atletas" }
     }
 }
-export async function getStatementAction(page = 1, pageSize = 10, filters?: { athleteName?: string, startDate?: string, endDate?: string }) {
+export async function getStatementAction(arenaId: string, page = 1, pageSize = 10, filters?: { athleteName?: string, startDate?: string, endDate?: string }) {
     try {
         const { userId: clerkId } = await auth()
         if (!clerkId) return { success: false, error: "Não autorizado" }
@@ -224,10 +200,7 @@ export async function getStatementAction(page = 1, pageSize = 10, filters?: { at
         const dbUser = await UserService.getUserByClerkId(clerkId)
         if (!dbUser) return { success: false, error: "Usuário não encontrado" }
 
-        const arena = await ArenaService.getFirstArenaByOrganizationUser(dbUser.id)
-        if (!arena) return { success: false, error: "Arena não encontrada" }
-
-        const result = await LoyaltyService.getStatement(arena.id, page, pageSize, filters)
+        const result = await LoyaltyService.getStatement(arenaId, page, pageSize, filters)
         return { success: true, ...result }
     } catch (error: any) {
         console.error("Error in getStatementAction:", error)

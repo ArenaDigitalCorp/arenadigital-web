@@ -1,67 +1,128 @@
 "use client"
 
-import { Plus } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { AthletesList } from "@/modules/athletes/components/AthletesList"
-import { AthleteRegistrationModal } from "@/modules/athletes/components/AthleteRegistrationModal"
-import { useState, useEffect } from "react"
-import { useUser } from "@clerk/nextjs"
-import { UserService } from "@/modules/users/services/userService"
-import { ArenaService } from "@/modules/arenas/services/arenaService"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { MapPin, Phone, Mail } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { ArenaService } from "@/modules/arenas/services/arenaService";
+import { useUserSync } from "@/hooks/useUserSync";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 
-export default function AthletesPage() {
-    const { user } = useUser()
-    const [isModalOpen, setIsModalOpen] = useState(false)
-    const [arenaId, setArenaId] = useState<string | null>(null)
-    const [refreshTrigger, setRefreshTrigger] = useState(0)
+export default function AthletesIndexPage() {
+    const router = useRouter();
+    const { dbUser, isLoading: userLoading } = useUserSync();
+    const [arenas, setArenas] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        if (user) {
-            loadCurrentArena()
-        }
-    }, [user])
-
-    async function loadCurrentArena() {
-        try {
-            const dbUser = await UserService.getUserByClerkId(user!.id)
+        async function loadArenas() {
             if (dbUser) {
-                const arena = await ArenaService.getFirstArenaByOrganizationUser(dbUser.id)
-                if (arena) {
-                    setArenaId(arena.id)
+                try {
+                    const data = await ArenaService.getArenasByOwner(dbUser.id);
+                    setArenas(data);
+
+                    // Auto-redirecionamento se houver apenas uma arena
+                    if (data.length === 1) {
+                        router.replace(`/dashboard/athletes/${data[0].id}`);
+                    }
+                } catch (error) {
+                    console.error("Error loading arenas:", error);
+                    toast.error("Erro ao carregar arenas.");
+                } finally {
+                    setIsLoading(false);
                 }
+            } else if (!userLoading) {
+                setIsLoading(false);
             }
-        } catch (error) {
-            console.error("Error loading current arena:", error)
         }
+
+        loadArenas();
+    }, [dbUser, userLoading, router]);
+
+    if (isLoading || userLoading) {
+        return (
+            <div className="space-y-6">
+                <Skeleton className="h-10 w-[200px]" />
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                    {[1, 2, 3].map(i => <Skeleton key={i} className="h-[200px] w-full" />)}
+                </div>
+            </div>
+        );
     }
 
     return (
-        <div className="p-8 space-y-8">
-            <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                    <h1 className="text-3xl font-bold text-[#002B40]">Atletas</h1>
-                    <p className="text-muted-foreground">
-                        Faça a gestão dos atletas, envie e desconte moedas.
-                    </p>
-                </div>
-                <Button
-                    onClick={() => setIsModalOpen(true)}
-                    className="bg-[#FF6B00] hover:bg-[#E66000] text-white gap-2 px-6 py-6 h-auto text-base rounded-lg font-semibold shadow-md active:scale-95 transition-all"
-                >
-                    Vincular atleta
-                    <Plus className="h-5 w-5" />
-                </Button>
+        <div className="space-y-6">
+            <div>
+                <h2 className="text-3xl font-bold tracking-tight">Atletas</h2>
+                <p className="text-muted-foreground">
+                    Selecione uma arena para gerenciar seus atletas.
+                </p>
             </div>
 
-            <AthletesList arenaId={arenaId} key={refreshTrigger} />
-
-            <AthleteRegistrationModal
-                open={isModalOpen}
-                onOpenChange={setIsModalOpen}
-                onSuccess={() => {
-                    setRefreshTrigger(prev => prev + 1)
-                }}
-            />
+            {arenas.length === 0 ? (
+                <Card className="col-span-full py-12">
+                    <CardContent className="flex flex-col items-center justify-center text-center">
+                        <div className="rounded-full bg-muted p-4 mb-4">
+                            <MapPin className="h-8 w-8 text-muted-foreground" />
+                        </div>
+                        <CardTitle className="mb-2">Nenhuma arena encontrada</CardTitle>
+                        <p className="text-muted-foreground max-w-sm mb-6">
+                            Para gerenciar atletas, você precisa de uma arena ativa no painel.
+                        </p>
+                        <Link href="/dashboard/arenas">
+                            <Button>Ir para Arenas</Button>
+                        </Link>
+                    </CardContent>
+                </Card>
+            ) : (
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                    {arenas.map((arena) => (
+                        <Card key={arena.id} className="hover:shadow-md transition-shadow">
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium">
+                                    {arena.name}
+                                </CardTitle>
+                                <Badge variant={(arena.status === 'active' || arena.status === 'ativo') ? 'default' : 'secondary'}>
+                                    {(arena.status === 'active' || arena.status === 'ativo') ? 'Ativo' :
+                                        (arena.status === 'inactive' || arena.status === 'inativo') ? 'Inativo' :
+                                            'Manutenção'}
+                                </Badge>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="space-y-2 mb-4">
+                                    <div className="flex items-center text-sm text-muted-foreground">
+                                        <MapPin className="mr-2 h-4 w-4" />
+                                        <span className="truncate">
+                                            {typeof arena.address === 'string'
+                                                ? arena.address
+                                                : arena.address?.street || 'Endereço não informado'}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center text-sm text-muted-foreground">
+                                        <Phone className="mr-2 h-4 w-4" />
+                                        <span>{arena.phone || 'Telefone não informado'}</span>
+                                    </div>
+                                    <div className="flex items-center text-sm text-muted-foreground">
+                                        <Mail className="mr-2 h-4 w-4" />
+                                        <span className="truncate">{arena.email || 'E-mail não informado'}</span>
+                                    </div>
+                                </div>
+                                <div className="flex gap-2">
+                                    <Link href={`/dashboard/athletes/${arena.id}`} className="w-full">
+                                        <Button className="w-full bg-[#FF6B00] hover:bg-[#E66000] text-white">
+                                            Acessar Atletas
+                                        </Button>
+                                    </Link>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    ))}
+                </div>
+            )}
         </div>
-    )
+    );
 }

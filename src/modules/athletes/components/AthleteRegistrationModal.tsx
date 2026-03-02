@@ -46,12 +46,14 @@ const athleteFormSchema = z.object({
 type AthleteFormValues = z.infer<typeof athleteFormSchema>
 
 interface AthleteRegistrationModalProps {
+    arenaId: string
     open: boolean
     onOpenChange: (open: boolean) => void
     onSuccess: () => void
 }
 
 export function AthleteRegistrationModal({
+    arenaId,
     open,
     onOpenChange,
     onSuccess
@@ -98,6 +100,7 @@ export function AthleteRegistrationModal({
                 phone: data.phone,
                 email: data.email,
                 sportId: data.sport,
+                arenaId: arenaId,
             })
 
             if (result.success) {
@@ -126,7 +129,7 @@ export function AthleteRegistrationModal({
                     </div>
 
                     <div className="space-y-1">
-                        <h2 className="text-3xl font-bold text-[#002B40]">Novo atleta</h2>
+                        <DialogTitle className="text-3xl font-bold text-[#002B40]">Novo atleta</DialogTitle>
                     </div>
 
                     <Form {...form}>

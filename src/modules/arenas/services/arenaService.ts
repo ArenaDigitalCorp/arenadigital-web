@@ -76,7 +76,17 @@ export class ArenaService {
     }
 
     static async getArenasByOwner(ownerId: string) {
-        const { data, error } = await supabase
+        // Find arenas where user is explicitly linked in arena_users
+        const { data: linkedArenas } = await supabase
+            .from('arena_users')
+            .select('arena_id')
+            .eq('user_id', ownerId)
+            .in('status', ['Ativo', 'ativo', 'active']);
+
+        const linkedArenaIds = linkedArenas?.map(l => l.arena_id) || [];
+
+        // Build base query
+        let query = supabase
             .from('arenas')
             .select(`
                 *,
@@ -86,9 +96,16 @@ export class ArenaService {
                 comodidades_relation:arena_comodidades(
                     comodidade:comodidades(*)
                 )
-            `)
-            .eq('owner_id', ownerId)
-            .order('created_at', { ascending: false });
+            `);
+
+        // Apply OR filter to include user's owned arenas or linked arenas
+        if (linkedArenaIds.length > 0) {
+            query = query.or(`owner_id.eq.${ownerId},id.in.(${linkedArenaIds.join(',')})`);
+        } else {
+            query = query.eq('owner_id', ownerId);
+        }
+
+        const { data, error } = await query.order('created_at', { ascending: false });
 
         if (error) {
             console.error('Error fetching arenas:', error);
@@ -225,42 +242,16 @@ export class ArenaService {
         return data.url;
     }
     static async getFirstArenaByOrganizationUser(userId: string) {
-        // 1. Find the organization owned by the user
-        const { data: orgs, error: orgError } = await supabase
-            .from('organizations')
-            .select('id')
-            .eq('owner_id', userId)
-            .limit(1);
-
-        if (orgError) {
-            console.error('Error fetching organization:', orgError);
-            throw orgError;
-        }
-
-        if (!orgs || orgs.length === 0) {
-            console.warn('No organization found for user:', userId);
+        try {
+            const arenas = await ArenaService.getArenasByOwner(userId);
+            if (arenas && arenas.length > 0) {
+                return arenas[0];
+            }
+            console.warn('No arena found for user:', userId);
+            return null;
+        } catch (error) {
+            console.error('Error fetching first arena for user:', error);
             return null;
         }
-
-        const organizationId = orgs[0].id;
-
-        // 2. Find the first arena linked to this organization
-        const { data: arenas, error: arenaError } = await supabase
-            .from('arenas')
-            .select('*')
-            .eq('organization_id', organizationId)
-            .limit(1);
-
-        if (arenaError) {
-            console.error('Error fetching arena for organization:', arenaError);
-            throw arenaError;
-        }
-
-        if (!arenas || arenas.length === 0) {
-            console.warn('No arena found for organization:', organizationId);
-            return null;
-        }
-
-        return arenas[0];
     }
 }

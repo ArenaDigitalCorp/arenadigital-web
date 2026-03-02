@@ -1,232 +1,128 @@
 "use client"
 
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { BarChart3, Plus, ArrowRight, Eye } from "lucide-react";
-import { useEffect, useState } from "react";
-import { useUserSync } from "@/hooks/useUserSync";
-import { ArenaService } from "@/modules/arenas/services/arenaService";
-import { FinanceService } from "@/modules/finance/services/financeService";
-import { Skeleton } from "@/components/ui/skeleton";
+import { MapPin, Phone, Mail } from "lucide-react";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
-import { TransactionForm } from "@/modules/finance/components/TransactionForm";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { ArenaService } from "@/modules/arenas/services/arenaService";
+import { useUserSync } from "@/hooks/useUserSync";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 
-export default function FinanceDashboard() {
-    const { dbUser } = useUserSync();
-    const [arena, setArena] = useState<any>(null);
-    const [totals, setTotals] = useState({ entradas: 0, saidas: 0, saldo: 0 });
-    const [recentEntradas, setRecentEntradas] = useState<any[]>([]);
-    const [recentSaidas, setRecentSaidas] = useState<any[]>([]);
+export default function FinanceIndexPage() {
+    const router = useRouter();
+    const { dbUser, isLoading: userLoading } = useUserSync();
+    const [arenas, setArenas] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [isAddingEntry, setIsAddingEntry] = useState(false);
-    const [isAddingExpense, setIsAddingExpense] = useState(false);
-
-    const loadData = async () => {
-        if (!dbUser) return;
-        try {
-            const arenas = await ArenaService.getArenasByOwner(dbUser.id);
-            if (arenas.length > 0) {
-                const arenaId = arenas[0].id; // Assuming first arena for now
-                setArena(arenas[0]);
-                const [totalsData, allEntradas, allSaidas] = await Promise.all([
-                    FinanceService.getTotals(arenaId),
-                    FinanceService.getTransactions(arenaId, 'entrada'),
-                    FinanceService.getTransactions(arenaId, 'saída')
-                ]);
-                setTotals(totalsData);
-                setRecentEntradas(allEntradas.slice(0, 4));
-                setRecentSaidas(allSaidas.slice(0, 4));
-            }
-        } catch (error) {
-            console.error(error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
 
     useEffect(() => {
-        loadData();
-    }, [dbUser]);
+        async function loadArenas() {
+            if (dbUser) {
+                try {
+                    const data = await ArenaService.getArenasByOwner(dbUser.id);
+                    setArenas(data);
 
-    if (isLoading) {
+                    // Auto-redirecionamento se houver apenas uma arena
+                    if (data.length === 1) {
+                        router.replace(`/dashboard/finance/${data[0].id}`);
+                    }
+                } catch (error) {
+                    console.error("Error loading arenas:", error);
+                    toast.error("Erro ao carregar arenas.");
+                } finally {
+                    setIsLoading(false);
+                }
+            } else if (!userLoading) {
+                setIsLoading(false);
+            }
+        }
+
+        loadArenas();
+    }, [dbUser, userLoading, router]);
+
+    if (isLoading || userLoading) {
         return (
-            <div className="space-y-8">
-                <Skeleton className="h-10 w-64" />
-                <div className="grid gap-6 md:grid-cols-3">
-                    {[1, 2, 3].map(i => <Skeleton key={i} className="h-40 w-full" />)}
+            <div className="space-y-6">
+                <Skeleton className="h-10 w-[200px]" />
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                    {[1, 2, 3].map(i => <Skeleton key={i} className="h-[200px] w-full" />)}
                 </div>
             </div>
         );
     }
 
-    const formatCurrency = (val: number) => {
-        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
-    };
-
     return (
-        <div className="space-y-8 pb-10">
-            <div className="flex flex-col gap-1">
-                <h1 className="text-3xl font-black text-[#002B40] tracking-tight">Financeiro</h1>
-                <p className="text-[#002B40]/60 font-medium">Controle suas entradas e saídas em um só lugar.</p>
+        <div className="space-y-6">
+            <div>
+                <h2 className="text-3xl font-bold tracking-tight">Financeiro</h2>
+                <p className="text-muted-foreground">
+                    Selecione uma arena para gerenciar o seu fluxo de caixa.
+                </p>
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-2">
-                {/* Left Column: Totals */}
-                <div className="space-y-6">
-                    <Card className="bg-gradient-to-r from-[#FF7A00] to-[#FFB800] border-none shadow-xl rounded-2xl overflow-hidden text-white relative h-[180px] flex items-center p-8">
-                        <div className="space-y-1 relative z-10">
-                            <p className="text-white/80 font-bold text-sm">Saldo Atual</p>
-                            <h2 className="text-5xl font-black">{formatCurrency(totals.saldo)}</h2>
-                            <p className="text-white/60 text-xs font-bold uppercase tracking-wider">Lucro líquido mensal</p>
+            {arenas.length === 0 ? (
+                <Card className="col-span-full py-12">
+                    <CardContent className="flex flex-col items-center justify-center text-center">
+                        <div className="rounded-full bg-muted p-4 mb-4">
+                            <MapPin className="h-8 w-8 text-muted-foreground" />
                         </div>
-                    </Card>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <Card className="p-8 border-none shadow-lg rounded-2xl bg-white">
-                            <p className="text-[#002B40]/40 font-bold text-xs uppercase tracking-widest mb-1">Entradas do Mês</p>
-                            <h3 className="text-3xl font-black text-[#20B2AA] mb-1">{formatCurrency(totals.entradas)}</h3>
-                            <p className="text-red-500 font-bold text-xs">-5% vs mês anterior</p>
+                        <CardTitle className="mb-2">Nenhuma arena encontrada</CardTitle>
+                        <p className="text-muted-foreground max-w-sm mb-6">
+                            Para gerenciar o financeiro, você precisa de uma arena ativa no painel.
+                        </p>
+                        <Link href="/dashboard/arenas">
+                            <Button>Ir para Arenas</Button>
+                        </Link>
+                    </CardContent>
+                </Card>
+            ) : (
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                    {arenas.map((arena) => (
+                        <Card key={arena.id} className="hover:shadow-md transition-shadow">
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium">
+                                    {arena.name}
+                                </CardTitle>
+                                <Badge variant={(arena.status === 'active' || arena.status === 'ativo') ? 'default' : 'secondary'}>
+                                    {(arena.status === 'active' || arena.status === 'ativo') ? 'Ativo' :
+                                        (arena.status === 'inactive' || arena.status === 'inativo') ? 'Inativo' :
+                                            'Manutenção'}
+                                </Badge>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="space-y-2 mb-4">
+                                    <div className="flex items-center text-sm text-muted-foreground">
+                                        <MapPin className="mr-2 h-4 w-4" />
+                                        <span className="truncate">
+                                            {typeof arena.address === 'string'
+                                                ? arena.address
+                                                : arena.address?.street || 'Endereço não informado'}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center text-sm text-muted-foreground">
+                                        <Phone className="mr-2 h-4 w-4" />
+                                        <span>{arena.phone || 'Telefone não informado'}</span>
+                                    </div>
+                                    <div className="flex items-center text-sm text-muted-foreground">
+                                        <Mail className="mr-2 h-4 w-4" />
+                                        <span className="truncate">{arena.email || 'E-mail não informado'}</span>
+                                    </div>
+                                </div>
+                                <div className="flex gap-2">
+                                    <Link href={`/dashboard/finance/${arena.id}`} className="w-full">
+                                        <Button className="w-full bg-[#FF6B00] hover:bg-[#E66000] text-white">
+                                            Acessar Financeiro
+                                        </Button>
+                                    </Link>
+                                </div>
+                            </CardContent>
                         </Card>
-                        <Card className="p-8 border-none shadow-lg rounded-2xl bg-white">
-                            <p className="text-[#002B40]/40 font-bold text-xs uppercase tracking-widest mb-1">Despesas do Mês</p>
-                            <h3 className="text-3xl font-black text-[#FF6B00] mb-1">{formatCurrency(totals.saidas)}</h3>
-                            <p className="text-red-500 font-bold text-xs">-5% vs mês anterior</p>
-                        </Card>
-                    </div>
+                    ))}
                 </div>
-
-                {/* Right Column: Chart */}
-                <Card className="p-8 border-none shadow-lg rounded-2xl bg-white flex flex-col">
-                    <div className="flex items-center justify-between mb-8">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-[#FF6B00]/10 p-2 rounded-lg">
-                                <BarChart3 className="h-5 w-5 text-[#FF6B00]" />
-                            </div>
-                            <h3 className="text-xl font-bold text-[#002B40]">Comparativo</h3>
-                        </div>
-                        <select className="bg-white border rounded-lg px-3 py-2 text-sm text-[#002B40]/60 focus:outline-none">
-                            <option>Última semana</option>
-                        </select>
-                    </div>
-
-                    <div className="flex-1 flex items-end gap-3 justify-between px-4 pb-2">
-                        {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((day, i) => (
-                            <div key={day} className="flex flex-col items-center gap-4 flex-1">
-                                <div
-                                    className={cn(
-                                        "w-full rounded-full transition-all duration-1000",
-                                        i === 2 ? "bg-[#FF6B00]" : "bg-[#002B40]/5"
-                                    )}
-                                    style={{ height: `${[40, 70, 85, 95, 60, 75, 55][i]}%` }}
-                                >
-                                    {i === 2 && (
-                                        <div className="bg-white shadow-lg text-[#002B40] font-black text-[10px] px-2 py-1 rounded-md -top-8 relative text-center">8.5</div>
-                                    )}
-                                </div>
-                                <span className="text-[#002B40]/40 font-bold text-[10px]">{day}</span>
-                            </div>
-                        ))}
-                    </div>
-                </Card>
-            </div>
-
-            <div className="grid gap-6 lg:grid-cols-2">
-                {/* Recent Incomes */}
-                <Card className="p-8 border-none shadow-lg rounded-2xl bg-white">
-                    <div className="flex items-center justify-between mb-8">
-                        <h3 className="text-xl font-bold text-[#002B40]">Últimas Entradas</h3>
-                        <Button onClick={() => setIsAddingEntry(true)} variant="ghost" className="text-[#002B40]/60 hover:text-[#002B40] gap-2 font-bold text-sm">
-                            Nova entrada <Plus className="h-4 w-4" />
-                        </Button>
-                    </div>
-                    <div className="space-y-4">
-                        {recentEntradas.map(t => (
-                            <div key={t.id} className="bg-[#FFF8F1] p-4 rounded-xl flex items-center justify-between">
-                                <div>
-                                    <p className="text-[#002B40] font-bold text-sm">{t.category} - {t.description}</p>
-                                    <p className="text-[#002B40]/40 text-xs font-medium">{new Date(t.launch_date).toLocaleDateString()}</p>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-[#20B2AA] font-black text-sm">+ {formatCurrency(t.total_value)}</p>
-                                    <span className="bg-[#FFC145]/20 text-[#002B40]/60 text-[10px] font-bold px-2 py-0.5 rounded uppercase">{t.category}</span>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                    <Link href="/dashboard/finance/entradas" className="mt-8 text-center block text-[#002B40]/40 hover:text-[#002B40] text-sm font-bold underline">
-                        Ver tudo
-                    </Link>
-                </Card>
-
-                {/* Recent Expenses */}
-                <Card className="p-8 border-none shadow-lg rounded-2xl bg-white">
-                    <div className="flex items-center justify-between mb-8">
-                        <h3 className="text-xl font-bold text-[#002B40]">Últimas Saídas</h3>
-                        <Button onClick={() => setIsAddingExpense(true)} variant="ghost" className="text-[#002B40]/60 hover:text-[#002B40] gap-2 font-bold text-sm">
-                            Nova saída <Plus className="h-4 w-4" />
-                        </Button>
-                    </div>
-                    <div className="space-y-4">
-                        {recentSaidas.map(t => (
-                            <div key={t.id} className="bg-[#FFF8F1] p-4 rounded-xl flex items-center justify-between">
-                                <div>
-                                    <p className="text-[#002B40] font-bold text-sm">{t.category} - {t.description}</p>
-                                    <p className="text-[#002B40]/40 text-xs font-medium">{new Date(t.launch_date).toLocaleDateString()}</p>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-[#FF6B00] font-black text-sm">- {formatCurrency(t.total_value)}</p>
-                                    <span className="bg-[#FFC145]/20 text-[#002B40]/60 text-[10px] font-bold px-2 py-0.5 rounded uppercase">{t.category}</span>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                    <Link href="/dashboard/finance/saidas" className="mt-8 text-center block text-[#002B40]/40 hover:text-[#002B40] text-sm font-bold underline">
-                        Ver tudo
-                    </Link>
-                </Card>
-            </div>
-
-            {/* Modals */}
-            <Dialog open={isAddingEntry} onOpenChange={setIsAddingEntry}>
-                <DialogContent className="max-w-[400px]">
-                    <DialogHeader>
-                        <DialogTitle className="text-2xl font-black text-[#002B40]">Nova entrada</DialogTitle>
-                    </DialogHeader>
-                    {arena && dbUser && (
-                        <TransactionForm
-                            arenaId={arena.id}
-                            registeredBy={dbUser.id}
-                            type="entrada"
-                            onSuccess={() => { setIsAddingEntry(false); loadData(); }}
-                            onCancel={() => setIsAddingEntry(false)}
-                        />
-                    )}
-                </DialogContent>
-            </Dialog>
-
-            <Dialog open={isAddingExpense} onOpenChange={setIsAddingExpense}>
-                <DialogContent className="max-w-[400px]">
-                    <DialogHeader>
-                        <DialogTitle className="text-2xl font-black text-[#002B40]">Nova saída</DialogTitle>
-                    </DialogHeader>
-                    {arena && dbUser && (
-                        <TransactionForm
-                            arenaId={arena.id}
-                            registeredBy={dbUser.id}
-                            type="saída"
-                            onSuccess={() => { setIsAddingExpense(false); loadData(); }}
-                            onCancel={() => setIsAddingExpense(false)}
-                        />
-                    )}
-                </DialogContent>
-            </Dialog>
+            )}
         </div>
     );
 }

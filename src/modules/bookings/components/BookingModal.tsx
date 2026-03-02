@@ -112,7 +112,7 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
         searchTimeout.current = setTimeout(async () => {
             try {
                 // Fetch all athletes for the arena to filter in frontend (accent-insensitive)
-                const result = await searchAthletesAction()
+                const result = await searchAthletesAction(arenaId)
                 if (result.success && result.data) {
                     const normalizedSearch = normalizeString(value);
                     const filtered = (result.data as Athlete[]).filter(athlete =>

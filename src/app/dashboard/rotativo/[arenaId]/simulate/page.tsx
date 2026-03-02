@@ -19,7 +19,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 
-export default function SimulateRegistrationPage() {
+export default function SimulateRegistrationPage({ params }: { params: { arenaId: string } }) {
     const [date, setDate] = useState<Date>(new Date())
     const [rotativos, setRotativos] = useState<any[]>([])
     const [athletes, setAthletes] = useState<any[]>([])
@@ -33,16 +33,15 @@ export default function SimulateRegistrationPage() {
         try {
             setIsLoading(true)
             const dateStr = format(date, 'yyyy-MM-dd')
-            const [rotativoRes, athleteRes] = await Promise.all([
-                getRotativosAction(dateStr),
-                // Since we don't have a specific getAthletes action without arenaId, 
-                // we'll need to fetch them. In real app, the athlete would be logged in.
-                // For simulation, we'll fetch athletes from the same arena.
-                // We need to know the arenaId. Let's assume the service handles context or returns first arena's athletes.
-                // Wait, AthleteService.getAthletesByArena needs arenaId.
-                // The getRotativosAction already knows the arena.
-                // Let's modify the action or fetch it here.
-            ])
+            const rotativoRes = await getRotativosAction(params.arenaId, dateStr)
+
+            // Since we don't have a specific getAthletes action without arenaId, 
+            // we'll need to fetch them. In real app, the athlete would be logged in.
+            // For simulation, we'll fetch athletes from the same arena.
+            // We need to know the arenaId. Let's assume the service handles context or returns first arena's athletes.
+            // Wait, AthleteService.getAthletesByArena needs arenaId.
+            // The getRotativosAction already knows the arena.
+            // Let's modify the action or fetch it here.
 
             if (rotativoRes.success) {
                 setRotativos(rotativoRes.data || [])
@@ -145,10 +144,10 @@ export default function SimulateRegistrationPage() {
                                             disabled={isFull}
                                             onClick={() => setSelectedRotativo(r.id)}
                                             className={`w-full text-left p-4 rounded-2xl border-2 transition-all ${isSelected
-                                                    ? "border-[#FF6B00] bg-[#FFF5EF]"
-                                                    : isFull
-                                                        ? "opacity-50 border-gray-50 bg-gray-50 cursor-not-allowed"
-                                                        : "border-gray-100 hover:border-[#FF6B00]/40"
+                                                ? "border-[#FF6B00] bg-[#FFF5EF]"
+                                                : isFull
+                                                    ? "opacity-50 border-gray-50 bg-gray-50 cursor-not-allowed"
+                                                    : "border-gray-100 hover:border-[#FF6B00]/40"
                                                 }`}
                                         >
                                             <div className="flex justify-between items-start">
@@ -200,8 +199,8 @@ export default function SimulateRegistrationPage() {
                                     key={a.id}
                                     onClick={() => setSelectedAthlete(a.id)}
                                     className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${selectedAthlete === a.id
-                                            ? "border-[#FF6B00] bg-[#FFF5EF]"
-                                            : "border-gray-50 hover:bg-gray-50"
+                                        ? "border-[#FF6B00] bg-[#FFF5EF]"
+                                        : "border-gray-50 hover:bg-gray-50"
                                         }`}
                                 >
                                     <div className="bg-[#002B40] text-white h-8 w-8 rounded-lg flex items-center justify-center font-bold text-xs">

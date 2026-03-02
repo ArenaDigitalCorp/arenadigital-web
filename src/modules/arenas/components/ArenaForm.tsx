@@ -29,7 +29,7 @@ import { ImageUpload } from "@/components/ui/image-upload"
 import { supabase } from "@/shared/database/supabaseClient"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { Check, ChevronsUpDown } from "lucide-react"
+import { Check, ChevronsUpDown, Copy } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { SportService, Sport } from "@/modules/courts/services/sportService"
 import { ComodidadeService, Comodidade } from "@/modules/arenas/services/comodidadeService"
@@ -80,7 +80,7 @@ export const DAYS_OF_WEEK = [
 ];
 
 export const DEFAULT_OPENING_HOURS = DAYS_OF_WEEK.reduce((acc, day) => {
-    acc[day.value] = { isOpen: true, start: "06:00", end: "23:00" };
+    acc[day.value] = { isOpen: false, start: "06:00", end: "23:00" };
     return acc;
 }, {} as Record<string, { isOpen: boolean; start: string; end: string }>);
 
@@ -688,31 +688,6 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
                         <div className="pt-4 border-t border-gray-100 mt-6">
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className="text-lg font-semibold text-[#002B40]">Dias de funcionamento</h3>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => {
-                                        const currentHours = form.getValues("opening_hours") || {};
-                                        // Pick the first day that is open to copy its schedule
-                                        const sourceDay = DAYS_OF_WEEK.find(d => currentHours[d.value]?.isOpen);
-                                        if (sourceDay && currentHours[sourceDay.value]) {
-                                            const { start, end } = currentHours[sourceDay.value];
-                                            const newHours = { ...currentHours };
-                                            DAYS_OF_WEEK.forEach(d => {
-                                                if (newHours[d.value]?.isOpen) {
-                                                    newHours[d.value] = { ...newHours[d.value], start, end };
-                                                }
-                                            });
-                                            form.setValue("opening_hours", newHours, { shouldDirty: true });
-                                            toast.success("Horários replicados para todos os dias abertos!");
-                                        } else {
-                                            toast.error("Ative pelo menos um dia e configure o horário antes de replicar.");
-                                        }
-                                    }}
-                                >
-                                    Replicar para todos
-                                </Button>
                             </div>
 
                             <div className="flex flex-col gap-4">
@@ -754,6 +729,32 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
                                                                     onChange={(e) => field.onChange({ ...value, end: e.target.value })}
                                                                 />
                                                             </div>
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="ml-2 h-9 text-xs border-orange-200 text-orange-700 hover:bg-orange-50"
+                                                                title="Replicar este horário para todos os dias"
+                                                                onClick={() => {
+                                                                    DAYS_OF_WEEK.forEach(d => {
+                                                                        if (d.value !== day.value) {
+                                                                            form.setValue(`opening_hours.${d.value}` as any, {
+                                                                                isOpen: true,
+                                                                                start: value.start,
+                                                                                end: value.end
+                                                                            }, {
+                                                                                shouldDirty: true,
+                                                                                shouldValidate: true,
+                                                                                shouldTouch: true
+                                                                            });
+                                                                        }
+                                                                    });
+                                                                    toast.success("Horários replicados com sucesso!");
+                                                                }}
+                                                            >
+                                                                <Copy className="h-3 w-3 mr-1" />
+                                                                Replicar
+                                                            </Button>
                                                         </div>
                                                     ) : (
                                                         <div className="text-sm text-gray-400 italic">Fechado</div>

@@ -5,8 +5,9 @@ export interface AtletaInput {
     nome_perfil: string;
     cpf?: string;
     telefone?: string;
-    origem_cadastro?: 'arena' | 'aplicativo';
+    origem_cadastro?: 'arena' | 'aplicativo' | 'web';
     id_arena_cadastro?: string;
+    compartilha_info?: boolean;
 }
 
 export interface AtletaEsporteInput {

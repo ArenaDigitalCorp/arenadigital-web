@@ -14,6 +14,7 @@ export async function linkAthlete(formData: {
     phone: string;
     email: string;
     sportId: string;
+    arenaId: string;
 }) {
     try {
         const { userId: managerClerkId } = await auth();
@@ -22,15 +23,10 @@ export async function linkAthlete(formData: {
             return { success: false, error: "Não autorizado" };
         }
 
-        // 1. Get Manager's DB User and Arena
+        // 1. Get Manager's DB User
         const managerDbUser = await UserService.getUserByClerkId(managerClerkId);
         if (!managerDbUser) {
             return { success: false, error: "Usuário gestor não encontrado no banco." };
-        }
-
-        const arena = await ArenaService.getFirstArenaByOrganizationUser(managerDbUser.id);
-        if (!arena) {
-            return { success: false, error: "Arena não vinculada ao gestor. Certifique-se de que sua arena está cadastrada." };
         }
 
         // 1.1 Check if email already exists
@@ -64,12 +60,13 @@ export async function linkAthlete(formData: {
             cpf: formData.cpf,
             telefone: formData.phone,
             origem_cadastro: 'arena',
-            id_arena_cadastro: arena.id
+            id_arena_cadastro: formData.arenaId,
+            compartilha_info: true
         });
 
         // 5. Link to Arena
         await AthleteService.linkToArena({
-            id_arena: arena.id,
+            id_arena: formData.arenaId,
             id_atleta: atleta.id,
             origem: 'web'
         });
