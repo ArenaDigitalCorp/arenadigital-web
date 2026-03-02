@@ -39,7 +39,7 @@ Mantém o registro das arenas que um atleta favoritou no aplicativo e os víncul
 - **Funcionalidade no App:** O atleta pode favoritar/desfavoritar uma arena para acesso rápido (salvo em `atleta_arena_favoritos`). Além disso, ao favoritar, o sistema também cria uma vinculação caso não exista na tabela principal de vínculos (`arenas_atleta`).
 - **Tabela `arenas_atleta` (Vínculo Principal):**
   - Vincula um atleta a uma arena.
-  - **`origem` (Enum: `web`, `aplicativo`):** Identifica se o vínculo foi criado pelo gestor da arena convidando o atleta (`web`) ou se o atleta buscou a arena e a marcou como favorita (`aplicativo`). Quando favoritar no aplicativo, o valor preenchido deve ser `aplicativo`. Se o usuário desfavoritar pelo aplicativo, o registro será removido de ambas tabelas (`atleta_arena_favoritos` e `arenas_atleta`).
+  - **`origem` (Enum: `arena`, `aplicativo`):** Identifica se o vínculo foi criado pelo gestor da arena convidando o atleta (`arena`) ou se o atleta buscou a arena e a marcou como favorita (`aplicativo`). Quando favoritar no aplicativo, o valor preenchido deve ser `aplicativo`. Se o usuário desfavoritar pelo aplicativo, o registro será removido de ambas tabelas (`atleta_arena_favoritos` e `arenas_atleta`).
 - **Tabela `atleta_arena_favoritos`: (Apenas Favoritos)**
 - **Tabela `atleta_arena_favoritos`:**
   - `id` (uuid, primary key)
@@ -60,6 +60,7 @@ O usuário do app é um "Atleta". Ele terá um perfil próprio, configurando pri
   - `id_users` (uuid, foreign key para `users.id`) - O elo entre a auth e o perfil.
   - `nome_perfil`, `descricao_perfil`, `data_nascimento`, `cpf`, `telefone`.
   - `origem_cadastro` - Se cadastrado pelo 'aplicativo' ou pela 'arena'.
+  - **`role` (tabela `users`):** Todo atleta criado pelo sistema Arena Digital Web recebe a role `'atleta'` na tabela de usuários.
   - **Redes:** `instagram`, `facebook`, `tiktok`.
   - **`compartilha_info` (boolean):** Identifica se o atleta permite que seu perfil seja encontrado pelos outros usuários.
 - **Tabela `atleta_esportes`:** Permite que o atleta cadastre seus esportes favoritos e seu `nivel_habilidade`.

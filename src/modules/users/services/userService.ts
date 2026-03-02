@@ -21,7 +21,7 @@ export class UserService {
         return null;
     }
 
-    static async syncUser(clerkUserId: string, email: string, name?: string, arenaName?: string, cpf?: string, phone?: string, addressData?: any) {
+    static async syncUser(clerkUserId: string, email: string, name?: string, arenaName?: string, cpf?: string, phone?: string, addressData?: any, role?: string) {
         // 1. Sync user
         const { data: user, error: userError } = await supabase
             .from('users')
@@ -30,7 +30,8 @@ export class UserService {
                     clerk_user_id: clerkUserId,
                     email: email,
                     name: name,
-                    ...(cpf && { cpf })
+                    ...(cpf && { cpf }),
+                    ...(role && { role })
                 },
                 { onConflict: 'clerk_user_id' }
             )

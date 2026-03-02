@@ -42,15 +42,18 @@ export async function linkAthlete(formData: {
             emailAddress: [formData.email],
             firstName: formData.name.split(' ')[0],
             lastName: formData.name.split(' ').slice(1).join(' ') || undefined,
-            password: "Mudar@123",
-            skipPasswordChecks: true,
         });
 
         // 3. Sync to Supabase users table
         const athleteDbUser = await UserService.syncUser(
             clerkUser.id,
             formData.email,
-            formData.name
+            formData.name,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            'atleta'
         );
 
         // 4. Create Atleta profile
@@ -68,7 +71,7 @@ export async function linkAthlete(formData: {
         await AthleteService.linkToArena({
             id_arena: formData.arenaId,
             id_atleta: atleta.id,
-            origem: 'web'
+            origem: 'arena'
         });
 
         // 6. Link to Sport

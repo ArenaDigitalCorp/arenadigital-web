@@ -19,7 +19,7 @@ export interface AtletaEsporteInput {
 export interface ArenaAtletaInput {
     id_arena: string;
     id_atleta: string;
-    origem?: 'web' | 'aplicativo';
+    origem?: 'arena' | 'aplicativo';
 }
 
 export class AthleteService {
