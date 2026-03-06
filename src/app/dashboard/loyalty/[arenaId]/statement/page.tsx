@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, use } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Search, Loader2, Calendar, ChevronLeft, ChevronRight, Filter } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -12,7 +12,8 @@ import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { cn } from "@/lib/utils"
 
-export default function FidelityStatementPage({ params }: { params: { arenaId: string } }) {
+export default function FidelityStatementPage({ params }: { params: Promise<{ arenaId: string }> }) {
+    const unwrappedParams = use(params)
     const router = useRouter()
     const [search, setSearch] = useState("")
     const [startDate, setStartDate] = useState("")
@@ -27,7 +28,7 @@ export default function FidelityStatementPage({ params }: { params: { arenaId: s
     const loadStatement = useCallback(async () => {
         try {
             setIsLoading(true)
-            const result = await getStatementAction(params.arenaId, page, pageSize, {
+            const result = await getStatementAction(unwrappedParams.arenaId, page, pageSize, {
                 athleteName: search,
                 startDate: startDate ? new Date(startDate + 'T00:00:00').toISOString() : undefined,
                 endDate: endDate ? new Date(endDate + 'T23:59:59').toISOString() : undefined

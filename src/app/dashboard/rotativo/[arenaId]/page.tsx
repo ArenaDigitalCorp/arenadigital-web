@@ -36,6 +36,7 @@ import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { toast } from "sonner"
 import { AthleteService } from "@/modules/athletes/services/athleteService"
+import { ArenaService } from "@/modules/arenas/services/arenaService"
 import { createRotativoAction, getRotativosAction, getParticipantsAction } from "@/modules/rotativos/actions/rotativoActions"
 import { Badge } from "@/components/ui/badge"
 
@@ -87,14 +88,16 @@ export default function RotativoPage({ params }: { params: Promise<{ arenaId: st
     useEffect(() => {
         async function loadSports() {
             try {
-                const data = await AthleteService.getSports()
-                setSports(data)
+                const arena = await ArenaService.getArenaById(resolvedParams.arenaId)
+                if (arena && arena.sports) {
+                    setSports(arena.sports)
+                }
             } catch (error) {
                 console.error("Error loading sports:", error)
             }
         }
         loadSports()
-    }, [])
+    }, [resolvedParams.arenaId])
 
     const form = useForm<RotativoFormValues>({
         resolver: zodResolver(rotativoFormSchema),

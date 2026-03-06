@@ -10,7 +10,7 @@ Este documento descreve a arquitetura atual do banco de dados (Supabase) utiliza
 
 O banco de dados é gerido via **Supabase** (PostgreSQL) com migrações em SQL puro (`supabase/migrations/*.sql`).
 A autenticação primária é gerida por um provedor externo (Clerk), que é sincronizado com a tabela public.`users` (onde o `clerk_user_id` é salvo). No App Mobile, isso significa que ao fazer login/cadastro com Clerk, o usuário deverá estar vinculado à tabela principal de usuários e posteriormente ao seu perfil de **Atleta**.
-> **Nota para Gestores:** Além dos dados de autenticação e nome, a tabela `users` também armazena o `cpf`, fornecido no momento do cadastro do gestor na plataforma Web. O telefone é armazenado diretamente no registro da respectiva `arena`. Atletas criados via Web Gestor são registrados no Clerk com `unsafeMetadata`: `{ role: 'atleta', origem_cadastro: 'arena' }`, permitindo que o aplicativo identifique a necessidade de criação de senha no primeiro login.
+> **Nota para Gestores:** Além dos dados de autenticação e nome, a tabela `users` também armazena o `cpf`, fornecido no momento do cadastro do gestor na plataforma Web. O telefone é armazenado diretamente no registro da respectiva `arena`.
 
 ---
 
@@ -63,7 +63,22 @@ O usuário do app é um "Atleta". Ele terá um perfil próprio, configurando pri
   - **`role` (tabela `users`):** Todo atleta criado pelo sistema Arena Digital Web recebe a role `'atleta'` na tabela de usuários.
   - **Redes:** `instagram`, `facebook`, `tiktok`.
   - **`compartilha_info` (boolean):** Identifica se o atleta permite que seu perfil seja encontrado pelos outros usuários.
-- **Tabela `atleta_esportes`:** Permite que o atleta cadastre seus esportes favoritos e seu `nivel_habilidade`.
+- **Tabela `atleta_esportes`:** Permite que o atleta cadastre seus esportes favoritos, seu nível de habilidade e uma descrição adicional.
+  - `id_atleta` (uuid, foreign key para `atleta.id`)
+  - `id_esporte` (uuid, foreign key para `sports.id`)
+  - `id_nivel_habilidade_esporte` (uuid, foreign key para `nivel_habilidade_esporte.id`)
+  - `descricao` (text) - Comentários ou observações sobre a prática deste esporte.
+- **Tabela `nivel_habilidade_esporte` (Referência):** Define os níveis de habilidade possíveis para cada esporte.
+  - `id` (uuid, primary key)
+  - `nivel` (text) - Descrição do nível (Ex: Iniciante, Intermediário, Pro).
+  - `id_esporte` (uuid, foreign key para `sports.id`) - Vincula o nível a um esporte específico.
+- **Tabela `atleta_esporte_historico` (Log):** Registra o histórico de evolução de níveis do atleta.
+  - `id` (uuid, primary key)
+  - `id_atleta` (uuid, foreign key para `atleta.id`)
+  - `id_nivel_habilidade_esporte` (uuid, foreign key para `nivel_habilidade_esporte.id`)
+  - `data_criacao` (timestamp with time zone) - Data/hora em que a mudança ocorreu.
+
+
 
 - **Como o App Mobile deve buscar Atletas:**
   No módulo de pesquisa, ao buscar atletas, a cláusula `where compartilha_info = true` é **obrigatória**.
@@ -128,7 +143,7 @@ A fim de contar e exibir informações sobre a lotação das arenas, o app rastr
   - `location` (geography(Point, 4326)).
   - `updated_at` (timestamp, indicando a última verificação).
 - **Controlador na Arena (`show_presence`):** A tabela `arenas` recebeu uma flag `show_presence` (boolean, default TRUE). Se FALSE, a arena oculta essas contagens de visitantes em tempo real.
-- **Função RPC (`get_arena_presence`):** Conta quantos atletas estão em um raio de 100 metros da Arena e que tiveram a localização enviada na última hora (`updated_at >= NOW() - INTERVAL '1 hour'`). Retorna -1 se a arena desativou a exibição.
+- **Função RPC (`get_arena_presence`):** Conta quantos atletas estão em um raio de 500 metros da Arena e que tiveram a localização enviada na última hora (`updated_at >= NOW() - INTERVAL '1 hour'`). Retorna -1 se a arena desativou a exibição.
 
 ---
 

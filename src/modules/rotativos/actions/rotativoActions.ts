@@ -14,9 +14,11 @@ export async function createRotativoAction(formData: any) {
         const dbUser = await UserService.getUserByClerkId(clerkId)
         if (!dbUser) return { success: false, error: "Usuário não encontrado" }
 
+        const { arenaId, ...rest } = formData
+
         await RotativoService.createRotativo({
-            ...formData,
-            id_arena: formData.arenaId
+            ...rest,
+            id_arena: arenaId
         })
 
         revalidatePath('/dashboard/rotativo')

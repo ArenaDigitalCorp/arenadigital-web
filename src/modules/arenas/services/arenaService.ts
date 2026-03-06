@@ -126,6 +126,9 @@ export class ArenaService {
                 *,
                 sports_relation:arena_sports(
                     sport:sports(*)
+                ),
+                comodidades_relation:arena_comodidades(
+                    comodidade:comodidades(*)
                 )
             `)
             .eq('id', id)
