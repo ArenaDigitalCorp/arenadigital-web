@@ -1,6 +1,6 @@
 "use client"
 
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, ArrowLeft, ChevronLeft, ChevronRight, Edit, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -9,7 +9,6 @@ import { ArenaService } from "@/modules/arenas/services/arenaService";
 import { FinanceService } from "@/modules/finance/services/financeService";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
 import {
     Table,
     TableBody,
@@ -23,8 +22,10 @@ import {
     DialogContent,
     DialogHeader,
     DialogTitle,
+    DialogFooter,
+    DialogDescription,
 } from "@/components/ui/dialog";
-import { TransactionForm } from "@/modules/finance/components/TransactionForm";
+import { TransactionForm, TransactionData } from "@/modules/finance/components/TransactionForm";
 import { toast } from "sonner";
 
 export default function EntradasPage() {
@@ -32,7 +33,13 @@ export default function EntradasPage() {
     const [arena, setArena] = useState<any>(null);
     const [transactions, setTransactions] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [isAdding, setIsAdding] = useState(false);
+
+    // Estado do modal de criação/edição
+    const [isFormOpen, setIsFormOpen] = useState(false);
+    const [editingTransaction, setEditingTransaction] = useState<TransactionData | null>(null);
+
+    // Estado do modal de confirmação de exclusão
+    const [deletingId, setDeletingId] = useState<string | null>(null);
 
     const loadData = async () => {
         if (!dbUser) return;
@@ -54,15 +61,50 @@ export default function EntradasPage() {
         loadData();
     }, [dbUser]);
 
-    const handleDelete = async (id: string) => {
-        if (confirm("Deseja realmente excluir este lançamento?")) {
-            try {
-                await FinanceService.deleteTransaction(id);
-                setTransactions(transactions.filter(t => t.id !== id));
-                toast.success("Lançamento excluído!");
-            } catch (error) {
-                toast.error("Erro ao excluir lançamento.");
-            }
+    const handleOpenCreate = () => {
+        setEditingTransaction(null);
+        setIsFormOpen(true);
+    };
+
+    const handleOpenEdit = (t: any) => {
+        setEditingTransaction({
+            id: t.id,
+            type: t.type,
+            category: t.category,
+            description: t.description,
+            quantity: t.quantity,
+            unit_value: t.unit_value,
+            discount: t.discount,
+            total_value: t.total_value,
+            launch_date: t.launch_date,
+            registration_date: t.registration_date,
+            atleta_id: t.atleta_id,
+            atleta: t.atleta,
+        });
+        setIsFormOpen(true);
+    };
+
+    const handleFormSuccess = () => {
+        setIsFormOpen(false);
+        setEditingTransaction(null);
+        loadData();
+    };
+
+    const handleFormCancel = () => {
+        setIsFormOpen(false);
+        setEditingTransaction(null);
+    };
+
+    const handleDelete = async () => {
+        if (!deletingId) return;
+        try {
+            await FinanceService.deleteTransaction(deletingId);
+            setTransactions(transactions.filter(t => t.id !== deletingId));
+            toast.success("Lançamento excluído!");
+        } catch (error) {
+            toast.error("Erro ao excluir lançamento.");
+        } finally {
+            setDeletingId(null);
         }
     };
 
@@ -80,7 +122,7 @@ export default function EntradasPage() {
 
             <div className="flex items-center justify-between">
                 <h1 className="text-3xl font-black text-[#002B40] tracking-tight">Entradas</h1>
-                <Button onClick={() => setIsAdding(true)} className="bg-[#FF6B00] hover:bg-[#E66000] text-white font-bold h-12 px-6 rounded-xl shadow-lg">
+                <Button onClick={handleOpenCreate} className="bg-[#FF6B00] hover:bg-[#E66000] text-white font-bold h-12 px-6 rounded-xl shadow-lg">
                     Nova entrada <Plus className="ml-2 h-5 w-5" />
                 </Button>
             </div>
@@ -105,6 +147,7 @@ export default function EntradasPage() {
                             <TableHead className="text-[#002B40]/40 font-bold uppercase text-xs">Desconto</TableHead>
                             <TableHead className="text-[#002B40]/40 font-bold uppercase text-xs text-[#FF6B00]">Valor total</TableHead>
                             <TableHead className="text-[#002B40]/40 font-bold uppercase text-xs">Data de lançamento</TableHead>
+                            <TableHead className="text-[#002B40]/40 font-bold uppercase text-xs">Atleta</TableHead>
                             <TableHead className="text-[#002B40]/40 font-bold uppercase text-xs">Registrado por</TableHead>
                             <TableHead className="w-24"></TableHead>
                         </TableRow>
@@ -121,37 +164,77 @@ export default function EntradasPage() {
                                 <TableCell className="text-[#002B40]/60 font-medium">{formatCurrency(t.discount)}</TableCell>
                                 <TableCell className="text-[#FF6B00] font-black">{formatCurrency(t.total_value)}</TableCell>
                                 <TableCell className="text-[#002B40]/60 font-medium">{new Date(t.launch_date).toLocaleDateString()}</TableCell>
+                                <TableCell className="text-[#002B40]/60 font-medium">
+                                    {t.atleta?.nome_perfil
+                                        ? <span className="bg-blue-50 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded">{t.atleta.nome_perfil}</span>
+                                        : <span className="text-[#002B40]/30">—</span>
+                                    }
+                                </TableCell>
                                 <TableCell className="text-[#002B40]/60 font-medium">{t.registered_by?.name}</TableCell>
                                 <TableCell>
                                     <div className="flex gap-2">
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 bg-[#FFC145]/10 text-[#002B40]/60 hover:bg-[#FFC145]/20">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => handleOpenEdit(t)}
+                                            className="h-8 w-8 bg-[#FFC145]/10 text-[#002B40]/60 hover:bg-[#FFC145]/30 hover:text-[#002B40]"
+                                        >
                                             <Edit className="h-4 w-4" />
                                         </Button>
-                                        <Button variant="ghost" size="icon" onClick={() => handleDelete(t.id)} className="h-8 w-8 bg-red-50 text-red-500 hover:bg-red-100">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => setDeletingId(t.id)}
+                                            className="h-8 w-8 bg-red-50 text-red-500 hover:bg-red-100"
+                                        >
                                             <Trash2 className="h-4 w-4" />
                                         </Button>
                                     </div>
                                 </TableCell>
-                            </TableRow>
+            </TableRow>
                         ))}
                     </TableBody>
                 </Table>
             </Card>
 
-            <Dialog open={isAdding} onOpenChange={setIsAdding}>
-                <DialogContent className="max-w-[400px]">
+            {/* Modal de criação / edição */}
+            <Dialog open={isFormOpen} onOpenChange={(open) => { if (!open) handleFormCancel(); }}>
+                <DialogContent className="max-w-[420px]">
                     <DialogHeader>
-                        <DialogTitle className="text-2xl font-black text-[#002B40]">Nova entrada</DialogTitle>
+                        <DialogTitle className="text-2xl font-black text-[#002B40]">
+                            {editingTransaction ? "Editar entrada" : "Nova entrada"}
+                        </DialogTitle>
                     </DialogHeader>
                     {arena && dbUser && (
                         <TransactionForm
                             arenaId={arena.id}
                             registeredBy={dbUser.id}
                             type="entrada"
-                            onSuccess={() => { setIsAdding(false); loadData(); }}
-                            onCancel={() => setIsAdding(false)}
+                            transaction={editingTransaction ?? undefined}
+                            onSuccess={handleFormSuccess}
+                            onCancel={handleFormCancel}
                         />
                     )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Modal de confirmação de exclusão */}
+            <Dialog open={!!deletingId} onOpenChange={(open: boolean) => { if (!open) setDeletingId(null); }}>
+                <DialogContent className="max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle className="text-lg font-black text-[#002B40]">Excluir lançamento?</DialogTitle>
+                        <DialogDescription className="text-[#002B40]/60">
+                            Esta ação não pode ser desfeita. O lançamento será removido permanentemente.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="flex gap-3 sm:justify-end">
+                        <Button variant="outline" onClick={() => setDeletingId(null)} className="border-[#002B40]/20">
+                            Cancelar
+                        </Button>
+                        <Button onClick={handleDelete} className="bg-red-600 hover:bg-red-700 text-white font-bold">
+                            Excluir
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
         </div>

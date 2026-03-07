@@ -12,6 +12,7 @@ export interface TransactionInput {
     registration_date: string;
     launch_date: string;
     registered_by: string;
+    atleta_id?: string | null;
 }
 
 export class FinanceService {
@@ -33,7 +34,7 @@ export class FinanceService {
     static async getTransactions(arenaId: string, type?: 'entrada' | 'saída') {
         let query = supabase
             .from('transactions')
-            .select('*, registered_by:users(name)')
+            .select('*, registered_by:users(name), atleta:atleta_id(id, nome_perfil)')
             .eq('arena_id', arenaId)
             .order('launch_date', { ascending: false });
 
@@ -75,6 +76,25 @@ export class FinanceService {
             ...totals,
             saldo: totals.entradas - totals.saidas
         };
+    }
+
+    static async updateTransaction(
+        id: string,
+        input: Omit<TransactionInput, 'arena_id' | 'registered_by'>
+    ) {
+        const { data, error } = await supabase
+            .from('transactions')
+            .update(input)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Error updating transaction:', error);
+            throw error;
+        }
+
+        return data;
     }
 
     static async deleteTransaction(id: string) {

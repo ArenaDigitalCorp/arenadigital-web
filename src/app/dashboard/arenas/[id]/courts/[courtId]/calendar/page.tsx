@@ -213,7 +213,7 @@ export default function CourtCalendarPage() {
     return (
         <div className="flex flex-col h-full bg-[#F8FAFC] min-h-screen">
             {/* Header */}
-            <header className="bg-white border-b border-[#002B40]/10 px-8 py-4 flex items-center justify-between sticky top-0 z-10">
+            <header className="bg-white border-b border-[#002B40]/10 px-4 md:px-8 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 sticky top-16 z-10 transition-all">
                 <div className="flex items-center gap-4">
                     <Button variant="ghost" size="icon" onClick={() => router.back()} className="text-[#002B40]/60 hover:bg-[#002B40]/5">
                         <ArrowLeft className="w-5 h-5" />
@@ -263,30 +263,32 @@ export default function CourtCalendarPage() {
 
                     <div className="h-6 w-px bg-[#002B40]/10 mx-2" />
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-2 md:gap-3">
                         <Button
                             onClick={() => setIsAvailableTimesModalOpen(true)}
-                            className="bg-[#002B40] hover:bg-[#001D2C] text-white font-bold gap-2"
+                            className="bg-[#002B40] hover:bg-[#001D2C] text-white font-bold gap-2 text-xs md:text-sm h-9 md:h-10"
                         >
                             <Clock className="w-4 h-4" />
-                            Horários disponíveis
+                            <span className="hidden sm:inline">Horários disponíveis</span>
+                            <span className="sm:hidden">Horários</span>
                         </Button>
                         <Button
                             onClick={() => setIsDayOpportunitiesModalOpen(true)}
-                            className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold gap-2"
+                            className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold gap-2 text-xs md:text-sm h-9 md:h-10"
                         >
                             <Check className="w-4 h-4" />
-                            Ver oportunidades do dia
+                            <span className="hidden sm:inline">Oportunidades</span>
+                            <span className="sm:hidden">Oportuns</span>
                         </Button>
-                        <Button onClick={() => setIsBookingModalOpen(true)} className="bg-[#FF6B00] hover:bg-[#E66000] text-white font-bold">
-                            Cadastrar reserva
+                        <Button onClick={() => setIsBookingModalOpen(true)} className="bg-[#FF6B00] hover:bg-[#E66000] text-white font-bold text-xs md:text-sm h-9 md:h-10">
+                            Reservar
                         </Button>
                     </div>
                 </div>
             </header>
 
-            <div className="flex-1 p-8 overflow-auto">
-                <Card className="border-none shadow-sm bg-white overflow-hidden min-w-[800px] flex flex-col gap-0">
+            <div className="flex-1 p-4 md:p-8 overflow-x-auto overflow-y-auto">
+                <Card className="border-none shadow-sm bg-white overflow-hidden min-w-[320px] sm:min-w-[800px] flex flex-col gap-0">
                     {/* Header Row */}
                     <div className="grid grid-cols-[80px_1fr] border-b border-[#002B40]/5">
                         <div className="p-4 border-r border-[#002B40]/5 font-bold text-[#002B40]/40 text-xs text-center flex items-center justify-center bg-[#F8FAFC]">

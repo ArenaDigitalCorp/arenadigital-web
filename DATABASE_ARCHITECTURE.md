@@ -128,6 +128,8 @@ O sistema da Web permite ao gestor abrir um jogo ("Rotativo") para inscrições 
 ### 2.6. Pagamentos e Transações (App para a Arena)
 O pagamento realizado pelo usuário através do aplicativo **deve ser direcionado para a Arena**.
 - Atualmente, as transações financeiras na visão do gestor são persistidas na tabela `transactions`. 
+- **Coluna `atleta_id` (opcional):** A tabela `transactions` possui a coluna `atleta_id` (UUID, nullable, FK → `atleta.id` com `ON DELETE SET NULL`). Ao registrar uma **entrada**, o gestor pode vincular opcionalmente um atleta da carteira da arena. Quando preenchido, o nome do atleta é exibido no relatório de entradas e nos cards do dashboard financeiro. Transações sem atleta vinculado exibem `—`.
+- **Migração:** `ALTER TABLE transactions ADD COLUMN atleta_id UUID REFERENCES atleta(id) ON DELETE SET NULL;`
 - **Desenho Futuro (App):** Deve-se definir a infraestrutura de pagamentos (Ex: Stripe, Pagar.me ou MercadoPago com Split de Pagamentos, ou cobrança na chave própria da Arena). Ao efetuar a reserva no App, o status da reserva no `bookings` muda para e.g. `'confirmed'`, e um registro poderá ser injetado em `transactions` com tipo `'entrada'` e a origem do App, garantindo que o relatório do gestor reflita essa venda imediatamente.
 
 ### 2.7. Programa de Fidelidade (`programa_fidelidade_extrato`)
