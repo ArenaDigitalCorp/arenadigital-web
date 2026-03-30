@@ -74,6 +74,39 @@ export class RotativoService {
         return results;
     }
 
+    static async getRotativosByMonth(arenaId: string, startDate: string, endDate: string) {
+        const { data, error } = await supabase
+            .from('rotativos')
+            .select('id, data')
+            .eq('id_arena', arenaId)
+            .gte('data', startDate)
+            .lte('data', endDate);
+
+        if (error) {
+            console.error('Error fetching rotativos by month:', error);
+            throw error;
+        }
+
+        const results = await Promise.all((data || []).map(async (r) => {
+            const { count } = await supabase
+                .from('rotativo_inscricoes')
+                .select('*', { count: 'exact', head: true })
+                .eq('id_rotativo', r.id);
+            return { data: r.data, inscricoes_count: count || 0 };
+        }));
+
+        const byDate: Record<string, { hasRotativo: boolean; hasInscriptions: boolean }> = {};
+        for (const r of results) {
+            if (!byDate[r.data]) {
+                byDate[r.data] = { hasRotativo: true, hasInscriptions: false };
+            }
+            if (r.inscricoes_count > 0) {
+                byDate[r.data].hasInscriptions = true;
+            }
+        }
+        return byDate;
+    }
+
     static async getRotativoInscritos(rotativoId: string) {
         const { data, error } = await supabase
             .from('rotativo_inscricoes')

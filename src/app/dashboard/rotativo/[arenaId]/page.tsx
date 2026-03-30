@@ -5,7 +5,7 @@ import { Calendar } from "@/components/ui/calendar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Plus, Activity, Clock, Users, DollarSign, Loader2, ClipboardList, Info } from "lucide-react"
-import { format } from "date-fns"
+import { format, startOfMonth, endOfMonth, subDays, addDays } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import {
     Dialog,
@@ -37,7 +37,7 @@ import * as z from "zod"
 import { toast } from "sonner"
 import { AthleteService } from "@/modules/athletes/services/athleteService"
 import { ArenaService } from "@/modules/arenas/services/arenaService"
-import { createRotativoAction, getRotativosAction, getParticipantsAction } from "@/modules/rotativos/actions/rotativoActions"
+import { createRotativoAction, getRotativosAction, getParticipantsAction, getRotativosByMonthAction } from "@/modules/rotativos/actions/rotativoActions"
 import { Badge } from "@/components/ui/badge"
 
 const rotativoFormSchema = z.object({
@@ -53,6 +53,8 @@ type RotativoFormValues = z.infer<typeof rotativoFormSchema>
 
 export default function RotativoPage({ params }: { params: Promise<{ arenaId: string }> }) {
     const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date())
+    const [displayMonth, setDisplayMonth] = useState<Date>(new Date())
+    const [calendarStatuses, setCalendarStatuses] = useState<Record<string, 'orange' | 'green'>>({})
     const resolvedParams = React.use(params);
     const [rotativos, setRotativos] = useState<any[]>([])
     const [isLoading, setIsLoading] = useState(false)
@@ -81,9 +83,34 @@ export default function RotativoPage({ params }: { params: Promise<{ arenaId: st
         }
     }, [selectedDate])
 
+    const loadMonthData = useCallback(async (month: Date) => {
+        try {
+            // Extend range by 7 days on each side to cover outside days visible in the calendar
+            const startDate = format(subDays(startOfMonth(month), 7), 'yyyy-MM-dd')
+            const endDate = format(addDays(endOfMonth(month), 7), 'yyyy-MM-dd')
+            const today = format(new Date(), 'yyyy-MM-dd')
+            const result = await getRotativosByMonthAction(resolvedParams.arenaId, startDate, endDate)
+            if (result.success && result.data) {
+                const statuses: Record<string, 'orange' | 'green'> = {}
+                for (const [date, info] of Object.entries(result.data)) {
+                    if (date >= today) {
+                        statuses[date] = info.hasInscriptions ? 'green' : 'orange'
+                    }
+                }
+                setCalendarStatuses(statuses)
+            }
+        } catch (error) {
+            console.error("Error loading month data:", error)
+        }
+    }, [resolvedParams.arenaId])
+
     useEffect(() => {
         loadRotativos()
     }, [loadRotativos])
+
+    useEffect(() => {
+        loadMonthData(displayMonth)
+    }, [displayMonth, loadMonthData])
 
     useEffect(() => {
         async function loadSports() {
@@ -129,6 +156,7 @@ export default function RotativoPage({ params }: { params: Promise<{ arenaId: st
                 setIsCreateModalOpen(false)
                 form.reset()
                 loadRotativos()
+                loadMonthData(displayMonth)
             } else {
                 toast.error(result.error)
             }
@@ -187,6 +215,32 @@ export default function RotativoPage({ params }: { params: Promise<{ arenaId: st
                                 onSelect={setSelectedDate}
                                 locale={ptBR}
                                 className="w-full"
+                                month={displayMonth}
+                                onMonthChange={setDisplayMonth}
+                                components={{
+                                    DayButton: ({ day, modifiers, children, ...buttonProps }: any) => {
+                                        const dateStr = format(day.date, 'yyyy-MM-dd')
+                                        const status = calendarStatuses[dateStr]
+                                        return (
+                                            <button {...buttonProps} style={{ position: 'relative' }}>
+                                                {children}
+                                                {status && (
+                                                    <span style={{
+                                                        position: 'absolute',
+                                                        bottom: '3px',
+                                                        left: '50%',
+                                                        transform: 'translateX(-50%)',
+                                                        width: '5px',
+                                                        height: '5px',
+                                                        borderRadius: '50%',
+                                                        backgroundColor: status === 'green' ? '#22c55e' : '#FF6B00',
+                                                        display: 'block',
+                                                    }} />
+                                                )}
+                                            </button>
+                                        )
+                                    }
+                                }}
                             />
                         </CardContent>
                     </Card>

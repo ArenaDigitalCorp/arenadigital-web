@@ -56,6 +56,19 @@ export async function registerAthleteAction(rotativoId: string, athleteId: strin
     }
 }
 
+export async function getRotativosByMonthAction(arenaId: string, startDate: string, endDate: string) {
+    try {
+        const { userId: clerkId } = await auth()
+        if (!clerkId) return { success: false, error: "Não autorizado" }
+
+        const data = await RotativoService.getRotativosByMonth(arenaId, startDate, endDate)
+        return { success: true, data }
+    } catch (error: any) {
+        console.error("Error in getRotativosByMonthAction:", error)
+        return { success: false, error: error.message || "Erro ao buscar rotativos do mês" }
+    }
+}
+
 export async function getParticipantsAction(rotativoId: string) {
     try {
         const data = await RotativoService.getRotativoInscritos(rotativoId)
