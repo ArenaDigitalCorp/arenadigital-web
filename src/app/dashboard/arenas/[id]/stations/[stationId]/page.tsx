@@ -154,6 +154,7 @@ export default function StationInternalPage() {
                 onClose={() => setIsOpenComandaModalOpen(false)}
                 arenaId={id}
                 stationId={stationId}
+                stationTypeId={station?.station_type_id}
                 onSuccess={loadData}
                 onRegisterNewCustomer={() => {
                     setIsOpenComandaModalOpen(false);
@@ -168,6 +169,7 @@ export default function StationInternalPage() {
                     setSelectedOrderForLaunch(null);
                 }}
                 arenaId={id}
+                stationTypeId={station?.station_type_id}
                 order={selectedOrderForLaunch}
                 onSuccess={loadData}
             />

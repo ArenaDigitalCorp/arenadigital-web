@@ -69,6 +69,9 @@ export class AthleteService {
                     nome_perfil,
                     cpf,
                     telefone,
+                    users:id_users (
+                        email
+                    ),
                     arenas_atleta!inner (
                         id_arena
                     ),
@@ -99,6 +102,7 @@ export class AthleteService {
                 name: atleta.nome_perfil,
                 cpf: atleta.cpf || "---",
                 telefone: atleta.telefone || "---",
+                email: atleta.users?.email || "---",
                 sport: atleta.atleta_esportes?.[0]?.sport?.name || "N/A"
             }));
         } catch (err) {

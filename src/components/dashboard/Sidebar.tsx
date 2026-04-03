@@ -15,7 +15,8 @@ import {
     Store,
     Activity,
     ChevronDown,
-    Menu
+    Menu,
+    Package
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -29,6 +30,7 @@ const sidebarItems = [
     { icon: MapPin, label: "Espaços", href: "/dashboard/arenas" },
     { icon: CreditCard, label: "Financeiro", href: "/dashboard/finance" },
     { icon: Store, label: "Estações", href: "/dashboard/stations" },
+    { icon: Package, label: "Produtos", href: "/dashboard/settings/products" },
     { icon: Trophy, label: "Programa de fidelidade", href: "/dashboard/loyalty" },
     { icon: Activity, label: "Rotativo", href: "/dashboard/rotativo" },
     { icon: Users, label: "Atletas", href: "/dashboard/athletes" },
@@ -40,7 +42,7 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
 
     // Check if we are in any settings page or editing an arena
     const isEditingArena = !!pathname.match(/\/dashboard\/arenas\/[^\/]+\/edit$/);
-    const isSettingsActive = pathname.includes("/settings") || isEditingArena;
+    const isSettingsActive = (pathname.includes("/settings") && !pathname.startsWith("/dashboard/settings/products")) || isEditingArena;
 
     const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(isSettingsActive);
 
@@ -170,22 +172,6 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                     >
                                         <Link href="/dashboard/settings/arenas">
                                             Arena
-                                        </Link>
-                                    </Button>
-
-                                    <Button
-                                        variant="ghost"
-                                        asChild
-                                        className={cn(
-                                            "w-full justify-start h-9 text-sm font-normal",
-                                            pathname.startsWith("/dashboard/settings/products")
-                                                ? "text-[#FFC145] bg-white/5"
-                                                : "text-white/60 hover:text-white hover:bg-white/5"
-                                        )}
-                                        onClick={onNavItemClick}
-                                    >
-                                        <Link href="/dashboard/settings/products">
-                                            Produtos
                                         </Link>
                                     </Button>
 

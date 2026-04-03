@@ -45,6 +45,7 @@ interface LaunchItemModalProps {
     isOpen: boolean
     onClose: () => void
     arenaId: string
+    stationTypeId?: string
     order: StationOrder | null
     onSuccess: () => void
 }
@@ -53,6 +54,7 @@ export function LaunchItemModal({
     isOpen,
     onClose,
     arenaId,
+    stationTypeId,
     order,
     onSuccess
 }: LaunchItemModalProps) {
@@ -89,6 +91,7 @@ export function LaunchItemModal({
     })
 
     const filteredProducts = allProducts.filter(p =>
+        (!stationTypeId || p.station_type_id === stationTypeId) &&
         normalizeString(p.name).includes(normalizeString(productSearch))
     )
 

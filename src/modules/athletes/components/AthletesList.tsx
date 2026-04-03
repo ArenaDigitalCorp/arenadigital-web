@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from "react"
 import {
     Search,
-    Trash2,
     ChevronLeft,
     ChevronRight,
     Loader2
@@ -24,6 +23,7 @@ interface Athlete {
     name: string
     cpf: string | null
     telefone: string | null
+    email: string | null
     sport: string
 }
 
@@ -90,14 +90,15 @@ export function AthletesList({ arenaId }: AthletesListProps) {
                                 <TableRow className="hover:bg-transparent">
                                     <TableHead className="text-[#002B40] font-semibold">Nome</TableHead>
                                     <TableHead className="text-[#002B40] font-semibold">CPF</TableHead>
+                                    <TableHead className="text-[#002B40] font-semibold">E-mail</TableHead>
+                                    <TableHead className="text-[#002B40] font-semibold">Telefone</TableHead>
                                     <TableHead className="text-[#002B40] font-semibold">Esporte</TableHead>
-                                    <TableHead className="text-right text-[#002B40] font-semibold">Ações</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {isLoading ? (
                                     <TableRow>
-                                        <TableCell colSpan={4} className="h-32 text-center text-muted-foreground">
+                                        <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
                                             <div className="flex flex-col items-center gap-2">
                                                 <Loader2 className="h-6 w-6 animate-spin text-[#FF6B00]" />
                                                 Buscando atletas...
@@ -106,7 +107,7 @@ export function AthletesList({ arenaId }: AthletesListProps) {
                                     </TableRow>
                                 ) : athletes.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={4} className="h-32 text-center text-muted-foreground">
+                                        <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
                                             Nenhum atleta encontrado.
                                         </TableCell>
                                     </TableRow>
@@ -115,17 +116,12 @@ export function AthletesList({ arenaId }: AthletesListProps) {
                                         <TableRow key={athlete.id} className="group transition-colors">
                                             <TableCell className="font-medium text-[#002B40]">{athlete.name}</TableCell>
                                             <TableCell className="text-muted-foreground">{athlete.cpf || "---"}</TableCell>
+                                            <TableCell className="text-muted-foreground">{athlete.email || "---"}</TableCell>
+                                            <TableCell className="text-muted-foreground">{athlete.telefone || "---"}</TableCell>
                                             <TableCell>
                                                 <span className="inline-flex items-center rounded-full bg-[#002B40]/5 px-2.5 py-0.5 text-xs font-medium text-[#002B40]">
                                                     {athlete.sport}
                                                 </span>
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-[#FF6B00] hover:text-[#E66000] hover:bg-[#FF6B00]/10">
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     ))

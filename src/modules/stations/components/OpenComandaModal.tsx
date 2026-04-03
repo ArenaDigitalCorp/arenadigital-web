@@ -48,6 +48,7 @@ interface OpenComandaModalProps {
     onClose: () => void
     arenaId: string
     stationId: string
+    stationTypeId?: string
     onSuccess: () => void
     onRegisterNewCustomer: () => void
 }
@@ -57,6 +58,7 @@ export function OpenComandaModal({
     onClose,
     arenaId,
     stationId,
+    stationTypeId,
     onSuccess,
     onRegisterNewCustomer
 }: OpenComandaModalProps) {
@@ -138,6 +140,7 @@ export function OpenComandaModal({
     }
 
     const filteredProducts = allProducts.filter(p =>
+        (!stationTypeId || p.station_type_id === stationTypeId) &&
         normalizeString(p.name).includes(normalizeString(productSearch))
     )
 
@@ -257,15 +260,16 @@ export function OpenComandaModal({
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-            <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden border-none shadow-2xl rounded-2xl">
-                <DialogHeader className="p-6 pb-0">
+            <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden border-none shadow-2xl rounded-2xl flex flex-col max-h-[90vh]">
+                <DialogHeader className="p-6 pb-0 flex-shrink-0">
                     <DialogTitle className="text-2xl font-black text-[#002B40]">
                         Abrir nova comanda
                     </DialogTitle>
                 </DialogHeader>
 
                 <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit)} className="p-6 space-y-6">
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 overflow-hidden">
+                        <div className="flex-1 overflow-y-auto p-6 space-y-6">
                         {/* Cliente Search */}
                         <div className="space-y-2 relative">
                             <Label className="text-[#002B40] font-bold">Cliente</Label>
@@ -439,8 +443,9 @@ export function OpenComandaModal({
                                 </div>
                             )}
                         </div>
+                        </div>
 
-                        <DialogFooter className="pt-6 border-t border-gray-100 flex flex-row items-center justify-between gap-3 bg-white w-full">
+                        <DialogFooter className="flex-shrink-0 p-6 pt-4 border-t border-gray-100 flex flex-row items-center justify-between gap-3 bg-white w-full">
                             <Button
                                 type="button"
                                 variant="outline"
