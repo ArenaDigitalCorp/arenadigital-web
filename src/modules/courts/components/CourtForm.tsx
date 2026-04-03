@@ -172,40 +172,45 @@ export function CourtForm({ initialData, arenaId, onSuccess }: CourtFormProps) {
             }
 
             setIsUploading(true)
-            let imageUrl = data.image_url
-
-            if (imageFile) {
-                try {
-                    imageUrl = await CourtService.uploadImage(imageFile, arenaId)
-                } catch (error) {
-                    console.error("Failed to upload image:", error)
-                    toast.error("Falha ao fazer upload da imagem.")
-                    setIsUploading(false)
-                    return
-                }
-            }
 
             const { sportIds, ...input } = data
-            // We update available_days based on enabled days for legacy/search compatibility
             const available_days = enabledDays.map(d => d.day)
-            // Use the price of the first enabled day as 'default' price for legacy compatibility
             const price = enabledDays[0]?.price || 0
 
-            const finalInput = {
-                ...input,
-                image_url: imageUrl,
-                day_config: dayConfigs,
-                available_days,
-                price
-            }
-
             if (initialData) {
+                // Editing: spaceId already exists — upload image first, then update
+                let imageUrl = data.image_url
+                if (imageFile) {
+                    try {
+                        imageUrl = await CourtService.uploadImage(imageFile, arenaId, initialData.id)
+                    } catch (error) {
+                        console.error("Failed to upload image:", error)
+                        toast.error("Falha ao fazer upload da imagem.")
+                        setIsUploading(false)
+                        return
+                    }
+                }
+                const finalInput = { ...input, image_url: imageUrl, day_config: dayConfigs, available_days, price }
                 await CourtService.updateCourt(initialData.id, { ...finalInput, arena_id: arenaId } as any, sportIds)
                 toast.success("Espaço atualizado com sucesso!")
             } else {
-                await CourtService.createCourt({ ...finalInput, arena_id: arenaId } as any, sportIds)
+                // Creating: create space first to get the ID, then upload image and update
+                const finalInput = { ...input, image_url: data.image_url || "", day_config: dayConfigs, available_days, price }
+                const newCourt = await CourtService.createCourt({ ...finalInput, arena_id: arenaId } as any, sportIds)
+
+                if (imageFile && newCourt?.id) {
+                    try {
+                        const imageUrl = await CourtService.uploadImage(imageFile, arenaId, newCourt.id)
+                        await CourtService.updateCourt(newCourt.id, { image_url: imageUrl, arena_id: arenaId } as any, undefined)
+                    } catch (error) {
+                        console.error("Failed to upload image:", error)
+                        toast.error("Espaço criado, mas falha ao fazer upload da imagem.")
+                    }
+                }
+
                 toast.success("Espaço criado com sucesso!")
             }
+
             if (onSuccess) onSuccess()
             router.refresh()
         } catch (error) {

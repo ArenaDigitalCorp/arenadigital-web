@@ -175,10 +175,12 @@ export class CourtService {
         return true;
     }
 
-    static async uploadImage(file: File, arenaId: string): Promise<string> {
+    static async uploadImage(file: File, arenaId: string, spaceId: string): Promise<string> {
         const formData = new FormData();
         formData.append('file', file);
         formData.append('arenaId', arenaId);
+        formData.append('spaceId', spaceId);
+        formData.append('type', 'space');
 
         const response = await fetch('/api/upload', {
             method: 'POST',

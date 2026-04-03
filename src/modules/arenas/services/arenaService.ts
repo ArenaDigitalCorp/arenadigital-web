@@ -230,6 +230,7 @@ export class ArenaService {
         const formData = new FormData();
         formData.append('file', file);
         formData.append('arenaId', arenaId);
+        formData.append('type', 'banner');
 
         const response = await fetch('/api/upload', {
             method: 'POST',
