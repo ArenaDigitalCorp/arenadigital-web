@@ -5,10 +5,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import React, { useState, useEffect, useCallback } from "react"
-import { updateCurrencyName, getLatestCreditsAction, getLatestRedemptionsAction, getTopAthletesAction } from "@/modules/loyalty/actions/loyaltyActions"
+import {
+    updateCurrencyName,
+    getLatestCreditsAction,
+    getLatestRedemptionsAction,
+    getLoyaltyDashboardDataAction,
+} from "@/modules/loyalty/actions/loyaltyActions"
 import { toast } from "sonner"
-import { useUser } from "@clerk/nextjs"
-import { UserService } from "@/modules/users/services/userService"
 import { ArenaService } from "@/modules/arenas/services/arenaService"
 import { FidelityTransaction } from "@/modules/loyalty/services/loyaltyService"
 import { format } from "date-fns"
@@ -18,7 +21,6 @@ import { NewRedemptionModal } from "@/modules/loyalty/components/NewRedemptionMo
 import Link from "next/link"
 
 export default function FidelityPage({ params }: { params: Promise<{ arenaId: string }> }) {
-    const { user } = useUser()
     const resolvedParams = React.use(params);
     const [currencyName, setCurrencyName] = useState("")
     const [isSaving, setIsSaving] = useState(false)
@@ -34,74 +36,82 @@ export default function FidelityPage({ params }: { params: Promise<{ arenaId: st
     const [isNewSendOpen, setIsNewSendOpen] = useState(false)
     const [isNewRedemptionOpen, setIsNewRedemptionOpen] = useState(false)
 
-    const loadData = useCallback(() => {
-        if (!resolvedParams.arenaId) return;
-        loadArenaData();
-        loadRecentCredits();
-        loadRecentRedemptions();
-        loadTopAthletes();
+    useEffect(() => {
+        const arenaId = resolvedParams.arenaId;
+        if (!arenaId) return;
+
+        let cancelled = false;
+
+        (async () => {
+            setIsLoading(true);
+            try {
+                const arena = await ArenaService.getArenaById(arenaId);
+                if (!cancelled && arena?.nome_moeda_virtual) {
+                    setCurrencyName(arena.nome_moeda_virtual);
+                }
+            } catch (error) {
+                console.error("Error loading arena data:", error);
+            } finally {
+                if (!cancelled) setIsLoading(false);
+            }
+
+            setIsLoadingCredits(true);
+            setIsLoadingRedemptions(true);
+            setIsLoadingTop(true);
+            try {
+                const result = await getLoyaltyDashboardDataAction(arenaId);
+                if (!cancelled && result.success && result.data) {
+                    setRecentCredits(result.data.credits as FidelityTransaction[]);
+                    setRecentRedemptions(result.data.redemptions as FidelityTransaction[]);
+                    setTopAthletes(result.data.topAthletes);
+                }
+            } catch (error) {
+                console.error("Error loading loyalty dashboard:", error);
+            } finally {
+                if (!cancelled) {
+                    setIsLoadingCredits(false);
+                    setIsLoadingRedemptions(false);
+                    setIsLoadingTop(false);
+                }
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
     }, [resolvedParams.arenaId]);
 
-    useEffect(() => {
-        if (resolvedParams.arenaId) {
-            loadData();
-        }
-    }, [resolvedParams.arenaId, loadData]);
-
-    async function loadArenaData() {
+    const loadRecentCredits = useCallback(async () => {
+        const arenaId = resolvedParams.arenaId;
+        if (!arenaId) return;
         try {
-            const arena = await ArenaService.getArenaById(resolvedParams.arenaId);
-            if (arena?.nome_moeda_virtual) {
-                setCurrencyName(arena.nome_moeda_virtual);
-            }
-        } catch (error) {
-            console.error("Error loading arena data:", error);
-        } finally {
-            setIsLoading(false);
-        }
-    }
-
-    async function loadRecentCredits() {
-        try {
-            setIsLoadingCredits(true)
-            const result = await getLatestCreditsAction(resolvedParams.arenaId)
+            setIsLoadingCredits(true);
+            const result = await getLatestCreditsAction(arenaId);
             if (result.success && result.data) {
-                setRecentCredits(result.data as FidelityTransaction[])
+                setRecentCredits(result.data as FidelityTransaction[]);
             }
         } catch (error) {
-            console.error("Error loading credits:", error)
+            console.error("Error loading credits:", error);
         } finally {
-            setIsLoadingCredits(false)
+            setIsLoadingCredits(false);
         }
-    }
+    }, [resolvedParams.arenaId]);
 
-    async function loadRecentRedemptions() {
+    const loadRecentRedemptions = useCallback(async () => {
+        const arenaId = resolvedParams.arenaId;
+        if (!arenaId) return;
         try {
-            setIsLoadingRedemptions(true)
-            const result = await getLatestRedemptionsAction(resolvedParams.arenaId)
+            setIsLoadingRedemptions(true);
+            const result = await getLatestRedemptionsAction(arenaId);
             if (result.success && result.data) {
-                setRecentRedemptions(result.data as FidelityTransaction[])
+                setRecentRedemptions(result.data as FidelityTransaction[]);
             }
         } catch (error) {
-            console.error("Error loading redemptions:", error)
+            console.error("Error loading redemptions:", error);
         } finally {
-            setIsLoadingRedemptions(false)
+            setIsLoadingRedemptions(false);
         }
-    }
-
-    async function loadTopAthletes() {
-        try {
-            setIsLoadingTop(true)
-            const result = await getTopAthletesAction(resolvedParams.arenaId)
-            if (result.success && result.data) {
-                setTopAthletes(result.data)
-            }
-        } catch (error) {
-            console.error("Error loading top athletes:", error)
-        } finally {
-            setIsLoadingTop(false)
-        }
-    }
+    }, [resolvedParams.arenaId]);
 
     const handleSave = async () => {
         if (!currencyName.trim()) {

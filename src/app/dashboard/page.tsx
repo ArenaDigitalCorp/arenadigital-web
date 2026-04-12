@@ -18,34 +18,47 @@ import { OccupancyChart } from "@/modules/dashboard/components/OccupancyChart";
 
 export default function DashboardPage() {
     const { dbUser, isLoading: userLoading } = useUserSync();
-    const { selectedArena } = useArena();
+    const { selectedArena, isLoadingArenas } = useArena();
     const [stats, setStats] = useState({ receita: 0, receitaChange: 0, reservas: 0, quadras: 0, ativos: 0 });
     const [occupancyData, setOccupancyData] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
         async function loadStats() {
-            if (dbUser) {
-                try {
-                    const [overview, occupancy] = await Promise.all([
-                        DashboardService.getOverviewStats(dbUser.id, selectedArena),
-                        DashboardService.getOccupancyOverview(dbUser.id, selectedArena)
-                    ]);
-                    setStats(overview);
-                    setOccupancyData(occupancy);
-                } catch (error) {
-                    console.error("Error loading dashboard data:", error);
-                } finally {
-                    setIsLoading(false);
-                }
-            } else if (!userLoading) {
+            if (userLoading) return;
+
+            if (!dbUser?.id) {
+                setIsLoading(false);
+                return;
+            }
+
+            if (isLoadingArenas) return;
+
+            if (!selectedArena) {
+                setStats({ receita: 0, receitaChange: 0, reservas: 0, quadras: 0, ativos: 0 });
+                setOccupancyData([]);
+                setIsLoading(false);
+                return;
+            }
+
+            setIsLoading(true);
+            try {
+                const { stats, occupancy } = await DashboardService.getDashboardPageData(
+                    dbUser.id,
+                    selectedArena
+                );
+                setStats(stats);
+                setOccupancyData(occupancy);
+            } catch (error) {
+                console.error("Error loading dashboard data:", error);
+            } finally {
                 setIsLoading(false);
             }
         }
         loadStats();
-    }, [dbUser, userLoading, selectedArena]);
+    }, [dbUser?.id, userLoading, isLoadingArenas, selectedArena]);
 
-    if (isLoading || userLoading) {
+    if (isLoading || userLoading || isLoadingArenas) {
         return (
             <div className="space-y-6">
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

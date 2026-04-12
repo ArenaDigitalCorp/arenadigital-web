@@ -177,6 +177,31 @@ export async function getTopAthletesAction(arenaId: string) {
         return { success: false, error: error.message || "Erro ao buscar top atletas" }
     }
 }
+
+/** Uma ida ao servidor em vez de três Server Actions separadas (menos POSTs na URL da página). */
+export async function getLoyaltyDashboardDataAction(arenaId: string) {
+    try {
+        const { userId: clerkId } = await auth()
+        if (!clerkId) return { success: false, error: "Não autorizado" }
+
+        const dbUser = await UserService.getUserByClerkId(clerkId)
+        if (!dbUser) return { success: false, error: "Usuário não encontrado" }
+
+        const [credits, redemptions, topAthletes] = await Promise.all([
+            LoyaltyService.getLatestCredits(arenaId),
+            LoyaltyService.getLatestRedemptions(arenaId),
+            LoyaltyService.getTopAthletes(arenaId),
+        ])
+
+        return {
+            success: true,
+            data: { credits, redemptions, topAthletes },
+        }
+    } catch (error: any) {
+        console.error("Error in getLoyaltyDashboardDataAction:", error)
+        return { success: false, error: error.message || "Erro ao carregar programa de fidelidade" }
+    }
+}
 export async function getAthletesWithBalanceAction(arenaId: string, page = 1, pageSize = 10, query?: string) {
     try {
         const { userId: clerkId } = await auth()
