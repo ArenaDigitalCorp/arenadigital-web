@@ -7,10 +7,10 @@ import { ptBR } from "date-fns/locale";
 import { Plus, ArrowLeft, ChevronLeft, ChevronRight, Edit, Trash2, Calendar } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 import { useUserSync } from "@/hooks/useUserSync";
-import { ArenaService } from "@/modules/arenas/services/arenaService";
 import { FinanceService } from "@/modules/finance/services/financeService";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import {
     Table,
     TableBody,
@@ -32,7 +32,9 @@ import { toast } from "sonner";
 
 export default function EntradasPage() {
     const { dbUser } = useUserSync();
-    const [arena, setArena] = useState<any>(null);
+    const params = useParams();
+    const arenaId = params.arenaId as string;
+    const [arena, setArena] = useState<{ id: string } | null>(null);
     const [transactions, setTransactions] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -45,31 +47,26 @@ export default function EntradasPage() {
     const [deletingId, setDeletingId] = useState<string | null>(null);
 
     const loadData = useCallback(async () => {
-        if (!dbUser) return;
+        if (!dbUser?.id || !arenaId) return;
         setIsLoading(true);
         try {
-            const arenas = await ArenaService.getArenasByOwner(dbUser.id);
-            if (arenas.length > 0) {
-                setArena(arenas[0]);
-                
-                const start = startOfMonth(currentDate);
-                const end = endOfMonth(currentDate);
-                
-                const data = await FinanceService.getTransactions(
-                    arenas[0].id, 
-                    'entrada',
-                    format(start, 'yyyy-MM-dd'),
-                    format(end, 'yyyy-MM-dd')
-                );
-                setTransactions(data);
-            }
+            setArena({ id: arenaId });
+            const start = startOfMonth(currentDate);
+            const end = endOfMonth(currentDate);
+            const data = await FinanceService.getTransactions(
+                arenaId,
+                'entrada',
+                format(start, 'yyyy-MM-dd'),
+                format(end, 'yyyy-MM-dd')
+            );
+            setTransactions(data);
         } catch (_error) {
             console.error(_error);
             toast.error("Erro ao carregar lançamentos.");
         } finally {
             setIsLoading(false);
         }
-    }, [dbUser, currentDate]);
+    }, [dbUser?.id, arenaId, currentDate]);
 
     useEffect(() => {
         loadData();
@@ -135,7 +132,7 @@ export default function EntradasPage() {
 
     return (
         <div className="space-y-8 pb-10">
-            <Link href="/dashboard/finance" className="flex items-center gap-2 text-[#002B40]/60 hover:text-[#002B40] font-bold text-sm">
+            <Link href={`/dashboard/finance/${arenaId}`} className="flex items-center gap-2 text-[#002B40]/60 hover:text-[#002B40] font-bold text-sm">
                 <ArrowLeft className="h-4 w-4" /> Voltar
             </Link>
 

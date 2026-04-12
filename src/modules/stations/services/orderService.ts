@@ -277,42 +277,67 @@ export class OrderService {
         return order;
     }
 
-    static async getStationMetrics(stationId: string) {
+    /**
+     * Metrics for many stations in 2 round-trips (avoids 3×N count queries on the list page).
+     */
+    static async getStationMetricsBatch(
+        stationIds: string[]
+    ): Promise<Record<string, { pending: number; closedToday: number; openedToday: number }>> {
+        const base = () => ({ pending: 0, closedToday: 0, openedToday: 0 });
+        const out: Record<string, { pending: number; closedToday: number; openedToday: number }> =
+            {};
+        for (const sid of stationIds) {
+            out[sid] = base();
+        }
+        if (stationIds.length === 0) return out;
+
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const todayISO = today.toISOString();
 
-        // 1. Pending (all time)
-        const { count: pendingCount, error: pendingError } = await supabase
-            .from('station_orders')
-            .select('*', { count: 'exact', head: true })
-            .eq('station_id', stationId)
-            .eq('status', 'open');
+        const [openRes, closedRes] = await Promise.all([
+            supabase
+                .from('station_orders')
+                .select('station_id, created_at')
+                .in('station_id', stationIds)
+                .eq('status', 'open'),
+            supabase
+                .from('station_orders')
+                .select('station_id')
+                .in('station_id', stationIds)
+                .eq('status', 'closed')
+                .gte('closed_at', todayISO),
+        ]);
 
-        // 2. Closed today
-        const { count: closedTodayCount, error: closedTodayError } = await supabase
-            .from('station_orders')
-            .select('*', { count: 'exact', head: true })
-            .eq('station_id', stationId)
-            .eq('status', 'closed')
-            .gte('closed_at', todayISO);
-
-        // 3. Opened today (still open)
-        const { count: openedTodayCount, error: openedTodayError } = await supabase
-            .from('station_orders')
-            .select('*', { count: 'exact', head: true })
-            .eq('station_id', stationId)
-            .eq('status', 'open')
-            .gte('created_at', todayISO);
-
-        if (pendingError || closedTodayError || openedTodayError) {
-            console.error('Error fetching station metrics:', { pendingError, closedTodayError, openedTodayError });
+        if (openRes.error) {
+            console.error('Error fetching open orders for station metrics:', openRes.error);
+            throw openRes.error;
+        }
+        if (closedRes.error) {
+            console.error('Error fetching closed orders for station metrics:', closedRes.error);
+            throw closedRes.error;
         }
 
-        return {
-            pending: pendingCount || 0,
-            closedToday: closedTodayCount || 0,
-            openedToday: openedTodayCount || 0
-        };
+        for (const row of openRes.data ?? []) {
+            const sid = row.station_id as string;
+            if (!out[sid]) continue;
+            out[sid].pending += 1;
+            if (row.created_at >= todayISO) {
+                out[sid].openedToday += 1;
+            }
+        }
+
+        for (const row of closedRes.data ?? []) {
+            const sid = row.station_id as string;
+            if (!out[sid]) continue;
+            out[sid].closedToday += 1;
+        }
+
+        return out;
+    }
+
+    static async getStationMetrics(stationId: string) {
+        const batch = await this.getStationMetricsBatch([stationId]);
+        return batch[stationId] ?? { pending: 0, closedToday: 0, openedToday: 0 };
     }
 }

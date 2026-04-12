@@ -1,12 +1,12 @@
 "use client"
 
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { BarChart3, Plus, ArrowRight, Eye } from "lucide-react";
-import React, { useEffect, useState } from "react";
+import { BarChart3, Plus } from "lucide-react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useUserSync } from "@/hooks/useUserSync";
-import { ArenaService } from "@/modules/arenas/services/arenaService";
-import { FinanceService } from "@/modules/finance/services/financeService";
+import { FinanceService, type ArenaFinanceDailyRow } from "@/modules/finance/services/financeService";
+import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -35,124 +35,115 @@ export default function FinanceDashboard({ params }: { params: Promise<{ arenaId
     const [viewType, setViewType] = useState<'saldo' | 'entrada' | 'saída'>('entrada');
     const [period, setPeriod] = useState<'7d' | '30d'>('7d');
     const [chartData, setChartData] = useState<{ label: string; value: number; percentage: number; isCurrentDay?: boolean }[]>([]);
+    const [chartSeries, setChartSeries] = useState<ArenaFinanceDailyRow[]>([]);
 
+    const processChartData = useCallback(
+        (series: ArenaFinanceDailyRow[], periodType: '7d' | '30d', type: 'saldo' | 'entrada' | 'saída') => {
+            const now = new Date();
+            const daysCount = periodType === '7d' ? 7 : 30;
+            const byDay = new Map(
+                series.map((r) => [r.bucket_date.length >= 10 ? r.bucket_date.slice(0, 10) : r.bucket_date, r])
+            );
 
-    const loadData = async () => {
-        if (!dbUser || !resolvedParams.arenaId) return;
+            const lastXDays = Array.from({ length: daysCount }, (_, i) => {
+                const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                d.setDate(d.getDate() - (daysCount - 1 - i));
+                return d;
+            });
+
+            const result = lastXDays.map((dateObj) => {
+                const key = format(dateObj, 'yyyy-MM-dd');
+                const row = byDay.get(key);
+                let value = 0;
+                if (row) {
+                    if (type === 'saldo') value = row.entradas - row.saidas;
+                    else if (type === 'entrada') value = row.entradas;
+                    else value = row.saidas;
+                }
+
+                const dateStr = dateObj.toLocaleDateString();
+                const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+                return {
+                    label:
+                        daysCount === 7
+                            ? weekdays[dateObj.getDay()]
+                            : `${dateObj.getDate().toString().padStart(2, '0')}/${(dateObj.getMonth() + 1).toString().padStart(2, '0')}`,
+                    value,
+                    isCurrentDay: dateStr === now.toLocaleDateString(),
+                };
+            });
+
+            const maxValue = Math.max(...result.map((d) => Math.abs(d.value)), 1);
+            setChartData(
+                result.map((d) => ({
+                    ...d,
+                    percentage: (Math.abs(d.value) / maxValue) * 100,
+                }))
+            );
+        },
+        []
+    );
+
+    const loadData = useCallback(async () => {
+        if (!dbUser?.id || !resolvedParams.arenaId) return;
+        setIsLoading(true);
         try {
             setArena({ id: resolvedParams.arenaId });
-            const [totalsData, allEntradas, allSaidas, transactions] = await Promise.all([
-                FinanceService.getTotals(resolvedParams.arenaId),
-                FinanceService.getTransactions(resolvedParams.arenaId, 'entrada'),
-                FinanceService.getTransactions(resolvedParams.arenaId, 'saída'),
-                FinanceService.getTransactions(resolvedParams.arenaId)
+
+            const now = new Date();
+            const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const start = new Date(end);
+            start.setDate(start.getDate() - 29);
+            const startStr = format(start, 'yyyy-MM-dd');
+            const endStr = format(end, 'yyyy-MM-dd');
+
+            const [summary, recentIn, recentOut, series] = await Promise.all([
+                FinanceService.getArenaFinanceSummary(resolvedParams.arenaId),
+                FinanceService.getRecentTransactions(resolvedParams.arenaId, 'entrada', 4),
+                FinanceService.getRecentTransactions(resolvedParams.arenaId, 'saída', 4),
+                FinanceService.getArenaFinanceDailyTotals(resolvedParams.arenaId, startStr, endStr),
             ]);
-            setTotals(totalsData);
-            setRecentEntradas(allEntradas.slice(0, 4));
-            setRecentSaidas(allSaidas.slice(0, 4));
-            calculateMonthlyComparison(transactions);
-            processChartData(transactions, period, viewType);
+
+            setTotals({
+                entradas: summary.lifetime_entradas,
+                saidas: summary.lifetime_saidas,
+                saldo: summary.lifetime_entradas - summary.lifetime_saidas,
+            });
+
+            const calcDiff = (curr: number, prev: number) => {
+                if (prev === 0) return curr === 0 ? 0 : 100;
+                return ((curr - prev) / prev) * 100;
+            };
+
+            setMonthlyComparison({
+                entradas: {
+                    current: summary.current_month_entradas,
+                    diff: calcDiff(summary.current_month_entradas, summary.prev_month_entradas),
+                },
+                saidas: {
+                    current: summary.current_month_saidas,
+                    diff: calcDiff(summary.current_month_saidas, summary.prev_month_saidas),
+                },
+            });
+
+            setRecentEntradas(recentIn);
+            setRecentSaidas(recentOut);
+            setChartSeries(series);
         } catch (error) {
             console.error(error);
         } finally {
             setIsLoading(false);
         }
-    };
-
-    const calculateMonthlyComparison = (transactions: any[]) => {
-        const now = new Date();
-        const currentMonth = now.getMonth();
-        const currentYear = now.getFullYear();
-
-        const prevDate = new Date(currentYear, currentMonth - 1, 1);
-        const prevMonth = prevDate.getMonth();
-        const prevYear = prevDate.getFullYear();
-
-        const getStats = (type: 'entrada' | 'saída', month: number, year: number) => {
-            return transactions
-                .filter(t => {
-                    const d = new Date(t.launch_date);
-                    d.setHours(12);
-                    return d.getMonth() === month && d.getFullYear() === year && t.type === type;
-                })
-                .reduce((acc, t) => acc + Number(t.total_value), 0);
-        };
-
-        const currEntradas = getStats('entrada', currentMonth, currentYear);
-        const prevEntradas = getStats('entrada', prevMonth, prevYear);
-
-        const currSaidas = getStats('saída', currentMonth, currentYear);
-        const prevSaidas = getStats('saída', prevMonth, prevYear);
-
-        const calcDiff = (curr: number, prev: number) => {
-            if (prev === 0) return curr === 0 ? 0 : 100;
-            return ((curr - prev) / prev) * 100;
-        };
-
-        setMonthlyComparison({
-            entradas: { current: currEntradas, diff: calcDiff(currEntradas, prevEntradas) },
-            saidas: { current: currSaidas, diff: calcDiff(currSaidas, prevSaidas) }
-        });
-    };
+    }, [dbUser?.id, resolvedParams.arenaId]);
 
     useEffect(() => {
         loadData();
-    }, [dbUser, resolvedParams.arenaId]);
+    }, [loadData]);
 
     useEffect(() => {
-        const refresh = async () => {
-            if (!resolvedParams.arenaId) return;
-            const transactions = await FinanceService.getTransactions(resolvedParams.arenaId);
-            processChartData(transactions, period, viewType);
-        };
-        refresh();
-    }, [period, viewType]);
-
-    const processChartData = (transactions: any[], periodType: '7d' | '30d', type: 'saldo' | 'entrada' | 'saída') => {
-        const now = new Date();
-        const daysCount = periodType === '7d' ? 7 : 30;
-
-        // Generate chronological array of dates
-        const lastXDays = Array.from({ length: daysCount }, (_, i) => {
-            const d = new Date();
-            d.setDate(now.getDate() - (daysCount - 1 - i));
-            d.setHours(0, 0, 0, 0);
-            return d;
-        });
-
-        const result = lastXDays.map(dateObj => {
-            const dateStr = dateObj.toLocaleDateString();
-            let value = 0;
-
-            transactions.forEach(t => {
-                const tDate = new Date(t.launch_date);
-                // Adjust for potential timezone shifts in YYYY-MM-DD input
-                tDate.setHours(tDate.getHours() + 12);
-
-                if (tDate.toLocaleDateString() === dateStr) {
-                    const val = Number(t.total_value);
-                    if (type === 'saldo') {
-                        value += (t.type === 'entrada' ? val : -val);
-                    } else if (t.type === type) {
-                        value += val;
-                    }
-                }
-            });
-
-            const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-            return {
-                label: daysCount === 7 ? weekdays[dateObj.getDay()] : `${dateObj.getDate().toString().padStart(2, '0')}/${(dateObj.getMonth() + 1).toString().padStart(2, '0')}`,
-                value,
-                isCurrentDay: dateStr === now.toLocaleDateString()
-            };
-        });
-
-        const maxValue = Math.max(...result.map(d => Math.abs(d.value)), 1);
-        setChartData(result.map(d => ({
-            ...d,
-            percentage: (Math.abs(d.value) / maxValue) * 100
-        })));
-    };
+        if (isLoading) return;
+        processChartData(chartSeries, period, viewType);
+    }, [period, viewType, chartSeries, processChartData, isLoading]);
 
     if (isLoading) {
         return (

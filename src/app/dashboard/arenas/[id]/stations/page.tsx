@@ -32,13 +32,16 @@ export default function StationsPage() {
                 try {
                     const data = await StationService.getStationsByArena(id);
 
-                    // Fetch metrics for each station
-                    const stationsWithMetrics = await Promise.all(
-                        data.map(async (station: any) => {
-                            const metrics = await OrderService.getStationMetrics(station.id);
-                            return { ...station, metrics };
-                        })
-                    );
+                    const stationIds = data.map((s: { id: string }) => s.id);
+                    const metricsByStation = await OrderService.getStationMetricsBatch(stationIds);
+                    const stationsWithMetrics = data.map((station: { id: string }) => ({
+                        ...station,
+                        metrics: metricsByStation[station.id] ?? {
+                            pending: 0,
+                            closedToday: 0,
+                            openedToday: 0,
+                        },
+                    }));
 
                     setStations(stationsWithMetrics);
                 } catch (error) {
