@@ -13,6 +13,8 @@
     "@clerk/localizations": "^3.35.3",
     "@clerk/nextjs": "^6.37.3",
     "@hookform/resolvers": "^5.2.2",
+    "@stripe/react-stripe-js": "^6.1.0",
+    "@stripe/stripe-js": "^9.1.0",
     "@supabase/supabase-js": "^2.95.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -28,6 +30,8 @@
     "react-hook-form": "^7.71.1",
     "recharts": "^3.8.0",
     "sonner": "^2.0.7",
+    "stripe": "^22.0.1",
+    "svix": "^1.90.0",
     "tailwind-merge": "^3.4.0",
     "zod": "^4.3.6"
   },

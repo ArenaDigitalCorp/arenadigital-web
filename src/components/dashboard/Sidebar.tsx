@@ -3,7 +3,6 @@
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
-    Calendar,
     LayoutDashboard,
     MapPin,
     Settings,
@@ -11,7 +10,6 @@ import {
     Users,
     CreditCard,
     ChevronLeft,
-    ChevronRight,
     Store,
     Activity,
     ChevronDown,
@@ -23,30 +21,73 @@ import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { Logo } from "@/components/shared/Logo";
 import { useSidebar } from "@/contexts/SidebarContext";
+import { useArena } from "@/contexts/ArenaContext";
 import { ArenaSelector } from "./ArenaSelector";
-
-const sidebarItems = [
-    { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
-    { icon: MapPin, label: "Espaços", href: "/dashboard/arenas" },
-    { icon: CreditCard, label: "Financeiro", href: "/dashboard/finance" },
-    { icon: Store, label: "Estações", href: "/dashboard/stations" },
-    { icon: Package, label: "Produtos", href: "/dashboard/settings/products" },
-    { icon: Trophy, label: "Programa de fidelidade", href: "/dashboard/loyalty" },
-    { icon: Activity, label: "Rotativo", href: "/dashboard/rotativo" },
-    { icon: Users, label: "Atletas", href: "/dashboard/athletes" },
-];
 
 export function Sidebar({ className, onNavItemClick }: { className?: string, onNavItemClick?: () => void }) {
     const pathname = usePathname();
     const { isCollapsed, toggleSidebar } = useSidebar();
+    const { selectedArena } = useArena();
 
-    // Check if we are in any settings page or editing an arena
+    const sidebarItems = [
+        {
+            icon: LayoutDashboard,
+            label: "Dashboard",
+            href: "/dashboard",
+            isActive: (p: string) => p === "/dashboard",
+        },
+        {
+            icon: MapPin,
+            label: "Espaços",
+            href: `/dashboard/arenas/${selectedArena}`,
+            isActive: (p: string) => p.startsWith("/dashboard/arenas/") && !p.includes("/stations") && !p.endsWith("/edit"),
+        },
+        {
+            icon: CreditCard,
+            label: "Financeiro",
+            href: `/dashboard/finance/${selectedArena}`,
+            isActive: (p: string) => p.startsWith("/dashboard/finance/"),
+        },
+        {
+            icon: Store,
+            label: "Estações",
+            href: `/dashboard/arenas/${selectedArena}/stations`,
+            isActive: (p: string) => p.includes("/stations"),
+        },
+        {
+            icon: Package,
+            label: "Produtos",
+            href: `/dashboard/settings/products/${selectedArena}`,
+            isActive: (p: string) => p.startsWith("/dashboard/settings/products/"),
+        },
+        {
+            icon: Trophy,
+            label: "Programa de fidelidade",
+            href: `/dashboard/loyalty/${selectedArena}`,
+            isActive: (p: string) => p.startsWith("/dashboard/loyalty/"),
+        },
+        {
+            icon: Activity,
+            label: "Rotativo",
+            href: `/dashboard/rotativo/${selectedArena}`,
+            isActive: (p: string) => p.startsWith("/dashboard/rotativo/"),
+        },
+        {
+            icon: Users,
+            label: "Atletas",
+            href: `/dashboard/athletes/${selectedArena}`,
+            isActive: (p: string) => p.startsWith("/dashboard/athletes/"),
+        },
+    ];
+
+    const settingsUsersHref = `/dashboard/settings/users/${selectedArena}`;
+    const settingsSubscriptionHref = `/dashboard/settings/subscription/${selectedArena}`;
+
     const isEditingArena = !!pathname.match(/\/dashboard\/arenas\/[^\/]+\/edit$/);
     const isSettingsActive = (pathname.includes("/settings") && !pathname.startsWith("/dashboard/settings/products")) || isEditingArena;
 
     const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(isSettingsActive);
 
-    // Sync isSettingsOpen when pathname changes to ensure it stays open when active
     useEffect(() => {
         if (isSettingsActive && !isCollapsed) {
             setIsSettingsOpen(true);
@@ -84,27 +125,7 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
 
                     <div className="space-y-2">
                         {sidebarItems.map((item) => {
-                            let isActive = item.href === "/dashboard"
-                                ? pathname === "/dashboard"
-                                : pathname.startsWith(item.href);
-
-                            // Special logic for "Espaços" (formerly Arena):
-                            // Do not highlight if we are editing the arena or in the settings list
-                            if (item.label === "Espaços") {
-                                if (isEditingArena || pathname.startsWith("/dashboard/settings/arenas")) {
-                                    isActive = false;
-                                }
-                            }
-
-                            // Special case for Stations:
-                            if (item.label === "Estações" && pathname.includes("/stations")) {
-                                isActive = true;
-                            }
-
-                            // Prevent Espaços from being active if path includes /stations
-                            if (item.label === "Espaços" && pathname.includes("/stations")) {
-                                isActive = false;
-                            }
+                            const isActive = item.isActive(pathname);
 
                             return (
                                 <Button
@@ -156,7 +177,6 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                 )}
                             </Button>
 
-                            {/* Settings Submenu */}
                             {!isCollapsed && isSettingsOpen && (
                                 <div className="mt-1 ml-4 space-y-1 border-l border-white/10 pl-2">
                                     <Button
@@ -186,8 +206,24 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                         )}
                                         onClick={onNavItemClick}
                                     >
-                                        <Link href="/dashboard/settings/users">
+                                        <Link href={settingsUsersHref}>
                                             Usuários
+                                        </Link>
+                                    </Button>
+
+                                    <Button
+                                        variant="ghost"
+                                        asChild
+                                        className={cn(
+                                            "w-full justify-start h-9 text-sm font-normal",
+                                            pathname.startsWith("/dashboard/settings/subscription")
+                                                ? "text-[#FFC145] bg-white/5"
+                                                : "text-white/60 hover:text-white hover:bg-white/5"
+                                        )}
+                                        onClick={onNavItemClick}
+                                    >
+                                        <Link href={settingsSubscriptionHref}>
+                                            Assinatura
                                         </Link>
                                     </Button>
                                 </div>

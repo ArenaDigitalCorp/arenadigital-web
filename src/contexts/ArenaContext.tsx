@@ -1,17 +1,17 @@
 "use client"
 
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { useUserSync } from "@/hooks/useUserSync";
+import { useDbUser } from "@/contexts/UserContext";
 import { supabase } from "@/shared/database/supabaseClient";
 
 interface Arena {
     id: string;
-    target_name: string;
+    name: string;
 }
 
 interface ArenaContextType {
-    selectedArena: string | "all";
-    setSelectedArena: (id: string | "all") => void;
+    selectedArena: string;
+    setSelectedArena: (id: string) => void;
     arenas: Arena[];
     isLoadingArenas: boolean;
 }
@@ -19,10 +19,10 @@ interface ArenaContextType {
 const ArenaContext = createContext<ArenaContextType | undefined>(undefined);
 
 export function ArenaProvider({ children }: { children: React.ReactNode }) {
-    const [selectedArena, setSelectedArena] = useState<string | "all">("all");
+    const [selectedArena, setSelectedArena] = useState<string>("");
     const [arenas, setArenas] = useState<Arena[]>([]);
     const [isLoadingArenas, setIsLoadingArenas] = useState(true);
-    const { dbUser } = useUserSync();
+    const { dbUser } = useDbUser();
 
     useEffect(() => {
         async function fetchArenas() {
@@ -33,12 +33,13 @@ export function ArenaProvider({ children }: { children: React.ReactNode }) {
             setIsLoadingArenas(true);
             const { data, error } = await supabase
                 .from('arenas')
-                .select('id, target_name')
+                .select('id, name')
                 .eq('owner_id', dbUser.id)
-                .order('target_name');
-            
-            if (!error && data) {
+                .order('name');
+
+            if (!error && data && data.length > 0) {
                 setArenas(data);
+                setSelectedArena(data[0].id);
             }
             setIsLoadingArenas(false);
         }

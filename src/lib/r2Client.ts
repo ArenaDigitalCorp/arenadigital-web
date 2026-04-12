@@ -12,13 +12,6 @@ export const r2 = new S3Client({
 const BUCKET = process.env.R2_BUCKET_NAME!
 const PUBLIC_URL = process.env.R2_PUBLIC_URL!
 
-/**
- * Uploads a file buffer to R2 and returns the public URL.
- *
- * Path structure:
- *   arena banner  → arenas/{arenaId}/banner/{filename}
- *   space photo   → arenas/{arenaId}/spaces/{spaceId}/{filename}
- */
 export async function uploadToR2(
     buffer: Buffer,
     key: string,
@@ -36,25 +29,14 @@ export async function uploadToR2(
     return `${PUBLIC_URL}/${key}`
 }
 
-/**
- * Builds the R2 object key for an arena banner.
- * arenas/{arenaId}/banner/{filename}
- */
 export function arenaBannerKey(arenaId: string, filename: string): string {
     return `arenas/${arenaId}/banner/${filename}`
 }
 
-/**
- * Builds the R2 object key for a space/court photo.
- * arenas/{arenaId}/spaces/{spaceId}/{filename}
- */
 export function spaceImageKey(arenaId: string, spaceId: string, filename: string): string {
     return `arenas/${arenaId}/spaces/${spaceId}/${filename}`
 }
 
-/**
- * Sanitizes a filename: removes spaces, lowercases, adds unique suffix.
- */
 export function sanitizeFilename(originalName: string): string {
     const ext = originalName.split(".").pop() ?? "bin"
     const base = originalName

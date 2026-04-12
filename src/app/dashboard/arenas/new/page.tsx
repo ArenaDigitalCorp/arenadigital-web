@@ -16,6 +16,8 @@ export default function NewArenaPage() {
         );
     }
 
+    if (!dbUser) return null;
+
     return (
         <div className="space-y-6">
             <div>
@@ -25,7 +27,7 @@ export default function NewArenaPage() {
                 </p>
             </div>
 
-            <ArenaForm ownerId={dbUser?.id} />
+            <ArenaForm ownerId={dbUser.id} />
         </div>
     );
 }

@@ -22,7 +22,6 @@ export class UserService {
     }
 
     static async syncUser(clerkUserId: string, email: string, name?: string, arenaName?: string, cpf?: string, phone?: string, addressData?: any, role?: string) {
-        // 1. Sync user
         const { data: user, error: userError } = await supabase
             .from('users')
             .upsert(
@@ -43,121 +42,73 @@ export class UserService {
             throw userError;
         }
 
-        // 2. If arenaName is provided, ensure organization and arena exist
         if (arenaName && user) {
-            // 2.1 Get or Create Organization
-            let orgId: string | null = null;
-            const { data: existingOrg } = await supabase
-                .from('organizations')
+            const { data: existingArena } = await supabase
+                .from('arenas')
                 .select('id')
                 .eq('owner_id', user.id)
-                .order('created_at', { ascending: true })
-                .limit(1)
+                .eq('name', arenaName)
                 .maybeSingle();
 
-            if (existingOrg) {
-                orgId = existingOrg.id;
-            } else {
-                const { data: newOrg, error: orgError } = await supabase
-                    .from('organizations')
-                    .insert({
-                        name: arenaName,
-                        owner_id: user.id
-                    })
+            if (!existingArena) {
+                const arenaInsertData: any = {
+                    name: arenaName,
+                    owner_id: user.id,
+                    status: 'ativo'
+                };
+
+                if (phone) {
+                    arenaInsertData.phone = phone;
+                }
+
+                if (addressData) {
+                    arenaInsertData.zip_code = addressData.cep || undefined;
+                    arenaInsertData.id_municipio = addressData.id_municipio || undefined;
+                    arenaInsertData.number = addressData.number || undefined;
+                    arenaInsertData.complement = addressData.complement || undefined;
+                    arenaInsertData.neighborhood = addressData.neighborhood || undefined;
+                    arenaInsertData.address = addressData.street || undefined;
+
+                    if (addressData.street && addressData.city && addressData.state) {
+                        const locationPoint = await this.getCoordinatesFromAddress({
+                            street: addressData.street,
+                            number: addressData.number || "",
+                            neighborhood: addressData.neighborhood || "",
+                            city: addressData.city,
+                            state: addressData.state
+                        });
+                        if (locationPoint) {
+                            arenaInsertData.location = locationPoint;
+                        }
+                    }
+                }
+
+                const { data: newArena, error: arenaError } = await supabase
+                    .from('arenas')
+                    .insert(arenaInsertData)
                     .select()
                     .single();
 
-                if (orgError) {
-                    // If duplicate (concurrent call), try to fetch it again
-                    if (orgError.code === '23505') {
-                        const { data: retryOrg } = await supabase
-                            .from('organizations')
-                            .select('id')
-                            .eq('owner_id', user.id)
-                            .maybeSingle();
-                        orgId = retryOrg?.id || null;
-                    } else {
-                        console.error('Error creating organization:', orgError);
-                        throw new Error(`Erro ao criar organização: ${orgError.message}`);
-                    }
-                } else {
-                    orgId = newOrg.id;
+                if (arenaError && arenaError.code !== '23505') {
+                    console.error('Error creating arena:', arenaError);
+                    throw new Error(`Erro ao criar arena: ${arenaError.message}`);
                 }
-            }
 
-            // 2.2 Create Arena if it doesn't exist for this organization
-            if (orgId) {
-                const { data: existingArena } = await supabase
-                    .from('arenas')
-                    .select('id')
-                    .eq('organization_id', orgId)
-                    .eq('name', arenaName)
-                    .maybeSingle();
+                if (newArena) {
+                    const { error: arenaUserError } = await supabase
+                        .from('arena_users')
+                        .insert({
+                            arena_id: newArena.id,
+                            user_id: user.id,
+                            role: 'Gestor',
+                            status: 'Ativo'
+                        });
 
-                if (!existingArena) {
-                    const arenaInsertData: any = {
-                        name: arenaName,
-                        owner_id: user.id,
-                        organization_id: orgId,
-                        status: 'ativo'
-                    };
-
-                    if (phone) {
-                        arenaInsertData.phone = phone;
-                    }
-
-                    if (addressData) {
-                        arenaInsertData.zip_code = addressData.cep || undefined;
-                        arenaInsertData.id_municipio = addressData.id_municipio || undefined;
-                        arenaInsertData.number = addressData.number || undefined;
-                        arenaInsertData.complement = addressData.complement || undefined;
-                        arenaInsertData.neighborhood = addressData.neighborhood || undefined;
-                        arenaInsertData.address = addressData.street || undefined;
-
-                        // Geocodificação automática
-                        if (addressData.street && addressData.city && addressData.state) {
-                            const locationPoint = await this.getCoordinatesFromAddress({
-                                street: addressData.street,
-                                number: addressData.number || "",
-                                neighborhood: addressData.neighborhood || "",
-                                city: addressData.city,
-                                state: addressData.state
-                            });
-                            if (locationPoint) {
-                                arenaInsertData.location = locationPoint;
-                            }
-                        }
-                    }
-
-                    const { data: newArena, error: arenaError } = await supabase
-                        .from('arenas')
-                        .insert(arenaInsertData)
-                        .select()
-                        .single();
-
-                    if (arenaError && arenaError.code !== '23505') {
-                        console.error('Error creating arena:', arenaError);
-                        throw new Error(`Erro ao criar arena: ${arenaError.message}`);
-                    }
-
-                    if (newArena) {
-                        const { error: arenaUserError } = await supabase
-                            .from('arena_users')
-                            .insert({
-                                arena_id: newArena.id,
-                                user_id: user.id,
-                                role: 'Gestor',
-                                status: 'Ativo'
-                            });
-
-                        if (arenaUserError && arenaUserError.code !== '23505') {
-                            console.error('Error linking user to arena:', arenaUserError);
-                            throw new Error(`Erro ao vincular usuário à arena: ${arenaUserError.message}`);
-                        }
+                    if (arenaUserError && arenaUserError.code !== '23505') {
+                        console.error('Error linking user to arena:', arenaUserError);
+                        throw new Error(`Erro ao vincular usuário à arena: ${arenaUserError.message}`);
                     }
                 }
-            } else {
-                throw new Error("Não foi possível criar ou encontrar a organização (orgId nulo).");
             }
         }
 

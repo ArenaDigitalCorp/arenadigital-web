@@ -44,11 +44,7 @@ export interface StockMovement {
 }
 
 export class StockService {
-    /**
-     * Creates a stock entry (inbound), records the movement, and updates the product stock.
-     */
     static async createStockEntry(input: StockEntryInput): Promise<StockEntry> {
-        // 1. Insert the stock entry record
         const { data: entry, error: entryError } = await supabase
             .from('product_stock_entries')
             .insert([{
@@ -69,7 +65,6 @@ export class StockService {
             throw entryError;
         }
 
-        // 2. Get current stock
         const { data: product, error: productError } = await supabase
             .from('products')
             .select('stock_quantity')
@@ -83,7 +78,6 @@ export class StockService {
 
         const newBalance = (product.stock_quantity || 0) + input.quantity;
 
-        // 3. Record the movement
         const { error: movementError } = await supabase
             .from('product_stock_movements')
             .insert([{
@@ -102,7 +96,6 @@ export class StockService {
             throw movementError;
         }
 
-        // 4. Update product stock_quantity
         const { error: updateError } = await supabase
             .from('products')
             .update({ stock_quantity: newBalance })
@@ -116,9 +109,6 @@ export class StockService {
         return entry as StockEntry;
     }
 
-    /**
-     * Gets all stock entries for a specific product.
-     */
     static async getStockEntriesByProduct(productId: string): Promise<StockEntry[]> {
         const { data, error } = await supabase
             .from('product_stock_entries')
@@ -137,9 +127,6 @@ export class StockService {
         return data as StockEntry[];
     }
 
-    /**
-     * Gets all stock movements for a specific product.
-     */
     static async getStockMovementsByProduct(productId: string): Promise<StockMovement[]> {
         const { data, error } = await supabase
             .from('product_stock_movements')
@@ -158,10 +145,6 @@ export class StockService {
         return data as StockMovement[];
     }
 
-    /**
-     * Registers a stock outflow (when an item is launched on an order).
-     * Decrements `products.stock_quantity` and records the movement.
-     */
     static async registerStockOutflow(
         productId: string,
         quantity: number,
@@ -170,7 +153,6 @@ export class StockService {
         referenceId?: string,
         referenceType: string = 'order_item'
     ): Promise<void> {
-        // 1. Get current stock
         const { data: product, error: productError } = await supabase
             .from('products')
             .select('stock_quantity')
@@ -190,7 +172,6 @@ export class StockService {
 
         const newBalance = currentStock - quantity;
 
-        // 2. Record the outflow movement
         const { error: movementError } = await supabase
             .from('product_stock_movements')
             .insert([{
@@ -209,7 +190,6 @@ export class StockService {
             throw movementError;
         }
 
-        // 3. Update product stock_quantity
         const { error: updateError } = await supabase
             .from('products')
             .update({ stock_quantity: newBalance })
@@ -221,16 +201,11 @@ export class StockService {
         }
     }
 
-    /**
-     * Restores stock when an order is cancelled.
-     * Re-adds quantities and records reversal movements.
-     */
     static async restoreStockForOrder(
         orderId: string,
         arenaId: string,
         userId: string
     ): Promise<void> {
-        // 1. Get all items from the order
         const { data: items, error: itemsError } = await supabase
             .from('station_order_items')
             .select('id, product_id, quantity')
@@ -243,7 +218,6 @@ export class StockService {
 
         if (!items || items.length === 0) return;
 
-        // 2. For each item, restore stock
         for (const item of items) {
             const { data: product, error: productError } = await supabase
                 .from('products')
@@ -258,7 +232,6 @@ export class StockService {
 
             const newBalance = (product.stock_quantity || 0) + item.quantity;
 
-            // Record the reversal movement
             await supabase
                 .from('product_stock_movements')
                 .insert([{
@@ -272,7 +245,6 @@ export class StockService {
                     registered_by: userId,
                 }]);
 
-            // Update product stock
             await supabase
                 .from('products')
                 .update({ stock_quantity: newBalance })
@@ -280,9 +252,6 @@ export class StockService {
         }
     }
 
-    /**
-     * Checks if there's enough stock for a product.
-     */
     static async checkStockAvailability(productId: string, requestedQty: number): Promise<boolean> {
         const { data, error } = await supabase
             .from('products')

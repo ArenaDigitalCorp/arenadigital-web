@@ -39,7 +39,7 @@ export default function EditArenaPage() {
         );
     }
 
-    if (!arena) return <div>Arena não encontrada.</div>;
+    if (!arena || !dbUser) return <div>Arena não encontrada.</div>;
 
     return (
         <div className="space-y-6">
@@ -50,7 +50,7 @@ export default function EditArenaPage() {
                 </p>
             </div>
 
-            <ArenaForm ownerId={dbUser?.id} initialData={arena} />
+            <ArenaForm ownerId={dbUser.id} initialData={arena} />
         </div>
     );
 }

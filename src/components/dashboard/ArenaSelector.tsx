@@ -22,11 +22,26 @@ export function ArenaSelector({ isCollapsed }: { isCollapsed?: boolean }) {
         return null;
     }
 
+    if (arenas.length === 1) {
+        if (isCollapsed) {
+            return (
+                <div title={arenas[0].name} className="w-10 h-10 mb-6 rounded-md bg-white/10 flex items-center justify-center text-white/70 font-bold">
+                    {arenas[0].name.charAt(0).toUpperCase()}
+                </div>
+            );
+        }
+        return (
+            <div className="mb-6 px-3 py-2 rounded-md bg-white/5 border border-white/10 text-white text-sm truncate">
+                {arenas[0].name}
+            </div>
+        );
+    }
+
     return (
         <div className={cn("mb-6", isCollapsed ? "px-0 flex justify-center" : "px-0")}>
             {isCollapsed ? (
-                <div title="Todas as arenas ou Selecionada" className="w-10 h-10 rounded-md bg-white/10 flex items-center justify-center text-white/70 font-bold">
-                    A
+                <div title={arenas.find(a => a.id === selectedArena)?.name ?? ""} className="w-10 h-10 rounded-md bg-white/10 flex items-center justify-center text-white/70 font-bold">
+                    {(arenas.find(a => a.id === selectedArena)?.name ?? "A").charAt(0).toUpperCase()}
                 </div>
             ) : (
                 <Select value={selectedArena} onValueChange={setSelectedArena}>
@@ -34,10 +49,9 @@ export function ArenaSelector({ isCollapsed }: { isCollapsed?: boolean }) {
                         <SelectValue placeholder="Selecione uma arena" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="all">Todas as arenas</SelectItem>
                         {arenas.map((arena) => (
                             <SelectItem key={arena.id} value={arena.id}>
-                                {arena.target_name}
+                                {arena.name}
                             </SelectItem>
                         ))}
                     </SelectContent>
