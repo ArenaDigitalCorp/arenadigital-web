@@ -1,16 +1,19 @@
-"use client"
+import { assertArenaAccess } from '@/lib/server-auth'
+import { CourtForm } from '@/modules/courts/components/CourtForm'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { ArrowLeft } from 'lucide-react'
+import Link from 'next/link'
+import { redirect } from 'next/navigation'
 
-import { useParams, useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { ArrowLeft } from "lucide-react"
-import { Card } from "@/components/ui/card"
-import { CourtForm } from "@/modules/courts/components/CourtForm"
-import Link from "next/link"
+export default async function NewSpacePage({ params }: { params: Promise<{ id: string }> }) {
+    const { id } = await params
 
-export default function NewSpacePage() {
-    const params = useParams()
-    const router = useRouter()
-    const id = params.id as string
+    try {
+        await assertArenaAccess(id)
+    } catch {
+        redirect(`/dashboard/arenas/${id}`)
+    }
 
     return (
         <div className="space-y-6">
@@ -27,10 +30,7 @@ export default function NewSpacePage() {
             </div>
 
             <Card className="p-8 border-none shadow-lg rounded-xl bg-white">
-                <CourtForm
-                    arenaId={id}
-                    onSuccess={() => router.push(`/dashboard/arenas/${id}`)}
-                />
+                <CourtForm arenaId={id} />
             </Card>
         </div>
     )

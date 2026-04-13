@@ -1,25 +1,29 @@
 "use server"
 
 import { auth } from '@clerk/nextjs/server'
-import { UserService } from '@/modules/users/services/userService'
-import { ArenaService } from '@/modules/arenas/services/arenaService'
-import { RotativoService } from '@/modules/rotativos/services/rotativoService'
+import { getSupabaseAdmin } from '@/lib/supabase-server'
+import { SupabaseRotativoRepository } from '@/modules/rotativos/repositories/SupabaseRotativoRepository'
 import { revalidatePath } from 'next/cache'
+import { createRotativoInputSchema } from '@/modules/rotativos/schemas/rotativo.schema'
 
-export async function createRotativoAction(formData: any) {
+export async function createRotativoAction(formData: unknown) {
+    const parsed = createRotativoInputSchema.safeParse(formData)
+    if (!parsed.success) {
+        return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" }
+    }
+
     try {
         const { userId: clerkId } = await auth()
         if (!clerkId) return { success: false, error: "Não autorizado" }
 
-        const dbUser = await UserService.getUserByClerkId(clerkId)
+        const supabase = getSupabaseAdmin()
+        const { data: dbUser } = await supabase.from('users').select('id').eq('clerk_user_id', clerkId).single()
         if (!dbUser) return { success: false, error: "Usuário não encontrado" }
 
-        const { arenaId, ...rest } = formData
+        const { arenaId, ...rest } = parsed.data
+        const repo = new SupabaseRotativoRepository(supabase)
 
-        await RotativoService.createRotativo({
-            ...rest,
-            id_arena: arenaId
-        })
+        await repo.create({ ...rest, id_arena: arenaId })
 
         revalidatePath('/dashboard/rotativo')
         return { success: true }
@@ -34,10 +38,12 @@ export async function getRotativosAction(arenaId: string, date: string) {
         const { userId: clerkId } = await auth()
         if (!clerkId) return { success: false, error: "Não autorizado" }
 
-        const dbUser = await UserService.getUserByClerkId(clerkId)
+        const supabase = getSupabaseAdmin()
+        const { data: dbUser } = await supabase.from('users').select('id').eq('clerk_user_id', clerkId).single()
         if (!dbUser) return { success: false, error: "Usuário não encontrado" }
 
-        const data = await RotativoService.getRotativosByDate(arenaId, date)
+        const repo = new SupabaseRotativoRepository(supabase)
+        const data = await repo.findByDate(arenaId, date)
         return { success: true, data }
     } catch (error: any) {
         console.error("Error in getRotativosAction:", error)
@@ -47,7 +53,8 @@ export async function getRotativosAction(arenaId: string, date: string) {
 
 export async function registerAthleteAction(rotativoId: string, athleteId: string, value: number) {
     try {
-        await RotativoService.registerAthlete(rotativoId, athleteId, value)
+        const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
+        await repo.registerAthlete(rotativoId, athleteId, value)
         revalidatePath('/dashboard/rotativo')
         return { success: true }
     } catch (error: any) {
@@ -61,7 +68,8 @@ export async function getRotativosByMonthAction(arenaId: string, startDate: stri
         const { userId: clerkId } = await auth()
         if (!clerkId) return { success: false, error: "Não autorizado" }
 
-        const data = await RotativoService.getRotativosByMonth(arenaId, startDate, endDate)
+        const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
+        const data = await repo.findByMonth(arenaId, startDate, endDate)
         return { success: true, data }
     } catch (error: any) {
         console.error("Error in getRotativosByMonthAction:", error)
@@ -71,7 +79,8 @@ export async function getRotativosByMonthAction(arenaId: string, startDate: stri
 
 export async function getParticipantsAction(rotativoId: string) {
     try {
-        const data = await RotativoService.getRotativoInscritos(rotativoId)
+        const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
+        const data = await repo.getInscritos(rotativoId)
         return { success: true, data }
     } catch (error: any) {
         console.error("Error in getParticipantsAction:", error)

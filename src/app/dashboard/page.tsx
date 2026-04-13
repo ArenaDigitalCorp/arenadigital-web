@@ -1,74 +1,48 @@
 "use client"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-    BarChart,
-    Users,
-    Map as MapIcon,
-    Calendar as CalendarIcon,
-    TrendingUp,
-    Clock
-} from "lucide-react";
-import { useEffect, useState } from "react";
-import { useUserSync } from "@/hooks/useUserSync";
-import { useArena } from "@/contexts/ArenaContext";
-import { DashboardService } from "@/modules/dashboard/services/dashboardService";
-import { Skeleton } from "@/components/ui/skeleton";
-import { OccupancyChart } from "@/modules/dashboard/components/OccupancyChart";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Users, Map as MapIcon, Calendar as CalendarIcon, TrendingUp, Clock } from "lucide-react"
+import { useEffect, useState } from "react"
+import { useArena } from "@/contexts/ArenaContext"
+import { getDashboardDataAction } from "@/modules/dashboard/actions/dashboardActions"
+import { Skeleton } from "@/components/ui/skeleton"
+import { OccupancyChart } from "@/modules/dashboard/components/OccupancyChart"
+import type { DashboardStats, OccupancyRow } from "@/modules/dashboard/services/dashboardService"
 
 export default function DashboardPage() {
-    const { dbUser, isLoading: userLoading } = useUserSync();
-    const { selectedArena, isLoadingArenas } = useArena();
-    const [stats, setStats] = useState({ receita: 0, receitaChange: 0, reservas: 0, quadras: 0, ativos: 0 });
-    const [occupancyData, setOccupancyData] = useState<any[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const { selectedArena, isLoadingArenas } = useArena()
+    const [stats, setStats] = useState<DashboardStats>({ receita: 0, receitaChange: 0, reservas: 0, quadras: 0, ativos: 0 })
+    const [occupancyData, setOccupancyData] = useState<OccupancyRow[]>([])
+    const [isLoading, setIsLoading] = useState(true)
 
     useEffect(() => {
+        if (isLoadingArenas) return
+
         async function loadStats() {
-            if (userLoading) return;
-
-            if (!dbUser?.id) {
-                setIsLoading(false);
-                return;
-            }
-
-            if (isLoadingArenas) return;
-
-            if (!selectedArena) {
-                setStats({ receita: 0, receitaChange: 0, reservas: 0, quadras: 0, ativos: 0 });
-                setOccupancyData([]);
-                setIsLoading(false);
-                return;
-            }
-
-            setIsLoading(true);
+            setIsLoading(true)
             try {
-                const { stats, occupancy } = await DashboardService.getDashboardPageData(
-                    dbUser.id,
-                    selectedArena
-                );
-                setStats(stats);
-                setOccupancyData(occupancy);
-            } catch (error) {
-                console.error("Error loading dashboard data:", error);
+                const res = await getDashboardDataAction(selectedArena ?? 'all')
+                if (res.success) {
+                    setStats(res.stats!)
+                    setOccupancyData(res.occupancy!)
+                }
             } finally {
-                setIsLoading(false);
+                setIsLoading(false)
             }
         }
-        loadStats();
-    }, [dbUser?.id, userLoading, isLoadingArenas, selectedArena]);
 
-    if (isLoading || userLoading || isLoadingArenas) {
+        loadStats()
+    }, [selectedArena, isLoadingArenas])
+
+    if (isLoading || isLoadingArenas) {
         return (
             <div className="space-y-6">
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                    {[1, 2, 3, 4].map((i) => (
-                        <Skeleton key={i} className="h-32 w-full" />
-                    ))}
+                    {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-32 w-full" />)}
                 </div>
                 <Skeleton className="h-[400px] w-full" />
             </div>
-        );
+        )
     }
 
     const cards = [
@@ -100,31 +74,25 @@ export default function DashboardPage() {
             description: "Jogando este mês",
             color: "text-purple-500",
         },
-    ];
+    ]
 
     return (
         <div className="space-y-6">
             <div>
                 <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
-                <p className="text-muted-foreground">
-                    Bem-vindo de volta! Aqui está um resumo da sua arena.
-                </p>
+                <p className="text-muted-foreground">Bem-vindo de volta! Aqui está um resumo da sua arena.</p>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 {cards.map((card) => (
                     <Card key={card.title}>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">
-                                {card.title}
-                            </CardTitle>
+                            <CardTitle className="text-sm font-medium">{card.title}</CardTitle>
                             <card.icon className={`h-4 w-4 ${card.color}`} />
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold">{card.value}</div>
-                            <p className="text-xs text-muted-foreground">
-                                {card.description}
-                            </p>
+                            <p className="text-xs text-muted-foreground">{card.description}</p>
                         </CardContent>
                     </Card>
                 ))}
@@ -151,12 +119,8 @@ export default function DashboardPage() {
                                     <Clock className="h-4 w-4" />
                                 </div>
                                 <div className="space-y-1">
-                                    <p className="text-sm font-medium leading-none">
-                                        Nenhuma atividade recente
-                                    </p>
-                                    <p className="text-sm text-muted-foreground">
-                                        As últimas ações aparecerão aqui.
-                                    </p>
+                                    <p className="text-sm font-medium leading-none">Nenhuma atividade recente</p>
+                                    <p className="text-sm text-muted-foreground">As últimas ações aparecerão aqui.</p>
                                 </div>
                             </div>
                         </div>
@@ -164,5 +128,5 @@ export default function DashboardPage() {
                 </Card>
             </div>
         </div>
-    );
+    )
 }

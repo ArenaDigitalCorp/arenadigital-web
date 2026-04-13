@@ -2,7 +2,6 @@
 
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
-import * as z from "zod"
 import {
     ChevronLeft,
     Plus
@@ -34,16 +33,7 @@ import { toast } from "sonner"
 import { useEffect, useState } from "react"
 import { AthleteService } from "@/modules/athletes/services/athleteService"
 import { linkAthlete } from "@/modules/athletes/actions/athleteActions"
-
-const athleteFormSchema = z.object({
-    name: z.string().min(2, "O nome deve ter pelo menos 2 caracteres."),
-    cpf: z.string().min(11, "CPF inválido."),
-    phone: z.string().min(10, "Telefone inválido."),
-    email: z.string().email("E-mail inválido."),
-    sport: z.string().min(1, "Selecione um esporte."),
-})
-
-type AthleteFormValues = z.infer<typeof athleteFormSchema>
+import { athleteFormSchema, type AthleteFormValues } from "@/modules/athletes/schemas/athlete.schema"
 
 interface AthleteRegistrationModalProps {
     arenaId: string

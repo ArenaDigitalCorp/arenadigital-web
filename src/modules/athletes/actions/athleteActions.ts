@@ -1,10 +1,10 @@
 "use server"
 
 import { createClerkClient } from '@clerk/nextjs/server'
-import { UserService } from '@/modules/users/services/userService'
-import { AthleteService } from '@/modules/athletes/services/athleteService'
-import { ArenaService } from '@/modules/arenas/services/arenaService'
+import { SupabaseAthleteRepository } from '@/modules/athletes/repositories/SupabaseAthleteRepository'
+import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { auth } from '@clerk/nextjs/server'
+import { linkAthleteSchema } from '@/modules/athletes/schemas/athlete.schema'
 
 const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
 
@@ -16,6 +16,11 @@ export async function linkAthlete(formData: {
     sportId: string;
     arenaId: string;
 }) {
+    const parsed = linkAthleteSchema.safeParse(formData)
+    if (!parsed.success) {
+        return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" }
+    }
+
     try {
         const { userId: managerClerkId } = await auth();
 
@@ -23,14 +28,18 @@ export async function linkAthlete(formData: {
             return { success: false, error: "Não autorizado" };
         }
 
+        const supabase = getSupabaseAdmin()
+
         // 1. Get Manager's DB User
-        const managerDbUser = await UserService.getUserByClerkId(managerClerkId);
+        const { data: managerDbUser } = await supabase
+            .from('users').select('*').eq('clerk_user_id', managerClerkId).single()
         if (!managerDbUser) {
             return { success: false, error: "Usuário gestor não encontrado no banco." };
         }
 
         // 1.1 Check if email already exists
-        const existingUser = await UserService.getUserByEmail(formData.email);
+        const { data: existingUser } = await supabase
+            .from('users').select('id').eq('email', formData.email).maybeSingle()
         if (existingUser) {
             return { success: false, error: "Este e-mail já está cadastrado no sistema." };
         }
@@ -49,19 +58,19 @@ export async function linkAthlete(formData: {
         });
 
         // 3. Sync to Supabase users table
-        const athleteDbUser = await UserService.syncUser(
-            clerkUser.id,
-            formData.email,
-            formData.name,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            'atleta'
-        );
+        const { data: athleteDbUser, error: upsertError } = await supabase
+            .from('users')
+            .upsert(
+                { clerk_user_id: clerkUser.id, email: formData.email, name: formData.name, role: 'atleta' },
+                { onConflict: 'clerk_user_id' }
+            )
+            .select()
+            .single()
+        if (upsertError) throw upsertError
 
         // 4. Create Atleta profile
-        const atleta = await AthleteService.createAtleta({
+        const repo = new SupabaseAthleteRepository(supabase)
+        const atleta = await repo.create({
             id_users: athleteDbUser.id,
             nome_perfil: formData.name,
             cpf: formData.cpf,
@@ -72,14 +81,14 @@ export async function linkAthlete(formData: {
         });
 
         // 5. Link to Arena
-        await AthleteService.linkToArena({
+        await repo.linkToArena({
             id_arena: formData.arenaId,
             id_atleta: atleta.id,
             origem: 'arena'
         });
 
         // 6. Link to Sport
-        await AthleteService.addSport({
+        await repo.addSport({
             id_atleta: atleta.id,
             id_esporte: formData.sportId,
             id_nivel_habilidade_esporte: undefined
@@ -94,7 +103,6 @@ export async function linkAthlete(formData: {
             if (clerkError.code === 'form_identifier_exists') {
                 return { success: false, error: "Este e-mail já está cadastrado no sistema." };
             }
-            // Retornar a mensagem longa do Clerk para diagnóstico
             return {
                 success: false,
                 error: clerkError.longMessage || clerkError.message || "Erro de validação no Clerk."

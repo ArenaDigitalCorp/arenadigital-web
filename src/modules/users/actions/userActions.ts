@@ -34,12 +34,12 @@ type ArenaUserQueryRow = {
     status: string;
     created_at: string;
     user_id: string;
-    users: Array<{
+    users: {
         id: string;
         name: string | null;
         email: string;
         clerk_user_id: string;
-    }>;
+    } | null;
 };
 
 function getErrorMessage(error: unknown) {
@@ -226,20 +226,19 @@ export async function getArenaUsersAction(arenaId: string): Promise<ActionResult
 
         // Transform data to flat format for easy table rendering
         const formattedData = ((data ?? []) as unknown as ArenaUserQueryRow[])
-            .filter((item) => item.users.length > 0)
+            .filter((item) => item.users !== null)
             .map((item) => {
-            const linkedUser = item.users[0];
-
-            return {
-            arenaUserId: item.id,
-            id: linkedUser.id, // mapped to user.id so existing code might work
-            name: linkedUser.name ?? '',
-            email: linkedUser.email,
-            role: item.role,
-            status: item.status,
-            clerkUserId: linkedUser.clerk_user_id,
-            };
-        });
+                const linkedUser = item.users!;
+                return {
+                    arenaUserId: item.id,
+                    id: linkedUser.id,
+                    name: linkedUser.name ?? '',
+                    email: linkedUser.email,
+                    role: item.role,
+                    status: item.status,
+                    clerkUserId: linkedUser.clerk_user_id,
+                };
+            });
 
         return { success: true, data: formattedData };
     } catch (error: unknown) {

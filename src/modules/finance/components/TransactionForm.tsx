@@ -40,22 +40,7 @@ import { AthleteService } from "@/modules/athletes/services/athleteService";
 import { supabase } from "@/shared/database/supabaseClient";
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
-
-const transactionSchema = zod.object({
-    type: zod.enum(["entrada", "saída"]),
-    category: zod.string().min(1, "Selecione uma categoria"),
-    description: zod.string().min(3, "Mínimo de 3 caracteres"),
-    quantity: zod.coerce.number().min(1, "Mínimo 1"),
-    unit_value: zod.coerce.number().min(0.01, "Mínimo R$ 0,01"),
-    discount: zod.coerce.number().min(0, "Mínimo 0"),
-    total_value: zod.coerce.number(),
-    launch_date: zod.string(),
-    registration_date: zod.string(),
-    atleta_id: zod.string().optional(),
-    modo_pagamento_id: zod.string().optional(),
-});
-
-type TransactionFormValues = zod.infer<typeof transactionSchema>;
+import { transactionSchema, type TransactionFormValues } from "@/modules/finance/schemas/transaction.schema";
 
 interface Atleta {
     id: string;

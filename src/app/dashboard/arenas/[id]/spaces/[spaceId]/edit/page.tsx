@@ -1,42 +1,30 @@
-"use client"
+import { assertArenaAccess } from '@/lib/server-auth'
+import { getSupabaseAdmin } from '@/lib/supabase-server'
+import { CourtForm } from '@/modules/courts/components/CourtForm'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { ArrowLeft } from 'lucide-react'
+import Link from 'next/link'
+import { redirect } from 'next/navigation'
 
-import { useParams, useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { ArrowLeft } from "lucide-react"
-import { Card } from "@/components/ui/card"
-import { CourtForm } from "@/modules/courts/components/CourtForm"
-import Link from "next/link"
-import { useEffect, useState } from "react"
-import { CourtService } from "@/modules/courts/services/courtService"
-import { toast } from "sonner"
+export default async function EditSpacePage({ params }: { params: Promise<{ id: string; spaceId: string }> }) {
+    const { id, spaceId } = await params
 
-export default function EditSpacePage() {
-    const params = useParams()
-    const router = useRouter()
-    const id = params.id as string
-    const spaceId = params.spaceId as string
-    const [court, setCourt] = useState<any>(null)
-    const [isLoading, setIsLoading] = useState(true)
-
-    useEffect(() => {
-        async function loadCourt() {
-            try {
-                const data = await CourtService.getCourtById(spaceId)
-                setCourt(data)
-            } catch (error) {
-                console.error("Failed to load court:", error)
-                toast.error("Erro ao carregar os dados do espaço.")
-                router.push(`/dashboard/arenas/${id}`)
-            } finally {
-                setIsLoading(false)
-            }
-        }
-        loadCourt()
-    }, [id, spaceId, router])
-
-    if (isLoading) {
-        return <div className="p-8 text-center text-[#002B40]">Carregando...</div>
+    try {
+        await assertArenaAccess(id)
+    } catch {
+        redirect(`/dashboard/arenas/${id}`)
     }
+
+    const { data, error } = await getSupabaseAdmin()
+        .from('courts')
+        .select(`*, sports:court_sports(sport:sports(*))`)
+        .eq('id', spaceId)
+        .single()
+
+    if (error || !data) redirect(`/dashboard/arenas/${id}`)
+
+    const court = { ...data, sports: (data.sports as any[]).map(s => s.sport) }
 
     return (
         <div className="space-y-6">
@@ -53,11 +41,7 @@ export default function EditSpacePage() {
             </div>
 
             <Card className="p-8 border-none shadow-lg rounded-xl bg-white">
-                <CourtForm
-                    initialData={court}
-                    arenaId={id}
-                    onSuccess={() => router.push(`/dashboard/arenas/${id}`)}
-                />
+                <CourtForm initialData={court} arenaId={id} />
             </Card>
         </div>
     )
