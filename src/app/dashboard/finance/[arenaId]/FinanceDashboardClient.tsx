@@ -4,8 +4,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BarChart3, Plus } from "lucide-react";
 import React, { useCallback, useEffect, useState } from "react";
-import { useUserSync } from "@/hooks/useUserSync";
-import { FinanceService, type ArenaFinanceSummary, type ArenaFinanceDailyRow, type Transaction } from "@/modules/finance/services/financeService";
+import { getFinanceDashboardAction } from "@/modules/finance/actions/financeActions";
+import type { ArenaFinanceSummary, ArenaFinanceDailyRow, Transaction } from "@/modules/finance/services/financeService";
 import { format } from "date-fns";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -45,7 +45,6 @@ function computeComparison(summary: ArenaFinanceSummary) {
 }
 
 export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentEntradas, initialRecentSaidas, initialChartSeries }: Props) {
-    const { dbUser } = useUserSync();
     const [totals, setTotals] = useState(() => computeTotals(initialSummary));
     const [recentEntradas, setRecentEntradas] = useState<Transaction[]>(initialRecentEntradas);
     const [recentSaidas, setRecentSaidas] = useState<Transaction[]>(initialRecentSaidas);
@@ -113,18 +112,14 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
             const start = new Date(end);
             start.setDate(start.getDate() - 29);
 
-            const [summary, recentIn, recentOut, series] = await Promise.all([
-                FinanceService.getArenaFinanceSummary(arenaId),
-                FinanceService.getRecentTransactions(arenaId, 'entrada', 4),
-                FinanceService.getRecentTransactions(arenaId, 'saída', 4),
-                FinanceService.getArenaFinanceDailyTotals(arenaId, format(start, 'yyyy-MM-dd'), format(end, 'yyyy-MM-dd')),
-            ]);
+            const res = await getFinanceDashboardAction(arenaId);
+            if (!res.success || !res.data) throw new Error(res.error)
 
-            setTotals(computeTotals(summary));
-            setMonthlyComparison(computeComparison(summary));
-            setRecentEntradas(recentIn);
-            setRecentSaidas(recentOut);
-            setChartSeries(series);
+            setTotals(computeTotals(res.data.summary));
+            setMonthlyComparison(computeComparison(res.data.summary));
+            setRecentEntradas(res.data.recentIn);
+            setRecentSaidas(res.data.recentOut);
+            setChartSeries(res.data.series);
         } catch (error) {
             console.error(error);
         } finally {
@@ -359,15 +354,13 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                     <DialogHeader>
                         <DialogTitle className="text-2xl font-black text-[#002B40]">Nova entrada</DialogTitle>
                     </DialogHeader>
-                    {dbUser && (
-                        <TransactionForm
-                            arenaId={arenaId}
-                            registeredBy={dbUser.id}
-                            type="entrada"
-                            onSuccess={() => { setIsAddingEntry(false); loadData(); }}
-                            onCancel={() => setIsAddingEntry(false)}
-                        />
-                    )}
+                    <TransactionForm
+                        arenaId={arenaId}
+                        registeredBy=""
+                        type="entrada"
+                        onSuccess={() => { setIsAddingEntry(false); loadData(); }}
+                        onCancel={() => setIsAddingEntry(false)}
+                    />
                 </DialogContent>
             </Dialog>
 
@@ -376,15 +369,13 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                     <DialogHeader>
                         <DialogTitle className="text-2xl font-black text-[#002B40]">Nova saída</DialogTitle>
                     </DialogHeader>
-                    {dbUser && (
-                        <TransactionForm
-                            arenaId={arenaId}
-                            registeredBy={dbUser.id}
-                            type="saída"
-                            onSuccess={() => { setIsAddingExpense(false); loadData(); }}
-                            onCancel={() => setIsAddingExpense(false)}
-                        />
-                    )}
+                    <TransactionForm
+                        arenaId={arenaId}
+                        registeredBy=""
+                        type="saída"
+                        onSuccess={() => { setIsAddingExpense(false); loadData(); }}
+                        onCancel={() => setIsAddingExpense(false)}
+                    />
                 </DialogContent>
             </Dialog>
         </div>

@@ -3,6 +3,7 @@
 import { createClerkClient } from '@clerk/nextjs/server'
 import { SupabaseAthleteRepository } from '@/modules/athletes/repositories/SupabaseAthleteRepository'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
+import { assertArenaAccess } from '@/lib/server-auth'
 import { auth } from '@clerk/nextjs/server'
 import { linkAthleteSchema } from '@/modules/athletes/schemas/athlete.schema'
 
@@ -113,5 +114,28 @@ export async function linkAthlete(formData: {
             success: false,
             error: error.message || "Ocorreu um erro inesperado ao vincular o atleta."
         };
+    }
+}
+
+export async function getAthletesByArenaAction(arenaId: string, searchTerm?: string) {
+    try {
+        await assertArenaAccess(arenaId)
+        const repo = new SupabaseAthleteRepository(getSupabaseAdmin())
+        const data = await repo.findByArena(arenaId, searchTerm)
+        return { success: true, data }
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Erro ao buscar atletas'
+        return { success: false, error: message, data: [] }
+    }
+}
+
+export async function getSportsAction() {
+    try {
+        const repo = new SupabaseAthleteRepository(getSupabaseAdmin())
+        const data = await repo.getSports()
+        return { success: true, data }
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Erro ao buscar esportes'
+        return { success: false, error: message, data: [] }
     }
 }

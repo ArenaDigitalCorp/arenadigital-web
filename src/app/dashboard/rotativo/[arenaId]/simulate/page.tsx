@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Activity, User, Calendar as CalendarIcon, Loader2, CheckCircle2, AlertCircle, Search } from "lucide-react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { AthleteService } from "@/modules/athletes/services/athleteService"
+import { getAthletesByArenaAction } from "@/modules/athletes/actions/athleteActions"
 import { getRotativosAction, registerAthleteAction } from "@/modules/rotativos/actions/rotativoActions"
 import { toast } from "sonner"
 import {
@@ -47,8 +47,8 @@ export default function SimulateRegistrationPage({ params }: { params: { arenaId
                 setRotativos(rotativoRes.data || [])
                 // After getting rotativos, we can use the id_arena from the first one to fetch athletes if needed
                 if (rotativoRes.data && rotativoRes.data.length > 0) {
-                    const arts = await AthleteService.getAthletesByArena(rotativoRes.data[0].id_arena)
-                    setAthletes(arts)
+                    const athletesRes = await getAthletesByArenaAction(rotativoRes.data[0].id_arena)
+                    setAthletes(athletesRes.data ?? [])
                 }
             } else {
                 toast.error(rotativoRes.error)

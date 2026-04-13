@@ -22,12 +22,10 @@ import {
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
-import { OrderService } from "../services/orderService"
-import { CustomerService, StationCustomer } from "../services/customerService"
-import { ProductService, Product } from "@/modules/products/services/productService"
-import { StockService } from "@/modules/products/services/stockService"
-import { AthleteService } from "@/modules/athletes/services/athleteService"
-import { useUserSync } from "@/hooks/useUserSync"
+import { createOrderWithItemsAction, getCustomersByArenaAction } from "@/modules/stations/actions/orderActions"
+import { registerStockOutflowAction, getProductsByArenaAction } from "@/modules/products/actions/stockActions"
+import { getAthletesByArenaAction } from "@/modules/athletes/actions/athleteActions"
+import type { Product } from "@/modules/products/services/productService"
 import { Plus, Minus, Search, Check, X, Loader2, Trash2 } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { cn, normalizeString } from "@/lib/utils"
@@ -66,7 +64,7 @@ export function OpenComandaModal({
     const [filteredCustomers, setFilteredCustomers] = useState<any[]>([])
     const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null)
     const [isSearchingCustomers, setIsSearchingCustomers] = useState(false)
-    const { dbUser } = useUserSync()
+
 
     const [allProducts, setAllProducts] = useState<Product[]>([])
     const [productSearch, setProductSearch] = useState("")
@@ -82,8 +80,8 @@ export function OpenComandaModal({
     const loadProducts = async () => {
         setIsSearchingProducts(true)
         try {
-            const productsData = await ProductService.getProductsByArena(arenaId)
-            setAllProducts(productsData || [])
+            const res = await getProductsByArenaAction(arenaId)
+            setAllProducts(res.data || [])
         } catch (error) {
             console.error("Error loading products:", error)
         } finally {
@@ -114,20 +112,20 @@ export function OpenComandaModal({
         setIsSearchingCustomers(true)
         customerSearchTimeout.current = setTimeout(async () => {
             try {
-                const [customersData, athletesData] = await Promise.all([
-                    CustomerService.getCustomersByArena(arenaId),
-                    AthleteService.getAthletesByArena(arenaId) // Fetch all for frontend filtering
+                const [customersRes, athletesData] = await Promise.all([
+                    getCustomersByArenaAction(arenaId),
+                    getAthletesByArenaAction(arenaId) // Fetch all for frontend filtering
                 ])
 
                 const normalizedValue = normalizeString(value)
 
                 const combined = [
-                    ...customersData
-                        .filter(c => normalizeString(c.name).includes(normalizedValue))
-                        .map(c => ({ id: `customer:${c.id}`, name: c.name, origin: 'station' })),
-                    ...athletesData
-                        .filter(a => normalizeString(a.name).includes(normalizedValue))
-                        .map(a => ({ id: `athlete:${a.id}`, name: a.name, origin: 'athlete' }))
+                    ...(customersRes.data ?? [])
+                        .filter((c: any) => normalizeString(c.name).includes(normalizedValue))
+                        .map((c: any) => ({ id: `customer:${c.id}`, name: c.name, origin: 'station' })),
+                    ...(athletesData.data ?? [])
+                        .filter((a: any) => normalizeString(a.name).includes(normalizedValue))
+                        .map((a: any) => ({ id: `athlete:${a.id}`, name: a.name, origin: 'athlete' }))
                 ]
 
                 setFilteredCustomers(combined)
@@ -204,9 +202,9 @@ export function OpenComandaModal({
             const isAthlete = selectedCustomer.id.startsWith('athlete:')
             const actualId = selectedCustomer.id.split(':')[1]
 
-            const { items: createdItems } = await OrderService.createOrderWithItems(
+            const orderRes = await createOrderWithItemsAction(
+                arenaId,
                 {
-                    arena_id: arenaId,
                     station_id: stationId,
                     atleta_id: isAthlete ? actualId : undefined,
                     customer_id: !isAthlete ? actualId : undefined,
@@ -220,21 +218,21 @@ export function OpenComandaModal({
                     total_price: item.product.price * item.quantity
                 }))
             )
+            if (!orderRes.success) throw new Error(orderRes.error)
+            const createdItems = orderRes.data?.items ?? []
 
             // Register stock outflow
-            if (dbUser && createdItems && createdItems.length > 0) {
-                for (let i = 0; i < selectedItems.length; i++) {
-                    const item = selectedItems[i]
-                    const createdItem = createdItems[i]
-                    await StockService.registerStockOutflow(
-                        item.product.id,
-                        item.quantity,
-                        arenaId,
-                        dbUser.id,
-                        createdItem?.id,
-                        'order_item'
-                    )
-                }
+            for (let i = 0; i < selectedItems.length; i++) {
+                const item = selectedItems[i]
+                const createdItem = createdItems[i]
+                await registerStockOutflowAction(
+                    item.product.id,
+                    item.quantity,
+                    arenaId,
+                    undefined,
+                    createdItem?.id,
+                    'order_item'
+                )
             }
 
             toast.success("Comanda aberta com sucesso!")

@@ -35,9 +35,8 @@ import {
 } from "@/components/ui/command";
 import { Check, ChevronsUpDown, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { FinanceService } from "../services/financeService";
-import { AthleteService } from "@/modules/athletes/services/athleteService";
-import { supabase } from "@/shared/database/supabaseClient";
+import { createTransactionAction, updateTransactionAction, getModoPagamentoAction } from "@/modules/finance/actions/financeActions";
+import { getAthletesByArenaAction } from "@/modules/athletes/actions/athleteActions";
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
 import { transactionSchema, type TransactionFormValues } from "@/modules/finance/schemas/transaction.schema";
@@ -130,12 +129,8 @@ export function TransactionForm({
     useEffect(() => {
         async function loadModosPagamento() {
             try {
-                const { data, error } = await supabase
-                    .from('modo_pagamento')
-                    .select('id, nome')
-                    .order('nome');
-                if (error) throw error;
-                setModosPagamento(data ?? []);
+                const res = await getModoPagamentoAction();
+                setModosPagamento(res.data ?? []);
             } catch (err) {
                 console.error("Erro ao carregar modos de pagamento:", err);
             }
@@ -148,8 +143,8 @@ export function TransactionForm({
         if (effectiveType !== "entrada") return;
         async function loadAtletas() {
             try {
-                const data = await AthleteService.getAthletesByArena(arenaId);
-                setAtletas(data);
+                const res = await getAthletesByArenaAction(arenaId);
+                setAtletas(res.data ?? []);
             } catch (err) {
                 console.error("Erro ao carregar atletas:", err);
             }
@@ -160,20 +155,20 @@ export function TransactionForm({
     const onSubmit = async (values: any) => {
         try {
             if (isEditing && transaction) {
-                await FinanceService.updateTransaction(transaction.id, {
+                const res = await updateTransactionAction(arenaId, transaction.id, {
                     ...values,
                     atleta_id: values.atleta_id || null,
                     modo_pagamento_id: values.modo_pagamento_id || null,
                 });
+                if (!res.success) throw new Error(res.error)
                 toast.success("Lançamento atualizado com sucesso!");
             } else {
-                await FinanceService.createTransaction({
+                const res = await createTransactionAction(arenaId, {
                     ...values,
-                    arena_id: arenaId,
-                    registered_by: registeredBy,
                     atleta_id: values.atleta_id || null,
                     modo_pagamento_id: values.modo_pagamento_id || null,
                 });
+                if (!res.success) throw new Error(res.error)
                 toast.success("Lançamento realizado com sucesso!");
             }
             onSuccess();

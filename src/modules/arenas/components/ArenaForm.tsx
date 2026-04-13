@@ -24,9 +24,10 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import { toast } from "sonner"
 import { ArenaService } from "@/modules/arenas/services/arenaService"
+import { createArenaAction, updateArenaAction } from "@/modules/arenas/actions/arenaActions"
 import { useRouter } from "next/navigation"
 import { ImageUpload } from "@/components/ui/image-upload"
-import { supabase } from "@/shared/database/supabaseClient"
+import { getEstadosAction, getMunicipiosByEstadoAction, getMunicipioByIbgeAction } from "@/modules/arenas/actions/arenaActions"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Check, ChevronsUpDown, Copy } from "lucide-react"
@@ -100,11 +101,13 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
         }
         async function loadEstados() {
             try {
-                const { data } = await supabase.from('estados').select('*').order('nome')
+                const res = await getEstadosAction()
+                const data = res.data
                 if (data) setEstados(data)
 
                 if (initialData?.id_municipio) {
-                    const { data: munData } = await supabase.from('municipios').select('*').eq('codigo_ibge', initialData.id_municipio).single()
+                    const munRes = await getMunicipioByIbgeAction(initialData.id_municipio)
+                    const munData = munRes.data
                     if (munData) {
                         setSelectedEstadoId(munData.codigo_uf)
                         setTimeout(() => form.setValue("id_municipio", initialData.id_municipio), 100)
@@ -126,7 +129,8 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
                 return
             }
             try {
-                const { data } = await supabase.from('municipios').select('*').eq('codigo_uf', selectedEstadoId).order('nome')
+                const munListRes = await getMunicipiosByEstadoAction(selectedEstadoId)
+                const data = munListRes.data
                 if (data) setMunicipios(data)
             } catch (error) {
                 console.error("Failed to load cities:", error)
@@ -183,7 +187,8 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
                 setSelectedEstadoId(estadoEncontrado.codigo_uf);
 
                 // Precisamos buscar os municipios desse estado para setar a cidade
-                const { data: muns } = await supabase.from('municipios').select('*').eq('codigo_uf', estadoEncontrado.codigo_uf);
+                const munsRes = await getMunicipiosByEstadoAction(estadoEncontrado.codigo_uf);
+                const muns = munsRes.data
                 if (muns) {
                     setMunicipios(muns); // atualiza estado local
                     const cidadeEncontrada = muns.find(m => m.codigo_ibge.toString() === data.ibge);
@@ -282,13 +287,15 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
                 payload.location = locationPoint;
             }
             if (initialData) {
-                await ArenaService.updateArena(initialData.id, payload)
+                const res = await updateArenaAction(initialData.id, payload)
+                if (!res.success) throw new Error(res.error)
                 toast.success("Arena atualizada com sucesso!")
                 router.refresh()
             } else {
-                await ArenaService.createArena({ ...payload, owner_id: ownerId })
+                const res = await createArenaAction({ ...payload, owner_id: ownerId })
+                if (!res.success) throw new Error(res.error)
                 toast.success("Arena criada com sucesso!")
-                router.push("/dashboard/settings/arena") // Assumindo que a criação também vai para settings/arena, ou pode recarregar a página
+                router.push("/dashboard/settings/arena")
                 router.refresh()
             }
         } catch (error: any) {

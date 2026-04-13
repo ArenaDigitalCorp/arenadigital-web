@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react"
 import { Search } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
-import { AthleteService } from "@/modules/athletes/services/athleteService"
+import { getAthletesByArenaAction } from "@/modules/athletes/actions/athleteActions"
 import { AthletesTable, type Athlete } from "./AthletesTable"
 
 interface AthletesListProps {
@@ -20,8 +20,8 @@ export function AthletesList({ arenaId }: AthletesListProps) {
         if (!arenaId) return
         try {
             setIsLoading(true)
-            const data = await AthleteService.getAthletesByArena(arenaId, searchTerm)
-            setAthletes(data)
+            const res = await getAthletesByArenaAction(arenaId, searchTerm)
+            setAthletes(res.data as Athlete[])
         } catch (error) {
             console.error("Error loading athletes:", error)
         } finally {

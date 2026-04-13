@@ -102,3 +102,71 @@ export async function getOrdersByStationAction(arenaId: string, stationId: strin
         return { success: false, error: message, data: [] }
     }
 }
+
+export async function getStationByIdAction(arenaId: string, stationId: string) {
+    try {
+        await assertArenaAccess(arenaId)
+        const { data, error } = await getSupabaseAdmin()
+            .from('stations')
+            .select(`*, station_type:station_types(*)`)
+            .eq('id', stationId)
+            .single()
+
+        if (error) throw new Error(error.message)
+        return { success: true, data }
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Erro ao buscar estação'
+        return { success: false, error: message, data: null }
+    }
+}
+
+export async function getStationTypesAction(arenaId: string) {
+    try {
+        await assertArenaAccess(arenaId)
+        const { data, error } = await getSupabaseAdmin()
+            .from('station_types')
+            .select('*')
+            .order('name')
+
+        if (error) throw new Error(error.message)
+        return { success: true, data: data ?? [] }
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Erro ao buscar tipos de estação'
+        return { success: false, error: message, data: [] }
+    }
+}
+
+export async function createStationAction(arenaId: string, input: { name: string; status: string; station_type_id: string }) {
+    try {
+        await assertArenaAccess(arenaId)
+        const { data, error } = await getSupabaseAdmin()
+            .from('stations')
+            .insert([{ ...input, arena_id: arenaId }])
+            .select()
+            .single()
+
+        if (error) throw new Error(error.message)
+        return { success: true, data }
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Erro ao criar estação'
+        return { success: false, error: message, data: null }
+    }
+}
+
+export async function updateStationAction(arenaId: string, stationId: string, input: Partial<{ name: string; status: string; station_type_id: string }>) {
+    try {
+        await assertArenaAccess(arenaId)
+        const { data, error } = await getSupabaseAdmin()
+            .from('stations')
+            .update(input)
+            .eq('id', stationId)
+            .select()
+            .single()
+
+        if (error) throw new Error(error.message)
+        return { success: true, data }
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Erro ao atualizar estação'
+        return { success: false, error: message, data: null }
+    }
+}

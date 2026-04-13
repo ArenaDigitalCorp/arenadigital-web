@@ -28,9 +28,9 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { toast } from "sonner"
-import { OrderService, StationOrder } from "../services/orderService"
+import type { StationOrder } from "../services/orderService"
+import { addPaymentAction, closeOrderAndGenerateFinanceAction } from "@/modules/stations/actions/orderActions"
 import { Loader2, X } from "lucide-react"
-import { useUserSync } from "@/hooks/useUserSync"
 
 const paymentSchema = z.object({
     amount: z.string().min(1, "Informe o valor"),
@@ -57,7 +57,6 @@ export function RegisterPaymentModal({
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [showCloseConfirmation, setShowCloseConfirmation] = useState(false)
     const [currentBalance, setCurrentBalance] = useState(0)
-    const { dbUser } = useUserSync()
 
     const form = useForm<PaymentValues>({
         resolver: zodResolver(paymentSchema),
@@ -85,13 +84,14 @@ export function RegisterPaymentModal({
         try {
             const amount = parseFloat(data.amount.replace(',', '.'))
 
-            await OrderService.addPayment({
+            const payRes = await addPaymentAction(order.arena_id, {
                 order_id: order.id,
                 amount,
                 payment_method: data.payment_method,
                 observation: data.observation,
                 paid_by_name: data.paid_by_name,
             })
+            if (!payRes.success) throw new Error(payRes.error)
 
             const newPaid = (order.station_payments?.reduce((acc, p) => acc + p.amount, 0) || 0) + amount
             const newBalance = order.total_value - newPaid
@@ -113,14 +113,11 @@ export function RegisterPaymentModal({
 
     const handleCloseComanda = async () => {
         if (!order) return
-        if (!dbUser) {
-            toast.error("Usuário não identificado.");
-            return;
-        }
 
         setIsSubmitting(true)
         try {
-            await OrderService.closeOrderAndGenerateFinance(order.id, dbUser.id)
+            const res = await closeOrderAndGenerateFinanceAction(order.arena_id, order.id)
+            if (!res.success) throw new Error(res.error)
             toast.success("Comanda fechada com sucesso!")
             onSuccess()
             handleClose()

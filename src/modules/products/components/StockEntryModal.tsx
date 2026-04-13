@@ -23,9 +23,8 @@ import {
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
-import { StockService } from "@/modules/products/services/stockService"
+import { createStockEntryAction } from "@/modules/products/actions/stockActions"
 import { Product } from "@/modules/products/services/productService"
-import { useUserSync } from "@/hooks/useUserSync"
 import { useState } from "react"
 import { Loader2, Package, CalendarIcon } from "lucide-react"
 import { format } from "date-fns"
@@ -60,7 +59,6 @@ export function StockEntryModal({
     onOpenChange,
     onSuccess,
 }: StockEntryModalProps) {
-    const { dbUser } = useUserSync()
     const [isSubmitting, setIsSubmitting] = useState(false)
 
     const form = useForm<StockEntryValues>({
@@ -75,14 +73,9 @@ export function StockEntryModal({
     })
 
     async function onSubmit(data: StockEntryValues) {
-        if (!dbUser) {
-            toast.error("Aguardando sincronização do usuário...")
-            return
-        }
-
         setIsSubmitting(true)
         try {
-            await StockService.createStockEntry({
+            const res = await createStockEntryAction({
                 product_id: product.id,
                 arena_id: arenaId,
                 quantity: Number(data.quantity),
@@ -90,8 +83,8 @@ export function StockEntryModal({
                 supplier: data.supplier,
                 description: data.description || undefined,
                 invoice_number: data.invoice_number || undefined,
-                registered_by: dbUser.id,
             })
+            if (!res.success) throw new Error(res.error)
 
             toast.success(`Entrada de ${data.quantity} unidade(s) registrada com sucesso!`)
             form.reset({

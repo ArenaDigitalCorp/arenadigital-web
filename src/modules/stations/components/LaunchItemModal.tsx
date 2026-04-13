@@ -22,10 +22,10 @@ import {
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
-import { OrderService, StationOrder } from "../services/orderService"
-import { ProductService, Product } from "@/modules/products/services/productService"
-import { StockService } from "@/modules/products/services/stockService"
-import { useUserSync } from "@/hooks/useUserSync"
+import type { StationOrder } from "../services/orderService"
+import { addOrderItemsAction, updateOrderAction } from "@/modules/stations/actions/orderActions"
+import { registerStockOutflowAction, getProductsByArenaAction } from "@/modules/products/actions/stockActions"
+import type { Product } from "@/modules/products/services/productService"
 import { Search, Check, X, Loader2, Plus, Minus, Trash2 } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { cn, normalizeString } from "@/lib/utils"
@@ -63,7 +63,6 @@ export function LaunchItemModal({
     const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([])
     const [isSearchingProducts, setIsSearchingProducts] = useState(false)
     const [isSubmitting, setIsSubmitting] = useState(false)
-    const { dbUser } = useUserSync()
 
     useEffect(() => {
         if (isOpen) {
@@ -74,8 +73,8 @@ export function LaunchItemModal({
     const loadProducts = async () => {
         setIsSearchingProducts(true)
         try {
-            const productsData = await ProductService.getProductsByArena(arenaId)
-            setAllProducts(productsData || [])
+            const res = await getProductsByArenaAction(arenaId)
+            setAllProducts(res.data || [])
         } catch (error) {
             console.error("Error loading products:", error)
         } finally {
@@ -159,27 +158,26 @@ export function LaunchItemModal({
             const launchTotalValue = itemsToLaunch.reduce((acc, item) => acc + item.total_price, 0)
 
             // Add all items in bulk and capture the created items
-            const createdItems = await OrderService.addOrderItems(order.id, itemsToLaunch.map(({ order_id, ...item }) => item))
+            const itemsRes = await addOrderItemsAction(arenaId, order.id, itemsToLaunch.map(({ order_id, ...item }) => item))
+            if (!itemsRes.success) throw new Error(itemsRes.error)
+            const createdItems = itemsRes.data
 
             // Register stock outflow
-            if (dbUser) {
-                for (let i = 0; i < selectedItems.length; i++) {
-                    const item = selectedItems[i]
-                    // We assume createdItems has the same length/order, or we just pass null for referenceId if we can't extract it easily
-                    const createdItem = createdItems?.[i]
-                    await StockService.registerStockOutflow(
-                        item.product.id,
-                        item.quantity,
-                        arenaId,
-                        dbUser.id,
-                        createdItem?.id,
-                        'order_item'
-                    )
-                }
+            for (let i = 0; i < selectedItems.length; i++) {
+                const item = selectedItems[i]
+                const createdItem = createdItems?.[i]
+                await registerStockOutflowAction(
+                    item.product.id,
+                    item.quantity,
+                    arenaId,
+                    undefined,
+                    createdItem?.id,
+                    'order_item'
+                )
             }
 
             // Update order total value
-            await OrderService.updateOrder(order.id, {
+            await updateOrderAction(arenaId, order.id, {
                 total_value: order.total_value + launchTotalValue
             })
 

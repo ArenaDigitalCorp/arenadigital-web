@@ -22,7 +22,8 @@ import {
 } from "@/components/ui/select"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
-import { StationService, StationType } from "@/modules/stations/services/stationService"
+import { getStationTypesAction, createStationAction, updateStationAction } from "@/modules/stations/actions/stationActions"
+import type { StationType } from "@/modules/stations/services/stationService"
 import { useEffect, useState } from "react"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -61,8 +62,8 @@ export function StationForm({ initialData, arenaId, onSuccess }: StationFormProp
     useEffect(() => {
         async function loadTypes() {
             try {
-                const types = await StationService.getStationTypes()
-                setStationTypes(types)
+                const res = await getStationTypesAction(arenaId)
+                if (res.success) setStationTypes(res.data as StationType[])
             } catch (error) {
                 console.error("Failed to load station types", error)
                 toast.error("Erro ao carregar tipos de estação.")
@@ -78,10 +79,12 @@ export function StationForm({ initialData, arenaId, onSuccess }: StationFormProp
             const finalInput = { ...data, arena_id: arenaId }
 
             if (initialData) {
-                await StationService.updateStation(initialData.id, finalInput)
+                const res = await updateStationAction(arenaId, initialData.id, data)
+                if (!res.success) throw new Error(res.error)
                 toast.success("Estação atualizada com sucesso!")
             } else {
-                await StationService.createStation(finalInput)
+                const res = await createStationAction(arenaId, data)
+                if (!res.success) throw new Error(res.error)
                 toast.success("Estação criada com sucesso!")
             }
             if (onSuccess) onSuccess()

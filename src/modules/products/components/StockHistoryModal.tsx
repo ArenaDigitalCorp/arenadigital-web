@@ -10,7 +10,8 @@ import {
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, ArrowUpCircle, ArrowDownCircle, History, Package } from "lucide-react"
-import { StockService, StockMovement } from "@/modules/products/services/stockService"
+import { getStockMovementsByProductAction } from "@/modules/products/actions/stockActions"
+import type { StockMovement } from "@/modules/products/services/stockService"
 import { Product } from "@/modules/products/services/productService"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -45,8 +46,8 @@ export function StockHistoryModal({
     const loadMovements = async () => {
         setIsLoading(true)
         try {
-            const data = await StockService.getStockMovementsByProduct(product.id)
-            setMovements(data)
+            const res = await getStockMovementsByProductAction(product.id)
+            setMovements(res.data as StockMovement[])
         } catch (error) {
             console.error("Error loading movements:", error)
         } finally {

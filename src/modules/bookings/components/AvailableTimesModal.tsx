@@ -10,8 +10,8 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { CourtService } from "@/modules/courts/services/courtService"
-import { BookingService } from "@/modules/bookings/services/bookingService"
+import { getCourtsByArenaAction } from "@/modules/courts/actions/courtActions"
+import { getBookingsByArenaAction } from "@/modules/bookings/actions/bookingActions"
 import { format, addDays, startOfWeek, parseISO, getHours, isSameDay, startOfDay, endOfDay } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { cn } from "@/lib/utils"
@@ -47,12 +47,12 @@ export function AvailableTimesModal({ isOpen, onClose, arenaId, currentDate }: A
             const startStr = startOfDay(weekDays[0]).toISOString()
             const endStr = endOfDay(weekDays[6]).toISOString()
 
-            const [courtsData, bookingsData] = await Promise.all([
-                CourtService.getCourtsByArena(arenaId),
-                BookingService.getBookingsByArena(arenaId, startStr, endStr)
+            const [courtsRes, bookingsRes] = await Promise.all([
+                getCourtsByArenaAction(arenaId),
+                getBookingsByArenaAction(arenaId, startStr, endStr)
             ])
-            setCourts(courtsData)
-            setBookings(bookingsData)
+            setCourts(courtsRes.data ?? [])
+            setBookings(bookingsRes.data ?? [])
         } catch (error) {
             console.error("Error loading availability data:", error)
         } finally {

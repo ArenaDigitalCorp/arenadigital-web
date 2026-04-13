@@ -29,9 +29,9 @@ import {
 } from "@/components/ui/select"
 import { toast } from "sonner"
 import { ProductService, Product } from "@/modules/products/services/productService"
-import { StationService, StationType } from "@/modules/stations/services/stationService"
+import { getStationTypesAction } from "@/modules/stations/actions/stationActions"
+import type { StationType } from "@/modules/stations/services/stationService"
 import { useEffect, useState } from "react"
-import { useUserSync } from "@/hooks/useUserSync"
 
 const productFormSchema = z.object({
     name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
@@ -60,7 +60,6 @@ export function ProductFormModal({
     onSuccess
 }: ProductFormModalProps) {
     const [stationTypes, setStationTypes] = useState<StationType[]>([])
-    const { dbUser } = useUserSync()
 
     const form = useForm<ProductFormValues>({
         resolver: zodResolver(productFormSchema),
@@ -87,8 +86,8 @@ export function ProductFormModal({
     // Load station types
     useEffect(() => {
         if (open) {
-            StationService.getStationTypes()
-                .then(setStationTypes)
+            getStationTypesAction(arenaId)
+                .then(res => { if (res.success) setStationTypes(res.data as StationType[]) })
                 .catch(error => {
                     console.error("Failed to load station types", error)
                     toast.error("Erro ao carregar tipos de estação")

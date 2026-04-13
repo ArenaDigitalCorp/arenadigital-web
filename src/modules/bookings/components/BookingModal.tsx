@@ -21,8 +21,8 @@ import {
     SelectValue
 } from "@/components/ui/select"
 import { searchAthletesAction } from "@/modules/loyalty/actions/loyaltyActions"
-import { ArenaService } from "@/modules/arenas/services/arenaService"
-import { BookingService } from "@/modules/bookings/services/bookingService"
+import { getArenaByIdAction } from "@/modules/arenas/actions/arenaActions"
+import { createBookingAction, createRecurringBookingsAction } from "@/modules/bookings/actions/bookingActions"
 import { toast } from "sonner"
 import { format, addHours, parse, addWeeks } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -83,11 +83,11 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
     async function loadArenaSports() {
         try {
             setIsLoadingSports(true)
-            const arena = await ArenaService.getArenaById(arenaId)
-            if (arena && arena.sports) {
-                setArenaSports(arena.sports)
-                if (arena.sports.length > 0) {
-                    setSelectedSport(arena.sports[0].id)
+            const res = await getArenaByIdAction(arenaId)
+            if (res.data && res.data.sports) {
+                setArenaSports(res.data.sports)
+                if (res.data.sports.length > 0) {
+                    setSelectedSport(res.data.sports[0].id)
                 }
             }
         } catch (error) {
@@ -170,9 +170,9 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                     })
                 }
 
-                await BookingService.createRecurringBookings(bookingsToCreate)
+                await createRecurringBookingsAction(arenaId, bookingsToCreate)
             } else {
-                await BookingService.createBooking({
+                await createBookingAction(arenaId, {
                     arena_id: arenaId,
                     court_id: courtId,
                     athlete_name: selectedAthlete ? selectedAthlete.nome_perfil : search,

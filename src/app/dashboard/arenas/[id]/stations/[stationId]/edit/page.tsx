@@ -2,7 +2,9 @@ import { StationForm } from "@/modules/stations/components/StationForm";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { StationService } from "@/modules/stations/services/stationService";
+import { getStationByIdAction } from "@/modules/stations/actions/stationActions";
+import { redirect } from "next/navigation";
+import { assertArenaAccess } from "@/lib/server-auth";
 
 interface EditStationPageProps {
     params: Promise<{
@@ -13,7 +15,12 @@ interface EditStationPageProps {
 
 export default async function EditStationPage({ params }: EditStationPageProps) {
     const { id, stationId } = await params;
-    const station = await StationService.getStationById(stationId);
+
+    try { await assertArenaAccess(id) } catch { redirect(`/dashboard/arenas/${id}/stations`) }
+
+    const res = await getStationByIdAction(id, stationId);
+    const station = res.data;
+    if (!station) redirect(`/dashboard/arenas/${id}/stations`);
 
     return (
         <div className="space-y-6">

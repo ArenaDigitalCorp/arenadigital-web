@@ -4,8 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, ArrowLeft, ChevronLeft, ChevronRight, Edit, Trash2, Calendar } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
-import { useUserSync } from "@/hooks/useUserSync";
-import { FinanceService } from "@/modules/finance/services/financeService";
+import { getTransactionsAction, deleteTransactionAction } from "@/modules/finance/actions/financeActions";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
 import { startOfMonth, endOfMonth, format, addMonths, subMonths } from "date-fns";
@@ -43,7 +42,6 @@ const formatCurrency = (val: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
 export function TransactionsPageClient({ arenaId, type }: Props) {
-    const { dbUser } = useUserSync();
     const [transactions, setTransactions] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -54,19 +52,19 @@ export function TransactionsPageClient({ arenaId, type }: Props) {
     const labels = LABELS[type];
 
     const loadData = useCallback(async () => {
-        if (!dbUser?.id || !arenaId) return;
+        if (!arenaId) return;
         setIsLoading(true);
         try {
             const start = startOfMonth(currentDate);
             const end = endOfMonth(currentDate);
-            const data = await FinanceService.getTransactions(arenaId, type, format(start, 'yyyy-MM-dd'), format(end, 'yyyy-MM-dd'));
-            setTransactions(data);
+            const res = await getTransactionsAction(arenaId, type, format(start, 'yyyy-MM-dd'), format(end, 'yyyy-MM-dd'));
+            setTransactions(res.data ?? []);
         } catch {
             toast.error("Erro ao carregar lançamentos.");
         } finally {
             setIsLoading(false);
         }
-    }, [dbUser?.id, arenaId, currentDate, type]);
+    }, [arenaId, currentDate, type]);
 
     useEffect(() => { loadData(); }, [loadData]);
 
@@ -99,7 +97,7 @@ export function TransactionsPageClient({ arenaId, type }: Props) {
     const handleDelete = async () => {
         if (!deletingId) return;
         try {
-            await FinanceService.deleteTransaction(deletingId);
+            await deleteTransactionAction(arenaId, deletingId);
             setTransactions(transactions.filter(t => t.id !== deletingId));
             toast.success("Lançamento excluído!");
         } catch {
@@ -210,16 +208,14 @@ export function TransactionsPageClient({ arenaId, type }: Props) {
                             {editingTransaction ? labels.editModal : labels.createModal}
                         </DialogTitle>
                     </DialogHeader>
-                    {dbUser && (
-                        <TransactionForm
-                            arenaId={arenaId}
-                            registeredBy={dbUser.id}
-                            type={type}
-                            transaction={editingTransaction ?? undefined}
-                            onSuccess={handleFormSuccess}
-                            onCancel={() => { setIsFormOpen(false); setEditingTransaction(null); }}
-                        />
-                    )}
+                    <TransactionForm
+                        arenaId={arenaId}
+                        registeredBy=""
+                        type={type}
+                        transaction={editingTransaction ?? undefined}
+                        onSuccess={handleFormSuccess}
+                        onCancel={() => { setIsFormOpen(false); setEditingTransaction(null); }}
+                    />
                 </DialogContent>
             </Dialog>
 

@@ -31,8 +31,7 @@ import {
 } from "@/components/ui/select"
 import { toast } from "sonner"
 import { useEffect, useState } from "react"
-import { AthleteService } from "@/modules/athletes/services/athleteService"
-import { linkAthlete } from "@/modules/athletes/actions/athleteActions"
+import { linkAthlete, getSportsAction } from "@/modules/athletes/actions/athleteActions"
 import { athleteFormSchema, type AthleteFormValues } from "@/modules/athletes/schemas/athlete.schema"
 
 interface AthleteRegistrationModalProps {
@@ -61,8 +60,8 @@ export function AthleteRegistrationModal({
     async function loadSports() {
         try {
             setIsLoadingSports(true)
-            const data = await AthleteService.getSports()
-            setSports(data)
+            const res = await getSportsAction()
+            setSports(res.data)
         } catch (error) {
             console.error("Error loading sports:", error)
         } finally {

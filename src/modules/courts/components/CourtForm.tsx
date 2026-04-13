@@ -23,6 +23,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import { toast } from "sonner"
 import { CourtService } from "@/modules/courts/services/courtService"
+import { createCourtAction, updateCourtAction } from "@/modules/courts/actions/courtActions"
 import { useRouter } from "next/navigation"
 import { Textarea } from "@/components/ui/textarea"
 import { SportService, Sport } from "@/modules/courts/services/sportService"
@@ -176,17 +177,20 @@ export function CourtForm({ initialData, arenaId, onSuccess }: CourtFormProps) {
                     }
                 }
                 const finalInput = { ...input, image_url: imageUrl, day_config: dayConfigs, available_days, price }
-                await CourtService.updateCourt(initialData.id, { ...finalInput, arena_id: arenaId } as any, sportIds)
+                const res = await updateCourtAction(arenaId, initialData.id, { ...finalInput }, sportIds)
+                if (!res.success) throw new Error(res.error)
                 toast.success("Espaço atualizado com sucesso!")
             } else {
                 // Creating: create space first to get the ID, then upload image and update
                 const finalInput = { ...input, image_url: data.image_url || "", day_config: dayConfigs, available_days, price }
-                const newCourt = await CourtService.createCourt({ ...finalInput, arena_id: arenaId } as any, sportIds)
+                const createRes = await createCourtAction(arenaId, { ...finalInput }, sportIds)
+                if (!createRes.success) throw new Error(createRes.error)
+                const newCourt = createRes.data
 
                 if (imageFile && newCourt?.id) {
                     try {
                         const imageUrl = await CourtService.uploadImage(imageFile, arenaId, newCourt.id)
-                        await CourtService.updateCourt(newCourt.id, { image_url: imageUrl, arena_id: arenaId } as any, undefined)
+                        await updateCourtAction(arenaId, newCourt.id, { image_url: imageUrl }, undefined)
                     } catch (error) {
                         console.error("Failed to upload image:", error)
                         toast.error("Espaço criado, mas falha ao fazer upload da imagem.")

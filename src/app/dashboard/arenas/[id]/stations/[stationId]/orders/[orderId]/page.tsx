@@ -5,15 +5,15 @@ import { useEffect, useState } from "react";
 import { ChevronLeft, Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { OrderService, StationOrder } from "@/modules/stations/services/orderService";
-import { StockService } from "@/modules/products/services/stockService";
+import type { StationOrder } from "@/modules/stations/services/orderService";
+import { getOrderByIdAction, updateOrderAction } from "@/modules/stations/actions/orderActions";
+import { restoreStockForOrderAction } from "@/modules/products/actions/stockActions";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LaunchItemModal } from "@/modules/stations/components/LaunchItemModal";
 import { RegisterPaymentModal } from "@/modules/stations/components/RegisterPaymentModal";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { useUserSync } from "@/hooks/useUserSync";
 
 export default function OrderDetailsPage() {
     const params = useParams();
@@ -27,13 +27,12 @@ export default function OrderDetailsPage() {
     const [isLaunchModalOpen, setIsLaunchModalOpen] = useState(false);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [isCancelling, setIsCancelling] = useState(false);
-    const { dbUser } = useUserSync();
 
     const loadOrderData = async () => {
         setIsLoading(true);
         try {
-            const data = await OrderService.getOrderById(orderId);
-            setOrder(data);
+            const res = await getOrderByIdAction(arenaId, orderId);
+            setOrder(res.data as StationOrder | null);
         } catch (error) {
             console.error("Error loading order details:", error);
         } finally {
@@ -46,13 +45,13 @@ export default function OrderDetailsPage() {
     }, [orderId]);
 
     const handleCancelOrder = async () => {
-        if (!order || !dbUser) return;
+        if (!order) return;
         if (!window.confirm("Tem certeza que deseja cancelar esta comanda? Essa ação não pode ser desfeita e os itens retornarão ao estoque.")) return;
 
         setIsCancelling(true);
         try {
-            await OrderService.updateOrder(order.id, { status: 'cancelled' });
-            await StockService.restoreStockForOrder(order.id, arenaId, dbUser.id);
+            await updateOrderAction(arenaId, order.id, { status: 'cancelled' });
+            await restoreStockForOrderAction(order.id, arenaId);
             toast.success("Comanda cancelada com sucesso!");
             loadOrderData();
         } catch (error) {
