@@ -1,126 +1,28 @@
-import { supabase } from "@/shared/database/supabaseClient";
+import { supabase } from '@/shared/database/supabaseClient';
+import { SupabaseAthleteRepository } from '../repositories/SupabaseAthleteRepository';
 
-export interface AtletaInput {
-    id_users: string;
-    nome_perfil: string;
-    cpf?: string;
-    telefone?: string;
-    origem_cadastro?: 'arena' | 'aplicativo' | 'web';
-    id_arena_cadastro?: string;
-    compartilha_info?: boolean;
-}
+export type { Atleta, AtletaListItem, CreateAtletaDTO as AtletaInput, CreateArenaAtletaDTO as ArenaAtletaInput, CreateAtletaEsporteDTO as AtletaEsporteInput } from '../types/athlete.types';
 
-export interface AtletaEsporteInput {
-    id_atleta: string;
-    id_esporte: string;
-    id_nivel_habilidade_esporte?: string;
-}
-
-export interface ArenaAtletaInput {
-    id_arena: string;
-    id_atleta: string;
-    origem?: 'arena' | 'aplicativo';
-}
+const repo = new SupabaseAthleteRepository(supabase);
 
 export class AthleteService {
-    static async createAtleta(input: AtletaInput) {
-        const { data, error } = await supabase
-            .from('atleta')
-            .insert(input)
-            .select()
-            .single();
+  static createAtleta(input: Parameters<typeof repo.create>[0]) {
+    return repo.create(input);
+  }
 
-        if (error) {
-            console.error('Error creating atleta:', error);
-            throw error;
-        }
-        return data;
-    }
+  static linkToArena(input: Parameters<typeof repo.linkToArena>[0]) {
+    return repo.linkToArena(input);
+  }
 
-    static async linkToArena(input: ArenaAtletaInput) {
-        const { error } = await supabase
-            .from('arenas_atleta')
-            .insert(input);
+  static addSport(input: Parameters<typeof repo.addSport>[0]) {
+    return repo.addSport(input);
+  }
 
-        if (error) {
-            console.error('Error linking atleta to arena:', error);
-            throw error;
-        }
-    }
+  static getAthletesByArena(arenaId: string, searchTerm?: string) {
+    return repo.findByArena(arenaId, searchTerm);
+  }
 
-    static async addSport(input: AtletaEsporteInput) {
-        const { error } = await supabase
-            .from('atleta_esportes')
-            .insert(input);
-
-        if (error) {
-            console.error('Error adding sport to athlete:', error);
-            throw error;
-        }
-    }
-
-    static async getAthletesByArena(arenaId: string, searchTerm?: string) {
-        try {
-            // Buscando diretamente da tabela de atletas para garantir consistência nos dados e filtros
-            let query = supabase
-                .from('atleta')
-                .select(`
-                    id,
-                    nome_perfil,
-                    cpf,
-                    telefone,
-                    users:id_users (
-                        email
-                    ),
-                    arenas_atleta!inner (
-                        id_arena
-                    ),
-                    atleta_esportes (
-                        sport:id_esporte (
-                            name
-                        )
-                    )
-                `)
-                .eq('arenas_atleta.id_arena', arenaId)
-                .order('nome_perfil', { ascending: true });
-
-            if (searchTerm) {
-                query = query.ilike('nome_perfil', `%${searchTerm}%`);
-            }
-
-            const { data, error } = await query;
-
-            if (error) {
-                console.error('Error fetching athletes by arena:', error);
-                throw error;
-            }
-
-            if (!data) return [];
-
-            return (data as any[]).map(atleta => ({
-                id: atleta.id,
-                name: atleta.nome_perfil,
-                cpf: atleta.cpf || "---",
-                telefone: atleta.telefone || "---",
-                email: atleta.users?.email || "---",
-                sport: atleta.atleta_esportes?.[0]?.sport?.name || "N/A"
-            }));
-        } catch (err) {
-            console.error('Critical error in getAthletesByArena:', err);
-            return [];
-        }
-    }
-
-    static async getSports() {
-        const { data, error } = await supabase
-            .from('sports')
-            .select('id, name')
-            .order('name');
-
-        if (error) {
-            console.error('Error fetching sports:', error);
-            throw error;
-        }
-        return data || [];
-    }
+  static getSports() {
+    return repo.getSports();
+  }
 }

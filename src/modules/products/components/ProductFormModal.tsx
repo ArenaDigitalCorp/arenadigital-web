@@ -77,7 +77,7 @@ export function ProductFormModal({
         if (open) {
             form.reset({
                 name: product?.name || "",
-                item_type: product?.item_type || "Alimentação",
+                item_type: (product?.item_type as 'Alimentação' | 'Bebida' | 'Vestimenta' | 'Acessório') || "Alimentação",
                 station_type_id: product?.station_type_id || "",
                 price: product?.price?.toString() || "",
             })
