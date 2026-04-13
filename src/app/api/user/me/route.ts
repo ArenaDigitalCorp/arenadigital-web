@@ -1,7 +1,7 @@
 import { auth, currentUser } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { UserService } from '@/modules/users/services/userService'
+import { syncUserAction } from '@/modules/users/actions/userActions'
 
 export async function GET() {
   const { userId } = await auth()
@@ -27,7 +27,7 @@ export async function GET() {
   const metadata = clerkUser.unsafeMetadata as Record<string, unknown>
 
   try {
-    const user = await UserService.syncUser(
+    const user = await syncUserAction(
       userId,
       email,
       name,

@@ -22,11 +22,10 @@ import {
 } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { toast } from "sonner"
-import { CourtService } from "@/modules/courts/services/courtService"
 import { createCourtAction, updateCourtAction } from "@/modules/courts/actions/courtActions"
 import { useRouter } from "next/navigation"
 import { Textarea } from "@/components/ui/textarea"
-import { SportService, Sport } from "@/modules/courts/services/sportService"
+import { getSportsAction } from "@/modules/athletes/actions/athleteActions"
 import { useEffect, useState, useRef } from "react"
 import { UploadCloud, X, Image as ImageIcon } from "lucide-react"
 import Image from "next/image"
@@ -54,7 +53,7 @@ const DEFAULT_DAY_CONFIG: DayConfig = {
 
 export function CourtForm({ initialData, arenaId, onSuccess }: CourtFormProps) {
     const router = useRouter()
-    const [sports, setSports] = useState<Sport[]>([])
+    const [sports, setSports] = useState<any[]>([])
     const [imageFile, setImageFile] = useState<File | null>(null)
     const [imagePreview, setImagePreview] = useState<string | null>(initialData?.image_url || null)
     const fileInputRef = useRef<HTMLInputElement>(null)
@@ -75,8 +74,8 @@ export function CourtForm({ initialData, arenaId, onSuccess }: CourtFormProps) {
     useEffect(() => {
         async function loadSports() {
             try {
-                const sportsData = await SportService.getSports()
-                setSports(sportsData)
+                const res = await getSportsAction()
+                setSports(res.data ?? [])
             } catch (error) {
                 console.error("Failed to load sports:", error)
             }
@@ -168,7 +167,14 @@ export function CourtForm({ initialData, arenaId, onSuccess }: CourtFormProps) {
                 let imageUrl = data.image_url
                 if (imageFile) {
                     try {
-                        imageUrl = await CourtService.uploadImage(imageFile, arenaId, initialData.id)
+                        const fd = new FormData()
+                        fd.append('file', imageFile)
+                        fd.append('arenaId', arenaId)
+                        fd.append('spaceId', initialData.id)
+                        fd.append('type', 'space')
+                        const uploadRes = await fetch('/api/upload', { method: 'POST', body: fd })
+                        if (!uploadRes.ok) throw new Error('Failed to upload image')
+                        imageUrl = (await uploadRes.json()).url
                     } catch (error) {
                         console.error("Failed to upload image:", error)
                         toast.error("Falha ao fazer upload da imagem.")
@@ -189,8 +195,16 @@ export function CourtForm({ initialData, arenaId, onSuccess }: CourtFormProps) {
 
                 if (imageFile && newCourt?.id) {
                     try {
-                        const imageUrl = await CourtService.uploadImage(imageFile, arenaId, newCourt.id)
-                        await updateCourtAction(arenaId, newCourt.id, { image_url: imageUrl }, undefined)
+                        const fd = new FormData()
+                        fd.append('file', imageFile)
+                        fd.append('arenaId', arenaId)
+                        fd.append('spaceId', newCourt.id)
+                        fd.append('type', 'space')
+                        const uploadRes = await fetch('/api/upload', { method: 'POST', body: fd })
+                        if (uploadRes.ok) {
+                            const { url } = await uploadRes.json()
+                            await updateCourtAction(arenaId, newCourt.id, { image_url: url }, undefined)
+                        }
                     } catch (error) {
                         console.error("Failed to upload image:", error)
                         toast.error("Espaço criado, mas falha ao fazer upload da imagem.")

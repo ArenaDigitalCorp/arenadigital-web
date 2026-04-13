@@ -28,7 +28,7 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { toast } from "sonner"
-import type { StationOrder } from "../services/orderService"
+import type { StationOrder } from "@/modules/stations/types/station.types"
 import { addPaymentAction, closeOrderAndGenerateFinanceAction } from "@/modules/stations/actions/orderActions"
 import { Loader2, X } from "lucide-react"
 

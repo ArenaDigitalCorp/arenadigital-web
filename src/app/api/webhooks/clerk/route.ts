@@ -3,7 +3,7 @@ import { headers } from 'next/headers'
 import { NextResponse } from 'next/server'
 import type { WebhookEvent } from '@clerk/nextjs/server'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { UserService } from '@/modules/users/services/userService'
+import { syncUserAction } from '@/modules/users/actions/userActions'
 
 export async function POST(req: Request) {
   const webhookSecret = process.env.CLERK_WEBHOOK_SECRET
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
     const name = [d.first_name, d.last_name].filter(Boolean).join(' ')
     const metadata = (d.unsafe_metadata ?? {}) as Record<string, unknown>
 
-    await UserService.syncUser(
+    await syncUserAction(
       d.id,
       email,
       name,

@@ -9,6 +9,22 @@ type StationOrderInsert = Database['public']['Tables']['station_orders']['Insert
 type StationOrderUpdate = Database['public']['Tables']['station_orders']['Update']
 type StationOrderPaymentInsert = Database['public']['Tables']['station_payments']['Insert']
 
+export async function createCustomerAction(arenaId: string, input: { name: string; cpf?: string; phone?: string; email?: string }) {
+    try {
+        await assertArenaAccess(arenaId)
+        const { data, error } = await getSupabaseAdmin()
+            .from('station_customers')
+            .insert([{ ...input, arena_id: arenaId }])
+            .select()
+            .single()
+        if (error) throw new Error(error.message)
+        return { success: true, data }
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Erro ao criar cliente'
+        return { success: false, error: message, data: null }
+    }
+}
+
 export async function getCustomersByArenaAction(arenaId: string) {
     try {
         await assertArenaAccess(arenaId)

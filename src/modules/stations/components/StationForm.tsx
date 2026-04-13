@@ -23,7 +23,7 @@ import {
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { getStationTypesAction, createStationAction, updateStationAction } from "@/modules/stations/actions/stationActions"
-import type { StationType } from "@/modules/stations/services/stationService"
+import type { StationType } from "@/modules/stations/types/station.types"
 import { useEffect, useState } from "react"
 import { Skeleton } from "@/components/ui/skeleton"
 

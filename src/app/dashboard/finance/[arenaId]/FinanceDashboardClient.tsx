@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { BarChart3, Plus } from "lucide-react";
 import React, { useCallback, useEffect, useState } from "react";
 import { getFinanceDashboardAction } from "@/modules/finance/actions/financeActions";
-import type { ArenaFinanceSummary, ArenaFinanceDailyRow, Transaction } from "@/modules/finance/services/financeService";
+import type { ArenaFinanceSummary, ArenaFinanceDailyRow, Transaction } from "@/modules/finance/types/finance.types";
 import { format } from "date-fns";
 import Link from "next/link";
 import { cn } from "@/lib/utils";

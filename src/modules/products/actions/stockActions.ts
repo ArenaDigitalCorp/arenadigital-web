@@ -3,6 +3,8 @@
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAuthenticatedDbUser, assertArenaAccess } from '@/lib/server-auth'
 import { SupabaseProductRepository } from '@/modules/products/repositories/SupabaseProductRepository'
+import type { CreateProductDTO, UpdateProductDTO } from '@/modules/products/types/product.types'
+import { revalidatePath } from 'next/cache'
 
 export async function getProductsByArenaAction(arenaId: string) {
     try {
@@ -13,6 +15,45 @@ export async function getProductsByArenaAction(arenaId: string) {
     } catch (err) {
         const message = err instanceof Error ? err.message : 'Erro ao buscar produtos'
         return { success: false, error: message, data: [] as any[] }
+    }
+}
+
+export async function createProductAction(arenaId: string, input: CreateProductDTO) {
+    try {
+        await assertArenaAccess(arenaId)
+        const repo = new SupabaseProductRepository(getSupabaseAdmin())
+        const data = await repo.create(input)
+        revalidatePath(`/dashboard/settings/products/${arenaId}`)
+        return { success: true, data }
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Erro ao criar produto'
+        return { success: false, error: message, data: null }
+    }
+}
+
+export async function updateProductAction(arenaId: string, productId: string, input: UpdateProductDTO) {
+    try {
+        await assertArenaAccess(arenaId)
+        const repo = new SupabaseProductRepository(getSupabaseAdmin())
+        const data = await repo.update(productId, input)
+        revalidatePath(`/dashboard/settings/products/${arenaId}`)
+        return { success: true, data }
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Erro ao atualizar produto'
+        return { success: false, error: message, data: null }
+    }
+}
+
+export async function deleteProductAction(arenaId: string, productId: string) {
+    try {
+        await assertArenaAccess(arenaId)
+        const repo = new SupabaseProductRepository(getSupabaseAdmin())
+        await repo.delete(productId)
+        revalidatePath(`/dashboard/settings/products/${arenaId}`)
+        return { success: true }
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Erro ao excluir produto'
+        return { success: false, error: message }
     }
 }
 

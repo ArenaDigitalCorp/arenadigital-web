@@ -4,6 +4,79 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { assertArenaAccess } from "@/lib/server-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-server";
 
+async function getCoordinatesFromAddress(addressData: { street: string; number: string; neighborhood: string; city: string; state: string }) {
+    const query = `${addressData.street}, ${addressData.number}, ${addressData.city}, ${addressData.state}, Brasil`;
+    try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`, {
+            headers: { 'Accept-Language': 'pt-BR', 'User-Agent': 'ArenaDigital-Web-Sync' }
+        });
+        const geoData = await res.json();
+        if (geoData?.[0]) return `POINT(${geoData[0].lon} ${geoData[0].lat})`;
+    } catch { /* geocoding is best-effort */ }
+    return null;
+}
+
+export async function syncUserAction(
+    clerkUserId: string,
+    email: string,
+    name?: string,
+    arenaName?: string,
+    cpf?: string,
+    phone?: string,
+    addressData?: any,
+    role?: string,
+) {
+    const supabase = getSupabaseAdmin();
+
+    const { data: user, error: userError } = await supabase
+        .from('users')
+        .upsert({ clerk_user_id: clerkUserId, email, name, ...(cpf && { cpf }), ...(role && { role }) }, { onConflict: 'clerk_user_id' })
+        .select()
+        .single();
+
+    if (userError) throw new Error(`Erro ao sincronizar usuário: ${userError.message}`);
+
+    if (arenaName && user) {
+        const { data: existingArena } = await supabase
+            .from('arenas').select('id').eq('owner_id', user.id).eq('name', arenaName).maybeSingle();
+
+        if (!existingArena) {
+            const arenaInsertData: any = { name: arenaName, owner_id: user.id, status: 'ativo', ...(phone && { phone }) };
+
+            if (addressData) {
+                arenaInsertData.zip_code = addressData.cep || undefined;
+                arenaInsertData.id_municipio = addressData.id_municipio || undefined;
+                arenaInsertData.number = addressData.number || undefined;
+                arenaInsertData.complement = addressData.complement || undefined;
+                arenaInsertData.neighborhood = addressData.neighborhood || undefined;
+                arenaInsertData.address = addressData.street || undefined;
+
+                if (addressData.street && addressData.city && addressData.state) {
+                    const locationPoint = await getCoordinatesFromAddress({
+                        street: addressData.street, number: addressData.number || '',
+                        neighborhood: addressData.neighborhood || '', city: addressData.city, state: addressData.state
+                    });
+                    if (locationPoint) arenaInsertData.location = locationPoint;
+                }
+            }
+
+            const { data: newArena, error: arenaError } = await supabase
+                .from('arenas').insert(arenaInsertData).select().single();
+
+            if (arenaError && arenaError.code !== '23505') throw new Error(`Erro ao criar arena: ${arenaError.message}`);
+
+            if (newArena) {
+                const { error: arenaUserError } = await supabase.from('arena_users').insert({
+                    arena_id: newArena.id, user_id: user.id, role: 'Gestor', status: 'Ativo'
+                });
+                if (arenaUserError && arenaUserError.code !== '23505') throw new Error(`Erro ao vincular usuário: ${arenaUserError.message}`);
+            }
+        }
+    }
+
+    return user;
+}
+
 type ArenaUserFormData = {
     email: string;
     login?: string;

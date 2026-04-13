@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { ChevronLeft, Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import type { StationOrder } from "@/modules/stations/services/orderService";
+import type { StationOrder } from "@/modules/stations/types/station.types";
 import { getOrderByIdAction, updateOrderAction } from "@/modules/stations/actions/orderActions";
 import { restoreStockForOrderAction } from "@/modules/products/actions/stockActions";
 import { Skeleton } from "@/components/ui/skeleton";

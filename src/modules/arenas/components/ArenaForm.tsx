@@ -23,17 +23,15 @@ import {
 } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { toast } from "sonner"
-import { ArenaService } from "@/modules/arenas/services/arenaService"
 import { createArenaAction, updateArenaAction } from "@/modules/arenas/actions/arenaActions"
 import { useRouter } from "next/navigation"
 import { ImageUpload } from "@/components/ui/image-upload"
-import { getEstadosAction, getMunicipiosByEstadoAction, getMunicipioByIbgeAction } from "@/modules/arenas/actions/arenaActions"
+import { getEstadosAction, getMunicipiosByEstadoAction, getMunicipioByIbgeAction, getComodidadesAction } from "@/modules/arenas/actions/arenaActions"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Check, ChevronsUpDown, Copy } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { SportService, Sport } from "@/modules/courts/services/sportService"
-import { ComodidadeService, Comodidade } from "@/modules/arenas/services/comodidadeService"
+import { getSportsAction } from "@/modules/athletes/actions/athleteActions"
 import { useEffect, useState } from "react"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
@@ -71,8 +69,8 @@ const mapStatusFromDB = (status: string): "ativo" | "inativo" | "Em manutenção
 
 export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
     const router = useRouter()
-    const [sports, setSports] = useState<Sport[]>([])
-    const [comodidades, setComodidades] = useState<Comodidade[]>([])
+    const [sports, setSports] = useState<any[]>([])
+    const [comodidades, setComodidades] = useState<any[]>([])
     const [bannerFile, setBannerFile] = useState<File | null>(null)
     const [isUploading, setIsUploading] = useState(false)
 
@@ -85,16 +83,16 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
     useEffect(() => {
         async function loadSports() {
             try {
-                const sportsData = await SportService.getSports()
-                setSports(sportsData)
+                const res = await getSportsAction()
+                setSports(res.data ?? [])
             } catch (error) {
                 console.error("Failed to load sports:", error)
             }
         }
         async function loadComodidades() {
             try {
-                const comodidadesData = await ComodidadeService.getComodidades()
-                setComodidades(comodidadesData)
+                const res = await getComodidadesAction()
+                setComodidades(res.data ?? [])
             } catch (error) {
                 console.error("Failed to load comodidades:", error)
             }
@@ -248,7 +246,13 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
                     // just upload to a general 'arenas' folder and not worry about ID in path.
 
                     const uploadId = initialData?.id || 'new-arena-' + Date.now();
-                    bannerUrl = await ArenaService.uploadBanner(bannerFile, uploadId)
+                    const formData = new FormData()
+                    formData.append('file', bannerFile)
+                    formData.append('arenaId', uploadId)
+                    formData.append('type', 'banner')
+                    const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData })
+                    if (!uploadRes.ok) throw new Error('Failed to upload image')
+                    bannerUrl = (await uploadRes.json()).url
                 } catch (error) {
                     console.error("Failed to upload image:", error)
                     toast.error("Falha ao fazer upload da imagem.")

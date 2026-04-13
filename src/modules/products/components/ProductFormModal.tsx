@@ -28,9 +28,10 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { toast } from "sonner"
-import { ProductService, Product } from "@/modules/products/services/productService"
+import { createProductAction, updateProductAction } from "@/modules/products/actions/stockActions"
 import { getStationTypesAction } from "@/modules/stations/actions/stationActions"
-import type { StationType } from "@/modules/stations/services/stationService"
+import type { Product } from "@/modules/products/types/product.types"
+import type { StationType } from "@/modules/stations/types/station.types"
 import { useEffect, useState } from "react"
 
 const productFormSchema = z.object({
@@ -71,7 +72,6 @@ export function ProductFormModal({
         },
     })
 
-    // Reset form when product changes or modal opens
     useEffect(() => {
         if (open) {
             form.reset({
@@ -83,7 +83,6 @@ export function ProductFormModal({
         }
     }, [product, open, form])
 
-    // Load station types
     useEffect(() => {
         if (open) {
             getStationTypesAction(arenaId)
@@ -101,11 +100,6 @@ export function ProductFormModal({
             return
         }
 
-        if (!dbUser) {
-            toast.error("Aguardando sincronização do usuário...")
-            return
-        }
-
         try {
             const baseInput = {
                 arena_id: arenaId,
@@ -116,21 +110,12 @@ export function ProductFormModal({
             }
 
             if (product) {
-                // Update
-                const updateInput = {
-                    ...baseInput,
-                    updated_by: dbUser.id
-                }
-                await ProductService.updateProduct(product.id, updateInput)
+                const res = await updateProductAction(arenaId, product.id, baseInput)
+                if (!res.success) throw new Error(res.error)
                 toast.success("Produto atualizado com sucesso!")
             } else {
-                // Creation
-                const createInput = {
-                    ...baseInput,
-                    created_by: dbUser.id
-                    // updated_by intentionally omitted during creation
-                }
-                await ProductService.createProduct(createInput)
+                const res = await createProductAction(arenaId, baseInput)
+                if (!res.success) throw new Error(res.error)
                 toast.success("Produto criado com sucesso!")
             }
 
@@ -138,7 +123,7 @@ export function ProductFormModal({
             onOpenChange(false)
         } catch (error: any) {
             console.error("Error saving product:", error)
-            toast.error(`Erro ao salvar produto: ${error.message || error.error_description || "Erro desconhecido"}`)
+            toast.error(`Erro ao salvar produto: ${error.message || "Erro desconhecido"}`)
         }
     }
 
@@ -233,8 +218,6 @@ export function ProductFormModal({
                                     </FormItem>
                                 )}
                             />
-
-
                         </div>
 
                         <div className="flex justify-end pt-4">

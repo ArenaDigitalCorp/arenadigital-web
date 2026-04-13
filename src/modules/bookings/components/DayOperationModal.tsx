@@ -6,7 +6,7 @@ import { ptBR } from "date-fns/locale";
 import { X, CalendarDays, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { BookingService } from "@/modules/bookings/services/bookingService";
+import { getBookingsByArenaWithSportsAction } from "@/modules/bookings/actions/bookingActions";
 
 interface Court {
     id: string;
@@ -162,12 +162,12 @@ export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts 
             const end = new Date(currentDate);
             end.setHours(23, 59, 59, 999);
 
-            const data = await BookingService.getBookingsByArenaWithSports(
+            const res = await getBookingsByArenaWithSportsAction(
                 arenaId,
                 start.toISOString(),
                 end.toISOString()
             );
-            setBookings((data ?? []) as unknown as Booking[]);
+            setBookings(((res.data ?? []) as unknown) as Booking[]);
         } catch (error) {
             console.error("Error loading bookings for day operation", error);
         } finally {

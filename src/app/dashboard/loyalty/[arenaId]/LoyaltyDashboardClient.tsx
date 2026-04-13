@@ -11,7 +11,7 @@ import {
     getLatestRedemptionsAction,
 } from "@/modules/loyalty/actions/loyaltyActions"
 import { toast } from "sonner"
-import { FidelityTransaction } from "@/modules/loyalty/services/loyaltyService"
+import type { LoyaltyTransaction as FidelityTransaction } from "@/modules/loyalty/types/loyalty.types"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { NewSendModal } from "@/modules/loyalty/components/NewSendModal"

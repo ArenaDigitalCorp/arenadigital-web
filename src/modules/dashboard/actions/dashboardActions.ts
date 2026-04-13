@@ -3,7 +3,7 @@
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { requireAuthenticatedDbUser } from '@/lib/server-auth'
 import { startOfMonth, endOfMonth, subMonths, startOfDay, endOfDay, addHours } from 'date-fns'
-import type { DashboardStats, OccupancyRow } from '@/modules/dashboard/services/dashboardService'
+import type { DashboardStats, OccupancyRow } from '@/modules/dashboard/types/dashboard.types'
 
 async function resolveArenaIds(supabase: ReturnType<typeof getSupabaseAdmin>, ownerId: string, selectedArenaId: string | 'all') {
     if (selectedArenaId === 'all') {

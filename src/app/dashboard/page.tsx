@@ -7,7 +7,7 @@ import { useArena } from "@/contexts/ArenaContext"
 import { getDashboardDataAction } from "@/modules/dashboard/actions/dashboardActions"
 import { Skeleton } from "@/components/ui/skeleton"
 import { OccupancyChart } from "@/modules/dashboard/components/OccupancyChart"
-import type { DashboardStats, OccupancyRow } from "@/modules/dashboard/services/dashboardService"
+import type { DashboardStats, OccupancyRow } from "@/modules/dashboard/types/dashboard.types"
 
 export default function DashboardPage() {
     const { selectedArena, isLoadingArenas } = useArena()

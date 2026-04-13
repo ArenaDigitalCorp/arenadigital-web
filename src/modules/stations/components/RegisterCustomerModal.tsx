@@ -22,7 +22,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
-import { CustomerService } from "../services/customerService"
+import { createCustomerAction } from "@/modules/stations/actions/orderActions"
 
 const registerCustomerSchema = z.object({
     name: z.string().min(2, "O nome deve ter pelo menos 2 caracteres"),
@@ -56,10 +56,9 @@ export function RegisterCustomerModal({ isOpen, onClose, arenaId, onSuccess }: R
     async function onSubmit(data: RegisterCustomerValues) {
         setIsSubmitting(true)
         try {
-            const newCustomer = await CustomerService.createCustomer({
-                ...data,
-                arena_id: arenaId,
-            })
+            const res = await createCustomerAction(arenaId, data)
+            if (!res.success) throw new Error(res.error ?? 'Erro ao cadastrar cliente')
+            const newCustomer = res.data
             toast.success("Cliente cadastrado com sucesso!")
             onSuccess(newCustomer)
             form.reset()

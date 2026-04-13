@@ -14,7 +14,7 @@ import { OpenComandaModal } from "@/modules/stations/components/OpenComandaModal
 import { RegisterCustomerModal } from "@/modules/stations/components/RegisterCustomerModal"
 import { LaunchItemModal } from "@/modules/stations/components/LaunchItemModal"
 import { getOrdersByStationAction } from "@/modules/stations/actions/stationActions"
-import type { StationOrder } from "@/modules/stations/services/orderService"
+import type { StationOrder } from "@/modules/stations/types/station.types"
 
 interface Props {
     arenaId: string

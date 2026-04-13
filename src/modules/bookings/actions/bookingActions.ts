@@ -39,6 +39,39 @@ export async function getBookingsByArenaAction(
     }
 }
 
+export async function getBookingsByArenaWithSportsAction(
+    arenaId: string,
+    startDate: string,
+    endDate: string
+): Promise<{ success: boolean; data?: Booking[]; error?: string }> {
+    try {
+        await assertArenaAccess(arenaId)
+        const repo = new SupabaseBookingRepository(getSupabaseAdmin())
+        const data = await repo.findByArenaWithSports(arenaId, startDate, endDate)
+        return { success: true, data }
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Erro ao buscar reservas'
+        return { success: false, error: message }
+    }
+}
+
+export async function updateBookingStatusAction(
+    arenaId: string,
+    bookingId: string,
+    status: 'confirmed' | 'cancelled'
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        await assertArenaAccess(arenaId)
+        const repo = new SupabaseBookingRepository(getSupabaseAdmin())
+        await repo.updateStatus(bookingId, status)
+        revalidatePath(`/dashboard/arenas/${arenaId}/courts`)
+        return { success: true }
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Erro ao atualizar reserva'
+        return { success: false, error: message }
+    }
+}
+
 export async function createBookingAction(
     arenaId: string,
     input: CreateBookingDTO

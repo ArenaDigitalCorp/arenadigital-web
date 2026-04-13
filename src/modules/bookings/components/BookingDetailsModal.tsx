@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge"
 import { format, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { cn } from "@/lib/utils"
-import { BookingService } from "@/modules/bookings/services/bookingService"
+import { updateBookingStatusAction } from "@/modules/bookings/actions/bookingActions"
 import { toast } from "sonner"
 
 interface BookingDetailsModalProps {
@@ -37,7 +37,7 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, booking, court
 
         setIsCancelling(true)
         try {
-            await BookingService.updateBookingStatus(booking.id, 'cancelled')
+            await updateBookingStatusAction(booking.arena_id, booking.id, 'cancelled')
             toast.success("Reserva cancelada com sucesso!")
             onSuccess()
             onClose()

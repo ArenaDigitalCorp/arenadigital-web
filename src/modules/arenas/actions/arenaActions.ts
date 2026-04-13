@@ -44,6 +44,17 @@ export async function createArenaAction(input: CreateArenaDTO) {
     }
 }
 
+export async function getComodidadesAction() {
+    try {
+        const { data, error } = await getSupabaseAdmin().from('comodidades').select('*').order('name')
+        if (error) throw new Error(error.message)
+        return { success: true, data: data ?? [] }
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Erro ao buscar comodidades'
+        return { success: false, error: message, data: [] }
+    }
+}
+
 export async function getEstadosAction() {
     try {
         const { data, error } = await getSupabaseAdmin().from('estados').select('*').order('nome')

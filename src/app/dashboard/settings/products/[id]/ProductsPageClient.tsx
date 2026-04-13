@@ -13,7 +13,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
-import { ProductService, Product } from "@/modules/products/services/productService"
+import { getProductsByArenaAction, deleteProductAction } from "@/modules/products/actions/stockActions"
+import type { Product } from "@/modules/products/types/product.types"
 import { ProductFormModal } from "@/modules/products/components/ProductFormModal"
 import { StockEntryModal } from "@/modules/products/components/StockEntryModal"
 import { StockHistoryModal } from "@/modules/products/components/StockHistoryModal"
@@ -41,13 +42,13 @@ export function ProductsPageClient({ arenaId, arenaName, initialProducts }: Prop
     const [isStockHistoryOpen, setIsStockHistoryOpen] = useState(false)
 
     const refreshProducts = () => {
-        ProductService.getProductsByArena(arenaId).then(setProducts)
+        getProductsByArenaAction(arenaId).then(res => setProducts(res.data ?? []))
     }
 
     const handleDelete = async (id: string) => {
         if (!confirm("Tem certeza que deseja excluir este produto?")) return
         try {
-            await ProductService.deleteProduct(id)
+            await deleteProductAction(arenaId, id)
             setProducts(prev => prev.filter(p => p.id !== id))
             toast.success("Produto excluído com sucesso")
         } catch {
