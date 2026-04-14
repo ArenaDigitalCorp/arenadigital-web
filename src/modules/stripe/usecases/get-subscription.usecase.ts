@@ -30,14 +30,27 @@ export type ArenaSubscription = {
   card: CardInfo | null
 }
 
-async function fetchCardInfo(stripeSubscriptionId: string): Promise<{ paymentMethod: string | null; card: CardInfo | null }> {
+type StripeEnrichedData = {
+  paymentMethod: string | null
+  card: CardInfo | null
+  currentPeriodEnd: string | null
+}
+
+async function fetchStripeData(stripeSubscriptionId: string): Promise<StripeEnrichedData> {
   try {
     const sub = await stripe.subscriptions.retrieve(stripeSubscriptionId, {
       expand: ['default_payment_method']
     })
 
+    const rawPeriodEnd = sub.items.data[0]?.current_period_end
+    const currentPeriodEnd = rawPeriodEnd
+      ? new Date(rawPeriodEnd * 1000).toISOString()
+      : null
+
     const pm = sub.default_payment_method
-    if (!pm || typeof pm === 'string') return { paymentMethod: null, card: null }
+    if (!pm || typeof pm === 'string') {
+      return { paymentMethod: null, card: null, currentPeriodEnd }
+    }
 
     if (pm.type === 'card' && pm.card) {
       return {
@@ -45,13 +58,14 @@ async function fetchCardInfo(stripeSubscriptionId: string): Promise<{ paymentMet
         card: {
           brand: pm.card.brand ?? 'unknown',
           last4: pm.card.last4 ?? '****'
-        }
+        },
+        currentPeriodEnd
       }
     }
 
-    return { paymentMethod: pm.type, card: null }
+    return { paymentMethod: pm.type, card: null, currentPeriodEnd }
   } catch {
-    return { paymentMethod: null, card: null }
+    return { paymentMethod: null, card: null, currentPeriodEnd: null }
   }
 }
 
@@ -84,9 +98,9 @@ export async function getSubscription(arenaId: string): Promise<ArenaSubscriptio
   const parsedKey = planKeySchema.safeParse(data.plan_key)
   const plan = parsedKey.success ? getStripePlanByKey(parsedKey.data) : undefined
 
-  let cardData: { paymentMethod: string | null; card: CardInfo | null } = { paymentMethod: null, card: null }
+  let stripeData: StripeEnrichedData = { paymentMethod: null, card: null, currentPeriodEnd: null }
   if (data.stripe_subscription_id) {
-    cardData = await fetchCardInfo(data.stripe_subscription_id)
+    stripeData = await fetchStripeData(data.stripe_subscription_id)
   }
 
   return {
@@ -95,10 +109,10 @@ export async function getSubscription(arenaId: string): Promise<ArenaSubscriptio
     planLabel: plan?.label ?? null,
     priceCents: plan?.priceCents ?? null,
     maxSpaces: plan?.maxSpaces ?? null,
-    currentPeriodEnd: data.current_period_end ?? null,
+    currentPeriodEnd: data.current_period_end ?? stripeData.currentPeriodEnd,
     cancelAtPeriodEnd: data.cancel_at_period_end ?? false,
     canceledAt: data.canceled_at ?? null,
-    paymentMethod: cardData.paymentMethod,
-    card: cardData.card
+    paymentMethod: stripeData.paymentMethod,
+    card: stripeData.card
   }
 }
