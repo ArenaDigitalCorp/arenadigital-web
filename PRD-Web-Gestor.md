@@ -241,3 +241,8 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
 - Adoção inicial pelos gestores
 - Qualidade do cadastro de dados
 - Dependência da estabilidade de serviços terceiros (Clerk, Supabase, Vercel)
+
+
+## 11. Fluxo de Agendamento
+
+teste
