@@ -8,8 +8,6 @@ import { STRIPE_PLANS } from '@/modules/stripe/stripe-plans'
 import { NextRequest, NextResponse } from 'next/server'
 import type Stripe from 'stripe'
 
-export const config = { api: { bodyParser: false } }
-
 export async function POST(request: NextRequest) {
   const signature = request.headers.get('stripe-signature')
 
