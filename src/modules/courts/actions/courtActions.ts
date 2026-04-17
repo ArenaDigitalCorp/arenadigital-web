@@ -73,7 +73,7 @@ export async function createCourtAction(arenaId: string, input: Record<string, a
 
         const { data: court, error } = await supabase
             .from('courts')
-            .insert([{ ...input, arena_id: arenaId }])
+            .insert([{ ...input, arena_id: arenaId }] as any)
             .select()
             .single()
 
@@ -98,7 +98,7 @@ export async function updateCourtAction(arenaId: string, courtId: string, input:
 
         const { data: court, error } = await supabase
             .from('courts')
-            .update(input)
+            .update(input as any)
             .eq('id', courtId)
             .select()
             .single()

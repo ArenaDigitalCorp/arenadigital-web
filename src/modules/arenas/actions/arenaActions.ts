@@ -66,7 +66,7 @@ export async function getEstadosAction() {
     }
 }
 
-export async function getMunicipiosByEstadoAction(codigoUf: string) {
+export async function getMunicipiosByEstadoAction(codigoUf: number) {
     try {
         const { data, error } = await getSupabaseAdmin()
             .from('municipios').select('*').eq('codigo_uf', codigoUf).order('nome')
