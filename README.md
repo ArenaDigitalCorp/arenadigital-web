@@ -1,2 +1,2 @@
 # arenadigital-web
-Arena Digital Web - Frontend - commit
+Arena Digital Web - Frontend
