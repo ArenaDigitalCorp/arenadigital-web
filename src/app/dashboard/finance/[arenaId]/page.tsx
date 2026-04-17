@@ -1,3 +1,5 @@
+import { redirect } from 'next/navigation'
+import { assertArenaBackofficeAccess } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { SupabaseFinanceRepository } from '@/modules/finance/repositories/SupabaseFinanceRepository'
 import { format } from 'date-fns'
@@ -5,6 +7,13 @@ import { FinanceDashboardClient } from './FinanceDashboardClient'
 
 export default async function FinanceDashboard({ params }: { params: Promise<{ arenaId: string }> }) {
     const { arenaId } = await params
+
+    try {
+        await assertArenaBackofficeAccess(arenaId)
+    } catch {
+        redirect('/dashboard/settings/arenas')
+    }
+
     const repo = new SupabaseFinanceRepository(getSupabaseAdmin())
 
     const now = new Date()

@@ -32,9 +32,9 @@ export async function POST(request: NextRequest) {
 
   try {
     if (parsed.data.action === 'cancel') {
-      await cancelSubscription(parsed.data.arenaId)
+      await cancelSubscription(parsed.data.arenaId, userId)
     } else {
-      await reactivateSubscription(parsed.data.arenaId)
+      await reactivateSubscription(parsed.data.arenaId, userId)
     }
 
     return NextResponse.json({ success: true })

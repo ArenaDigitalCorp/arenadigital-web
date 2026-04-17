@@ -1,4 +1,4 @@
-import { assertArenaAccess, AuthorizationError, requireAuthenticatedDbUser } from '@/lib/server-auth'
+import { assertArenaSubscriptionAccess, AuthorizationError, requireAuthenticatedDbUser } from '@/lib/server-auth'
 
 export async function verifyArenaAccess(clerkUserId: string, arenaId: string): Promise<boolean> {
   try {
@@ -8,7 +8,7 @@ export async function verifyArenaAccess(clerkUserId: string, arenaId: string): P
       return false
     }
 
-    await assertArenaAccess(arenaId)
+    await assertArenaSubscriptionAccess(arenaId)
     return true
   } catch (error) {
     if (error instanceof AuthorizationError) {

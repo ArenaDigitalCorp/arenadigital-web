@@ -225,42 +225,6 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
             setIsUploading(true)
             let bannerUrl = values.banner_url
 
-            if (bannerFile) {
-                try {
-                    // We need an ID to upload. If creating, we might need a temp ID or upload 
-                    // after creation? 
-                    // Strategy: 
-                    // If editing, use initialData.id.
-                    // If creating, we can't upload to a specific folder yet if we follow /arenas/[id] pattern.
-                    // But we can use a temp ID or just upload to a 'temp' folder and move? 
-                    // Or just use the user ID as a bucket?
-                    // For now, let's assume we use 'temp' or just a random ID if not exists.
-                    // Actually, the previous implementation for Court used court-specific path.
-                    // For Arena, we can use 'arenas/banner/[random]'.
-                    // Let's use 'arenas' prefix.
-                    // Wait, `ArenaService.uploadBanner` takes `arenaId`.
-                    // If creating, we don't have ID.
-                    // We can create the arena first, then upload, then update?
-                    // Or finding a way to generate ID first? Supabase allows client-side UUID generation?
-                    // Let's go with Create -> Upload -> Update for now to be safe, or 
-                    // just upload to a general 'arenas' folder and not worry about ID in path.
-
-                    const uploadId = initialData?.id || 'new-arena-' + Date.now();
-                    const formData = new FormData()
-                    formData.append('file', bannerFile)
-                    formData.append('arenaId', uploadId)
-                    formData.append('type', 'banner')
-                    const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData })
-                    if (!uploadRes.ok) throw new Error('Failed to upload image')
-                    bannerUrl = (await uploadRes.json()).url
-                } catch (error) {
-                    console.error("Failed to upload image:", error)
-                    toast.error("Falha ao fazer upload da imagem.")
-                    setIsUploading(false)
-                    return
-                }
-            }
-
             // Construct the final object
             // Ensure opening_hours is structurally correct if we modified it
             // For now, we are passing values directly, but if we add specific controls for days/time, we might need to reconstruct it.
@@ -291,6 +255,24 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
                 payload.location = locationPoint;
             }
             if (initialData) {
+                if (bannerFile) {
+                    try {
+                        const formData = new FormData()
+                        formData.append('file', bannerFile)
+                        formData.append('arenaId', initialData.id)
+                        formData.append('type', 'banner')
+                        const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData })
+                        if (!uploadRes.ok) throw new Error('Failed to upload image')
+                        bannerUrl = (await uploadRes.json()).url
+                        payload.banner_url = bannerUrl
+                    } catch (error) {
+                        console.error("Failed to upload image:", error)
+                        toast.error("Falha ao fazer upload da imagem.")
+                        setIsUploading(false)
+                        return
+                    }
+                }
+
                 const res = await updateArenaAction(initialData.id, payload)
                 if (!res.success) throw new Error(res.error)
                 toast.success("Arena atualizada com sucesso!")
@@ -298,8 +280,28 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
             } else {
                 const res = await createArenaAction({ ...payload, owner_id: ownerId })
                 if (!res.success) throw new Error(res.error)
+                const createdArena = res.data
+
+                if (bannerFile && createdArena) {
+                    try {
+                        const formData = new FormData()
+                        formData.append('file', bannerFile)
+                        formData.append('arenaId', createdArena.id)
+                        formData.append('type', 'banner')
+                        const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData })
+                        if (!uploadRes.ok) throw new Error('Failed to upload image')
+                        bannerUrl = (await uploadRes.json()).url
+
+                        const updateRes = await updateArenaAction(createdArena.id, { ...payload, banner_url: bannerUrl })
+                        if (!updateRes.success) throw new Error(updateRes.error)
+                    } catch (error) {
+                        console.error("Failed to upload image after arena creation:", error)
+                        toast.error("Arena criada, mas falha ao fazer upload da imagem.")
+                    }
+                }
+
                 toast.success("Arena criada com sucesso!")
-                router.push("/dashboard/settings/arena")
+                router.push("/dashboard/settings/arenas")
                 router.refresh()
             }
         } catch (error: any) {

@@ -1,14 +1,14 @@
 "use server"
 
 import { revalidatePath } from 'next/cache'
-import { assertArenaAccess, requireAuthenticatedDbUser } from '@/lib/server-auth'
+import { assertArenaBackofficeAccess, requireAuthenticatedDbUser } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { SupabaseArenaRepository } from '@/modules/arenas/repositories/SupabaseArenaRepository'
 import type { CreateArenaDTO, UpdateArenaDTO } from '@/modules/arenas/types/arena.types'
 
 export async function deleteArenaAction(arenaId: string): Promise<{ success: boolean; error?: string }> {
     try {
-        await assertArenaAccess(arenaId)
+        await assertArenaBackofficeAccess(arenaId)
         const supabase = getSupabaseAdmin()
         const { error } = await supabase.from('arenas').delete().eq('id', arenaId)
         if (error) throw new Error(error.message)
@@ -23,7 +23,7 @@ export async function deleteArenaAction(arenaId: string): Promise<{ success: boo
 
 export async function getArenaByIdAction(arenaId: string) {
     try {
-        await assertArenaAccess(arenaId)
+        await assertArenaBackofficeAccess(arenaId)
         const arena = await new SupabaseArenaRepository(getSupabaseAdmin()).findById(arenaId)
         return { success: true, data: arena }
     } catch (err) {
@@ -92,7 +92,7 @@ export async function getMunicipioByIbgeAction(codigoIbge: number) {
 
 export async function updateArenaAction(arenaId: string, input: UpdateArenaDTO) {
     try {
-        await assertArenaAccess(arenaId)
+        await assertArenaBackofficeAccess(arenaId)
         const arena = await new SupabaseArenaRepository(getSupabaseAdmin()).update(arenaId, input)
         revalidatePath(`/dashboard/arenas/${arenaId}/edit`)
         revalidatePath('/dashboard/settings/arenas')

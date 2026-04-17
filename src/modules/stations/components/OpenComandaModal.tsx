@@ -23,7 +23,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { createOrderWithItemsAction, getCustomersByArenaAction } from "@/modules/stations/actions/orderActions"
-import { registerStockOutflowAction, getProductsByArenaAction } from "@/modules/products/actions/stockActions"
+import { getProductsByArenaAction } from "@/modules/products/actions/stockActions"
 import { getAthletesByArenaAction } from "@/modules/athletes/actions/athleteActions"
 import type { Product } from "@/modules/products/types/product.types"
 import { Plus, Minus, Search, Check, X, Loader2, Trash2 } from "lucide-react"
@@ -219,21 +219,6 @@ export function OpenComandaModal({
                 }))
             )
             if (!orderRes.success) throw new Error(orderRes.error)
-            const createdItems = orderRes.data?.items ?? []
-
-            // Register stock outflow
-            for (let i = 0; i < selectedItems.length; i++) {
-                const item = selectedItems[i]
-                const createdItem = createdItems[i]
-                await registerStockOutflowAction(
-                    item.product.id,
-                    item.quantity,
-                    arenaId,
-                    undefined,
-                    createdItem?.id,
-                    'order_item'
-                )
-            }
 
             toast.success("Comanda aberta com sucesso!")
             onSuccess()

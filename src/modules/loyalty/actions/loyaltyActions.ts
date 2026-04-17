@@ -2,6 +2,7 @@
 
 import { auth } from "@clerk/nextjs/server"
 import { getSupabaseAdmin } from "@/lib/supabase-server"
+import { assertArenaBackofficeAccess } from "@/lib/server-auth"
 import { SupabaseLoyaltyRepository } from "@/modules/loyalty/repositories/SupabaseLoyaltyRepository"
 import { revalidatePath } from "next/cache"
 
@@ -14,6 +15,7 @@ export async function updateCurrencyName(arenaId: string, name: string) {
     try {
         const { userId: clerkId } = await auth()
         if (!clerkId) return { success: false, error: "Não autorizado" }
+        await assertArenaBackofficeAccess(arenaId)
 
         const dbUserId = await getDbUserId(clerkId)
         if (!dbUserId) return { success: false, error: "Usuário não encontrado" }
@@ -34,6 +36,7 @@ export async function getLatestCreditsAction(arenaId: string) {
     try {
         const { userId: clerkId } = await auth()
         if (!clerkId) return { success: false, error: "Não autorizado" }
+        await assertArenaBackofficeAccess(arenaId)
 
         const dbUserId = await getDbUserId(clerkId)
         if (!dbUserId) return { success: false, error: "Usuário não encontrado" }
@@ -51,6 +54,7 @@ export async function getLatestRedemptionsAction(arenaId: string) {
     try {
         const { userId: clerkId } = await auth()
         if (!clerkId) return { success: false, error: "Não autorizado" }
+        await assertArenaBackofficeAccess(arenaId)
 
         const dbUserId = await getDbUserId(clerkId)
         if (!dbUserId) return { success: false, error: "Usuário não encontrado" }
@@ -68,6 +72,7 @@ export async function searchAthletesAction(arenaId: string, query?: string) {
     try {
         const { userId: clerkId } = await auth()
         if (!clerkId) return { success: false, error: "Não autorizado" }
+        await assertArenaBackofficeAccess(arenaId)
 
         const dbUserId = await getDbUserId(clerkId)
         if (!dbUserId) return { success: false, error: "Usuário não encontrado" }
@@ -91,6 +96,7 @@ export async function createCreditTransactionAction(data: {
     try {
         const { userId: clerkId } = await auth()
         if (!clerkId) return { success: false, error: "Não autorizado" }
+        await assertArenaBackofficeAccess(data.arenaId)
 
         const dbUserId = await getDbUserId(clerkId)
         if (!dbUserId) return { success: false, error: "Usuário não encontrado" }
@@ -136,6 +142,7 @@ export async function createRedemptionTransactionAction(data: {
     try {
         const { userId: clerkId } = await auth()
         if (!clerkId) return { success: false, error: "Não autorizado" }
+        await assertArenaBackofficeAccess(data.arenaId)
 
         const dbUserId = await getDbUserId(clerkId)
         if (!dbUserId) return { success: false, error: "Usuário não encontrado" }
@@ -163,6 +170,7 @@ export async function getTopAthletesAction(arenaId: string) {
     try {
         const { userId: clerkId } = await auth()
         if (!clerkId) return { success: false, error: "Não autorizado" }
+        await assertArenaBackofficeAccess(arenaId)
 
         const dbUserId = await getDbUserId(clerkId)
         if (!dbUserId) return { success: false, error: "Usuário não encontrado" }
@@ -180,6 +188,7 @@ export async function getLoyaltyDashboardDataAction(arenaId: string) {
     try {
         const { userId: clerkId } = await auth()
         if (!clerkId) return { success: false, error: "Não autorizado" }
+        await assertArenaBackofficeAccess(arenaId)
 
         const dbUserId = await getDbUserId(clerkId)
         if (!dbUserId) return { success: false, error: "Usuário não encontrado" }
@@ -202,6 +211,7 @@ export async function getAthletesWithBalanceAction(arenaId: string, page = 1, pa
     try {
         const { userId: clerkId } = await auth()
         if (!clerkId) return { success: false, error: "Não autorizado" }
+        await assertArenaBackofficeAccess(arenaId)
 
         const dbUserId = await getDbUserId(clerkId)
         if (!dbUserId) return { success: false, error: "Usuário não encontrado" }
@@ -219,6 +229,7 @@ export async function getStatementAction(arenaId: string, page = 1, pageSize = 1
     try {
         const { userId: clerkId } = await auth()
         if (!clerkId) return { success: false, error: "Não autorizado" }
+        await assertArenaBackofficeAccess(arenaId)
 
         const dbUserId = await getDbUserId(clerkId)
         if (!dbUserId) return { success: false, error: "Usuário não encontrado" }

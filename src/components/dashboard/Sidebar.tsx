@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Logo } from "@/components/shared/Logo";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { useArena } from "@/contexts/ArenaContext";
@@ -27,9 +27,26 @@ import { ArenaSelector } from "./ArenaSelector";
 export function Sidebar({ className, onNavItemClick }: { className?: string, onNavItemClick?: () => void }) {
     const pathname = usePathname();
     const { isCollapsed, toggleSidebar } = useSidebar();
-    const { selectedArena } = useArena();
+    const { selectedArena, selectedArenaDetails } = useArena();
+    const isCashier = selectedArenaDetails?.role === "Caixa" && !selectedArenaDetails?.isOwner;
+    const canAccessSubscription =
+        Boolean(selectedArenaDetails?.isOwner) || selectedArenaDetails?.role === "Gestor";
+    const arenaHref = selectedArena ? `/dashboard/arenas/${selectedArena}` : "/dashboard/arenas";
+    const stationsHref = selectedArena ? `/dashboard/arenas/${selectedArena}/stations` : "/dashboard/stations";
+    const financeHref = selectedArena ? `/dashboard/finance/${selectedArena}` : "/dashboard/finance";
+    const productsHref = selectedArena ? `/dashboard/settings/products/${selectedArena}` : "/dashboard/settings/products";
+    const loyaltyHref = selectedArena ? `/dashboard/loyalty/${selectedArena}` : "/dashboard/loyalty";
+    const rotativoHref = selectedArena ? `/dashboard/rotativo/${selectedArena}` : "/dashboard/rotativo";
+    const athletesHref = selectedArena ? `/dashboard/athletes/${selectedArena}` : "/dashboard/athletes";
 
-    const sidebarItems = [
+    const sidebarItems = isCashier && selectedArenaDetails?.assignedStationId ? [
+        {
+            icon: Store,
+            label: "Minha estação",
+            href: `/dashboard/arenas/${selectedArena}/stations/${selectedArenaDetails.assignedStationId}`,
+            isActive: (p: string) => p.includes(`/dashboard/arenas/${selectedArena}/stations/`),
+        },
+    ] : [
         {
             icon: LayoutDashboard,
             label: "Dashboard",
@@ -39,60 +56,55 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
         {
             icon: MapPin,
             label: "Espaços",
-            href: `/dashboard/arenas/${selectedArena}`,
+            href: arenaHref,
             isActive: (p: string) => p.startsWith("/dashboard/arenas/") && !p.includes("/stations") && !p.endsWith("/edit"),
         },
         {
             icon: CreditCard,
             label: "Financeiro",
-            href: `/dashboard/finance/${selectedArena}`,
+            href: financeHref,
             isActive: (p: string) => p.startsWith("/dashboard/finance/"),
         },
         {
             icon: Store,
             label: "Estações",
-            href: `/dashboard/arenas/${selectedArena}/stations`,
+            href: stationsHref,
             isActive: (p: string) => p.includes("/stations"),
         },
         {
             icon: Package,
             label: "Produtos",
-            href: `/dashboard/settings/products/${selectedArena}`,
+            href: productsHref,
             isActive: (p: string) => p.startsWith("/dashboard/settings/products/"),
         },
         {
             icon: Trophy,
             label: "Programa de fidelidade",
-            href: `/dashboard/loyalty/${selectedArena}`,
+            href: loyaltyHref,
             isActive: (p: string) => p.startsWith("/dashboard/loyalty/"),
         },
         {
             icon: Activity,
             label: "Rotativo",
-            href: `/dashboard/rotativo/${selectedArena}`,
+            href: rotativoHref,
             isActive: (p: string) => p.startsWith("/dashboard/rotativo/"),
         },
         {
             icon: Users,
             label: "Atletas",
-            href: `/dashboard/athletes/${selectedArena}`,
+            href: athletesHref,
             isActive: (p: string) => p.startsWith("/dashboard/athletes/"),
         },
     ];
 
-    const settingsUsersHref = `/dashboard/settings/users/${selectedArena}`;
-    const settingsSubscriptionHref = `/dashboard/settings/subscription/${selectedArena}`;
+    const settingsUsersHref = selectedArena ? `/dashboard/settings/users/${selectedArena}` : "/dashboard/settings/users";
+    const settingsSubscriptionHref = selectedArena ? `/dashboard/settings/subscription/${selectedArena}` : "/dashboard/settings/subscription";
 
     const isEditingArena = !!pathname.match(/\/dashboard\/arenas\/[^\/]+\/edit$/);
     const isSettingsActive = (pathname.includes("/settings") && !pathname.startsWith("/dashboard/settings/products")) || isEditingArena;
 
     const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(isSettingsActive);
-
-    useEffect(() => {
-        if (isSettingsActive && !isCollapsed) {
-            setIsSettingsOpen(true);
-        }
-    }, [pathname, isSettingsActive, isCollapsed]);
+    const shouldShowSettingsOpen = !isCollapsed && (isSettingsOpen || isSettingsActive);
 
     return (
         <div className={cn(
@@ -152,6 +164,7 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                             );
                         })}
 
+                        {!isCashier && (
                         <div className="pt-2">
                             <Button
                                 variant="ghost"
@@ -171,13 +184,13 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                     <ChevronDown
                                         className={cn(
                                             "h-4 w-4 opacity-50 transition-transform duration-200",
-                                            isSettingsOpen && "transform rotate-180"
+                                            shouldShowSettingsOpen && "transform rotate-180"
                                         )}
                                     />
                                 )}
                             </Button>
 
-                            {!isCollapsed && isSettingsOpen && (
+                            {shouldShowSettingsOpen && (
                                 <div className="mt-1 ml-4 space-y-1 border-l border-white/10 pl-2">
                                     <Button
                                         variant="ghost"
@@ -211,24 +224,27 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                         </Link>
                                     </Button>
 
-                                    <Button
-                                        variant="ghost"
-                                        asChild
-                                        className={cn(
-                                            "w-full justify-start h-9 text-sm font-normal",
-                                            pathname.startsWith("/dashboard/settings/subscription")
-                                                ? "text-[#FFC145] bg-white/5"
-                                                : "text-white/60 hover:text-white hover:bg-white/5"
-                                        )}
-                                        onClick={onNavItemClick}
-                                    >
-                                        <Link href={settingsSubscriptionHref}>
-                                            Assinatura
-                                        </Link>
-                                    </Button>
+                                    {canAccessSubscription && (
+                                        <Button
+                                            variant="ghost"
+                                            asChild
+                                            className={cn(
+                                                "w-full justify-start h-9 text-sm font-normal",
+                                                pathname.startsWith("/dashboard/settings/subscription")
+                                                    ? "text-[#FFC145] bg-white/5"
+                                                    : "text-white/60 hover:text-white hover:bg-white/5"
+                                            )}
+                                            onClick={onNavItemClick}
+                                        >
+                                            <Link href={settingsSubscriptionHref}>
+                                                Assinatura
+                                            </Link>
+                                        </Button>
+                                    )}
                                 </div>
                             )}
                         </div>
+                        )}
                     </div>
                 </div>
             </div>

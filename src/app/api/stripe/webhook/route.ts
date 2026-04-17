@@ -4,9 +4,13 @@ import {
   InvalidStripeWebhookSignatureError,
   MissingStripeSignatureError
 } from '@/modules/stripe/errors'
-import { STRIPE_PLANS } from '@/modules/stripe/stripe-plans'
+import { fetchPlanByStripePrice } from '@/modules/stripe/repositories/subscription-plans.repository'
+import { logAuditEvent } from '@/modules/audit/audit-log.service'
+import type { Database } from '@/types/supabase.types'
 import { NextRequest, NextResponse } from 'next/server'
 import type Stripe from 'stripe'
+
+type ArenaSubscriptionTable = Database['public']['Tables']['arena_subscriptions']
 
 export async function POST(request: NextRequest) {
   const signature = request.headers.get('stripe-signature')
@@ -32,24 +36,25 @@ export async function POST(request: NextRequest) {
 
   try {
     switch (event.type) {
+      case 'customer.subscription.created':
       case 'customer.subscription.updated':
-        await handleSubscriptionUpdated(event.data.object as Stripe.Subscription)
+        await handleSubscriptionUpdated(event.data.object as Stripe.Subscription, event.id)
         break
 
       case 'customer.subscription.deleted':
-        await handleSubscriptionDeleted(event.data.object as Stripe.Subscription)
+        await handleSubscriptionDeleted(event.data.object as Stripe.Subscription, event.id)
         break
 
       case 'invoice.paid':
-        await handleInvoicePaid(event.data.object as Stripe.Invoice)
+        await handleInvoicePaid(event.data.object as Stripe.Invoice, event.id)
         break
 
       case 'invoice.payment_failed':
-        await handleInvoicePaymentFailed(event.data.object as Stripe.Invoice)
+        await handleInvoicePaymentFailed(event.data.object as Stripe.Invoice, event.id)
         break
 
       case 'invoice.payment_action_required':
-        await handleInvoiceActionRequired(event.data.object as Stripe.Invoice)
+        await handleInvoiceActionRequired(event.data.object as Stripe.Invoice, event.id)
         break
 
       default:
@@ -69,7 +74,51 @@ function getCustomerId(subscription: Stripe.Subscription): string {
     : subscription.customer.id
 }
 
-function resolveSubscriptionFields(subscription: Stripe.Subscription) {
+async function resolveArenaIdBySubscriptionId(subscriptionId: string) {
+  const { data } = await getSupabaseAdmin()
+    .from('arena_subscriptions')
+    .select('arena_id')
+    .eq('stripe_subscription_id', subscriptionId)
+    .maybeSingle()
+
+  return data?.arena_id ?? null
+}
+
+async function updateArenaSubscriptionRecord(input: {
+  arenaId: string | null
+  subscriptionId: string
+  payload: ArenaSubscriptionTable['Update']
+}) {
+  const supabase = getSupabaseAdmin()
+
+  if (input.arenaId) {
+    const { error } = await supabase
+      .from('arena_subscriptions')
+      .upsert(
+        { arena_id: input.arenaId, ...input.payload } as ArenaSubscriptionTable['Insert'],
+        { onConflict: 'arena_id' }
+      )
+
+    if (error) {
+      throw error
+    }
+
+    return input.arenaId
+  }
+
+  const { error } = await supabase
+    .from('arena_subscriptions')
+    .update(input.payload)
+    .eq('stripe_subscription_id', input.subscriptionId)
+
+  if (error) {
+    throw error
+  }
+
+  return resolveArenaIdBySubscriptionId(input.subscriptionId)
+}
+
+async function resolveSubscriptionFields(subscription: Stripe.Subscription) {
   const rawPeriodEnd = subscription.items.data[0]?.current_period_end
   const periodEnd = rawPeriodEnd
     ? new Date(rawPeriodEnd * 1000).toISOString()
@@ -81,16 +130,15 @@ function resolveSubscriptionFields(subscription: Stripe.Subscription) {
 
   const stripePriceId = subscription.items?.data?.[0]?.price?.id ?? null
   const matchedPlan = stripePriceId
-    ? STRIPE_PLANS.find((p) => p.stripePriceId === stripePriceId)
+    ? await fetchPlanByStripePrice(stripePriceId)
     : null
 
   return { periodEnd, canceledAt, matchedPlan }
 }
 
-async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
-  const supabase = getSupabaseAdmin()
-  const { periodEnd, canceledAt, matchedPlan } = resolveSubscriptionFields(subscription)
-  const arenaId = subscription.metadata?.arena_id
+async function handleSubscriptionUpdated(subscription: Stripe.Subscription, eventId: string) {
+  const { periodEnd, canceledAt, matchedPlan } = await resolveSubscriptionFields(subscription)
+  const arenaId = subscription.metadata?.arena_id ?? (await resolveArenaIdBySubscriptionId(subscription.id))
 
   const payload = {
     stripe_subscription_id: subscription.id,
@@ -100,40 +148,39 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
     cancel_at_period_end: subscription.cancel_at_period_end,
     canceled_at: canceledAt,
     updated_at: new Date().toISOString(),
-    ...(matchedPlan ? { plan_key: matchedPlan.key } : { plan_key: '' })
+    ...(matchedPlan ? { plan_key: matchedPlan.key, plan_id: matchedPlan.id } : {})
   }
 
-  if (arenaId) {
-    const { error } = await supabase
-      .from('arena_subscriptions')
-      .upsert({ arena_id: arenaId, ...payload }, { onConflict: 'arena_id' })
-
-    if (error) {
-      console.error('[stripe-webhook] handleSubscriptionUpdated — upsert failed', error)
-      throw error
-    }
-  } else {
-    const { error } = await supabase
-      .from('arena_subscriptions')
-      .update(payload)
-      .eq('stripe_subscription_id', subscription.id)
-
-    if (error) {
-      console.error('[stripe-webhook] handleSubscriptionUpdated — update failed', error)
-      throw error
-    }
-  }
+  const resolvedArenaId = await updateArenaSubscriptionRecord({
+    arenaId,
+    subscriptionId: subscription.id,
+    payload
+  })
 
   console.info('[stripe-webhook] Subscription updated', {
     subscription_id: subscription.id,
     status: subscription.status,
-    arena_id: arenaId ?? '(no metadata)'
+    arena_id: resolvedArenaId ?? '(no metadata)'
+  })
+
+  await logAuditEvent({
+    entityType: 'arena_subscription',
+    entityId: resolvedArenaId ?? subscription.id,
+    action: 'subscription.updated',
+    actorId: eventId,
+    actorType: 'stripe_webhook',
+    newValue: {
+      status: subscription.status,
+      cancel_at_period_end: subscription.cancel_at_period_end,
+      plan_key: matchedPlan?.key ?? null
+    },
+    metadata: { stripe_event_id: eventId, stripe_subscription_id: subscription.id }
   })
 }
 
-async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
+async function handleSubscriptionDeleted(subscription: Stripe.Subscription, eventId: string) {
   const supabase = getSupabaseAdmin()
-  const arenaId = subscription.metadata?.arena_id
+  const arenaId = subscription.metadata?.arena_id ?? (await resolveArenaIdBySubscriptionId(subscription.id))
 
   const canceledAt = subscription.canceled_at
     ? new Date(subscription.canceled_at * 1000).toISOString()
@@ -173,11 +220,19 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
     subscription_id: subscription.id,
     arena_id: arenaId ?? '(no metadata)'
   })
+
+  await logAuditEvent({
+    entityType: 'arena_subscription',
+    entityId: arenaId ?? subscription.id,
+    action: 'subscription.deleted',
+    actorId: eventId,
+    actorType: 'stripe_webhook',
+    newValue: { status: 'canceled', canceled_at: canceledAt },
+    metadata: { stripe_event_id: eventId, stripe_subscription_id: subscription.id }
+  })
 }
 
-async function handleInvoicePaid(invoice: Stripe.Invoice) {
-  const supabase = getSupabaseAdmin()
-
+async function handleInvoicePaid(invoice: Stripe.Invoice, eventId: string) {
   const subscriptionRef = invoice.parent?.subscription_details?.subscription
   const subscriptionId =
     typeof subscriptionRef === 'string'
@@ -187,50 +242,48 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
   if (!subscriptionId) return
 
   const subscription = await stripe.subscriptions.retrieve(subscriptionId)
-  const arenaId = subscription.metadata?.arena_id
-
-  const rawPeriodEnd = subscription.items.data[0]?.current_period_end
-  const periodEnd = rawPeriodEnd
-    ? new Date(rawPeriodEnd * 1000).toISOString()
-    : null
+  const arenaId = subscription.metadata?.arena_id ?? (await resolveArenaIdBySubscriptionId(subscriptionId))
+  const { periodEnd, canceledAt, matchedPlan } = await resolveSubscriptionFields(subscription)
 
   const payload = {
     stripe_subscription_id: subscriptionId,
+    stripe_customer_id: getCustomerId(subscription),
     status: 'active' as const,
     current_period_end: periodEnd,
-    updated_at: new Date().toISOString()
+    cancel_at_period_end: subscription.cancel_at_period_end,
+    canceled_at: canceledAt,
+    updated_at: new Date().toISOString(),
+    ...(matchedPlan ? { plan_key: matchedPlan.key, plan_id: matchedPlan.id } : {})
   }
 
-  if (arenaId) {
-    const { error } = await supabase
-      .from('arena_subscriptions')
-      .update(payload)
-      .eq('arena_id', arenaId)
-
-    if (error) {
-      console.error('[stripe-webhook] handleInvoicePaid — update failed', error)
-      throw error
-    }
-  } else {
-    const { error } = await supabase
-      .from('arena_subscriptions')
-      .update(payload)
-      .eq('stripe_subscription_id', subscriptionId)
-
-    if (error) {
-      console.error('[stripe-webhook] handleInvoicePaid — update failed', error)
-      throw error
-    }
-  }
+  const resolvedArenaId = await updateArenaSubscriptionRecord({
+    arenaId,
+    subscriptionId,
+    payload
+  })
 
   console.info('[stripe-webhook] Invoice paid — access renewed', {
     subscription_id: subscriptionId,
     period_end: periodEnd,
-    arena_id: arenaId ?? '(no metadata)'
+    arena_id: resolvedArenaId ?? '(no metadata)'
+  })
+
+  await logAuditEvent({
+    entityType: 'arena_subscription',
+    entityId: resolvedArenaId ?? subscriptionId,
+    action: 'invoice.paid',
+    actorId: eventId,
+    actorType: 'stripe_webhook',
+    newValue: {
+      status: 'active',
+      current_period_end: periodEnd,
+      plan_key: matchedPlan?.key ?? null
+    },
+    metadata: { stripe_event_id: eventId, stripe_subscription_id: subscriptionId, invoice_id: invoice.id }
   })
 }
 
-async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
+async function handleInvoicePaymentFailed(invoice: Stripe.Invoice, eventId: string) {
   const supabase = getSupabaseAdmin()
 
   const subscriptionRef = invoice.parent?.subscription_details?.subscription
@@ -241,10 +294,15 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
 
   if (!subscriptionId) return
 
-  const { error } = await supabase
+  const arenaId = await resolveArenaIdBySubscriptionId(subscriptionId)
+
+  const updateQuery = supabase
     .from('arena_subscriptions')
     .update({ status: 'past_due', updated_at: new Date().toISOString() })
-    .eq('stripe_subscription_id', subscriptionId)
+
+  const { error } = arenaId
+    ? await updateQuery.eq('arena_id', arenaId)
+    : await updateQuery.eq('stripe_subscription_id', subscriptionId)
 
   if (error) {
     console.error('[stripe-webhook] handleInvoicePaymentFailed — update failed', error)
@@ -255,9 +313,24 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
     subscription_id: subscriptionId,
     attempt_count: invoice.attempt_count
   })
+
+  await logAuditEvent({
+    entityType: 'arena_subscription',
+    entityId: arenaId ?? subscriptionId,
+    action: 'invoice.payment_failed',
+    actorId: eventId,
+    actorType: 'stripe_webhook',
+    newValue: { status: 'past_due' },
+    metadata: {
+      stripe_event_id: eventId,
+      stripe_subscription_id: subscriptionId,
+      invoice_id: invoice.id,
+      attempt_count: invoice.attempt_count
+    }
+  })
 }
 
-async function handleInvoiceActionRequired(invoice: Stripe.Invoice) {
+async function handleInvoiceActionRequired(invoice: Stripe.Invoice, eventId: string) {
   const supabase = getSupabaseAdmin()
 
   const subscriptionRef = invoice.parent?.subscription_details?.subscription
@@ -268,10 +341,15 @@ async function handleInvoiceActionRequired(invoice: Stripe.Invoice) {
 
   if (!subscriptionId) return
 
-  const { error } = await supabase
+  const arenaId = await resolveArenaIdBySubscriptionId(subscriptionId)
+
+  const updateQuery = supabase
     .from('arena_subscriptions')
     .update({ status: 'incomplete', updated_at: new Date().toISOString() })
-    .eq('stripe_subscription_id', subscriptionId)
+
+  const { error } = arenaId
+    ? await updateQuery.eq('arena_id', arenaId)
+    : await updateQuery.eq('stripe_subscription_id', subscriptionId)
 
   if (error) {
     console.error('[stripe-webhook] handleInvoiceActionRequired — update failed', error)
@@ -281,5 +359,19 @@ async function handleInvoiceActionRequired(invoice: Stripe.Invoice) {
   console.warn('[stripe-webhook] Invoice requires action (3DS)', {
     subscription_id: subscriptionId,
     invoice_id: invoice.id
+  })
+
+  await logAuditEvent({
+    entityType: 'arena_subscription',
+    entityId: arenaId ?? subscriptionId,
+    action: 'invoice.action_required',
+    actorId: eventId,
+    actorType: 'stripe_webhook',
+    newValue: { status: 'incomplete' },
+    metadata: {
+      stripe_event_id: eventId,
+      stripe_subscription_id: subscriptionId,
+      invoice_id: invoice.id
+    }
   })
 }

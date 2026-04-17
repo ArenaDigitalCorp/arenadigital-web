@@ -1,4 +1,4 @@
-import { assertArenaAccess } from '@/lib/server-auth'
+import { assertArenaBackofficeAccess } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { SupabaseArenaRepository } from '@/modules/arenas/repositories/SupabaseArenaRepository'
 import { SupabaseProductRepository } from '@/modules/products/repositories/SupabaseProductRepository'
@@ -9,7 +9,7 @@ export default async function ArenaProductsPage({ params }: { params: Promise<{ 
     const { id: arenaId } = await params
 
     try {
-        await assertArenaAccess(arenaId)
+        await assertArenaBackofficeAccess(arenaId)
     } catch {
         redirect('/dashboard/settings/arenas')
     }

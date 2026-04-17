@@ -1,12 +1,12 @@
 "use server"
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { assertArenaAccess } from '@/lib/server-auth'
+import { assertArenaBackofficeAccess, assertCourtAccess } from '@/lib/server-auth'
 import { revalidatePath } from 'next/cache'
 
 export async function getCourtsByArenaAction(arenaId: string) {
     try {
-        await assertArenaAccess(arenaId)
+        await assertArenaBackofficeAccess(arenaId)
         const supabase = getSupabaseAdmin()
         const { data, error } = await supabase
             .from('courts')
@@ -31,11 +31,12 @@ export async function getCourtsByArenaAction(arenaId: string) {
 
 export async function deleteCourtAction(arenaId: string, courtId: string) {
     try {
-        await assertArenaAccess(arenaId)
+        await assertCourtAccess(courtId, arenaId)
         const { error } = await getSupabaseAdmin()
             .from('courts')
             .delete()
             .eq('id', courtId)
+            .eq('arena_id', arenaId)
 
         if (error) throw new Error(error.message)
         return { success: true }
@@ -47,11 +48,12 @@ export async function deleteCourtAction(arenaId: string, courtId: string) {
 
 export async function getCourtByIdAction(arenaId: string, courtId: string) {
     try {
-        await assertArenaAccess(arenaId)
+        await assertCourtAccess(courtId, arenaId)
         const { data, error } = await getSupabaseAdmin()
             .from('courts')
             .select(`*, sports:court_sports(sport:sports(*))`)
             .eq('id', courtId)
+            .eq('arena_id', arenaId)
             .single()
 
         if (error) throw new Error(error.message)
@@ -68,7 +70,7 @@ export async function getCourtByIdAction(arenaId: string, courtId: string) {
 
 export async function createCourtAction(arenaId: string, input: Record<string, any>, sportIds?: string[]) {
     try {
-        await assertArenaAccess(arenaId)
+        await assertArenaBackofficeAccess(arenaId)
         const supabase = getSupabaseAdmin()
 
         const { data: court, error } = await supabase
@@ -93,13 +95,14 @@ export async function createCourtAction(arenaId: string, input: Record<string, a
 
 export async function updateCourtAction(arenaId: string, courtId: string, input: Record<string, any>, sportIds?: string[]) {
     try {
-        await assertArenaAccess(arenaId)
+        await assertCourtAccess(courtId, arenaId)
         const supabase = getSupabaseAdmin()
 
         const { data: court, error } = await supabase
             .from('courts')
             .update(input as any)
             .eq('id', courtId)
+            .eq('arena_id', arenaId)
             .select()
             .single()
 

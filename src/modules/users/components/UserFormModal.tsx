@@ -16,10 +16,11 @@ interface UserFormModalProps {
     isOpen: boolean;
     onClose: () => void;
     user?: any; // To be typed properly later
+    stations: Array<{ id: string; name: string }>;
     onSave: (data: any) => Promise<void>;
 }
 
-export function UserFormModal({ isOpen, onClose, user, onSave }: UserFormModalProps) {
+export function UserFormModal({ isOpen, onClose, user, stations, onSave }: UserFormModalProps) {
     const isEditMode = !!user;
 
     const [isLoading, setIsLoading] = useState(false);
@@ -31,6 +32,7 @@ export function UserFormModal({ isOpen, onClose, user, onSave }: UserFormModalPr
         email: "",
         senha: "",
         role: "Atendente",
+        stationId: "",
         status: "Ativo"
     });
 
@@ -41,6 +43,7 @@ export function UserFormModal({ isOpen, onClose, user, onSave }: UserFormModalPr
                 email: user.email || "",
                 senha: "", // always empty on edit
                 role: user.role || "Atendente",
+                stationId: user.stationId || "",
                 status: user.status || "Ativo",
             });
             setShowPassword(false);
@@ -50,6 +53,7 @@ export function UserFormModal({ isOpen, onClose, user, onSave }: UserFormModalPr
                 email: "",
                 senha: "",
                 role: "Atendente",
+                stationId: "",
                 status: "Ativo"
             });
             setShowPassword(false);
@@ -129,7 +133,7 @@ export function UserFormModal({ isOpen, onClose, user, onSave }: UserFormModalPr
                             <Label htmlFor="role" className="text-[#0089A0] text-sm font-medium">Perfil</Label>
                             <Select
                                 value={formData.role}
-                                onValueChange={(value) => setFormData({ ...formData, role: value })}
+                                onValueChange={(value) => setFormData({ ...formData, role: value, stationId: value === "Caixa" ? formData.stationId : "" })}
                             >
                                 <SelectTrigger className="bg-white border-slate-300 text-slate-800 w-full focus:ring-[#0089A0]">
                                     <SelectValue placeholder="Selecione o perfil" />
@@ -141,6 +145,27 @@ export function UserFormModal({ isOpen, onClose, user, onSave }: UserFormModalPr
                                 </SelectContent>
                             </Select>
                         </div>
+
+                        {formData.role === "Caixa" && (
+                            <div className="space-y-1.5">
+                                <Label htmlFor="stationId" className="text-[#0089A0] text-sm font-medium">Estação vinculada</Label>
+                                <Select
+                                    value={formData.stationId}
+                                    onValueChange={(value) => setFormData({ ...formData, stationId: value })}
+                                >
+                                    <SelectTrigger className="bg-white border-slate-300 text-slate-800 w-full focus:ring-[#0089A0]">
+                                        <SelectValue placeholder="Selecione a estação" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-white border-slate-200 text-slate-800 rounded-xl shadow-lg">
+                                        {stations.map((station) => (
+                                            <SelectItem key={station.id} value={station.id} className="hover:bg-slate-100 cursor-pointer focus:bg-slate-100 focus:text-slate-900">
+                                                {station.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
                     </div>
 
                     <div className="flex justify-end gap-3 pt-6">

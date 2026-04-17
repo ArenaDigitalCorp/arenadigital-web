@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
   if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   try {
-    const result = await subscribe(parsed.data)
+    const result = await subscribe({ ...parsed.data, actorId: userId })
     return NextResponse.json(result)
   } catch (error) {
     if (error instanceof StripeApiError) return error.toNextResponse()

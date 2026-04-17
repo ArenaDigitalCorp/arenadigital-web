@@ -1,13 +1,34 @@
 "use server"
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { requireAuthenticatedDbUser } from '@/lib/server-auth'
+import { assertArenaBackofficeAccess, requireAuthenticatedDbUser } from '@/lib/server-auth'
 import { startOfMonth, endOfMonth, subMonths, startOfDay, endOfDay, addHours } from 'date-fns'
 import type { DashboardStats, OccupancyRow } from '@/modules/dashboard/types/dashboard.types'
 
 async function resolveArenaIds(supabase: ReturnType<typeof getSupabaseAdmin>, ownerId: string, selectedArenaId: string | 'all') {
     if (selectedArenaId === 'all') {
-        const { data } = await supabase.from('arenas').select('id').eq('owner_id', ownerId)
+        const { data: linkedArenas, error: linkedError } = await supabase
+            .from('arena_users')
+            .select('arena_id')
+            .eq('user_id', ownerId)
+            .in('status', ['Ativo', 'ativo', 'active'])
+
+        if (linkedError) {
+            throw new Error(`Failed to load linked arenas: ${linkedError.message}`)
+        }
+
+        const linkedArenaIds = linkedArenas?.map((arena) => arena.arena_id) ?? []
+
+        let query = supabase.from('arenas').select('id')
+        query = linkedArenaIds.length > 0
+            ? query.or(`owner_id.eq.${ownerId},id.in.(${linkedArenaIds.join(',')})`)
+            : query.eq('owner_id', ownerId)
+
+        const { data, error } = await query
+        if (error) {
+            throw new Error(`Failed to load arenas: ${error.message}`)
+        }
+
         return data?.map(a => a.id) ?? []
     }
     if (!selectedArenaId) return []
@@ -60,6 +81,9 @@ export async function getDashboardDataAction(
     try {
         const { dbUserId } = await requireAuthenticatedDbUser()
         const supabase = getSupabaseAdmin()
+        if (selectedArenaId !== 'all') {
+            await assertArenaBackofficeAccess(selectedArenaId)
+        }
         const arenaIds = await resolveArenaIds(supabase, dbUserId, selectedArenaId)
 
         if (arenaIds.length === 0) {

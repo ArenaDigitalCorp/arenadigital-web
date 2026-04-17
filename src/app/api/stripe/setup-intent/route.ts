@@ -4,9 +4,11 @@ import { verifyArenaAccess } from '@/modules/stripe/utils/verify-arena-access'
 import { auth, currentUser } from '@clerk/nextjs/server'
 import { NextRequest, NextResponse } from 'next/server'
 import z from 'zod'
+import { planKeySchema } from '@/modules/stripe/stripe-plans'
 
 const RequestSchema = z.object({
-  arenaId: z.string().uuid()
+  arenaId: z.string().uuid(),
+  planKey: planKeySchema
 })
 
 export async function POST(request: NextRequest) {
@@ -31,7 +33,13 @@ export async function POST(request: NextRequest) {
     const email = user?.emailAddresses?.[0]?.emailAddress ?? ''
     const name = user?.fullName ?? null
 
-    const result = await createSetupIntent(parsed.data.arenaId, email, name)
+    const result = await createSetupIntent(
+      parsed.data.arenaId,
+      parsed.data.planKey,
+      email,
+      name,
+      userId
+    )
     return NextResponse.json(result)
   } catch (error) {
     if (error instanceof StripeApiError) return error.toNextResponse()

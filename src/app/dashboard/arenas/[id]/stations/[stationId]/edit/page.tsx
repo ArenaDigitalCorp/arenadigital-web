@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { getStationByIdAction } from "@/modules/stations/actions/stationActions";
 import { redirect } from "next/navigation";
-import { assertArenaAccess } from "@/lib/server-auth";
+import { assertArenaBackofficeAccess } from "@/lib/server-auth";
 
 interface EditStationPageProps {
     params: Promise<{
@@ -16,7 +16,7 @@ interface EditStationPageProps {
 export default async function EditStationPage({ params }: EditStationPageProps) {
     const { id, stationId } = await params;
 
-    try { await assertArenaAccess(id) } catch { redirect(`/dashboard/arenas/${id}/stations`) }
+    try { await assertArenaBackofficeAccess(id) } catch { redirect(`/dashboard/arenas/${id}/stations`) }
 
     const res = await getStationByIdAction(id, stationId);
     const station = res.data;

@@ -3,7 +3,7 @@
 import { createClerkClient } from '@clerk/nextjs/server'
 import { SupabaseAthleteRepository } from '@/modules/athletes/repositories/SupabaseAthleteRepository'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { assertArenaAccess } from '@/lib/server-auth'
+import { assertArenaBackofficeAccess } from '@/lib/server-auth'
 import { auth } from '@clerk/nextjs/server'
 import { linkAthleteSchema } from '@/modules/athletes/schemas/athlete.schema'
 
@@ -28,6 +28,8 @@ export async function linkAthlete(formData: {
         if (!managerClerkId) {
             return { success: false, error: "Não autorizado" };
         }
+
+        await assertArenaBackofficeAccess(formData.arenaId)
 
         const supabase = getSupabaseAdmin()
 
@@ -119,7 +121,7 @@ export async function linkAthlete(formData: {
 
 export async function getAthletesByArenaAction(arenaId: string, searchTerm?: string) {
     try {
-        await assertArenaAccess(arenaId)
+        await assertArenaBackofficeAccess(arenaId)
         const repo = new SupabaseAthleteRepository(getSupabaseAdmin())
         const data = await repo.findByArena(arenaId, searchTerm)
         return { success: true, data }

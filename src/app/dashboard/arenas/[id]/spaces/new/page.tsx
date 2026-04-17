@@ -1,4 +1,4 @@
-import { assertArenaAccess } from '@/lib/server-auth'
+import { assertArenaBackofficeAccess } from '@/lib/server-auth'
 import { CourtForm } from '@/modules/courts/components/CourtForm'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -10,7 +10,7 @@ export default async function NewSpacePage({ params }: { params: Promise<{ id: s
     const { id } = await params
 
     try {
-        await assertArenaAccess(id)
+        await assertArenaBackofficeAccess(id)
     } catch {
         redirect(`/dashboard/arenas/${id}`)
     }

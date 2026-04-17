@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { assertArenaBackofficeAccess } from "@/lib/server-auth";
 import { StationForm } from "@/modules/stations/components/StationForm";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
@@ -11,6 +13,12 @@ interface NewStationPageProps {
 
 export default async function NewStationPage({ params }: NewStationPageProps) {
     const { id } = await params;
+
+    try {
+        await assertArenaBackofficeAccess(id);
+    } catch {
+        redirect(`/dashboard/arenas/${id}/stations`);
+    }
 
     return (
         <div className="space-y-6">

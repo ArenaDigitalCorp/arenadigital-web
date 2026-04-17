@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { uploadToR2, arenaBannerKey, spaceImageKey, sanitizeFilename } from "@/lib/r2Client";
+import { auth } from "@clerk/nextjs/server";
+import { assertArenaAccess, assertCourtAccess } from "@/lib/server-auth";
 
 export async function POST(request: NextRequest) {
     try {
+        const { userId } = await auth();
+        if (!userId) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
         const formData = await request.formData();
         const file = formData.get("file") as File;
         const arenaId = formData.get("arenaId") as string;
@@ -17,6 +24,8 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "No arenaId received." }, { status: 400 });
         }
 
+        await assertArenaAccess(arenaId);
+
         const buffer = Buffer.from(await file.arrayBuffer());
         const filename = sanitizeFilename(file.name);
 
@@ -27,6 +36,7 @@ export async function POST(request: NextRequest) {
             if (!spaceId) {
                 return NextResponse.json({ error: "No spaceId received for space upload." }, { status: 400 });
             }
+            await assertCourtAccess(spaceId, arenaId);
             key = spaceImageKey(arenaId, spaceId, filename);
         }
 

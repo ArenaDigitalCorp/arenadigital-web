@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import { Users, Search, Plus, MoreVertical, Edit, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,8 +23,14 @@ type SelectedUser = {
     name: string;
     email: string;
     role: string;
+    stationId: string | null;
     status: string;
     clerkUserId: string;
+};
+
+type StationOption = {
+    id: string;
+    name: string;
 };
 
 type UserFormData = {
@@ -34,6 +39,7 @@ type UserFormData = {
     name: string;
     password?: string;
     role: string;
+    stationId?: string | null;
     senha?: string;
     status: string;
 };
@@ -42,10 +48,10 @@ interface Props {
     arenaId: string;
     arenaName: string;
     initialUsers: SelectedUser[];
+    stations: StationOption[];
 }
 
-export function UsersPageClient({ arenaId, arenaName, initialUsers }: Props) {
-    const router = useRouter();
+export function UsersPageClient({ arenaId, arenaName, initialUsers, stations }: Props) {
     const [users, setUsers] = useState<SelectedUser[]>(initialUsers);
     const [searchTerm, setSearchTerm] = useState("");
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -200,6 +206,7 @@ export function UsersPageClient({ arenaId, arenaName, initialUsers }: Props) {
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 user={selectedUser}
+                stations={stations}
                 onSave={handleSaveUser}
             />
 

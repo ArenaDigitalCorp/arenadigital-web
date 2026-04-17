@@ -1,3 +1,5 @@
+import { redirect } from 'next/navigation'
+import { assertArenaBackofficeAccess } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { SupabaseArenaRepository } from '@/modules/arenas/repositories/SupabaseArenaRepository'
 import { SupabaseLoyaltyRepository } from '@/modules/loyalty/repositories/SupabaseLoyaltyRepository'
@@ -5,6 +7,13 @@ import { LoyaltyDashboardClient } from './LoyaltyDashboardClient'
 
 export default async function FidelityPage({ params }: { params: Promise<{ arenaId: string }> }) {
     const { arenaId } = await params
+
+    try {
+        await assertArenaBackofficeAccess(arenaId)
+    } catch {
+        redirect('/dashboard/settings/arenas')
+    }
+
     const admin = getSupabaseAdmin()
     const arenaRepo = new SupabaseArenaRepository(admin)
     const loyaltyRepo = new SupabaseLoyaltyRepository(admin)

@@ -1,18 +1,28 @@
 "use server"
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { assertArenaAccess } from '@/lib/server-auth'
+import { assertArenaAccess, assertArenaBackofficeAccess, assertStationAccess } from '@/lib/server-auth'
 
 export async function getStationsWithMetricsAction(arenaId: string) {
     try {
-        await assertArenaAccess(arenaId)
+        const access = await assertArenaAccess(arenaId)
         const supabase = getSupabaseAdmin()
 
-        const { data: stations, error } = await supabase
+        if (!access.isOwner && access.role === 'Caixa' && !access.assignedStationId) {
+            throw new Error('Caixa sem estação vinculada')
+        }
+
+        let stationsQuery = supabase
             .from('stations')
             .select(`*, station_type:station_types(*)`)
             .eq('arena_id', arenaId)
             .order('created_at', { ascending: false })
+
+        if (!access.isOwner && access.role === 'Caixa' && access.assignedStationId) {
+            stationsQuery = stationsQuery.eq('id', access.assignedStationId)
+        }
+
+        const { data: stations, error } = await stationsQuery
 
         if (error) throw new Error(error.message)
         if (!stations || stations.length === 0) return { success: true, data: [] }
@@ -61,7 +71,7 @@ export async function getStationsWithMetricsAction(arenaId: string) {
 
 export async function getStationWithOrdersAction(arenaId: string, stationId: string) {
     try {
-        await assertArenaAccess(arenaId)
+        await assertStationAccess(stationId, arenaId)
         const supabase = getSupabaseAdmin()
 
         const [stationRes, ordersRes] = await Promise.all([
@@ -69,11 +79,13 @@ export async function getStationWithOrdersAction(arenaId: string, stationId: str
                 .from('stations')
                 .select(`*, station_type:station_types(*)`)
                 .eq('id', stationId)
+                .eq('arena_id', arenaId)
                 .single(),
             supabase
                 .from('station_orders')
                 .select(`*, atleta:atleta(nome_perfil), station_order_items(*, product:products(name))`)
                 .eq('station_id', stationId)
+                .eq('arena_id', arenaId)
                 .order('created_at', { ascending: false }),
         ])
 
@@ -88,11 +100,12 @@ export async function getStationWithOrdersAction(arenaId: string, stationId: str
 
 export async function getOrdersByStationAction(arenaId: string, stationId: string) {
     try {
-        await assertArenaAccess(arenaId)
+        await assertStationAccess(stationId, arenaId)
         const { data, error } = await getSupabaseAdmin()
             .from('station_orders')
             .select(`*, atleta:atleta(nome_perfil), station_order_items(*, product:products(name))`)
             .eq('station_id', stationId)
+            .eq('arena_id', arenaId)
             .order('created_at', { ascending: false })
 
         if (error) throw new Error(error.message)
@@ -105,11 +118,12 @@ export async function getOrdersByStationAction(arenaId: string, stationId: strin
 
 export async function getStationByIdAction(arenaId: string, stationId: string) {
     try {
-        await assertArenaAccess(arenaId)
+        await assertStationAccess(stationId, arenaId)
         const { data, error } = await getSupabaseAdmin()
             .from('stations')
             .select(`*, station_type:station_types(*)`)
             .eq('id', stationId)
+            .eq('arena_id', arenaId)
             .single()
 
         if (error) throw new Error(error.message)
@@ -122,7 +136,7 @@ export async function getStationByIdAction(arenaId: string, stationId: string) {
 
 export async function getStationTypesAction(arenaId: string) {
     try {
-        await assertArenaAccess(arenaId)
+        await assertArenaBackofficeAccess(arenaId)
         const { data, error } = await getSupabaseAdmin()
             .from('station_types')
             .select('*')
@@ -138,7 +152,7 @@ export async function getStationTypesAction(arenaId: string) {
 
 export async function createStationAction(arenaId: string, input: { name: string; status: string; station_type_id: string }) {
     try {
-        await assertArenaAccess(arenaId)
+        await assertArenaBackofficeAccess(arenaId)
         const { data, error } = await getSupabaseAdmin()
             .from('stations')
             .insert([{ ...input, arena_id: arenaId }])
@@ -155,11 +169,13 @@ export async function createStationAction(arenaId: string, input: { name: string
 
 export async function updateStationAction(arenaId: string, stationId: string, input: Partial<{ name: string; status: string; station_type_id: string }>) {
     try {
-        await assertArenaAccess(arenaId)
+        await assertArenaBackofficeAccess(arenaId)
+        await assertStationAccess(stationId, arenaId)
         const { data, error } = await getSupabaseAdmin()
             .from('stations')
             .update(input)
             .eq('id', stationId)
+            .eq('arena_id', arenaId)
             .select()
             .single()
 

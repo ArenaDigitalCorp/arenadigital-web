@@ -1,4 +1,4 @@
-import { assertArenaAccess } from '@/lib/server-auth'
+import { assertArenaBackofficeAccess, assertCourtAccess } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { CourtForm } from '@/modules/courts/components/CourtForm'
 import { Button } from '@/components/ui/button'
@@ -11,7 +11,8 @@ export default async function EditSpacePage({ params }: { params: Promise<{ id: 
     const { id, spaceId } = await params
 
     try {
-        await assertArenaAccess(id)
+        await assertArenaBackofficeAccess(id)
+        await assertCourtAccess(spaceId, id)
     } catch {
         redirect(`/dashboard/arenas/${id}`)
     }
@@ -20,6 +21,7 @@ export default async function EditSpacePage({ params }: { params: Promise<{ id: 
         .from('courts')
         .select(`*, sports:court_sports(sport:sports(*))`)
         .eq('id', spaceId)
+        .eq('arena_id', id)
         .single()
 
     if (error || !data) redirect(`/dashboard/arenas/${id}`)

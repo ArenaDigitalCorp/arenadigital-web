@@ -1,10 +1,26 @@
 "use server"
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { requireAuthenticatedDbUser, assertArenaAccess } from '@/lib/server-auth'
+import { requireAuthenticatedDbUser, assertArenaAccess, assertArenaBackofficeAccess, assertProductAccess, assertStationOrderAccess } from '@/lib/server-auth'
 import { SupabaseProductRepository } from '@/modules/products/repositories/SupabaseProductRepository'
 import type { CreateProductDTO, UpdateProductDTO } from '@/modules/products/types/product.types'
 import { revalidatePath } from 'next/cache'
+
+async function getProductStockSnapshot(productId: string, arenaId?: string) {
+    const resolvedArenaId = await assertProductAccess(productId, arenaId)
+    const { data, error } = await getSupabaseAdmin()
+        .from('products')
+        .select('id, arena_id, stock_quantity')
+        .eq('id', productId)
+        .single()
+
+    if (error) throw new Error(error.message)
+
+    return {
+        arenaId: resolvedArenaId,
+        stockQuantity: data.stock_quantity || 0,
+    }
+}
 
 export async function getProductsByArenaAction(arenaId: string) {
     try {
@@ -20,7 +36,10 @@ export async function getProductsByArenaAction(arenaId: string) {
 
 export async function createProductAction(arenaId: string, input: CreateProductDTO) {
     try {
-        await assertArenaAccess(arenaId)
+        await assertArenaBackofficeAccess(arenaId)
+        if (input.arena_id !== arenaId) {
+            throw new Error('Produto não pertence à arena informada')
+        }
         const repo = new SupabaseProductRepository(getSupabaseAdmin())
         const data = await repo.create(input)
         revalidatePath(`/dashboard/settings/products/${arenaId}`)
@@ -33,7 +52,10 @@ export async function createProductAction(arenaId: string, input: CreateProductD
 
 export async function updateProductAction(arenaId: string, productId: string, input: UpdateProductDTO) {
     try {
-        await assertArenaAccess(arenaId)
+        await assertProductAccess(productId, arenaId)
+        if ('arena_id' in input && input.arena_id && input.arena_id !== arenaId) {
+            throw new Error('Produto não pertence à arena informada')
+        }
         const repo = new SupabaseProductRepository(getSupabaseAdmin())
         const data = await repo.update(productId, input)
         revalidatePath(`/dashboard/settings/products/${arenaId}`)
@@ -46,7 +68,7 @@ export async function updateProductAction(arenaId: string, productId: string, in
 
 export async function deleteProductAction(arenaId: string, productId: string) {
     try {
-        await assertArenaAccess(arenaId)
+        await assertProductAccess(productId, arenaId)
         const repo = new SupabaseProductRepository(getSupabaseAdmin())
         await repo.delete(productId)
         revalidatePath(`/dashboard/settings/products/${arenaId}`)
@@ -59,10 +81,12 @@ export async function deleteProductAction(arenaId: string, productId: string) {
 
 export async function getStockMovementsByProductAction(productId: string) {
     try {
+        const arenaId = await assertProductAccess(productId)
         const { data, error } = await getSupabaseAdmin()
             .from('product_stock_movements')
             .select(`*, user:users!product_stock_movements_registered_by_fkey(name)`)
             .eq('product_id', productId)
+            .eq('arena_id', arenaId)
             .order('created_at', { ascending: false })
 
         if (error) throw new Error(error.message)
@@ -82,9 +106,15 @@ export async function createStockEntryAction(input: {
     description?: string
     invoice_number?: string
 }) {
+    let entryId: string | null = null
+    let movementId: string | null = null
+
     try {
+        await assertArenaBackofficeAccess(input.arena_id)
         const { dbUserId } = await requireAuthenticatedDbUser()
         const supabase = getSupabaseAdmin()
+        const product = await getProductStockSnapshot(input.product_id, input.arena_id)
+        const newBalance = product.stockQuantity + input.quantity
 
         const { data: entry, error: entryError } = await supabase
             .from('product_stock_entries')
@@ -93,18 +123,9 @@ export async function createStockEntryAction(input: {
             .single()
 
         if (entryError) throw new Error(entryError.message)
+        entryId = entry.id
 
-        const { data: product, error: productError } = await supabase
-            .from('products')
-            .select('stock_quantity')
-            .eq('id', input.product_id)
-            .single()
-
-        if (productError) throw new Error(productError.message)
-
-        const newBalance = (product.stock_quantity || 0) + input.quantity
-
-        await supabase.from('product_stock_movements').insert([{
+        const { data: movement, error: movementError } = await supabase.from('product_stock_movements').insert([{
             product_id: input.product_id,
             arena_id: input.arena_id,
             type: 'entrada',
@@ -113,14 +134,31 @@ export async function createStockEntryAction(input: {
             reference_id: entry.id,
             balance_after: newBalance,
             registered_by: dbUserId,
-        }])
+        }]).select('id').single()
 
-        await supabase.from('products').update({ stock_quantity: newBalance }).eq('id', input.product_id)
+        if (movementError) throw new Error(movementError.message)
+        movementId = movement.id
+
+        const { error: updateError } = await supabase
+            .from('products')
+            .update({ stock_quantity: newBalance })
+            .eq('id', input.product_id)
+
+        if (updateError) throw new Error(updateError.message)
 
         return { success: true, data: entry }
     } catch (err) {
-        const message = err instanceof Error ? err.message : 'Erro ao registrar entrada de estoque'
-        return { success: false, error: message }
+        const supabase = getSupabaseAdmin()
+        const error = err instanceof Error ? err : new Error('Erro ao registrar entrada de estoque')
+
+        if (movementId) {
+            await supabase.from('product_stock_movements').delete().eq('id', movementId)
+        }
+        if (entryId) {
+            await supabase.from('product_stock_entries').delete().eq('id', entryId)
+        }
+
+        return { success: false, error: error.message }
     }
 }
 
@@ -133,25 +171,19 @@ export async function registerStockOutflowAction(
     referenceType = 'order_item'
 ) {
     try {
+        await assertArenaBackofficeAccess(arenaId)
         const { dbUserId } = await requireAuthenticatedDbUser()
         const supabase = getSupabaseAdmin()
-
-        const { data: product, error: productError } = await supabase
-            .from('products')
-            .select('stock_quantity')
-            .eq('id', productId)
-            .single()
-
-        if (productError) throw new Error(productError.message)
-
-        const currentStock = product.stock_quantity || 0
+        const product = await getProductStockSnapshot(productId, arenaId)
+        const currentStock = product.stockQuantity
         if (currentStock < quantity) {
             throw new Error(`Estoque insuficiente. Disponível: ${currentStock}, Solicitado: ${quantity}`)
         }
 
         const newBalance = currentStock - quantity
+        let movementId: string | null = null
 
-        await supabase.from('product_stock_movements').insert([{
+        const { data: movement, error: movementError } = await supabase.from('product_stock_movements').insert([{
             product_id: productId,
             arena_id: arenaId,
             type: 'saida',
@@ -160,9 +192,20 @@ export async function registerStockOutflowAction(
             reference_id: referenceId || null,
             balance_after: newBalance,
             registered_by: dbUserId,
-        }])
+        }]).select('id').single()
 
-        await supabase.from('products').update({ stock_quantity: newBalance }).eq('id', productId)
+        if (movementError) throw new Error(movementError.message)
+        movementId = movement.id
+
+        const { error: updateError } = await supabase
+            .from('products')
+            .update({ stock_quantity: newBalance })
+            .eq('id', productId)
+
+        if (updateError) {
+            await supabase.from('product_stock_movements').delete().eq('id', movementId)
+            throw new Error(updateError.message)
+        }
 
         return { success: true }
     } catch (err) {
@@ -172,7 +215,10 @@ export async function registerStockOutflowAction(
 }
 
 export async function restoreStockForOrderAction(orderId: string, arenaId: string, _userId?: string) {
+    const appliedRestores: Array<{ productId: string; previousStock: number; movementId: string }> = []
+
     try {
+        await assertStationOrderAccess(orderId, arenaId)
         const { dbUserId } = await requireAuthenticatedDbUser()
         const supabase = getSupabaseAdmin()
 
@@ -185,15 +231,10 @@ export async function restoreStockForOrderAction(orderId: string, arenaId: strin
         if (!items || items.length === 0) return { success: true }
 
         for (const item of items) {
-            const { data: product } = await supabase
-                .from('products')
-                .select('stock_quantity')
-                .eq('id', item.product_id)
-                .single()
+            const product = await getProductStockSnapshot(item.product_id, arenaId)
+            const newBalance = product.stockQuantity + item.quantity
 
-            const newBalance = (product?.stock_quantity || 0) + item.quantity
-
-            await supabase.from('product_stock_movements').insert([{
+            const { data: movement, error: movementError } = await supabase.from('product_stock_movements').insert([{
                 product_id: item.product_id,
                 arena_id: arenaId,
                 type: 'entrada',
@@ -202,13 +243,36 @@ export async function restoreStockForOrderAction(orderId: string, arenaId: strin
                 reference_id: item.id,
                 balance_after: newBalance,
                 registered_by: dbUserId,
-            }])
+            }]).select('id').single()
 
-            await supabase.from('products').update({ stock_quantity: newBalance }).eq('id', item.product_id)
+            if (movementError) throw new Error(movementError.message)
+
+            const { error: updateError } = await supabase
+                .from('products')
+                .update({ stock_quantity: newBalance })
+                .eq('id', item.product_id)
+
+            if (updateError) {
+                await supabase.from('product_stock_movements').delete().eq('id', movement.id)
+                throw new Error(updateError.message)
+            }
+
+            appliedRestores.push({
+                productId: item.product_id,
+                previousStock: product.stockQuantity,
+                movementId: movement.id,
+            })
         }
 
         return { success: true }
     } catch (err) {
+        if (appliedRestores.length > 0) {
+            const supabase = getSupabaseAdmin()
+            for (const restore of [...appliedRestores].reverse()) {
+                await supabase.from('product_stock_movements').delete().eq('id', restore.movementId)
+                await supabase.from('products').update({ stock_quantity: restore.previousStock }).eq('id', restore.productId)
+            }
+        }
         const message = err instanceof Error ? err.message : 'Erro ao restaurar estoque'
         return { success: false, error: message }
     }

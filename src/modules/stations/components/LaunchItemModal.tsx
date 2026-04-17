@@ -23,8 +23,8 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import type { StationOrder } from "@/modules/stations/types/station.types"
-import { addOrderItemsAction, updateOrderAction } from "@/modules/stations/actions/orderActions"
-import { registerStockOutflowAction, getProductsByArenaAction } from "@/modules/products/actions/stockActions"
+import { addOrderItemsAction } from "@/modules/stations/actions/orderActions"
+import { getProductsByArenaAction } from "@/modules/products/actions/stockActions"
 import type { Product } from "@/modules/products/types/product.types"
 import { Search, Check, X, Loader2, Plus, Minus, Trash2 } from "lucide-react"
 import { Label } from "@/components/ui/label"
@@ -154,33 +154,9 @@ export function LaunchItemModal({
                 unit_price: item.product.price,
                 total_price: item.product.price * item.quantity
             }))
-
-            const launchTotalValue = itemsToLaunch.reduce((acc, item) => acc + item.total_price, 0)
-
             // Add all items in bulk and capture the created items
             const itemsRes = await addOrderItemsAction(arenaId, order.id, itemsToLaunch.map(({ order_id, ...item }) => item))
             if (!itemsRes.success) throw new Error(itemsRes.error)
-            const createdItems = itemsRes.data
-
-            // Register stock outflow
-            for (let i = 0; i < selectedItems.length; i++) {
-                const item = selectedItems[i]
-                const createdItem = createdItems?.[i]
-                await registerStockOutflowAction(
-                    item.product.id,
-                    item.quantity,
-                    arenaId,
-                    undefined,
-                    createdItem?.id,
-                    'order_item'
-                )
-            }
-
-            // Update order total value
-            await updateOrderAction(arenaId, order.id, {
-                total_value: order.total_value + launchTotalValue
-            })
-
             toast.success("Itens lançados com sucesso!")
             onSuccess()
             handleClose()

@@ -1,7 +1,7 @@
 "use server"
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { assertArenaAccess } from '@/lib/server-auth'
+import { assertArenaBackofficeAccess, assertBookingAccess, assertCourtAccess } from '@/lib/server-auth'
 import { SupabaseBookingRepository } from '@/modules/bookings/repositories/SupabaseBookingRepository'
 import type { Booking, CreateBookingDTO } from '@/modules/bookings/types/booking.types'
 import { revalidatePath } from 'next/cache'
@@ -13,7 +13,7 @@ export async function getBookingsByCourtAction(
     endDate?: string
 ): Promise<{ success: boolean; data?: Booking[]; error?: string }> {
     try {
-        await assertArenaAccess(arenaId)
+        await assertCourtAccess(courtId, arenaId)
         const repo = new SupabaseBookingRepository(getSupabaseAdmin())
         const data = await repo.findByCourt(courtId, startDate, endDate)
         return { success: true, data }
@@ -29,7 +29,7 @@ export async function getBookingsByArenaAction(
     endDate?: string
 ): Promise<{ success: boolean; data?: Booking[]; error?: string }> {
     try {
-        await assertArenaAccess(arenaId)
+        await assertArenaBackofficeAccess(arenaId)
         const repo = new SupabaseBookingRepository(getSupabaseAdmin())
         const data = await repo.findByArena(arenaId, startDate, endDate)
         return { success: true, data }
@@ -45,7 +45,7 @@ export async function getBookingsByArenaWithSportsAction(
     endDate: string
 ): Promise<{ success: boolean; data?: Booking[]; error?: string }> {
     try {
-        await assertArenaAccess(arenaId)
+        await assertArenaBackofficeAccess(arenaId)
         const repo = new SupabaseBookingRepository(getSupabaseAdmin())
         const data = await repo.findByArenaWithSports(arenaId, startDate, endDate)
         return { success: true, data }
@@ -61,7 +61,7 @@ export async function updateBookingStatusAction(
     status: 'confirmed' | 'cancelled'
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        await assertArenaAccess(arenaId)
+        await assertBookingAccess(bookingId, arenaId)
         const repo = new SupabaseBookingRepository(getSupabaseAdmin())
         await repo.updateStatus(bookingId, status)
         revalidatePath(`/dashboard/arenas/${arenaId}/courts`)
@@ -77,7 +77,11 @@ export async function createBookingAction(
     input: CreateBookingDTO
 ): Promise<{ success: boolean; data?: Booking; error?: string }> {
     try {
-        await assertArenaAccess(arenaId)
+        await assertArenaBackofficeAccess(arenaId)
+        if (input.arena_id !== arenaId) {
+            throw new Error('Reserva não pertence à arena informada')
+        }
+        await assertCourtAccess(input.court_id, arenaId)
         const repo = new SupabaseBookingRepository(getSupabaseAdmin())
         const data = await repo.create(input)
         revalidatePath(`/dashboard/arenas/${arenaId}/courts`)
@@ -93,7 +97,13 @@ export async function createRecurringBookingsAction(
     inputs: CreateBookingDTO[]
 ): Promise<{ success: boolean; data?: Booking[]; error?: string }> {
     try {
-        await assertArenaAccess(arenaId)
+        await assertArenaBackofficeAccess(arenaId)
+        for (const input of inputs) {
+            if (input.arena_id !== arenaId) {
+                throw new Error('Reserva não pertence à arena informada')
+            }
+            await assertCourtAccess(input.court_id, arenaId)
+        }
         const repo = new SupabaseBookingRepository(getSupabaseAdmin())
         const data = await repo.createMany(inputs)
         revalidatePath(`/dashboard/arenas/${arenaId}/courts`)

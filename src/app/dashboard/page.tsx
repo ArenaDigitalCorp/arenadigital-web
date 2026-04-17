@@ -8,15 +8,28 @@ import { getDashboardDataAction } from "@/modules/dashboard/actions/dashboardAct
 import { Skeleton } from "@/components/ui/skeleton"
 import { OccupancyChart } from "@/modules/dashboard/components/OccupancyChart"
 import type { DashboardStats, OccupancyRow } from "@/modules/dashboard/types/dashboard.types"
+import { useRouter } from "next/navigation"
 
 export default function DashboardPage() {
-    const { selectedArena, isLoadingArenas } = useArena()
+    const router = useRouter()
+    const { selectedArena, selectedArenaDetails, isLoadingArenas } = useArena()
     const [stats, setStats] = useState<DashboardStats>({ receita: 0, receitaChange: 0, reservas: 0, quadras: 0, ativos: 0 })
     const [occupancyData, setOccupancyData] = useState<OccupancyRow[]>([])
     const [isLoading, setIsLoading] = useState(true)
 
     useEffect(() => {
         if (isLoadingArenas) return
+        if (selectedArenaDetails?.role === 'Caixa' && selectedArenaDetails.assignedStationId) {
+            router.replace(`/dashboard/arenas/${selectedArena}/stations/${selectedArenaDetails.assignedStationId}`)
+        }
+    }, [isLoadingArenas, router, selectedArena, selectedArenaDetails])
+
+    useEffect(() => {
+        if (isLoadingArenas) return
+        if (selectedArenaDetails?.role === 'Caixa') {
+            setIsLoading(false)
+            return
+        }
 
         async function loadStats() {
             setIsLoading(true)
@@ -32,7 +45,7 @@ export default function DashboardPage() {
         }
 
         loadStats()
-    }, [selectedArena, isLoadingArenas])
+    }, [selectedArena, selectedArenaDetails, isLoadingArenas])
 
     if (isLoading || isLoadingArenas) {
         return (

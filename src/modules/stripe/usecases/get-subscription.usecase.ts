@@ -1,6 +1,7 @@
 import { stripe } from '@/lib/stripe.client'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { getStripePlanByKey, planKeySchema, type PlanKey } from '@/modules/stripe/stripe-plans'
+import { fetchPlanByKey } from '@/modules/stripe/repositories/subscription-plans.repository'
+import { planKeySchema, type PlanKey } from '@/modules/stripe/stripe-plans'
 
 export type SubscriptionStatus =
   | 'active'
@@ -75,7 +76,7 @@ export async function getSubscription(arenaId: string): Promise<ArenaSubscriptio
   const { data } = await supabase
     .from('arena_subscriptions')
     .select(
-      'plan_key, status, current_period_end, cancel_at_period_end, canceled_at, stripe_subscription_id'
+      'plan_key, status, current_period_end, cancel_at_period_end, canceled_at, stripe_subscription_id, subscription_plans(label, price_cents, max_spaces)'
     )
     .eq('arena_id', arenaId)
     .maybeSingle()
@@ -96,7 +97,15 @@ export async function getSubscription(arenaId: string): Promise<ArenaSubscriptio
   }
 
   const parsedKey = planKeySchema.safeParse(data.plan_key)
-  const plan = parsedKey.success ? getStripePlanByKey(parsedKey.data) : undefined
+
+  // Dados do plano vêm do join com subscription_plans via plan_id FK.
+  // Fallback para null caso o join não retorne (plan_id não preenchido ainda).
+  const planJoin = Array.isArray(data.subscription_plans)
+    ? data.subscription_plans[0]
+    : data.subscription_plans
+
+  const fallbackPlan =
+    !planJoin && parsedKey.success ? await fetchPlanByKey(parsedKey.data) : null
 
   let stripeData: StripeEnrichedData = { paymentMethod: null, card: null, currentPeriodEnd: null }
   if (data.stripe_subscription_id) {
@@ -106,9 +115,9 @@ export async function getSubscription(arenaId: string): Promise<ArenaSubscriptio
   return {
     status: (data.status as SubscriptionStatus) ?? 'none',
     planKey: parsedKey.success ? parsedKey.data : null,
-    planLabel: plan?.label ?? null,
-    priceCents: plan?.priceCents ?? null,
-    maxSpaces: plan?.maxSpaces ?? null,
+    planLabel: planJoin?.label ?? fallbackPlan?.label ?? null,
+    priceCents: planJoin?.price_cents ?? fallbackPlan?.price_cents ?? null,
+    maxSpaces: planJoin?.max_spaces ?? fallbackPlan?.max_spaces ?? null,
     currentPeriodEnd: data.current_period_end ?? stripeData.currentPeriodEnd,
     cancelAtPeriodEnd: data.cancel_at_period_end ?? false,
     canceledAt: data.canceled_at ?? null,

@@ -2,9 +2,22 @@
 
 import { auth } from '@clerk/nextjs/server'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
+import { assertArenaBackofficeAccess, assertRotativoAccess } from '@/lib/server-auth'
 import { SupabaseRotativoRepository } from '@/modules/rotativos/repositories/SupabaseRotativoRepository'
 import { revalidatePath } from 'next/cache'
 import { createRotativoInputSchema } from '@/modules/rotativos/schemas/rotativo.schema'
+
+async function ensureAthleteBelongsToArena(arenaId: string, athleteId: string) {
+    const { data, error } = await getSupabaseAdmin()
+        .from('arenas_atleta')
+        .select('id_atleta')
+        .eq('id_arena', arenaId)
+        .eq('id_atleta', athleteId)
+        .maybeSingle()
+
+    if (error) throw new Error(`Erro ao validar atleta do rotativo: ${error.message}`)
+    if (!data) throw new Error('Atleta não pertence à arena informada')
+}
 
 export async function createRotativoAction(formData: unknown) {
     const parsed = createRotativoInputSchema.safeParse(formData)
@@ -16,11 +29,10 @@ export async function createRotativoAction(formData: unknown) {
         const { userId: clerkId } = await auth()
         if (!clerkId) return { success: false, error: "Não autorizado" }
 
-        const supabase = getSupabaseAdmin()
-        const { data: dbUser } = await supabase.from('users').select('id').eq('clerk_user_id', clerkId).single()
-        if (!dbUser) return { success: false, error: "Usuário não encontrado" }
-
         const { arenaId, ...rest } = parsed.data
+        await assertArenaBackofficeAccess(arenaId)
+
+        const supabase = getSupabaseAdmin()
         const repo = new SupabaseRotativoRepository(supabase)
 
         await repo.create({ ...rest, id_arena: arenaId })
@@ -37,12 +49,9 @@ export async function getRotativosAction(arenaId: string, date: string) {
     try {
         const { userId: clerkId } = await auth()
         if (!clerkId) return { success: false, error: "Não autorizado" }
+        await assertArenaBackofficeAccess(arenaId)
 
-        const supabase = getSupabaseAdmin()
-        const { data: dbUser } = await supabase.from('users').select('id').eq('clerk_user_id', clerkId).single()
-        if (!dbUser) return { success: false, error: "Usuário não encontrado" }
-
-        const repo = new SupabaseRotativoRepository(supabase)
+        const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
         const data = await repo.findByDate(arenaId, date)
         return { success: true, data }
     } catch (error: any) {
@@ -53,9 +62,12 @@ export async function getRotativosAction(arenaId: string, date: string) {
 
 export async function registerAthleteAction(rotativoId: string, athleteId: string, value: number) {
     try {
+        const arenaId = await assertRotativoAccess(rotativoId)
+        await ensureAthleteBelongsToArena(arenaId, athleteId)
+
         const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
         await repo.registerAthlete(rotativoId, athleteId, value)
-        revalidatePath('/dashboard/rotativo')
+        revalidatePath(`/dashboard/rotativo/${arenaId}`)
         return { success: true }
     } catch (error: any) {
         console.error("Error in registerAthleteAction:", error)
@@ -67,6 +79,7 @@ export async function getRotativosByMonthAction(arenaId: string, startDate: stri
     try {
         const { userId: clerkId } = await auth()
         if (!clerkId) return { success: false, error: "Não autorizado" }
+        await assertArenaBackofficeAccess(arenaId)
 
         const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
         const data = await repo.findByMonth(arenaId, startDate, endDate)
@@ -79,6 +92,7 @@ export async function getRotativosByMonthAction(arenaId: string, startDate: stri
 
 export async function getParticipantsAction(rotativoId: string) {
     try {
+        await assertRotativoAccess(rotativoId)
         const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
         const data = await repo.getInscritos(rotativoId)
         return { success: true, data }

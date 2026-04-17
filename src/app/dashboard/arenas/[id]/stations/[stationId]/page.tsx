@@ -1,4 +1,4 @@
-import { assertArenaAccess } from '@/lib/server-auth'
+import { assertStationAccess } from '@/lib/server-auth'
 import { getStationWithOrdersAction } from '@/modules/stations/actions/stationActions'
 import { StationDetailPageClient } from './StationDetailPageClient'
 import { redirect } from 'next/navigation'
@@ -7,7 +7,7 @@ export default async function StationInternalPage({ params }: { params: Promise<
     const { id, stationId } = await params
 
     try {
-        await assertArenaAccess(id)
+        await assertStationAccess(stationId, id)
     } catch {
         redirect(`/dashboard/arenas/${id}/stations`)
     }

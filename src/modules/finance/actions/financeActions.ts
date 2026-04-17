@@ -1,14 +1,14 @@
 "use server"
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { assertArenaAccess, requireAuthenticatedDbUser } from '@/lib/server-auth'
+import { assertArenaBackofficeAccess, requireAuthenticatedDbUser } from '@/lib/server-auth'
 import { SupabaseFinanceRepository } from '@/modules/finance/repositories/SupabaseFinanceRepository'
 import { revalidatePath } from 'next/cache'
 import type { CreateTransactionDTO, UpdateTransactionDTO } from '@/modules/finance/types/finance.types'
 
 export async function getFinanceDashboardAction(arenaId: string) {
     try {
-        await assertArenaAccess(arenaId)
+        await assertArenaBackofficeAccess(arenaId)
         const repo = new SupabaseFinanceRepository(getSupabaseAdmin())
         const now = new Date()
         const end = new Date(now.getFullYear(), now.getMonth(), now.getDate())
@@ -46,7 +46,7 @@ export async function getModoPagamentoAction() {
 
 export async function getTransactionsAction(arenaId: string, type?: 'entrada' | 'saída', startDate?: string, endDate?: string) {
     try {
-        await assertArenaAccess(arenaId)
+        await assertArenaBackofficeAccess(arenaId)
         const repo = new SupabaseFinanceRepository(getSupabaseAdmin())
         const data = await repo.findByArena(arenaId, type, startDate, endDate)
         return { success: true, data }
@@ -58,7 +58,7 @@ export async function getTransactionsAction(arenaId: string, type?: 'entrada' | 
 
 export async function createTransactionAction(arenaId: string, input: Omit<CreateTransactionDTO, 'arena_id' | 'registered_by'>) {
     try {
-        await assertArenaAccess(arenaId)
+        await assertArenaBackofficeAccess(arenaId)
         const { dbUserId } = await requireAuthenticatedDbUser()
         const repo = new SupabaseFinanceRepository(getSupabaseAdmin())
         const data = await repo.create({ ...input, arena_id: arenaId, registered_by: dbUserId })
@@ -72,7 +72,7 @@ export async function createTransactionAction(arenaId: string, input: Omit<Creat
 
 export async function updateTransactionAction(arenaId: string, transactionId: string, input: UpdateTransactionDTO) {
     try {
-        await assertArenaAccess(arenaId)
+        await assertArenaBackofficeAccess(arenaId)
         const repo = new SupabaseFinanceRepository(getSupabaseAdmin())
         const data = await repo.update(transactionId, input)
         revalidatePath(`/dashboard/finance/${arenaId}`)
@@ -85,7 +85,7 @@ export async function updateTransactionAction(arenaId: string, transactionId: st
 
 export async function deleteTransactionAction(arenaId: string, transactionId: string) {
     try {
-        await assertArenaAccess(arenaId)
+        await assertArenaBackofficeAccess(arenaId)
         const repo = new SupabaseFinanceRepository(getSupabaseAdmin())
         await repo.delete(transactionId)
         revalidatePath(`/dashboard/finance/${arenaId}`)

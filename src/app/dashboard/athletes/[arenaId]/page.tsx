@@ -1,16 +1,28 @@
 "use client"
 import React, { useState } from "react"
+import { useRouter } from "next/navigation"
 
 import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AthletesList } from "@/modules/athletes/components/AthletesList"
 import { AthleteRegistrationModal } from "@/modules/athletes/components/AthleteRegistrationModal"
+import { useArena } from "@/contexts/ArenaContext"
 
 
 export default function AthletesPage({ params }: { params: Promise<{ arenaId: string }> }) {
     const resolvedParams = React.use(params);
+    const router = useRouter()
+    const { arenas } = useArena()
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [refreshTrigger, setRefreshTrigger] = useState(0)
+
+    const currentArena = arenas.find((arena) => arena.id === resolvedParams.arenaId)
+
+    React.useEffect(() => {
+        if (currentArena?.role === 'Caixa' && currentArena.assignedStationId) {
+            router.replace(`/dashboard/arenas/${resolvedParams.arenaId}/stations/${currentArena.assignedStationId}`)
+        }
+    }, [currentArena, resolvedParams.arenaId, router])
 
     return (
         <div className="p-8 space-y-8">

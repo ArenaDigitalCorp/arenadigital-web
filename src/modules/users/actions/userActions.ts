@@ -1,7 +1,13 @@
 "use server";
 
 import { clerkClient } from "@clerk/nextjs/server";
-import { assertArenaAccess } from "@/lib/server-auth";
+import {
+    fetchArenaUserLink,
+    fetchArenaUsersForArena,
+    getArenaUsersStationColumnErrorMessage,
+    isArenaUsersStationColumnMissingError
+} from "@/lib/arena-users";
+import { assertArenaBackofficeAccess, assertStationAccess } from "@/lib/server-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-server";
 
 async function getCoordinatesFromAddress(addressData: { street: string; number: string; neighborhood: string; city: string; state: string }) {
@@ -83,6 +89,7 @@ type ArenaUserFormData = {
     name: string;
     password?: string;
     role: string;
+    stationId?: string | null;
     senha?: string;
     status: string;
 };
@@ -94,6 +101,7 @@ type ArenaUserListItem = {
     id: string;
     name: string;
     role: string;
+    stationId: string | null;
     status: string;
 };
 
@@ -104,6 +112,7 @@ type ActionResult<T = undefined> =
 type ArenaUserQueryRow = {
     id: string;
     role: string;
+    station_id: string | null;
     status: string;
     created_at: string;
     user_id: string;
@@ -115,6 +124,13 @@ type ArenaUserQueryRow = {
     } | null;
 };
 
+type ArenaUserLinkRow = {
+    id: string;
+    arena_id: string;
+    station_id: string | null;
+    user_id: string;
+};
+
 function getErrorMessage(error: unknown) {
     if (error instanceof Error) {
         return error.message;
@@ -123,9 +139,29 @@ function getErrorMessage(error: unknown) {
     return "Erro desconhecido";
 }
 
+async function getArenaUserLinkOrThrow(arenaId: string, arenaUserId: string): Promise<ArenaUserLinkRow> {
+    const { data, error } = await fetchArenaUserLink(getSupabaseAdmin(), arenaId, arenaUserId);
+
+    if (error) {
+        throw new Error(`Erro ao carregar vínculo do usuário: ${error.message}`);
+    }
+
+    return data as ArenaUserLinkRow;
+}
+
 export async function createArenaUserAction(arenaId: string, data: ArenaUserFormData): Promise<ActionResult<{ clerk_user_id: string; email: string; id: string; name: string | null; role: string | null }>> {
+    let createdClerkUserId: string | null = null;
+    let createdLocalUserId: string | null = null;
+
     try {
-        await assertArenaAccess(arenaId);
+        await assertArenaBackofficeAccess(arenaId);
+
+        if (data.role === 'Caixa' && !data.stationId) {
+            throw new Error('Selecione a estação vinculada ao caixa.');
+        }
+        if (data.role === 'Caixa' && data.stationId) {
+            await assertStationAccess(data.stationId, arenaId);
+        }
 
         const client = await clerkClient();
         const supabase = getSupabaseAdmin();
@@ -140,6 +176,7 @@ export async function createArenaUserAction(arenaId: string, data: ArenaUserForm
         };
 
         const clerkUser = await client.users.createUser(clerkUserOptions);
+        createdClerkUserId = clerkUser.id;
 
         // 2. Insert into users table
         const { data: newUser, error: userError } = await supabase
@@ -157,16 +194,35 @@ export async function createArenaUserAction(arenaId: string, data: ArenaUserForm
             console.error("Supabase user error:", userError);
             throw new Error(`Erro ao criar usuário local: ${userError.message}`);
         }
+        createdLocalUserId = newUser.id;
 
         // 3. Insert into arena_users table
-        const { error: arenaUserError } = await supabase
+        const arenaUserPayload = {
+            arena_id: arenaId,
+            user_id: newUser.id,
+            role: data.role,
+            station_id: data.role === 'Caixa' ? data.stationId ?? null : null,
+            status: data.status,
+        };
+
+        let { error: arenaUserError } = await supabase
             .from('arena_users')
-            .insert({
-                arena_id: arenaId,
-                user_id: newUser.id,
-                role: data.role,
-                status: data.status,
-            });
+            .insert(arenaUserPayload);
+
+        if (isArenaUsersStationColumnMissingError(arenaUserError)) {
+            if (data.role === 'Caixa') {
+                throw new Error(getArenaUsersStationColumnErrorMessage());
+            }
+
+            ({ error: arenaUserError } = await supabase
+                .from('arena_users')
+                .insert({
+                    arena_id: arenaId,
+                    user_id: newUser.id,
+                    role: data.role,
+                    status: data.status,
+                }));
+        }
 
         if (arenaUserError) {
             console.error("Supabase arena user error:", arenaUserError);
@@ -175,6 +231,14 @@ export async function createArenaUserAction(arenaId: string, data: ArenaUserForm
 
         return { success: true, user: newUser };
     } catch (error: unknown) {
+        const supabase = getSupabaseAdmin();
+        const client = await clerkClient();
+        if (createdLocalUserId) {
+            await supabase.from('users').delete().eq('id', createdLocalUserId);
+        }
+        if (createdClerkUserId) {
+            await client.users.deleteUser(createdClerkUserId).catch(() => null);
+        }
         console.error("Error creating arena user:", error);
         return { success: false, error: getErrorMessage(error) };
     }
@@ -182,10 +246,21 @@ export async function createArenaUserAction(arenaId: string, data: ArenaUserForm
 
 export async function updateArenaUserAction(arenaId: string, arenaUserId: string, userId: string, data: ArenaUserFormData): Promise<ActionResult> {
     try {
-        await assertArenaAccess(arenaId);
+        await assertArenaBackofficeAccess(arenaId);
+
+        if (data.role === 'Caixa' && !data.stationId) {
+            throw new Error('Selecione a estação vinculada ao caixa.');
+        }
+        if (data.role === 'Caixa' && data.stationId) {
+            await assertStationAccess(data.stationId, arenaId);
+        }
 
         const client = await clerkClient();
         const supabase = getSupabaseAdmin();
+        const arenaUser = await getArenaUserLinkOrThrow(arenaId, arenaUserId);
+        if (arenaUser.user_id !== userId) {
+            throw new Error('Vínculo do usuário não corresponde à arena informada');
+        }
 
         // Find clerk id first to update Clerk fields
         const { data: localUser, error: localUserError } = await supabase
@@ -212,13 +287,32 @@ export async function updateArenaUserAction(arenaId: string, arenaUserId: string
             .eq('id', userId);
 
         // Update arena_users table
-        const { error: arenaUserError } = await supabase
+        let { error: arenaUserError } = await supabase
             .from('arena_users')
             .update({
                 role: data.role,
+                station_id: data.role === 'Caixa' ? data.stationId ?? null : null,
                 status: data.status,
             })
-            .eq('id', arenaUserId);
+            .eq('id', arenaUserId)
+            .eq('arena_id', arenaId)
+            .eq('user_id', userId);
+
+        if (isArenaUsersStationColumnMissingError(arenaUserError)) {
+            if (data.role === 'Caixa') {
+                throw new Error(getArenaUsersStationColumnErrorMessage());
+            }
+
+            ({ error: arenaUserError } = await supabase
+                .from('arena_users')
+                .update({
+                    role: data.role,
+                    status: data.status,
+                })
+                .eq('id', arenaUserId)
+                .eq('arena_id', arenaId)
+                .eq('user_id', userId));
+        }
 
         if (arenaUserError) {
             throw new Error(`Erro ao atualizar vínculo: ${arenaUserError.message}`);
@@ -233,10 +327,14 @@ export async function updateArenaUserAction(arenaId: string, arenaUserId: string
 
 export async function deleteArenaUserAction(arenaId: string, arenaUserId: string, userId: string): Promise<ActionResult> {
     try {
-        await assertArenaAccess(arenaId);
+        await assertArenaBackofficeAccess(arenaId);
 
         const client = await clerkClient();
         const supabase = getSupabaseAdmin();
+        const arenaUser = await getArenaUserLinkOrThrow(arenaId, arenaUserId);
+        if (arenaUser.user_id !== userId) {
+            throw new Error('Vínculo do usuário não corresponde à arena informada');
+        }
 
         // 1. Get clerk ID
         const { data: localUser, error: localUserError } = await supabase
@@ -249,17 +347,30 @@ export async function deleteArenaUserAction(arenaId: string, arenaUserId: string
         const { error: arenaUserError } = await supabase
             .from('arena_users')
             .delete()
-            .eq('id', arenaUserId);
+            .eq('id', arenaUserId)
+            .eq('arena_id', arenaId)
+            .eq('user_id', userId);
 
         if (arenaUserError) {
             throw new Error(`Erro ao desvincular usuário: ${arenaUserError.message}`);
         }
 
-        // 3. Delete from users table
-        await supabase.from('users').delete().eq('id', userId);
+        // 3. Delete from users table only if no other arena link remains
+        const { count: remainingLinks, error: remainingLinksError } = await supabase
+            .from('arena_users')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', userId);
 
-        // 4. Delete from clerk if possible
-        if (!localUserError && localUser) {
+        if (remainingLinksError) {
+            throw new Error(`Erro ao verificar vínculos restantes do usuário: ${remainingLinksError.message}`);
+        }
+
+        if ((remainingLinks ?? 0) === 0) {
+            await supabase.from('users').delete().eq('id', userId);
+        }
+
+        // 4. Delete from clerk if possible and no other arena link remains
+        if ((remainingLinks ?? 0) === 0 && !localUserError && localUser) {
             await client.users.deleteUser(localUser.clerk_user_id).catch(e => console.error("Error deleting clerk user", e));
         }
 
@@ -272,26 +383,10 @@ export async function deleteArenaUserAction(arenaId: string, arenaUserId: string
 
 export async function getArenaUsersAction(arenaId: string): Promise<ActionResult<ArenaUserListItem[]>> {
     try {
-        await assertArenaAccess(arenaId);
+        await assertArenaBackofficeAccess(arenaId);
 
         const supabase = getSupabaseAdmin();
-        const { data, error } = await supabase
-            .from('arena_users')
-            .select(`
-                id,
-                role,
-                status,
-                created_at,
-                user_id,
-                users (
-                    id,
-                    name,
-                    email,
-                    clerk_user_id
-                )
-            `)
-            .eq('arena_id', arenaId)
-            .order('created_at', { ascending: false });
+        const { data, error } = await fetchArenaUsersForArena(supabase, arenaId);
 
         if (error) {
             throw new Error(error.message);
@@ -308,6 +403,7 @@ export async function getArenaUsersAction(arenaId: string): Promise<ActionResult
                     name: linkedUser.name ?? '',
                     email: linkedUser.email,
                     role: item.role,
+                    stationId: item.station_id,
                     status: item.status,
                     clerkUserId: linkedUser.clerk_user_id,
                 };

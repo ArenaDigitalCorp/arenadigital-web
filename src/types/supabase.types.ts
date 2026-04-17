@@ -82,6 +82,7 @@ export type Database = {
           created_at: string
           current_period_end: string | null
           id: string
+          plan_id: string | null
           plan_key: string
           status: string
           stripe_customer_id: string
@@ -95,6 +96,7 @@ export type Database = {
           created_at?: string
           current_period_end?: string | null
           id?: string
+          plan_id?: string | null
           plan_key: string
           status?: string
           stripe_customer_id: string
@@ -108,6 +110,7 @@ export type Database = {
           created_at?: string
           current_period_end?: string | null
           id?: string
+          plan_id?: string | null
           plan_key?: string
           status?: string
           stripe_customer_id?: string
@@ -122,6 +125,13 @@ export type Database = {
             referencedRelation: "arenas"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "arena_subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_plans"
+            referencedColumns: ["id"]
+          },
         ]
       }
       arena_users: {
@@ -130,6 +140,7 @@ export type Database = {
           created_at: string
           id: string
           role: string
+          station_id: string | null
           status: string
           updated_at: string
           user_id: string
@@ -139,6 +150,7 @@ export type Database = {
           created_at?: string
           id?: string
           role?: string
+          station_id?: string | null
           status?: string
           updated_at?: string
           user_id: string
@@ -148,6 +160,7 @@ export type Database = {
           created_at?: string
           id?: string
           role?: string
+          station_id?: string | null
           status?: string
           updated_at?: string
           user_id?: string
@@ -165,6 +178,13 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arena_users_station_id_fkey"
+            columns: ["station_id"]
+            isOneToOne: false
+            referencedRelation: "stations"
             referencedColumns: ["id"]
           },
         ]
@@ -571,6 +591,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      audit_logs: {
+        Row: {
+          action: string
+          actor_id: string | null
+          actor_type: string
+          created_at: string
+          entity_id: string
+          entity_type: string
+          id: string
+          metadata: Json | null
+          new_value: Json | null
+          old_value: Json | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          actor_type: string
+          created_at?: string
+          entity_id: string
+          entity_type: string
+          id?: string
+          metadata?: Json | null
+          new_value?: Json | null
+          old_value?: Json | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          actor_type?: string
+          created_at?: string
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          metadata?: Json | null
+          new_value?: Json | null
+          old_value?: Json | null
+        }
+        Relationships: []
       }
       booking_participants: {
         Row: {
@@ -1578,6 +1637,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      subscription_plans: {
+        Row: {
+          created_at: string
+          features: Json | null
+          id: string
+          is_active: boolean
+          key: string
+          label: string
+          max_spaces: number
+          price_cents: number
+          sort_order: number
+          stripe_price_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          features?: Json | null
+          id?: string
+          is_active?: boolean
+          key: string
+          label: string
+          max_spaces: number
+          price_cents: number
+          sort_order?: number
+          stripe_price_id?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          features?: Json | null
+          id?: string
+          is_active?: boolean
+          key?: string
+          label?: string
+          max_spaces?: number
+          price_cents?: number
+          sort_order?: number
+          stripe_price_id?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       times: {
         Row: {

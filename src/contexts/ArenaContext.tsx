@@ -6,6 +6,9 @@ import { useDbUser } from "@/contexts/UserContext";
 interface Arena {
     id: string;
     name: string;
+    isOwner: boolean;
+    role: 'Owner' | 'Gestor' | 'Atendente' | 'Caixa';
+    assignedStationId: string | null;
 }
 
 type State =
@@ -31,6 +34,7 @@ interface ArenaContextType {
     selectedArena: string;
     setSelectedArena: (id: string) => void;
     arenas: Arena[];
+    selectedArenaDetails: Arena | null;
     isLoadingArenas: boolean;
     arenasError: string | null;
     retryArenas: () => void;
@@ -73,9 +77,10 @@ export function ArenaProvider({ children }: { children: React.ReactNode }) {
     const arenas = state.status === 'success' ? state.data : [];
     const isLoadingArenas = state.status === 'idle' || state.status === 'loading';
     const arenasError = state.status === 'error' ? state.message : null;
+    const selectedArenaDetails = arenas.find((arena) => arena.id === selectedArena) ?? null;
 
     return (
-        <ArenaContext.Provider value={{ selectedArena, setSelectedArena, arenas, isLoadingArenas, arenasError, retryArenas: fetchArenas }}>
+        <ArenaContext.Provider value={{ selectedArena, setSelectedArena, arenas, selectedArenaDetails, isLoadingArenas, arenasError, retryArenas: fetchArenas }}>
             {children}
         </ArenaContext.Provider>
     );

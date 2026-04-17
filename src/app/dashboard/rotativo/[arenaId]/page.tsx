@@ -1,4 +1,4 @@
-import { assertArenaAccess } from '@/lib/server-auth'
+import { assertArenaBackofficeAccess } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { SupabaseArenaRepository } from '@/modules/arenas/repositories/SupabaseArenaRepository'
 import { getRotativosAction } from '@/modules/rotativos/actions/rotativoActions'
@@ -10,7 +10,7 @@ export default async function RotativoPage({ params }: { params: Promise<{ arena
     const { arenaId } = await params
 
     try {
-        await assertArenaAccess(arenaId)
+        await assertArenaBackofficeAccess(arenaId)
     } catch {
         redirect('/dashboard/settings/arenas')
     }

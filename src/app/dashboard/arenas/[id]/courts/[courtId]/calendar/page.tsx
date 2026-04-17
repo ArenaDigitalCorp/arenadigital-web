@@ -1,4 +1,4 @@
-import { assertArenaAccess } from '@/lib/server-auth'
+import { assertArenaBackofficeAccess, assertCourtAccess } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { SupabaseBookingRepository } from '@/modules/bookings/repositories/SupabaseBookingRepository'
 import { CourtCalendarPageClient } from './CourtCalendarPageClient'
@@ -9,7 +9,8 @@ export default async function CourtCalendarPage({ params }: { params: Promise<{ 
     const { id: arenaId, courtId } = await params
 
     try {
-        await assertArenaAccess(arenaId)
+        await assertArenaBackofficeAccess(arenaId)
+        await assertCourtAccess(courtId, arenaId)
     } catch {
         redirect(`/dashboard/arenas/${arenaId}`)
     }
@@ -24,6 +25,7 @@ export default async function CourtCalendarPage({ params }: { params: Promise<{ 
             .from('courts')
             .select(`*, sports:court_sports(sport:sports(*))`)
             .eq('id', courtId)
+            .eq('arena_id', arenaId)
             .single(),
         new SupabaseBookingRepository(supabase).findByCourt(courtId, todayStart, todayEnd),
     ])

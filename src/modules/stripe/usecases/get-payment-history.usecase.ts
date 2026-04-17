@@ -29,7 +29,7 @@ export async function getPaymentHistory(arenaId: string): Promise<PaymentHistory
 
     return invoices.data.map((inv) => ({
       id: inv.id,
-      amountCents: inv.amount_due ?? 0,
+      amountCents: inv.amount_paid || inv.amount_due || 0,
       status: inv.status as PaymentHistoryItem['status'],
       invoiceNumber: inv.number ?? null,
       description: inv.description ?? null,

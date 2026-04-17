@@ -9,13 +9,14 @@ import { useState } from 'react'
 
 type Props = {
   arenaId: string
+  planKey: 'starter' | 'pro' | 'max'
   onSuccess: () => void
   onError: (message: string) => void
   onCancel?: () => void
   submitLabel?: string
 }
 
-export function PaymentSetupForm({ arenaId, onSuccess, onError, onCancel, submitLabel = 'Salvar' }: Props) {
+export function PaymentSetupForm({ arenaId, planKey, onSuccess, onError, onCancel, submitLabel = 'Salvar' }: Props) {
   const stripe = useStripe()
   const elements = useElements()
   const [loading, setLoading] = useState(false)
@@ -56,7 +57,7 @@ export function PaymentSetupForm({ arenaId, onSuccess, onError, onCancel, submit
       const res = await fetch('/api/stripe/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ arenaId, paymentMethodId })
+        body: JSON.stringify({ arenaId, planKey, paymentMethodId })
       })
 
       const data = await res.json()
