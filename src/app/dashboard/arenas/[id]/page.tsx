@@ -4,8 +4,6 @@ import { SupabaseArenaRepository } from '@/modules/arenas/repositories/SupabaseA
 import { SupabaseBookingRepository } from '@/modules/bookings/repositories/SupabaseBookingRepository'
 import { ArenaDetailPageClient } from './ArenaDetailPageClient'
 import { redirect } from 'next/navigation'
-import { format } from 'date-fns'
-
 export default async function ArenaDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
 
@@ -16,9 +14,9 @@ export default async function ArenaDetailPage({ params }: { params: Promise<{ id
     }
 
     const supabase = getSupabaseAdmin()
-    const today = new Date()
-    const startOfDay = format(new Date(today.setHours(0, 0, 0, 0)), "yyyy-MM-dd'T'HH:mm:ss")
-    const endOfDay = format(new Date(today.setHours(23, 59, 59, 999)), "yyyy-MM-dd'T'HH:mm:ss")
+    const now = new Date()
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).toISOString()
+    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString()
 
     const [arena, courtsRaw, bookings] = await Promise.all([
         new SupabaseArenaRepository(supabase).findById(id),

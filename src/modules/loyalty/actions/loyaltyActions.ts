@@ -104,7 +104,11 @@ export async function createCreditTransactionAction(data: {
         let data_vencimento: string | null = null;
         const now = new Date();
 
-        if (data.validade === "3_meses") {
+        if (data.validade === "1_mes") {
+            const d = new Date(now); d.setDate(d.getDate() + 30); data_vencimento = d.toISOString();
+        } else if (data.validade === "2_meses") {
+            const d = new Date(now); d.setDate(d.getDate() + 60); data_vencimento = d.toISOString();
+        } else if (data.validade === "3_meses") {
             const d = new Date(now); d.setMonth(d.getMonth() + 3); data_vencimento = d.toISOString();
         } else if (data.validade === "6_meses") {
             const d = new Date(now); d.setMonth(d.getMonth() + 6); data_vencimento = d.toISOString();

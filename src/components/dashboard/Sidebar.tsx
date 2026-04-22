@@ -14,7 +14,8 @@ import {
     Activity,
     ChevronDown,
     Menu,
-    Package
+    Package,
+    BarChart2,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -39,14 +40,16 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
     const rotativoHref = selectedArena ? `/dashboard/rotativo/${selectedArena}` : "/dashboard/rotativo";
     const athletesHref = selectedArena ? `/dashboard/athletes/${selectedArena}` : "/dashboard/athletes";
 
-    const sidebarItems = isCashier && selectedArenaDetails?.assignedStationId ? [
+    const cashierItems = isCashier && selectedArenaDetails?.assignedStationId ? [
         {
             icon: Store,
             label: "Minha estação",
             href: `/dashboard/arenas/${selectedArena}/stations/${selectedArenaDetails.assignedStationId}`,
             isActive: (p: string) => p.includes(`/dashboard/arenas/${selectedArena}/stations/`),
         },
-    ] : [
+    ] : null;
+
+    const topItems = cashierItems ?? [
         {
             icon: LayoutDashboard,
             label: "Dashboard",
@@ -54,17 +57,14 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
             isActive: (p: string) => p === "/dashboard",
         },
         {
-            icon: MapPin,
-            label: "Espaços",
-            href: arenaHref,
-            isActive: (p: string) => p.startsWith("/dashboard/arenas/") && !p.includes("/stations") && !p.endsWith("/edit"),
+            icon: Users,
+            label: "Atletas",
+            href: athletesHref,
+            isActive: (p: string) => p.startsWith("/dashboard/athletes/"),
         },
-        {
-            icon: CreditCard,
-            label: "Financeiro",
-            href: financeHref,
-            isActive: (p: string) => p.startsWith("/dashboard/finance/"),
-        },
+    ];
+
+    const bottomItems = cashierItems ? [] : [
         {
             icon: Store,
             label: "Estações",
@@ -78,6 +78,12 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
             isActive: (p: string) => p.startsWith("/dashboard/settings/products/"),
         },
         {
+            icon: CreditCard,
+            label: "Financeiro",
+            href: financeHref,
+            isActive: (p: string) => p.startsWith("/dashboard/finance/"),
+        },
+        {
             icon: Trophy,
             label: "Programa de fidelidade",
             href: loyaltyHref,
@@ -89,22 +95,25 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
             href: rotativoHref,
             isActive: (p: string) => p.startsWith("/dashboard/rotativo/"),
         },
-        {
-            icon: Users,
-            label: "Atletas",
-            href: athletesHref,
-            isActive: (p: string) => p.startsWith("/dashboard/athletes/"),
-        },
     ];
 
     const settingsUsersHref = selectedArena ? `/dashboard/settings/users/${selectedArena}` : "/dashboard/settings/users";
     const settingsSubscriptionHref = selectedArena ? `/dashboard/settings/subscription/${selectedArena}` : "/dashboard/settings/subscription";
+    const reportsHref = selectedArena ? `/dashboard/reports/${selectedArena}/status-pagamentos` : "/dashboard/reports";
+
+    const mensalistasHref = selectedArena ? `/dashboard/arenas/${selectedArena}/mensalistas` : "/dashboard/arenas";
 
     const isEditingArena = !!pathname.match(/\/dashboard\/arenas\/[^\/]+\/edit$/);
     const isSettingsActive = (pathname.includes("/settings") && !pathname.startsWith("/dashboard/settings/products")) || isEditingArena;
+    const isEspacosActive = pathname.startsWith("/dashboard/arenas/") && !pathname.includes("/stations") && !pathname.endsWith("/edit");
+    const isReportsActive = pathname.startsWith("/dashboard/reports/");
 
     const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(isSettingsActive);
+    const [isEspacosOpen, setIsEspacosOpen] = useState<boolean>(isEspacosActive);
+    const [isReportsOpen, setIsReportsOpen] = useState<boolean>(isReportsActive);
     const shouldShowSettingsOpen = !isCollapsed && (isSettingsOpen || isSettingsActive);
+    const shouldShowEspacosOpen = !isCollapsed && (isEspacosOpen || isEspacosActive);
+    const shouldShowReportsOpen = !isCollapsed && (isReportsOpen || isReportsActive);
 
     return (
         <div className={cn(
@@ -136,7 +145,7 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                     <ArenaSelector isCollapsed={isCollapsed} />
 
                     <div className="space-y-2">
-                        {sidebarItems.map((item) => {
+                        {topItems.map((item) => {
                             const isActive = item.isActive(pathname);
 
                             return (
@@ -163,6 +172,139 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                 </Button>
                             );
                         })}
+
+                        {!isCashier && (
+                        <div className="pt-2">
+                            <Button
+                                variant="ghost"
+                                className={cn(
+                                    "w-full transition-colors flex items-center",
+                                    isCollapsed ? "justify-center px-0" : "justify-between text-white/70 hover:text-white hover:bg-white/10",
+                                    isEspacosActive && "text-[#FFC145] bg-white/5"
+                                )}
+                                onClick={() => !isCollapsed && setIsEspacosOpen(!isEspacosOpen)}
+                                title={isCollapsed ? "Espaços" : ""}
+                            >
+                                <div className="flex items-center">
+                                    <MapPin className={cn("h-5 w-5", !isCollapsed && "mr-3")} />
+                                    {!isCollapsed && <span className="font-medium text-sm">Espaços</span>}
+                                </div>
+                                {!isCollapsed && (
+                                    <ChevronDown
+                                        className={cn(
+                                            "h-4 w-4 opacity-50 transition-transform duration-200",
+                                            shouldShowEspacosOpen && "transform rotate-180"
+                                        )}
+                                    />
+                                )}
+                            </Button>
+
+                            {shouldShowEspacosOpen && (
+                                <div className="mt-1 ml-4 space-y-1 border-l border-white/10 pl-2">
+                                    <Button
+                                        variant="ghost"
+                                        asChild
+                                        className={cn(
+                                            "w-full justify-start h-9 text-sm font-normal",
+                                            (isEspacosActive && !pathname.includes("/mensalistas"))
+                                                ? "text-[#FFC145] bg-white/5"
+                                                : "text-white/60 hover:text-white hover:bg-white/5"
+                                        )}
+                                        onClick={onNavItemClick}
+                                    >
+                                        <Link href={arenaHref}>Espaços</Link>
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        asChild
+                                        className={cn(
+                                            "w-full justify-start h-9 text-sm font-normal",
+                                            pathname.includes("/mensalistas")
+                                                ? "text-[#FFC145] bg-white/5"
+                                                : "text-white/60 hover:text-white hover:bg-white/5"
+                                        )}
+                                        onClick={onNavItemClick}
+                                    >
+                                        <Link href={mensalistasHref}>Mensalistas</Link>
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+                        )}
+
+                        {bottomItems.map((item) => {
+                            const isActive = item.isActive(pathname);
+
+                            return (
+                                <Button
+                                    key={item.href}
+                                    variant="ghost"
+                                    className={cn(
+                                        "w-full transition-colors flex items-center",
+                                        isCollapsed ? "justify-center px-0" : "justify-start text-white/70 hover:text-white hover:bg-white/10",
+                                        isActive && !isCollapsed && "text-[#FFC145] bg-white/5",
+                                        isActive && isCollapsed && "text-[#FFC145] bg-white/10"
+                                    )}
+                                    asChild
+                                    onClick={onNavItemClick}
+                                >
+                                    <Link href={item.href} title={isCollapsed ? item.label : ""}>
+                                        <item.icon className={cn(
+                                            "h-5 w-5 transition-all duration-300",
+                                            !isCollapsed && "mr-3",
+                                            isActive && "text-[#FFC145]"
+                                        )} />
+                                        {!isCollapsed && <span className="font-medium text-sm">{item.label}</span>}
+                                    </Link>
+                                </Button>
+                            );
+                        })}
+
+                        {!isCashier && (
+                        <div className="pt-2">
+                            <Button
+                                variant="ghost"
+                                className={cn(
+                                    "w-full transition-colors flex items-center",
+                                    isCollapsed ? "justify-center px-0" : "justify-between text-white/70 hover:text-white hover:bg-white/10",
+                                    isReportsActive && "text-[#FFC145] bg-white/5"
+                                )}
+                                onClick={() => !isCollapsed && setIsReportsOpen(!isReportsOpen)}
+                                title={isCollapsed ? "Relatórios" : ""}
+                            >
+                                <div className="flex items-center">
+                                    <BarChart2 className={cn("h-5 w-5", !isCollapsed && "mr-3")} />
+                                    {!isCollapsed && <span className="font-medium text-sm">Relatórios</span>}
+                                </div>
+                                {!isCollapsed && (
+                                    <ChevronDown
+                                        className={cn(
+                                            "h-4 w-4 opacity-50 transition-transform duration-200",
+                                            shouldShowReportsOpen && "transform rotate-180"
+                                        )}
+                                    />
+                                )}
+                            </Button>
+
+                            {shouldShowReportsOpen && (
+                                <div className="mt-1 ml-4 space-y-1 border-l border-white/10 pl-2">
+                                    <Button
+                                        variant="ghost"
+                                        asChild
+                                        className={cn(
+                                            "w-full justify-start h-9 text-sm font-normal",
+                                            pathname.startsWith("/dashboard/reports/") && pathname.includes("status-pagamentos")
+                                                ? "text-[#FFC145] bg-white/5"
+                                                : "text-white/60 hover:text-white hover:bg-white/5"
+                                        )}
+                                        onClick={onNavItemClick}
+                                    >
+                                        <Link href={reportsHref}>Status Pagamentos</Link>
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+                        )}
 
                         {!isCashier && (
                         <div className="pt-2">

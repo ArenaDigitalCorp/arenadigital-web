@@ -77,10 +77,19 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, booking, court
                                 </p>
                                 <Badge className={cn(
                                     "text-[10px] font-black uppercase px-2 py-0.5 rounded-md border-none",
-                                    booking.status === 'confirmed' ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
+                                    booking.status === 'confirmed' ? "bg-emerald-100 text-emerald-700" :
+                                    booking.status === 'reservado' ? "bg-amber-100 text-amber-700" :
+                                    "bg-red-100 text-red-700"
                                 )}>
-                                    {booking.status === 'confirmed' ? 'Confirmado' : 'Cancelado'}
+                                    {booking.status === 'confirmed' ? 'Confirmado' :
+                                     booking.status === 'reservado' ? 'Ag. Confirmação' :
+                                     'Cancelado'}
                                 </Badge>
+                                {booking.booking_type === 'mensalista' && (
+                                    <Badge className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md border-none bg-amber-100 text-amber-700 ml-1">
+                                        Mensalista
+                                    </Badge>
+                                )}
                             </div>
 
                             {/* Esporte */}
@@ -142,14 +151,20 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, booking, court
                         >
                             Fechar
                         </Button>
-                        <Button
-                            onClick={handleCancel}
-                            disabled={isCancelling || booking.status === 'cancelled'}
-                            className="flex-1 h-14 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-bold rounded-2xl active:scale-95 transition-all gap-2"
-                        >
-                            <Trash2 className="w-4 h-4" />
-                            {isCancelling ? "Cancelando..." : "Cancelar Reserva"}
-                        </Button>
+                        {booking.booking_type === 'mensalista' && booking.status === 'reservado' ? (
+                            <div className="flex-1 h-14 flex items-center justify-center text-xs text-amber-600 font-bold bg-amber-50 border border-amber-200 rounded-2xl px-4 text-center">
+                                Gerencie via "Mensalistas" no calendário
+                            </div>
+                        ) : (
+                            <Button
+                                onClick={handleCancel}
+                                disabled={isCancelling || booking.status === 'cancelled'}
+                                className="flex-1 h-14 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-bold rounded-2xl active:scale-95 transition-all gap-2"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                                {isCancelling ? "Cancelando..." : "Cancelar Reserva"}
+                            </Button>
+                        )}
                     </div>
                 </div>
             </DialogContent>

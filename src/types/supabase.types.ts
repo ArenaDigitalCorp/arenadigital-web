@@ -688,10 +688,12 @@ export type Database = {
           arena_id: string
           athlete_id: string | null
           athlete_name: string | null
+          booking_type: string | null
           court_id: string
           created_at: string
           end_time: string
           id: string
+          plano_mensalista_id: string | null
           price: number | null
           recurrence_id: string | null
           sport_id: string | null
@@ -702,10 +704,12 @@ export type Database = {
           arena_id: string
           athlete_id?: string | null
           athlete_name?: string | null
+          booking_type?: string | null
           court_id: string
           created_at?: string
           end_time: string
           id?: string
+          plano_mensalista_id?: string | null
           price?: number | null
           recurrence_id?: string | null
           sport_id?: string | null
@@ -716,10 +720,12 @@ export type Database = {
           arena_id?: string
           athlete_id?: string | null
           athlete_name?: string | null
+          booking_type?: string | null
           court_id?: string
           created_at?: string
           end_time?: string
           id?: string
+          plano_mensalista_id?: string | null
           price?: number | null
           recurrence_id?: string | null
           sport_id?: string | null
@@ -1238,6 +1244,86 @@ export type Database = {
             columns: ["id_atleta"]
             isOneToOne: false
             referencedRelation: "atleta"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      planos_mensalista: {
+        Row: {
+          arena_id: string
+          athlete_id: string
+          athlete_name: string
+          court_id: string
+          created_at: string
+          data_inicio: string
+          dia_semana: number
+          horario_fim: string
+          horario_inicio: string
+          id: string
+          sessoes_por_mes: number
+          sport_id: string | null
+          status: string
+          valor_mensal: number
+        }
+        Insert: {
+          arena_id: string
+          athlete_id: string
+          athlete_name: string
+          court_id: string
+          created_at?: string
+          data_inicio: string
+          dia_semana: number
+          horario_fim: string
+          horario_inicio: string
+          id?: string
+          sessoes_por_mes?: number
+          sport_id?: string | null
+          status?: string
+          valor_mensal: number
+        }
+        Update: {
+          arena_id?: string
+          athlete_id?: string
+          athlete_name?: string
+          court_id?: string
+          created_at?: string
+          data_inicio?: string
+          dia_semana?: number
+          horario_fim?: string
+          horario_inicio?: string
+          id?: string
+          sessoes_por_mes?: number
+          sport_id?: string | null
+          status?: string
+          valor_mensal?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planos_mensalista_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planos_mensalista_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "atleta"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planos_mensalista_court_id_fkey"
+            columns: ["court_id"]
+            isOneToOne: false
+            referencedRelation: "courts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planos_mensalista_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
             referencedColumns: ["id"]
           },
         ]

@@ -12,6 +12,7 @@ type DashboardSection =
   | 'athletes'
   | 'users'
   | 'subscription'
+  | 'reports'
 
 type AccessibleArenaTarget = {
   arenaId: string
@@ -110,6 +111,8 @@ export async function resolveDashboardDefaultRoute(section: DashboardSection): P
       return `/dashboard/athletes/${primaryArena.arenaId}`
     case 'users':
       return `/dashboard/settings/users/${primaryArena.arenaId}`
+    case 'reports':
+      return `/dashboard/reports/${primaryArena.arenaId}/status-pagamentos`
     default:
       return '/dashboard'
   }

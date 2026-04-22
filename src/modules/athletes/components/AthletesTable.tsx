@@ -1,7 +1,8 @@
 "use client"
 
-import { Loader2, ChevronLeft, ChevronRight } from "lucide-react"
+import { Loader2, ChevronLeft, ChevronRight, Eye } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useRouter } from "next/navigation"
 import {
     Table,
     TableBody,
@@ -23,9 +24,11 @@ export interface Athlete {
 interface Props {
     athletes: Athlete[]
     isLoading: boolean
+    arenaId: string | null
 }
 
-export function AthletesTable({ athletes, isLoading }: Props) {
+export function AthletesTable({ athletes, isLoading, arenaId }: Props) {
+    const router = useRouter()
     return (
         <div className="rounded-md border border-gray-100 overflow-hidden">
             <Table>
@@ -36,6 +39,7 @@ export function AthletesTable({ athletes, isLoading }: Props) {
                         <TableHead className="text-[#002B40] font-semibold">E-mail</TableHead>
                         <TableHead className="text-[#002B40] font-semibold">Telefone</TableHead>
                         <TableHead className="text-[#002B40] font-semibold">Esporte</TableHead>
+                        <TableHead className="text-[#002B40] font-semibold w-14 text-center">Ações</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -50,7 +54,7 @@ export function AthletesTable({ athletes, isLoading }: Props) {
                         </TableRow>
                     ) : athletes.length === 0 ? (
                         <TableRow>
-                            <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
+                            <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
                                 Nenhum atleta encontrado.
                             </TableCell>
                         </TableRow>
@@ -65,6 +69,17 @@ export function AthletesTable({ athletes, isLoading }: Props) {
                                     <span className="inline-flex items-center rounded-full bg-[#002B40]/5 px-2.5 py-0.5 text-xs font-medium text-[#002B40]">
                                         {athlete.sport}
                                     </span>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                    <button
+                                        onClick={() => {
+                                            if (arenaId) router.push(`/dashboard/athletes/${arenaId}/${athlete.id}`)
+                                        }}
+                                        title="Ver detalhes"
+                                        className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-[#002B40]/40 hover:text-[#FF6B00] hover:bg-[#FF6B00]/10 transition-all active:scale-95"
+                                    >
+                                        <Eye className="h-4 w-4" />
+                                    </button>
                                 </TableCell>
                             </TableRow>
                         ))

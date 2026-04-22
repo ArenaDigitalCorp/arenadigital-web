@@ -216,6 +216,8 @@ export function NewSendModal({ arenaId, isOpen, onClose, onSuccess }: NewSendMod
                                 </SelectTrigger>
                                 <SelectContent className="rounded-xl border-[#002B40]/10">
                                     <SelectItem value="indeterminate" className="rounded-lg">Indeterminado</SelectItem>
+                                    <SelectItem value="1_mes" className="rounded-lg">1 mês</SelectItem>
+                                    <SelectItem value="2_meses" className="rounded-lg">2 meses</SelectItem>
                                     <SelectItem value="3_meses" className="rounded-lg">3 meses</SelectItem>
                                     <SelectItem value="6_meses" className="rounded-lg">6 meses</SelectItem>
                                     <SelectItem value="1_ano" className="rounded-lg">1 ano</SelectItem>

@@ -58,7 +58,11 @@ export function AthletesList({ arenaId }: AthletesListProps) {
                         />
                     </div>
 
-                    <AthletesTable athletes={athletes} isLoading={isLoading} />
+                    <AthletesTable
+                        athletes={athletes}
+                        isLoading={isLoading}
+                        arenaId={arenaId}
+                    />
                 </div>
             </CardContent>
         </Card>

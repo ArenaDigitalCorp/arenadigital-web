@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { PlusCircle, Eye, MoreVertical, Edit, Trash2, Search, CalendarDays } from "lucide-react"
+import { PlusCircle, Eye, MoreVertical, Edit, Trash2, Search, CalendarDays, Clock } from "lucide-react"
 import Link from "next/link"
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -20,6 +20,7 @@ import {
 import Image from "next/image"
 import { cn } from "@/lib/utils"
 import { DayOperationModal } from "@/modules/bookings/components/DayOperationModal"
+import { AvailableTimesModal } from "@/modules/bookings/components/AvailableTimesModal"
 import { deleteCourtAction } from "@/modules/courts/actions/courtActions"
 import type { Booking } from "@/modules/bookings/types/booking.types"
 
@@ -42,6 +43,7 @@ export function ArenaDetailPageClient({ arenaId, arenaName, initialCourts, initi
     const [activeTab, setActiveTab] = useState<"espacos" | "cadastro">("espacos")
     const [searchQuery, setSearchQuery] = useState("")
     const [isDayOperationOpen, setIsDayOperationOpen] = useState(false)
+    const [isAvailableTimesOpen, setIsAvailableTimesOpen] = useState(false)
 
     const handleDeleteCourt = async (courtId: string) => {
         if (!confirm("Deseja realmente excluir esta quadra?")) return
@@ -60,7 +62,7 @@ export function ArenaDetailPageClient({ arenaId, arenaName, initialCourts, initi
             const isAvailable = court.available_days?.includes(dayName)
             if (!isAvailable) return { status: 'closed', message: 'Fechado hoje' }
             const totalSlots = 15
-            const courtBookings = bookings.filter(b => b.court_id === court.id && b.status === 'confirmed').length
+            const courtBookings = bookings.filter(b => b.court_id === court.id && (b.status === 'confirmed' || b.status === 'reservado')).length
             return { status: 'open', booked: courtBookings, total: totalSlots }
         }
 
@@ -72,7 +74,7 @@ export function ArenaDetailPageClient({ arenaId, arenaName, initialCourts, initi
         let totalSlots = endHour - startHour
         if (totalSlots < 0) totalSlots += 24
 
-        const courtBookings = bookings.filter(b => b.court_id === court.id && b.status === 'confirmed').length
+        const courtBookings = bookings.filter(b => b.court_id === court.id && (b.status === 'confirmed' || b.status === 'reservado')).length
         return { status: 'open', booked: courtBookings, total: totalSlots }
     }
 
@@ -104,7 +106,14 @@ export function ArenaDetailPageClient({ arenaId, arenaName, initialCourts, initi
                 {activeTab === "espacos" && (
                     <div className="space-y-6">
                         {courts.length > 0 && (
-                            <div className="flex justify-end">
+                            <div className="flex justify-end gap-3">
+                                <Button
+                                    onClick={() => setIsAvailableTimesOpen(true)}
+                                    className="bg-[#002B40]/10 hover:bg-[#002B40]/20 text-[#002B40] font-bold gap-2"
+                                >
+                                    <Clock className="w-4 h-4" />
+                                    Horários disponíveis
+                                </Button>
                                 <Button
                                     onClick={() => setIsDayOperationOpen(true)}
                                     className="bg-[#002B40] hover:bg-[#001D2C] text-white font-bold gap-2"
@@ -365,6 +374,13 @@ export function ArenaDetailPageClient({ arenaId, arenaName, initialCourts, initi
                     arenaId={arenaId}
                     arenaName={arenaName}
                     courts={courts}
+                />
+
+                <AvailableTimesModal
+                    isOpen={isAvailableTimesOpen}
+                    onClose={() => setIsAvailableTimesOpen(false)}
+                    arenaId={arenaId}
+                    currentDate={new Date()}
                 />
             </div>
         </TooltipProvider>

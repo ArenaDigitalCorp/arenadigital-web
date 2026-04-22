@@ -14,7 +14,7 @@ export class SupabaseBookingRepository implements IBookingRepository {
       .eq('arena_id', arenaId);
 
     if (startDate) query = query.gte('start_time', startDate);
-    if (endDate) query = query.lte('end_time', endDate);
+    if (endDate) query = query.lte('start_time', endDate);
 
     const { data, error } = await query.order('start_time', { ascending: true });
     if (error) throw new Error(`SupabaseBookingRepository.findByArena: ${error.message}`);

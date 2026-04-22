@@ -64,6 +64,7 @@ export async function updateBookingStatusAction(
         await assertBookingAccess(bookingId, arenaId)
         const repo = new SupabaseBookingRepository(getSupabaseAdmin())
         await repo.updateStatus(bookingId, status)
+        revalidatePath(`/dashboard/arenas/${arenaId}`)
         revalidatePath(`/dashboard/arenas/${arenaId}/courts`)
         return { success: true }
     } catch (err) {
@@ -84,6 +85,7 @@ export async function createBookingAction(
         await assertCourtAccess(input.court_id, arenaId)
         const repo = new SupabaseBookingRepository(getSupabaseAdmin())
         const data = await repo.create(input)
+        revalidatePath(`/dashboard/arenas/${arenaId}`)
         revalidatePath(`/dashboard/arenas/${arenaId}/courts`)
         return { success: true, data }
     } catch (err) {
@@ -106,6 +108,7 @@ export async function createRecurringBookingsAction(
         }
         const repo = new SupabaseBookingRepository(getSupabaseAdmin())
         const data = await repo.createMany(inputs)
+        revalidatePath(`/dashboard/arenas/${arenaId}`)
         revalidatePath(`/dashboard/arenas/${arenaId}/courts`)
         return { success: true, data }
     } catch (err) {

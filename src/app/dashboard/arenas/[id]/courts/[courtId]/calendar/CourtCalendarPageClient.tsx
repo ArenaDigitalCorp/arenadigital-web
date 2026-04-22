@@ -4,14 +4,13 @@ import { useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { format, addDays, subDays, startOfWeek, endOfWeek, addWeeks, subWeeks, isSameDay, parseISO, startOfDay, getHours } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { ArrowLeft, ChevronLeft, ChevronRight, Clock, Check } from "lucide-react"
+import { ArrowLeft, ChevronLeft, ChevronRight, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { BookingModal } from "@/modules/bookings/components/BookingModal"
 import { BookingDetailsModal } from "@/modules/bookings/components/BookingDetailsModal"
-import { AvailableTimesModal } from "@/modules/bookings/components/AvailableTimesModal"
 import { DayOpportunitiesModal } from "@/modules/bookings/components/DayOpportunitiesModal"
 import { getBookingsByCourtAction } from "@/modules/bookings/actions/bookingActions"
 import type { Json } from '@/types/supabase.types'
@@ -31,6 +30,8 @@ interface Booking {
     start_time: string
     end_time: string
     status: string | null
+    booking_type?: string | null
+    plano_mensalista_id?: string | null
     price?: number | null
     sports?: { id: string; name: string }
     atleta?: { id: string; nome_perfil: string; telefone: string } | null
@@ -65,23 +66,33 @@ function TimeSlot({ date, hour, booking, available, court, className, onClick }:
         const endH = getHours(parseISO(booking.end_time))
         const isStart = hour === startH
         const isEnd = hour === endH - 1
+        const isReservado = booking.status === 'reservado'
         const sportStyles = getSportStyles(booking.sports?.name || court.sports?.[0]?.name || '')
+        const reservadoStyles = {
+            bg: 'bg-amber-50',
+            border: 'border-amber-400 border-dashed',
+            text: 'text-amber-800',
+            textSecondary: 'text-amber-600',
+        }
+        const styles = isReservado ? reservadoStyles : sportStyles
         return (
             <div className={cn("px-1 h-full", isEnd && "border-b border-[#002B40]/5", className)} onClick={onClick}>
                 <div className={cn(
                     "w-full h-full flex flex-col items-center justify-center gap-0.5 cursor-pointer hover:brightness-95 transition-all border-l-4",
-                    sportStyles.bg, sportStyles.border,
+                    styles.bg, styles.border,
                     isStart ? "rounded-t pt-2 border-t" : "border-t-transparent",
                     isEnd ? "rounded-b pb-2 border-b" : "border-b-transparent",
                     !isStart && !isEnd && "border-y-transparent"
                 )}>
                     {isStart && (
                         <>
-                            <span className={cn("text-[9px] font-black uppercase tracking-wider leading-none", sportStyles.textSecondary)}>Reservado</span>
-                            <span className={cn("text-[11px] font-bold text-center line-clamp-1 px-1", sportStyles.text)}>
-                                {booking.athlete_name} {booking.price !== undefined && `| R$ ${booking.price}`}
+                            <span className={cn("text-[9px] font-black uppercase tracking-wider leading-none", styles.textSecondary)}>
+                                {isReservado ? 'Ag. Confirmação' : 'Confirmado'}
                             </span>
-                            <span className={cn("text-[9px] font-bold leading-none", sportStyles.textSecondary)}>{booking.sports?.name || court.sports?.[0]?.name || 'Esporte'}</span>
+                            <span className={cn("text-[11px] font-bold text-center line-clamp-1 px-1", styles.text)}>
+                                {booking.athlete_name} {!isReservado && booking.price !== undefined && `| R$ ${booking.price}`}
+                            </span>
+                            <span className={cn("text-[9px] font-bold leading-none", styles.textSecondary)}>{booking.sports?.name || court.sports?.[0]?.name || 'Esporte'}</span>
                         </>
                     )}
                 </div>
@@ -104,7 +115,6 @@ export function CourtCalendarPageClient({ arenaId, courtId, initialCourt, initia
     const [currentDate, setCurrentDate] = useState(new Date(initialDate))
     const [viewMode, setViewMode] = useState<'day' | 'week'>('day')
     const [isBookingModalOpen, setIsBookingModalOpen] = useState(false)
-    const [isAvailableTimesModalOpen, setIsAvailableTimesModalOpen] = useState(false)
     const [selectedSlotDate, setSelectedSlotDate] = useState<Date>(new Date(initialDate))
     const [selectedSlotHour, setSelectedSlotHour] = useState(0)
     const [customPrice, setCustomPrice] = useState(0)
@@ -271,11 +281,6 @@ export function CourtCalendarPageClient({ arenaId, courtId, initialCourt, initia
                     <div className="h-6 w-px bg-[#002B40]/10 mx-2" />
 
                     <div className="flex flex-wrap items-center gap-2 md:gap-3">
-                        <Button onClick={() => setIsAvailableTimesModalOpen(true)} className="bg-[#002B40] hover:bg-[#001D2C] text-white font-bold gap-2 text-xs md:text-sm h-9 md:h-10">
-                            <Clock className="w-4 h-4" />
-                            <span className="hidden sm:inline">Horários disponíveis</span>
-                            <span className="sm:hidden">Horários</span>
-                        </Button>
                         <Button onClick={() => setIsDayOpportunitiesModalOpen(true)} className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold gap-2 text-xs md:text-sm h-9 md:h-10">
                             <Check className="w-4 h-4" />
                             <span className="hidden sm:inline">Oportunidades</span>
@@ -347,19 +352,13 @@ export function CourtCalendarPageClient({ arenaId, courtId, initialCourt, initia
                 defaultPrice={customPrice || court.price || 0}
             />
 
-            <AvailableTimesModal
-                isOpen={isAvailableTimesModalOpen}
-                onClose={() => setIsAvailableTimesModalOpen(false)}
-                arenaId={arenaId}
-                currentDate={currentDate}
-            />
-
             <DayOpportunitiesModal
                 isOpen={isDayOpportunitiesModalOpen}
                 onClose={() => setIsDayOpportunitiesModalOpen(false)}
                 bookings={bookings.filter(b => isSameDay(parseISO(b.start_time), currentDate))}
                 currentDate={currentDate}
             />
+
         </div>
     )
 }
