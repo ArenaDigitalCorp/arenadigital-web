@@ -355,8 +355,10 @@ export function CourtCalendarPageClient({ arenaId, courtId, initialCourt, initia
             <DayOpportunitiesModal
                 isOpen={isDayOpportunitiesModalOpen}
                 onClose={() => setIsDayOpportunitiesModalOpen(false)}
-                bookings={bookings.filter(b => isSameDay(parseISO(b.start_time), currentDate))}
+                arenaId={arenaId}
+                courtId={courtId}
                 currentDate={currentDate}
+                todayBookings={bookings.filter(b => isSameDay(parseISO(b.start_time), currentDate))}
             />
 
         </div>

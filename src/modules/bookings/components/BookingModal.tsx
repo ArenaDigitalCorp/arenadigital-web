@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Search, Save, X, Loader2, Check, Calendar as CalendarIcon, Clock, Users } from "lucide-react"
+import { Search, Save, X, Loader2, Check, Calendar as CalendarIcon, Clock, Users, UserPlus } from "lucide-react"
 import {
     Dialog,
     DialogContent,
@@ -24,6 +24,7 @@ import { searchAthletesAction } from "@/modules/loyalty/actions/loyaltyActions"
 import { getArenaByIdAction } from "@/modules/arenas/actions/arenaActions"
 import { createBookingAction, createRecurringBookingsAction } from "@/modules/bookings/actions/bookingActions"
 import { createPlanoMensalistaAction } from "@/modules/bookings/actions/mensalistaActions"
+import { AthleteRegistrationModal } from "@/modules/athletes/components/AthleteRegistrationModal"
 import { toast } from "sonner"
 import { format, addWeeks } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -50,6 +51,107 @@ interface Sport {
     name: string;
 }
 
+interface AthleteSearchFieldProps {
+    search: string
+    athletes: Athlete[]
+    selectedAthlete: Athlete | null
+    isSearching: boolean
+    mensalista?: boolean
+    onSearch: (value: string) => void
+    onSelectAthlete: (athlete: Athlete) => void
+    onClearAthlete: () => void
+    onRegisterNew: () => void
+}
+
+function AthleteSearchField({
+    search,
+    athletes,
+    selectedAthlete,
+    isSearching,
+    mensalista = false,
+    onSearch,
+    onSelectAthlete,
+    onClearAthlete,
+    onRegisterNew,
+}: AthleteSearchFieldProps) {
+    const showDropdown = search.length >= 2 && !selectedAthlete
+    return (
+        <div className="space-y-2 relative">
+            <Label className="text-xs font-bold uppercase text-[#002B40]/40 tracking-wider">
+                {mensalista ? "Atleta" : "Nome do responsável"}
+            </Label>
+            {!selectedAthlete ? (
+                <div className="relative">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#002B40]/20" />
+                    <Input
+                        placeholder={mensalista ? "Buscar atleta vinculado à arena" : "Selecione um atleta vinculado ou insira um novo"}
+                        value={search}
+                        onChange={(e) => onSearch(e.target.value)}
+                        className="pl-12 h-14 border-[#002B40]/10 focus:ring-[#FF6B00] focus:border-[#FF6B00] rounded-xl font-bold text-[#002B40]"
+                    />
+                    {isSearching && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-[#FF6B00]" />}
+                    {showDropdown && (athletes.length > 0 || !isSearching) && (
+                        <div className="absolute z-50 w-full mt-2 bg-white border border-[#002B40]/10 rounded-2xl shadow-2xl max-h-48 overflow-auto p-2">
+                            {athletes.map((athlete) => (
+                                <button
+                                    key={athlete.id}
+                                    type="button"
+                                    onClick={() => onSelectAthlete(athlete)}
+                                    className={cn(
+                                        "w-full text-left px-4 py-3 transition-colors flex items-center justify-between rounded-xl mb-1 last:mb-0",
+                                        mensalista ? "hover:bg-amber-50" : "hover:bg-[#FFF5EF]"
+                                    )}
+                                >
+                                    <div>
+                                        <p className="font-bold text-[#002B40] text-sm">{athlete.nome_perfil}</p>
+                                        <p className="text-[10px] uppercase font-black text-[#002B40]/40 tracking-tight">{athlete.telefone}</p>
+                                    </div>
+                                </button>
+                            ))}
+                            {athletes.length === 0 && !isSearching && (
+                                <button
+                                    type="button"
+                                    onClick={onRegisterNew}
+                                    className="w-full text-left px-4 py-3 transition-colors flex items-center gap-3 rounded-xl hover:bg-[#FFF5EF]"
+                                >
+                                    <div className="h-8 w-8 rounded-full bg-[#FF6B00]/10 flex items-center justify-center flex-shrink-0">
+                                        <UserPlus className="h-4 w-4 text-[#FF6B00]" />
+                                    </div>
+                                    <div>
+                                        <p className="font-bold text-[#FF6B00] text-sm">Cadastrar &ldquo;{search}&rdquo;</p>
+                                        <p className="text-[10px] text-[#002B40]/40">Nenhum atleta encontrado · Criar novo</p>
+                                    </div>
+                                </button>
+                            )}
+                        </div>
+                    )}
+                </div>
+            ) : (
+                <div className={cn(
+                    "flex items-center justify-between p-4 rounded-xl border",
+                    mensalista ? "bg-amber-50 border-amber-200" : "bg-[#FFF5EF] border-[#FFE4D3]"
+                )}>
+                    <div className="flex items-center gap-3">
+                        <div className={cn(
+                            "h-9 w-9 rounded-full flex items-center justify-center",
+                            mensalista ? "bg-amber-100" : "bg-[#FF6B00]/10"
+                        )}>
+                            <Check className={cn("h-4 w-4", mensalista ? "text-amber-600" : "text-[#FF6B00]")} />
+                        </div>
+                        <div>
+                            <p className="font-bold text-[#002B40] text-sm">{selectedAthlete.nome_perfil}</p>
+                            <p className="text-[10px] uppercase font-black text-[#002B40]/40 tracking-tight">{selectedAthlete.telefone}</p>
+                        </div>
+                    </div>
+                    <Button variant="ghost" size="icon" onClick={onClearAthlete} className="h-8 w-8 hover:bg-red-50 text-red-500 rounded-lg">
+                        <X className="h-4 w-4" />
+                    </Button>
+                </div>
+            )}
+        </div>
+    )
+}
+
 interface BookingModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -73,13 +175,14 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
     const [selectedSport, setSelectedSport] = useState<string>("")
     const [isLoadingSports, setIsLoadingSports] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
+    const [isAthleteModalOpen, setIsAthleteModalOpen] = useState(false)
 
     // Avulso
     const [startTime, setStartTime] = useState("")
     const [endTime, setEndTime] = useState("")
     const [price, setPrice] = useState(defaultPrice.toString())
     const [isRecurring, setIsRecurring] = useState(false)
-    const [recurrenceWeeks, setRecurrenceWeeks] = useState(12)
+    const [recurrenceWeeks, setRecurrenceWeeks] = useState(2)
 
     // Mensal
     const [diaSemana, setDiaSemana] = useState<string>(String(selectedDate.getDay()))
@@ -248,7 +351,7 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
         setSelectedAthlete(null)
         setSelectedSport("")
         setIsRecurring(false)
-        setRecurrenceWeeks(12)
+        setRecurrenceWeeks(2)
         setDiaSemana("1")
         setHorarioInicio("19:00")
         setHorarioFim("20:00")
@@ -262,71 +365,46 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
             ? (Number(valorMensal) / Number(sessoesPorMes)).toFixed(2)
             : null
 
-    const AthleteSearch = ({ mensalista = false }: { mensalista?: boolean }) => (
-        <div className="space-y-2 relative">
-            <Label className="text-xs font-bold uppercase text-[#002B40]/40 tracking-wider">
-                {mensalista ? "Atleta" : "Nome do responsável"}
-            </Label>
-            {!selectedAthlete ? (
-                <div className="relative">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#002B40]/20" />
-                    <Input
-                        placeholder={mensalista ? "Buscar atleta vinculado à arena" : "Selecione um atleta vinculado ou insira um novo"}
-                        value={search}
-                        onChange={(e) => handleSearch(e.target.value)}
-                        className="pl-12 h-14 border-[#002B40]/10 focus:ring-[#FF6B00] focus:border-[#FF6B00] rounded-xl font-bold text-[#002B40]"
-                    />
-                    {isSearching && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-[#FF6B00]" />}
-                    {athletes.length > 0 && (
-                        <div className="absolute z-50 w-full mt-2 bg-white border border-[#002B40]/10 rounded-2xl shadow-2xl max-h-48 overflow-auto p-2">
-                            {athletes.map((athlete) => (
-                                <button
-                                    key={athlete.id}
-                                    onClick={() => {
-                                        setSelectedAthlete(athlete)
-                                        setSearch(athlete.nome_perfil)
-                                        setAthletes([])
-                                    }}
-                                    className={cn(
-                                        "w-full text-left px-4 py-3 transition-colors flex items-center justify-between rounded-xl mb-1 last:mb-0",
-                                        mensalista ? "hover:bg-amber-50" : "hover:bg-[#FFF5EF]"
-                                    )}
-                                >
-                                    <div>
-                                        <p className="font-bold text-[#002B40] text-sm">{athlete.nome_perfil}</p>
-                                        <p className="text-[10px] uppercase font-black text-[#002B40]/40 tracking-tight">{athlete.telefone}</p>
-                                    </div>
-                                </button>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            ) : (
-                <div className={cn(
-                    "flex items-center justify-between p-4 rounded-xl border",
-                    mensalista ? "bg-amber-50 border-amber-200" : "bg-[#FFF5EF] border-[#FFE4D3]"
-                )}>
-                    <div className="flex items-center gap-3">
-                        <div className={cn(
-                            "h-9 w-9 rounded-full flex items-center justify-center",
-                            mensalista ? "bg-amber-100" : "bg-[#FF6B00]/10"
-                        )}>
-                            <Check className={cn("h-4 w-4", mensalista ? "text-amber-600" : "text-[#FF6B00]")} />
-                        </div>
-                        <div>
-                            <p className="font-bold text-[#002B40] text-sm">{selectedAthlete.nome_perfil}</p>
-                            <p className="text-[10px] uppercase font-black text-[#002B40]/40 tracking-tight">{selectedAthlete.telefone}</p>
-                        </div>
-                    </div>
-                    <Button variant="ghost" size="icon" onClick={() => setSelectedAthlete(null)} className="h-8 w-8 hover:bg-red-50 text-red-500 rounded-lg">
-                        <X className="h-4 w-4" />
-                    </Button>
-                </div>
-            )}
-        </div>
-    )
+    const handleAthleteRegistered = async () => {
+        setIsAthleteModalOpen(false)
+        try {
+            setIsSearching(true)
+            const result = await searchAthletesAction(arenaId)
+            if (result.success && result.data) {
+                const normalizedSearch = normalizeString(search)
+                const filtered = (result.data as Athlete[]).filter(
+                    (a) => a && normalizeString(a.nome_perfil).includes(normalizedSearch)
+                )
+                if (filtered.length === 1) {
+                    setSelectedAthlete(filtered[0])
+                    setSearch(filtered[0].nome_perfil)
+                    setAthletes([])
+                } else {
+                    setAthletes(filtered)
+                }
+            }
+        } finally {
+            setIsSearching(false)
+        }
+    }
+
+    const athleteSearchProps = {
+        search,
+        athletes,
+        selectedAthlete,
+        isSearching,
+        onSearch: handleSearch,
+        onSelectAthlete: (athlete: Athlete) => {
+            setSelectedAthlete(athlete)
+            setSearch(athlete.nome_perfil)
+            setAthletes([])
+        },
+        onClearAthlete: () => setSelectedAthlete(null),
+        onRegisterNew: () => setIsAthleteModalOpen(true),
+    }
 
     return (
+        <>
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
             <DialogContent className="sm:max-w-[480px] p-0 overflow-hidden border-none shadow-2xl rounded-3xl">
                 <DialogHeader className="p-8 pb-4">
@@ -371,6 +449,8 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                         {/* ── AVULSO ── */}
                         {bookingType === "avulso" && (
                             <>
+                                <AthleteSearchField {...athleteSearchProps} />
+
                                 {/* Data */}
                                 <div className="space-y-2">
                                     <Label className="text-xs font-bold uppercase text-[#002B40]/40 tracking-wider">Data</Label>
@@ -401,17 +481,6 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                                     </div>
                                 </div>
 
-                                <AthleteSearch />
-
-                                {/* Valor Pago */}
-                                <div className="space-y-2">
-                                    <Label className="text-xs font-bold uppercase text-[#002B40]/40 tracking-wider">Valor pago</Label>
-                                    <div className="relative">
-                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#002B40]/40 font-bold">R$</span>
-                                        <Input value={price} onChange={(e) => setPrice(e.target.value)} className="pl-12 h-14 border-[#002B40]/10 focus:ring-[#FF6B00] focus:border-[#FF6B00] rounded-xl font-bold text-[#002B40]" />
-                                    </div>
-                                </div>
-
                                 {/* Esporte */}
                                 <div className="space-y-2">
                                     <Label className="text-xs font-bold uppercase text-[#002B40]/40 tracking-wider">Esporte</Label>
@@ -428,6 +497,15 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                                             )}
                                         </SelectContent>
                                     </Select>
+                                </div>
+
+                                {/* Valor Pago */}
+                                <div className="space-y-2">
+                                    <Label className="text-xs font-bold uppercase text-[#002B40]/40 tracking-wider">Valor pago</Label>
+                                    <div className="relative">
+                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#002B40]/40 font-bold">R$</span>
+                                        <Input value={price} onChange={(e) => setPrice(e.target.value)} className="pl-12 h-14 border-[#002B40]/10 focus:ring-[#FF6B00] focus:border-[#FF6B00] rounded-xl font-bold text-[#002B40]" />
+                                    </div>
                                 </div>
 
                                 {/* Recorrência */}
@@ -471,7 +549,7 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                         {/* ── MENSAL ── */}
                         {bookingType === "mensal" && (
                             <>
-                                <AthleteSearch mensalista />
+                                <AthleteSearchField {...athleteSearchProps} mensalista />
 
                                 {/* Dia da semana */}
                                 <div className="space-y-2">
@@ -583,5 +661,13 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+
+        <AthleteRegistrationModal
+            arenaId={arenaId}
+            open={isAthleteModalOpen}
+            onOpenChange={setIsAthleteModalOpen}
+            onSuccess={handleAthleteRegistered}
+        />
+        </>
     )
 }
