@@ -16,6 +16,13 @@ export async function linkAthlete(formData: {
     email: string;
     sportId: string;
     arenaId: string;
+    nivelHabilidadeId?: string;
+    birthDate?: string;
+    cep?: string;
+    endereco?: string;
+    enderecoNumero?: string;
+    bairro?: string;
+    idMunicipio?: number;
 }) {
     const parsed = linkAthleteSchema.safeParse(formData)
     if (!parsed.success) {
@@ -78,6 +85,12 @@ export async function linkAthlete(formData: {
             nome_perfil: formData.name,
             cpf: formData.cpf,
             telefone: formData.phone,
+            data_nascimento: formData.birthDate || null,
+            cep: formData.cep || null,
+            endereco: formData.endereco || null,
+            endereco_numero: formData.enderecoNumero || null,
+            bairro: formData.bairro || null,
+            id_municipio: formData.idMunicipio || null,
             origem_cadastro: 'arena',
             id_arena_cadastro: formData.arenaId,
             compartilha_info: true
@@ -94,7 +107,7 @@ export async function linkAthlete(formData: {
         await repo.addSport({
             id_atleta: atleta.id,
             id_esporte: formData.sportId,
-            id_nivel_habilidade_esporte: undefined
+            id_nivel_habilidade_esporte: formData.nivelHabilidadeId || undefined
         });
 
         return { success: true };
@@ -139,5 +152,55 @@ export async function getSportsAction() {
     } catch (err) {
         const message = err instanceof Error ? err.message : 'Erro ao buscar esportes'
         return { success: false, error: message, data: [] }
+    }
+}
+
+export async function getNiveisHabilidadeAction(sportId: string): Promise<{
+    success: boolean;
+    data: { id: string; nivel: string }[];
+    error?: string;
+}> {
+    try {
+        const supabase = getSupabaseAdmin()
+        const { data, error } = await supabase
+            .from('nivel_habilidade_esporte')
+            .select('id, nivel')
+            .eq('id_esporte', sportId)
+            .order('nivel')
+        if (error) throw error
+        return { success: true, data: data ?? [] }
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Erro ao buscar níveis'
+        return { success: false, data: [], error: message }
+    }
+}
+
+export async function searchMunicipiosAction(query: string): Promise<{
+    success: boolean;
+    data: { codigo_ibge: number; nome: string; uf: string }[];
+    error?: string;
+}> {
+    if (query.length < 2) return { success: true, data: [] }
+    try {
+        const supabase = getSupabaseAdmin()
+        const { data, error } = await supabase
+            .from('municipios')
+            .select('codigo_ibge, nome, estados:codigo_uf(uf)')
+            .ilike('nome', `${query}%`)
+            .limit(10)
+            .order('nome')
+
+        if (error) throw error
+
+        const result = (data ?? []).map((m: any) => ({
+            codigo_ibge: m.codigo_ibge,
+            nome: m.nome,
+            uf: m.estados?.uf ?? '',
+        }))
+
+        return { success: true, data: result }
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Erro ao buscar municípios'
+        return { success: false, data: [], error: message }
     }
 }

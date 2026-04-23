@@ -323,11 +323,16 @@ export type Database = {
       }
       atleta: {
         Row: {
+          bairro: string | null
+          cep: string | null
           compartilha_info: boolean | null
+          complemento: string | null
           cpf: string | null
           created_at: string
           data_nascimento: string | null
           descricao_perfil: string | null
+          endereco: string | null
+          endereco_numero: string | null
           facebook: string | null
           foto_url: string | null
           id: string
@@ -342,11 +347,16 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          bairro?: string | null
+          cep?: string | null
           compartilha_info?: boolean | null
+          complemento?: string | null
           cpf?: string | null
           created_at?: string
           data_nascimento?: string | null
           descricao_perfil?: string | null
+          endereco?: string | null
+          endereco_numero?: string | null
           facebook?: string | null
           foto_url?: string | null
           id?: string
@@ -361,11 +371,16 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          bairro?: string | null
+          cep?: string | null
           compartilha_info?: boolean | null
+          complemento?: string | null
           cpf?: string | null
           created_at?: string
           data_nascimento?: string | null
           descricao_perfil?: string | null
+          endereco?: string | null
+          endereco_numero?: string | null
           facebook?: string | null
           foto_url?: string | null
           id?: string
