@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback } from "react";
-import { Users, Search, Plus, MoreVertical, Edit, Trash2 } from "lucide-react";
+import { Users, Search, Plus, MoreVertical, Edit, Trash2, Crown, UserCog, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -201,6 +201,54 @@ export function UsersPageClient({ arenaId, arenaName, initialUsers, stations }: 
                     </div>
                 </CardContent>
             </Card>
+
+            <div className="space-y-4">
+                <div>
+                    <h3 className="text-base font-semibold">Conheça os perfis</h3>
+                    <p className="text-sm text-muted-foreground">Entenda as permissões de cada tipo de usuário</p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <Card className="border-border">
+                        <CardContent className="p-5 flex flex-col gap-3">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 rounded-lg bg-[#FF6B00]/10">
+                                    <Crown className="h-5 w-5 text-[#FF6B00]" />
+                                </div>
+                                <span className="font-semibold text-sm">Administrador</span>
+                            </div>
+                            <p className="text-sm text-muted-foreground leading-relaxed">
+                                Perfil que possui acesso a todas as ferramentas da plataforma.
+                            </p>
+                        </CardContent>
+                    </Card>
+                    <Card className="border-border">
+                        <CardContent className="p-5 flex flex-col gap-3">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 rounded-lg bg-blue-500/10">
+                                    <UserCog className="h-5 w-5 text-blue-500" />
+                                </div>
+                                <span className="font-semibold text-sm">Usuário Comum</span>
+                            </div>
+                            <p className="text-sm text-muted-foreground leading-relaxed">
+                                Possui acesso a todas as ferramentas da plataforma, porém não pode cadastrar novos usuários.
+                            </p>
+                        </CardContent>
+                    </Card>
+                    <Card className="border-border">
+                        <CardContent className="p-5 flex flex-col gap-3">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 rounded-lg bg-emerald-500/10">
+                                    <Store className="h-5 w-5 text-emerald-500" />
+                                </div>
+                                <span className="font-semibold text-sm">Caixa</span>
+                            </div>
+                            <p className="text-sm text-muted-foreground leading-relaxed">
+                                Usuário que irá ter acesso somente à área de estações cadastradas.
+                            </p>
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
 
             <UserFormModal
                 isOpen={isModalOpen}
