@@ -21,6 +21,7 @@ export interface DayConfig {
     endTime: string
     price: number
     customPrices: CustomPrice[]
+    slotShiftTime?: string | null
 }
 
 interface DayScheduleConfigProps {
@@ -129,6 +130,28 @@ export function DayScheduleConfig({ day, config, onChange, onReplicate }: DaySch
                                 />
                             </div>
                         </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 pt-1">
+                        <Checkbox
+                            id={`shift-${day}`}
+                            checked={!!config.slotShiftTime}
+                            onCheckedChange={(checked) =>
+                                handleChange("slotShiftTime", checked ? "17:00" : null)
+                            }
+                            className="data-[state=checked]:bg-[#FF6B00] data-[state=checked]:border-[#FF6B00]"
+                        />
+                        <Label htmlFor={`shift-${day}`} className="text-xs text-muted-foreground cursor-pointer select-none">
+                            Virada de horário — slots passam a ser :30 a partir de
+                        </Label>
+                        {config.slotShiftTime && (
+                            <Input
+                                type="time"
+                                value={config.slotShiftTime}
+                                onChange={(e) => handleChange("slotShiftTime", e.target.value)}
+                                className="h-8 w-24 text-xs"
+                            />
+                        )}
                     </div>
 
                     <div className="pt-2">

@@ -1,10 +1,13 @@
 "use client"
 
-import { useEffect, useState, useMemo, useCallback } from "react";
-import { format, parseISO, getHours, addDays, subDays, isToday } from "date-fns";
+import { useEffect, useState, useMemo } from "react";
+import { format, parseISO, getHours, getDay, addDays, subDays, addMonths, isToday } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { X, CalendarDays, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, CalendarDays, CalendarIcon, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { getBookingsByArenaWithSportsAction } from "@/modules/bookings/actions/bookingActions";
 
@@ -133,8 +136,10 @@ const getSportStyles = (sportName: string) => {
 
 export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts }: DayOperationModalProps) {
     const [bookings, setBookings] = useState<Booking[]>([]);
+    const [futureBookings, setFutureBookings] = useState<Booking[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [currentDate, setCurrentDate] = useState(new Date());
+    const [calendarOpen, setCalendarOpen] = useState(false);
 
     // Sort courts alphabetically
     const sortedCourts = useMemo(() => {
@@ -173,6 +178,36 @@ export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts 
         } finally {
             setIsLoading(false);
         }
+    };
+
+    // Carrega reservas futuras (próximos 60 dias) para indicador de eventos futuros
+    useEffect(() => {
+        if (!isOpen || !arenaId) return;
+        const loadFutureBookings = async () => {
+            const start = addDays(new Date(), 1);
+            const end = addMonths(new Date(), 2);
+            const res = await getBookingsByArenaWithSportsAction(
+                arenaId,
+                start.toISOString(),
+                end.toISOString()
+            );
+            if (res.data) {
+                setFutureBookings((res.data as unknown as Booking[]).filter(b => b.status !== 'cancelled'));
+            }
+        };
+        loadFutureBookings();
+    }, [isOpen, arenaId]);
+
+    // Próxima reserva futura no mesmo dia da semana + mesma hora + mesma quadra
+    const getFutureBookingForSlot = (courtId: string, hour: number): Booking | null => {
+        const targetDayOfWeek = getDay(currentDate);
+        return futureBookings.find(b => {
+            if (b.court_id !== courtId) return false;
+            const bStart = parseISO(b.start_time);
+            return getDay(bStart) === targetDayOfWeek
+                && getHours(bStart) === hour
+                && bStart > currentDate;
+        }) ?? null;
     };
 
     const handlePreviousDay = () => setCurrentDate(prev => subDays(prev, 1));
@@ -261,9 +296,59 @@ export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts 
                                 >
                                     <ChevronLeft className="w-4 h-4" />
                                 </button>
-                                <p className="text-white/60 text-sm font-medium capitalize">
-                                    {arenaName} — {format(currentDate, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
-                                </p>
+
+                                {/* Data clicável que abre o calendário */}
+                                <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                                    <PopoverTrigger asChild>
+                                        <button
+                                            className="flex items-center gap-1.5 text-white/80 hover:text-white text-sm font-medium capitalize px-2 py-1 rounded-md hover:bg-white/10 transition-colors group"
+                                        >
+                                            <CalendarIcon className="w-3.5 h-3.5 text-white/50 group-hover:text-white/80 transition-colors" />
+                                            {format(currentDate, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                                        </button>
+                                    </PopoverTrigger>
+                                    <PopoverContent
+                                        align="start"
+                                        sideOffset={8}
+                                        className="w-auto p-0 border-none shadow-2xl rounded-xl overflow-hidden z-[60]"
+                                    >
+                                        <div className="bg-[#1E293B] rounded-xl">
+                                            <Calendar
+                                                mode="single"
+                                                selected={currentDate}
+                                                onSelect={(date) => {
+                                                    if (date) {
+                                                        setCurrentDate(date);
+                                                        setCalendarOpen(false);
+                                                    }
+                                                }}
+                                                locale={ptBR}
+                                                initialFocus
+                                                classNames={{
+                                                    months: "flex flex-col",
+                                                    month: "space-y-3",
+                                                    month_caption: "flex justify-center items-center h-8 mb-2 px-2",
+                                                    caption_label: "text-sm font-bold text-white capitalize",
+                                                    nav: "flex items-center",
+                                                    button_previous: "h-7 w-7 bg-white/10 hover:bg-white/20 text-white rounded-md p-0 flex items-center justify-center absolute left-2 top-3 z-20 transition-colors",
+                                                    button_next: "h-7 w-7 bg-white/10 hover:bg-white/20 text-white rounded-md p-0 flex items-center justify-center absolute right-2 top-3 z-20 transition-colors",
+                                                    month_grid: "w-full border-collapse",
+                                                    weekdays: "flex mb-1",
+                                                    weekday: "text-white/40 rounded-md w-9 font-medium text-[0.7rem] flex items-center justify-center",
+                                                    week: "flex w-full mt-1 justify-between",
+                                                    day: "h-9 w-9 text-center text-sm p-0 relative",
+                                                    day_button: "h-9 w-9 p-0 font-medium w-full h-full flex items-center justify-center rounded-md text-white/80 hover:bg-white/15 hover:text-white transition-colors",
+                                                    selected: "bg-indigo-500 text-white hover:bg-indigo-400 rounded-md",
+                                                    today: "bg-white/10 text-white font-bold rounded-md",
+                                                    outside: "text-white/20 opacity-50",
+                                                    disabled: "text-white/20 opacity-30",
+                                                    hidden: "invisible",
+                                                }}
+                                            />
+                                        </div>
+                                    </PopoverContent>
+                                </Popover>
+
                                 <button
                                     onClick={handleNextDay}
                                     className="text-white/50 hover:text-white hover:bg-white/10 rounded p-0.5 transition-colors"
@@ -415,7 +500,47 @@ export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts 
                                                     }
 
                                                     return (
-                                                        <td key={court.id} className="bg-white border-r border-b border-[#002B40]/5 last:border-r-0">
+                                                        <td key={court.id} className="bg-white border-r border-b border-[#002B40]/5 last:border-r-0 relative group/slot">
+                                                            {(() => {
+                                                                const futureB = getFutureBookingForSlot(court.id, hour);
+                                                                if (!futureB) return null;
+                                                                const fStart = parseISO(futureB.start_time);
+                                                                const fEnd = parseISO(futureB.end_time);
+                                                                return (
+                                                                    <TooltipProvider delayDuration={200}>
+                                                                        <Tooltip>
+                                                                            <TooltipTrigger
+                                                                                asChild
+                                                                                onClick={(e) => e.stopPropagation()}
+                                                                            >
+                                                                                <div className="absolute top-1.5 right-1.5 z-10 cursor-default">
+                                                                                    <div
+                                                                                        className="h-2 w-2 rounded-full bg-indigo-300 animate-pulse"
+                                                                                        style={{ boxShadow: '0 0 0 3px rgba(129,140,248,0.15)' }}
+                                                                                    />
+                                                                                </div>
+                                                                            </TooltipTrigger>
+                                                                            <TooltipContent
+                                                                                side="right"
+                                                                                sideOffset={8}
+                                                                                className="bg-[#1E293B] border-none text-white rounded-xl px-3.5 py-2.5 shadow-xl max-w-[200px]"
+                                                                            >
+                                                                                <div className="space-y-1">
+                                                                                    <p className="text-[9px] font-black uppercase tracking-wider text-indigo-300">
+                                                                                        Próximo evento
+                                                                                    </p>
+                                                                                    <p className="text-[12px] font-bold leading-tight">
+                                                                                        {futureB.athlete_name ?? 'Atleta'}
+                                                                                    </p>
+                                                                                    <p className="text-[10px] text-white/70 font-medium">
+                                                                                        {format(fStart, "EEE, dd/MM", { locale: ptBR })} &middot; {format(fStart, "HH:mm")}&ndash;{format(fEnd, "HH:mm")}
+                                                                                    </p>
+                                                                                </div>
+                                                                            </TooltipContent>
+                                                                        </Tooltip>
+                                                                    </TooltipProvider>
+                                                                );
+                                                            })()}
                                                         </td>
                                                     );
                                                 })}

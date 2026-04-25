@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Search, Save, X, Loader2, Check, Calendar as CalendarIcon, Clock, Users, UserPlus } from "lucide-react"
+import { Search, Save, X, Loader2, Check, Calendar as CalendarIcon, Clock, Users, UserPlus, AlertTriangle } from "lucide-react"
 import {
     Dialog,
     DialogContent,
@@ -22,11 +22,12 @@ import {
 } from "@/components/ui/select"
 import { searchAthletesAction } from "@/modules/loyalty/actions/loyaltyActions"
 import { getArenaByIdAction } from "@/modules/arenas/actions/arenaActions"
-import { createBookingAction, createRecurringBookingsAction } from "@/modules/bookings/actions/bookingActions"
+import { createBookingAction, createRecurringBookingsAction, checkBookingConflictsAction } from "@/modules/bookings/actions/bookingActions"
+import type { BookingConflict } from "@/modules/bookings/actions/bookingActions"
 import { createPlanoMensalistaAction } from "@/modules/bookings/actions/mensalistaActions"
 import { AthleteRegistrationModal } from "@/modules/athletes/components/AthleteRegistrationModal"
 import { toast } from "sonner"
-import { format, addWeeks } from "date-fns"
+import { format, addWeeks, addDays, addMonths, startOfMonth, endOfMonth } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { cn, normalizeString } from "@/lib/utils"
 
@@ -176,6 +177,8 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
     const [isLoadingSports, setIsLoadingSports] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
     const [isAthleteModalOpen, setIsAthleteModalOpen] = useState(false)
+    const [conflicts, setConflicts] = useState<BookingConflict[]>([])
+    const [isCheckingConflicts, setIsCheckingConflicts] = useState(false)
 
     // Avulso
     const [startTime, setStartTime] = useState("")
@@ -206,6 +209,12 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
             loadArenaSports()
         }
     }, [isOpen, selectedHour, defaultPrice])
+
+    // Limpa conflitos quando qualquer campo relevante muda
+    useEffect(() => {
+        setConflicts([])
+    }, [startTime, endTime, horarioInicio, horarioFim, diaSemana, isRecurring, recurrenceWeeks, bookingType])
+
 
     async function loadArenaSports() {
         try {
@@ -358,6 +367,88 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
         setSessoesPorMes("4")
         setValorMensal("")
         setBookingType("avulso")
+        setConflicts([])
+    }
+
+    // ── Helpers para gerar slots a verificar ────────────────────────────────
+    function buildSlotsAvulso(): { startTime: string; endTime: string }[] {
+        const startDateTime = new Date(selectedDate)
+        const [sH, sM] = startTime.split(':').map(Number)
+        startDateTime.setHours(sH, sM, 0, 0)
+        const endDateTime = new Date(selectedDate)
+        const [eH, eM] = endTime.split(':').map(Number)
+        endDateTime.setHours(eH, eM, 0, 0)
+
+        if (!isRecurring) return [{ startTime: startDateTime.toISOString(), endTime: endDateTime.toISOString() }]
+
+        const slots = []
+        for (let i = 0; i < recurrenceWeeks; i++) {
+            slots.push({
+                startTime: addWeeks(startDateTime, i).toISOString(),
+                endTime: addWeeks(endDateTime, i).toISOString(),
+            })
+        }
+        return slots
+    }
+
+    function buildSlotsMensal(): { startTime: string; endTime: string }[] {
+        const slots: { startTime: string; endTime: string }[] = []
+        const now = new Date()
+        const [sH, sM] = horarioInicio.split(':').map(Number)
+        const [eH, eM] = horarioFim.split(':').map(Number)
+        const diaSemanaNum = Number(diaSemana)
+        const sessoes = Number(sessoesPorMes) || 4
+
+        for (let monthOffset = 0; monthOffset < 3; monthOffset++) {
+            const targetDate = addMonths(now, monthOffset)
+            const year = targetDate.getFullYear()
+            const month = targetDate.getMonth()
+
+            let current = startOfMonth(new Date(year, month, 1))
+            const end = endOfMonth(new Date(year, month, 1))
+            while (current.getDay() !== diaSemanaNum) current = addDays(current, 1)
+
+            let count = 0
+            while (current <= end && count < sessoes) {
+                const startDt = new Date(current)
+                startDt.setHours(sH, sM, 0, 0)
+                const endDt = new Date(current)
+                endDt.setHours(eH, eM, 0, 0)
+                if (startDt > now) {
+                    slots.push({ startTime: startDt.toISOString(), endTime: endDt.toISOString() })
+                }
+                current = addDays(current, 7)
+                count++
+            }
+        }
+        return slots
+    }
+
+    // ── Pre-save: verifica conflitos antes de salvar ─────────────────────────
+    async function handlePreSave() {
+        setConflicts([])
+        setIsCheckingConflicts(true)
+        try {
+            const slots = bookingType === 'avulso' ? buildSlotsAvulso() : buildSlotsMensal()
+            if (slots.length === 0) {
+                // Sem slots futuros (todos no passado), deixa o server action tratar
+                bookingType === 'avulso' ? await handleSaveAvulso() : await handleSaveMensal()
+                return
+            }
+            const result = await checkBookingConflictsAction(arenaId, courtId, slots)
+            if (!result.success) {
+                toast.error(result.error ?? 'Erro ao verificar conflitos')
+                return
+            }
+            if (result.conflicts.length > 0) {
+                setConflicts(result.conflicts)
+                return
+            }
+            // Sem conflitos — prossegue
+            bookingType === 'avulso' ? await handleSaveAvulso() : await handleSaveMensal()
+        } finally {
+            setIsCheckingConflicts(false)
+        }
     }
 
     const valorPorSessao =
@@ -628,6 +719,40 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                             </>
                         )}
 
+                        {/* ── ALERTA DE CONFLITOS ── */}
+                        {conflicts.length > 0 && (
+                            <div className="rounded-2xl border border-red-200 bg-red-50 p-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                                <div className="flex items-center gap-2">
+                                    <AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0" />
+                                    <p className="text-sm font-black text-red-700">
+                                        {conflicts.length === 1
+                                            ? 'Conflito de horário encontrado'
+                                            : `${conflicts.length} conflitos de horário encontrados`}
+                                    </p>
+                                </div>
+                                <p className="text-xs text-red-600 font-medium">
+                                    Os horários abaixo já estão ocupados. Altere o horário ou data antes de prosseguir.
+                                </p>
+                                <div className="space-y-2">
+                                    {conflicts.map((c, i) => (
+                                        <div key={i} className="bg-white border border-red-100 rounded-xl px-3 py-2.5 flex items-start gap-2">
+                                            <div className="h-5 w-5 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                                <span className="text-[9px] font-black text-red-500">{i + 1}</span>
+                                            </div>
+                                            <div>
+                                                <p className="text-[11px] font-black text-red-700 uppercase tracking-wider">
+                                                    {c.proposedDate}
+                                                </p>
+                                                <p className="text-xs text-red-600 font-medium">
+                                                    Ocupado por <span className="font-black">{c.athleteName}</span> ({c.startTime}–{c.endTime})
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                     </div>
                 </ScrollArea>
 
@@ -640,8 +765,8 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                         Fechar
                     </Button>
                     <Button
-                        onClick={bookingType === "avulso" ? handleSaveAvulso : handleSaveMensal}
-                        disabled={isSaving}
+                        onClick={handlePreSave}
+                        disabled={isSaving || isCheckingConflicts}
                         className={cn(
                             "flex-1 h-14 text-white font-black uppercase tracking-widest text-xs rounded-xl shadow-xl transition-all active:scale-95 gap-2",
                             bookingType === "avulso"
@@ -649,14 +774,14 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                                 : "bg-amber-500 hover:bg-amber-600 shadow-amber-500/20"
                         )}
                     >
-                        {isSaving ? (
+                        {(isSaving || isCheckingConflicts) ? (
                             <Loader2 className="h-5 w-5 animate-spin" />
                         ) : bookingType === "avulso" ? (
                             <Check className="h-5 w-5" />
                         ) : (
                             <Save className="h-5 w-5" />
                         )}
-                        {bookingType === "avulso" ? "Salvar" : "Criar Plano"}
+                        {isCheckingConflicts ? 'Verificando...' : bookingType === "avulso" ? "Salvar" : "Criar Plano"}
                     </Button>
                 </DialogFooter>
             </DialogContent>

@@ -48,7 +48,34 @@ export class SupabaseBookingRepository implements IBookingRepository {
     return (data ?? []) as unknown as Booking[];
   }
 
+  /**
+   * Verifica se já existe uma reserva ativa que conflita com o período informado
+   * para a mesma quadra. Conflito ocorre quando os períodos se sobrepõem:
+   *   existente.start_time < novo.end_time AND existente.end_time > novo.start_time
+   */
+  private async checkConflict(courtId: string, startTime: string, endTime: string): Promise<void> {
+    const { data, error } = await this.client
+      .from('bookings')
+      .select('id, athlete_name, start_time, end_time, status')
+      .eq('court_id', courtId)
+      .in('status', ['confirmed', 'reservado'])
+      .lt('start_time', endTime)
+      .gt('end_time', startTime)
+      .limit(1);
+
+    if (error) throw new Error(`SupabaseBookingRepository.checkConflict: ${error.message}`);
+    if (data && data.length > 0) {
+      const conflicting = data[0] as any;
+      throw new Error(
+        `Conflito de horário: já existe uma reserva para ${conflicting.athlete_name ?? 'outro atleta'} nesta quadra no período solicitado.`
+      );
+    }
+  }
+
   async create(data: CreateBookingDTO): Promise<Booking> {
+    // Valida conflito antes de inserir
+    await this.checkConflict(data.court_id, data.start_time, data.end_time);
+
     const { data: row, error } = await this.client
       .from('bookings')
       .insert([data])
@@ -60,6 +87,11 @@ export class SupabaseBookingRepository implements IBookingRepository {
   }
 
   async createMany(data: CreateBookingDTO[]): Promise<Booking[]> {
+    // Valida conflito para cada reserva antes de inserir em lote
+    for (const booking of data) {
+      await this.checkConflict(booking.court_id, booking.start_time, booking.end_time);
+    }
+
     const { data: rows, error } = await this.client
       .from('bookings')
       .insert(data)

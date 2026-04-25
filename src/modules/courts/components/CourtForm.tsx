@@ -140,7 +140,8 @@ export function CourtForm({ initialData, arenaId, onSuccess }: CourtFormProps) {
                 startTime: sourceConfig.startTime,
                 endTime: sourceConfig.endTime,
                 price: sourceConfig.price,
-                customPrices: [...sourceConfig.customPrices]
+                customPrices: [...sourceConfig.customPrices],
+                slotShiftTime: sourceConfig.slotShiftTime ?? null
             }
         })
         setDayConfigs(newConfigs)
