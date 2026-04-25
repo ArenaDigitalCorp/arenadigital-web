@@ -1,12 +1,56 @@
 "use server"
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { assertArenaBackofficeAccess, assertBookingAccess, assertCourtAccess } from '@/lib/server-auth'
+import { assertArenaBackofficeAccess, assertBookingAccess, assertCourtAccess, requireAuthenticatedDbUser } from '@/lib/server-auth'
 import { SupabaseBookingRepository } from '@/modules/bookings/repositories/SupabaseBookingRepository'
 import type { Booking, CreateBookingDTO } from '@/modules/bookings/types/booking.types'
 import { revalidatePath } from 'next/cache'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+
+async function createAvulsoTransaction(
+    supabase: ReturnType<typeof getSupabaseAdmin>,
+    {
+        arenaId,
+        athleteId,
+        athleteName,
+        price,
+        quantity,
+        startTime,
+        registeredBy,
+    }: {
+        arenaId: string
+        athleteId?: string
+        athleteName: string
+        price: number
+        quantity: number
+        startTime: string
+        registeredBy: string
+    }
+) {
+    const date = format(new Date(startTime), 'dd/MM/yyyy', { locale: ptBR })
+    const description = quantity > 1
+        ? `Reserva Avulsa - ${athleteName} - ${quantity} sessões`
+        : `Reserva Avulsa - ${athleteName} - ${date}`
+    const today = new Date().toISOString().split('T')[0]
+
+    const { error } = await supabase.from('transactions').insert({
+        arena_id: arenaId,
+        atleta_id: athleteId || null,
+        type: 'entrada',
+        category: 'Reserva Avulsa',
+        description,
+        unit_value: price,
+        quantity,
+        total_value: price * quantity,
+        discount: 0,
+        launch_date: today,
+        registration_date: today,
+        registered_by: registeredBy,
+        modo_pagamento_id: null,
+    })
+    if (error) throw new Error(`Erro ao registrar transação: ${error.message}`)
+}
 
 export interface BookingConflict {
     date: string          // ISO string da reserva conflitante existente
@@ -135,14 +179,30 @@ export async function createBookingAction(
 ): Promise<{ success: boolean; data?: Booking; error?: string }> {
     try {
         await assertArenaBackofficeAccess(arenaId)
+        const { dbUserId } = await requireAuthenticatedDbUser()
         if (input.arena_id !== arenaId) {
             throw new Error('Reserva não pertence à arena informada')
         }
         await assertCourtAccess(input.court_id, arenaId)
-        const repo = new SupabaseBookingRepository(getSupabaseAdmin())
+        const supabase = getSupabaseAdmin()
+        const repo = new SupabaseBookingRepository(supabase)
         const data = await repo.create(input)
+
+        if (input.status === 'confirmed' && (input.price ?? 0) > 0) {
+            await createAvulsoTransaction(supabase, {
+                arenaId,
+                athleteId: input.athlete_id ?? undefined,
+                athleteName: input.athlete_name ?? 'Atleta',
+                price: input.price as number,
+                quantity: 1,
+                startTime: input.start_time as string,
+                registeredBy: dbUserId,
+            })
+        }
+
         revalidatePath(`/dashboard/arenas/${arenaId}`)
         revalidatePath(`/dashboard/arenas/${arenaId}/courts`)
+        revalidatePath(`/dashboard/finance/${arenaId}`)
         return { success: true, data }
     } catch (err) {
         const message = err instanceof Error ? err.message : 'Erro ao criar reserva'
@@ -156,16 +216,34 @@ export async function createRecurringBookingsAction(
 ): Promise<{ success: boolean; data?: Booking[]; error?: string }> {
     try {
         await assertArenaBackofficeAccess(arenaId)
+        const { dbUserId } = await requireAuthenticatedDbUser()
         for (const input of inputs) {
             if (input.arena_id !== arenaId) {
                 throw new Error('Reserva não pertence à arena informada')
             }
             await assertCourtAccess(input.court_id, arenaId)
         }
-        const repo = new SupabaseBookingRepository(getSupabaseAdmin())
+        const supabase = getSupabaseAdmin()
+        const repo = new SupabaseBookingRepository(supabase)
         const data = await repo.createMany(inputs)
+
+        const confirmed = inputs.filter(i => i.status === 'confirmed' && (i.price ?? 0) > 0)
+        if (confirmed.length > 0) {
+            const first = confirmed[0]
+            await createAvulsoTransaction(supabase, {
+                arenaId,
+                athleteId: first.athlete_id ?? undefined,
+                athleteName: first.athlete_name ?? 'Atleta',
+                price: first.price as number,
+                quantity: confirmed.length,
+                startTime: first.start_time as string,
+                registeredBy: dbUserId,
+            })
+        }
+
         revalidatePath(`/dashboard/arenas/${arenaId}`)
         revalidatePath(`/dashboard/arenas/${arenaId}/courts`)
+        revalidatePath(`/dashboard/finance/${arenaId}`)
         return { success: true, data }
     } catch (err) {
         const message = err instanceof Error ? err.message : 'Erro ao criar reservas recorrentes'

@@ -3,9 +3,10 @@
 import { use, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
-    ArrowLeft, Wallet, CalendarDays, Trophy, RefreshCw, 
+    ArrowLeft, Wallet, CalendarDays, Trophy, RefreshCw,
     ShoppingCart, Receipt, CheckCircle2, XCircle, Clock,
-    Activity, ChevronRight, Loader2, Star, X
+    Activity, ChevronRight, Loader2, Star, X,
+    ArrowUpDown, ArrowUp, ArrowDown,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -64,33 +65,120 @@ function SectionCard({ title, action, children }: { title: string, action?: Reac
 // ─────────────────────────────────────────────
 // Table Components for reuse
 // ─────────────────────────────────────────────
-function ReservasTable({ reservas, limit }: { reservas: any[], limit?: number }) {
-    const items = limit ? reservas.slice(0, limit) : reservas
+type ReservasSortField = 'date' | 'time' | 'sport' | 'court' | 'duration' | 'status'
+type SortDir = 'asc' | 'desc'
+
+const STATUS_LABEL: Record<string, string> = {
+    confirmed: 'Confirmada',
+    cancelled: 'Cancelada',
+    reservado: 'Ag. Confirmação',
+}
+const STATUS_CLASS: Record<string, string> = {
+    confirmed: 'bg-emerald-100 text-emerald-700',
+    cancelled: 'bg-red-100 text-red-700',
+    reservado: 'bg-amber-100 text-amber-700',
+}
+
+function SortIcon({ field, active, dir }: { field: string; active: boolean; dir: SortDir }) {
+    if (!active) return <ArrowUpDown className="inline ml-1 h-3 w-3 opacity-40" />
+    return dir === 'asc'
+        ? <ArrowUp className="inline ml-1 h-3 w-3 text-[#FF6B00]" />
+        : <ArrowDown className="inline ml-1 h-3 w-3 text-[#FF6B00]" />
+}
+
+function ReservasTable({ reservas, limit, showTime }: { reservas: any[], limit?: number, showTime?: boolean }) {
+    const [sortField, setSortField] = useState<ReservasSortField>('date')
+    const [sortDir, setSortDir] = useState<SortDir>('desc')
+
+    const handleSort = (field: ReservasSortField) => {
+        if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+        else { setSortField(field); setSortDir('asc') }
+    }
+
+    const sorted = [...reservas].sort((a, b) => {
+        let va: any, vb: any
+        if (sortField === 'date' || sortField === 'time') {
+            va = new Date(a.start_time).getTime()
+            vb = new Date(b.start_time).getTime()
+        } else if (sortField === 'sport') {
+            va = (a.sport_name ?? '').toLowerCase()
+            vb = (b.sport_name ?? '').toLowerCase()
+        } else if (sortField === 'court') {
+            va = (a.court_name ?? '').toLowerCase()
+            vb = (b.court_name ?? '').toLowerCase()
+        } else if (sortField === 'duration') {
+            va = new Date(a.end_time).getTime() - new Date(a.start_time).getTime()
+            vb = new Date(b.end_time).getTime() - new Date(b.start_time).getTime()
+        } else {
+            va = (a.status ?? '').toLowerCase()
+            vb = (b.status ?? '').toLowerCase()
+        }
+        if (va < vb) return sortDir === 'asc' ? -1 : 1
+        if (va > vb) return sortDir === 'asc' ? 1 : -1
+        return 0
+    })
+
+    const items = limit ? sorted.slice(0, limit) : sorted
+
     if (reservas.length === 0) return <p className="text-gray-400 text-sm text-center py-4">Nenhuma reserva encontrada.</p>
-    
+
+    const thCls = "pb-3 font-bold cursor-pointer select-none hover:text-[#FF6B00] transition-colors whitespace-nowrap"
+
     return (
         <div className="overflow-x-auto">
             <table className="w-full text-sm text-left relative min-w-[600px]">
                 <thead className="text-[11px] text-gray-500 font-bold uppercase tracking-wider border-b border-gray-100 sticky top-0 bg-white z-10">
                     <tr>
                         <th className="pb-3 font-bold w-10 pl-2">#</th>
-                        <th className="pb-3 font-bold">Data</th>
-                        <th className="pb-3 font-bold">Esporte</th>
-                        <th className="pb-3 font-bold">Quadra</th>
-                        <th className="pb-3 font-bold text-right pr-2">Duração</th>
+                        <th className={thCls} onClick={() => handleSort('date')}>
+                            Data <SortIcon field="date" active={sortField === 'date'} dir={sortDir} />
+                        </th>
+                        {showTime && (
+                            <th className={thCls} onClick={() => handleSort('time')}>
+                                Horário <SortIcon field="time" active={sortField === 'time'} dir={sortDir} />
+                            </th>
+                        )}
+                        <th className={thCls} onClick={() => handleSort('sport')}>
+                            Esporte <SortIcon field="sport" active={sortField === 'sport'} dir={sortDir} />
+                        </th>
+                        <th className={thCls} onClick={() => handleSort('court')}>
+                            Quadra <SortIcon field="court" active={sortField === 'court'} dir={sortDir} />
+                        </th>
+                        <th className={`${thCls} text-right pr-2`} onClick={() => handleSort('duration')}>
+                            Duração <SortIcon field="duration" active={sortField === 'duration'} dir={sortDir} />
+                        </th>
+                        {showTime && (
+                            <th className={`${thCls} pr-2`} onClick={() => handleSort('status')}>
+                                Status <SortIcon field="status" active={sortField === 'status'} dir={sortDir} />
+                            </th>
+                        )}
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                     {items.map((r, index) => (
-                        <tr key={r.id}>
+                        <tr key={r.id} className="hover:bg-gray-50/60 transition-colors">
                             <td className="py-4 text-gray-400 font-medium pl-2">{index + 1}</td>
                             <td className="py-4 text-gray-900 whitespace-nowrap">{fmt(r.start_time)}</td>
-                            <td className="py-4 text-gray-900 flex items-center gap-2 whitespace-nowrap">
-                                <Activity className="h-3.5 w-3.5 text-gray-400"/>
-                                {r.sport_name || "Esporte"}
+                            {showTime && (
+                                <td className="py-4 text-gray-900 whitespace-nowrap font-medium">
+                                    {new Date(r.start_time).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                                </td>
+                            )}
+                            <td className="py-4 text-gray-900 whitespace-nowrap">
+                                <span className="flex items-center gap-2">
+                                    <Activity className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                                    {r.sport_name || "—"}
+                                </span>
                             </td>
-                            <td className="py-4 text-gray-900 whitespace-nowrap">{r.court_name || "Quadra"}</td>
+                            <td className="py-4 text-gray-900 whitespace-nowrap">{r.court_name || "—"}</td>
                             <td className="py-4 text-gray-900 text-right pr-2 whitespace-nowrap">{duration(r.start_time, r.end_time)}</td>
+                            {showTime && (
+                                <td className="py-4 pr-2 whitespace-nowrap">
+                                    <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase ${STATUS_CLASS[r.status ?? ''] ?? 'bg-gray-100 text-gray-500'}`}>
+                                        {STATUS_LABEL[r.status ?? ''] ?? r.status ?? '—'}
+                                    </span>
+                                </td>
+                            )}
                         </tr>
                     ))}
                 </tbody>
@@ -305,6 +393,12 @@ export default function AthleteDetailPage({
                             <p className="text-xs text-gray-500 font-medium mb-1">Membro desde</p>
                             <p className="font-medium text-gray-900">{data.membro_desde ? fmt(data.membro_desde, { month: 'short', year: 'numeric' }) : "---"}</p>
                         </div>
+                        <div>
+                            <p className="text-xs text-gray-500 font-medium mb-1">Data de Nascimento</p>
+                            <p className="font-medium text-gray-900">
+                                {data.data_nascimento ? fmt(data.data_nascimento, { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' }) : "-"}
+                            </p>
+                        </div>
                     </div>
                 </div>
 
@@ -445,7 +539,7 @@ export default function AthleteDetailPage({
                         
                         <div className="flex-1 overflow-y-auto bg-gray-50 p-6">
                             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-                                {activeModal === 'reservas' && <ReservasTable reservas={data.reservas} />}
+                                {activeModal === 'reservas' && <ReservasTable reservas={data.reservas} showTime />}
                                 {activeModal === 'rotativos' && <RotativosTable rotativos={data.rotativos} />}
                                 {activeModal === 'comandas' && <ComandasTable comandas={data.comandas} />}
                                 {activeModal === 'pagamentos' && <PagamentosTable pagamentos={data.pagamentos} />}

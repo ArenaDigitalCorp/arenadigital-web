@@ -2,13 +2,17 @@
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { BarChart3, Plus } from "lucide-react";
+import { BarChart3, Plus, AlertCircle, CheckCircle2, Loader2, Clock, MapPin, Users } from "lucide-react";
 import React, { useCallback, useEffect, useState } from "react";
-import { getFinanceDashboardAction } from "@/modules/finance/actions/financeActions";
+import { getFinanceDashboardAction, getMensalistasComPendenciaAction } from "@/modules/finance/actions/financeActions";
+import { confirmarMesMensalistaAction } from "@/modules/bookings/actions/mensalistaActions";
+import { ConfirmarPagamentoDialog } from "@/modules/bookings/components/ConfirmarPagamentoDialog";
 import type { ArenaFinanceSummary, ArenaFinanceDailyRow, Transaction } from "@/modules/finance/types/finance.types";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import {
     Dialog,
     DialogContent,
@@ -56,6 +60,10 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
     const [period, setPeriod] = useState<'7d' | '30d'>('7d');
     const [chartData, setChartData] = useState<{ label: string; value: number; percentage: number; isCurrentDay?: boolean }[]>([]);
     const [chartSeries, setChartSeries] = useState<ArenaFinanceDailyRow[]>(initialChartSeries);
+    const [pendingMensalistas, setPendingMensalistas] = useState<any[]>([]);
+    const [isLoadingPending, setIsLoadingPending] = useState(false);
+    const [confirmingId, setConfirmingId] = useState<string | null>(null);
+    const [confirmDialog, setConfirmDialog] = useState<{ planoId: string; nome: string; mes: string; valor: number } | null>(null);
 
     const processChartData = useCallback(
         (series: ArenaFinanceDailyRow[], periodType: '7d' | '30d', type: 'saldo' | 'entrada' | 'saída') => {
@@ -104,6 +112,16 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
         []
     );
 
+    const loadPendingMensalistas = useCallback(async () => {
+        setIsLoadingPending(true);
+        try {
+            const res = await getMensalistasComPendenciaAction(arenaId);
+            if (res.success) setPendingMensalistas(res.data ?? []);
+        } finally {
+            setIsLoadingPending(false);
+        }
+    }, [arenaId]);
+
     const loadData = useCallback(async () => {
         setIsLoading(true);
         try {
@@ -126,6 +144,26 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
             setIsLoading(false);
         }
     }, [arenaId]);
+
+    const handleConfirmarPagamento = async (valor: number) => {
+        if (!confirmDialog) return;
+        setConfirmingId(confirmDialog.planoId);
+        try {
+            const res = await confirmarMesMensalistaAction(arenaId, confirmDialog.planoId, valor);
+            if (!res.success) throw new Error(res.error);
+            toast.success("Pagamento confirmado! Próximo mês gerado.");
+            setConfirmDialog(null);
+            await Promise.all([loadPendingMensalistas(), loadData()]);
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Erro ao confirmar pagamento");
+        } finally {
+            setConfirmingId(null);
+        }
+    };
+
+    useEffect(() => {
+        loadPendingMensalistas();
+    }, [loadPendingMensalistas]);
 
     useEffect(() => {
         if (isLoading) return;
@@ -348,9 +386,115 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                 </Card>
             </div>
 
+            {/* Pendências de Mensalistas */}
+            <Card className="p-8 border-none shadow-lg rounded-2xl bg-white">
+                <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-3">
+                        <div className={cn(
+                            "p-2 rounded-lg",
+                            pendingMensalistas.length > 0 ? "bg-amber-100" : "bg-emerald-50"
+                        )}>
+                            {pendingMensalistas.length > 0
+                                ? <AlertCircle className="h-5 w-5 text-amber-600" />
+                                : <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                            }
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-bold text-[#002B40]">Cobranças Pendentes — Mensalistas</h3>
+                            {pendingMensalistas.length > 0 && (
+                                <p className="text-xs text-amber-600 font-bold">
+                                    {pendingMensalistas.length} pagamento{pendingMensalistas.length !== 1 ? "s" : ""} aguardando confirmação
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                    <Link
+                        href={`/dashboard/arenas/${arenaId}/mensalistas`}
+                        className="text-sm font-bold text-[#002B40]/50 hover:text-[#002B40] underline"
+                    >
+                        Ver todos mensalistas
+                    </Link>
+                </div>
+
+                {isLoadingPending ? (
+                    <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-6 w-6 animate-spin text-amber-500" />
+                    </div>
+                ) : pendingMensalistas.length === 0 ? (
+                    <div className="flex items-center gap-3 py-6 px-4 bg-emerald-50 rounded-xl">
+                        <CheckCircle2 className="h-5 w-5 text-emerald-500 flex-shrink-0" />
+                        <p className="text-sm font-bold text-emerald-700">Todos os mensalistas estão em dia!</p>
+                    </div>
+                ) : (
+                    <div className="space-y-3">
+                        {pendingMensalistas.map((plano) => {
+                            const nome = plano.atleta?.nome_perfil ?? plano.athlete_name;
+                            const courtName = plano.court?.name ?? "—";
+                            const mesDevido = plano.proximo_mes_reservado
+                                ? format(parseISO(plano.proximo_mes_reservado), "MMMM/yyyy", { locale: ptBR })
+                                : "—";
+                            const isConfirming = confirmingId === plano.id;
+
+                            return (
+                                <div key={plano.id} className="flex items-center justify-between gap-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                                        <div className="h-10 w-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                                            <Users className="h-5 w-5 text-amber-600" />
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="font-bold text-[#002B40] text-sm truncate">{nome}</p>
+                                            <div className="flex items-center gap-3 mt-0.5">
+                                                <span className="flex items-center gap-1 text-[11px] text-[#002B40]/50">
+                                                    <MapPin className="h-3 w-3" />{courtName}
+                                                </span>
+                                                <span className="flex items-center gap-1 text-[11px] text-amber-600 font-bold capitalize">
+                                                    <Clock className="h-3 w-3" />{mesDevido}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-4 flex-shrink-0">
+                                        <p className="font-black text-[#FF6B00] text-base">
+                                            {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(plano.valor_mensal)}
+                                        </p>
+                                        <Button
+                                            size="sm"
+                                            onClick={() => setConfirmDialog({
+                                                planoId: plano.id,
+                                                nome: nome,
+                                                mes: mesDevido,
+                                                valor: plano.valor_mensal,
+                                            })}
+                                            disabled={isConfirming}
+                                            className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold gap-1.5 rounded-xl h-9 px-4"
+                                        >
+                                            {isConfirming
+                                                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                : <CheckCircle2 className="h-3.5 w-3.5" />
+                                            }
+                                            Confirmar
+                                        </Button>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </Card>
+
+            <ConfirmarPagamentoDialog
+                isOpen={!!confirmDialog}
+                onClose={() => setConfirmDialog(null)}
+                onConfirm={handleConfirmarPagamento}
+                atletaNome={confirmDialog?.nome ?? ""}
+                mesDevido={confirmDialog?.mes ?? ""}
+                valorPadrao={confirmDialog?.valor ?? 0}
+                isLoading={confirmingId !== null}
+            />
+
             {/* Modals */}
             <Dialog open={isAddingEntry} onOpenChange={setIsAddingEntry}>
-                <DialogContent className="max-w-[400px]">
+                <DialogContent className="w-[calc(100vw-2rem)] max-w-[440px]">
                     <DialogHeader>
                         <DialogTitle className="text-2xl font-black text-[#002B40]">Nova entrada</DialogTitle>
                     </DialogHeader>
@@ -365,7 +509,7 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
             </Dialog>
 
             <Dialog open={isAddingExpense} onOpenChange={setIsAddingExpense}>
-                <DialogContent className="max-w-[400px]">
+                <DialogContent className="w-[calc(100vw-2rem)] max-w-[440px]">
                     <DialogHeader>
                         <DialogTitle className="text-2xl font-black text-[#002B40]">Nova saída</DialogTitle>
                     </DialogHeader>

@@ -495,6 +495,7 @@ export function CourtCalendarPageClient({ arenaId, courtId, initialCourt, initia
                 courtId={courtId}
                 selectedDate={selectedSlotDate}
                 selectedHour={selectedSlotHour}
+                selectedMinute={selectedSlotMinute}
                 defaultPrice={customPrice || court.price || 0}
             />
 

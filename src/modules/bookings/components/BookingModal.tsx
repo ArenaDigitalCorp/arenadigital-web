@@ -161,10 +161,11 @@ interface BookingModalProps {
     courtId: string;
     selectedDate: Date;
     selectedHour: number;
+    selectedMinute?: number;
     defaultPrice: number;
 }
 
-export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, selectedDate, selectedHour, defaultPrice }: BookingModalProps) {
+export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, selectedDate, selectedHour, selectedMinute = 0, defaultPrice }: BookingModalProps) {
     const [bookingType, setBookingType] = useState<"avulso" | "mensal">("avulso")
 
     // Shared
@@ -198,8 +199,12 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
 
     useEffect(() => {
         if (isOpen) {
-            const startStr = `${String(selectedHour).padStart(2, '0')}:00`
-            const endStr = `${String(selectedHour + 1).padStart(2, '0')}:00`
+            const startTotal = selectedHour * 60 + selectedMinute
+            const endTotal = startTotal + 60
+            const endHour = Math.floor(endTotal / 60) % 24
+            const endMin = endTotal % 60
+            const startStr = `${String(selectedHour).padStart(2, '0')}:${String(selectedMinute).padStart(2, '0')}`
+            const endStr = `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`
             setStartTime(startStr)
             setEndTime(endStr)
             setHorarioInicio(startStr)
@@ -208,7 +213,7 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
             setDiaSemana(String(selectedDate.getDay()))
             loadArenaSports()
         }
-    }, [isOpen, selectedHour, defaultPrice])
+    }, [isOpen, selectedHour, selectedMinute, defaultPrice])
 
     // Limpa conflitos quando qualquer campo relevante muda
     useEffect(() => {

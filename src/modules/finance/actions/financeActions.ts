@@ -95,3 +95,41 @@ export async function deleteTransactionAction(arenaId: string, transactionId: st
         return { success: false, error: message }
     }
 }
+
+export async function getMensalistasComPendenciaAction(arenaId: string) {
+    try {
+        await assertArenaBackofficeAccess(arenaId)
+        const supabase = getSupabaseAdmin()
+
+        const { data: planos, error } = await supabase
+            .from('planos_mensalista')
+            .select('id, athlete_id, athlete_name, valor_mensal, sessoes_por_mes, dia_semana, horario_inicio, horario_fim, data_inicio, atleta:athlete_id(id, nome_perfil, telefone), court:court_id(id, name), sports:sport_id(id, name)')
+            .eq('arena_id', arenaId)
+            .eq('status', 'ativo')
+            .order('created_at', { ascending: false })
+
+        if (error) throw new Error(error.message)
+
+        const now = new Date().toISOString()
+        const withPending = await Promise.all(
+            (planos || []).map(async (plano: any) => {
+                const { data: reservado } = await supabase
+                    .from('bookings')
+                    .select('start_time')
+                    .eq('plano_mensalista_id', plano.id)
+                    .eq('status', 'reservado')
+                    .gte('start_time', now)
+                    .order('start_time', { ascending: true })
+                    .limit(1)
+
+                return { ...plano, proximo_mes_reservado: reservado?.[0]?.start_time || null }
+            })
+        )
+
+        const pendentes = withPending.filter(p => p.proximo_mes_reservado !== null)
+        return { success: true, data: pendentes }
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Erro ao buscar pendências'
+        return { success: false, error: message, data: [] }
+    }
+}

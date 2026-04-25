@@ -20,6 +20,7 @@ import {
   confirmarMesMensalistaAction,
 } from "@/modules/bookings/actions/mensalistaActions"
 import { MensalistaModal } from "@/modules/bookings/components/MensalistaModal"
+import { ConfirmarPagamentoDialog } from "@/modules/bookings/components/ConfirmarPagamentoDialog"
 import type { PlanoMensalistaComDetalhes } from "@/modules/bookings/types/booking.types"
 
 const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
@@ -44,6 +45,7 @@ export function MensalistasView({
   const [isMensalistaModalOpen, setIsMensalistaModalOpen] = useState(false)
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const [cancellingId, setCancellingId] = useState<string | null>(null)
+  const [confirmDialog, setConfirmDialog] = useState<PlanoMensalistaComDetalhes | null>(null)
 
   const loadPlanos = useCallback(async () => {
     setIsLoading(true)
@@ -59,12 +61,14 @@ export function MensalistasView({
     if (isOpen) loadPlanos()
   }, [isOpen, loadPlanos])
 
-  const handleConfirmar = async (planoId: string) => {
-    setConfirmingId(planoId)
+  const handleConfirmarPagamento = async (valor: number) => {
+    if (!confirmDialog) return
+    setConfirmingId(confirmDialog.id)
     try {
-      const res = await confirmarMesMensalistaAction(arenaId, planoId)
+      const res = await confirmarMesMensalistaAction(arenaId, confirmDialog.id, valor)
       if (!res.success) throw new Error(res.error)
       toast.success("Pagamento confirmado! Próximo mês gerado.")
+      setConfirmDialog(null)
       await loadPlanos()
       onSuccess()
     } catch (err) {
@@ -218,7 +222,7 @@ export function MensalistasView({
                         </div>
                         <Button
                           size="sm"
-                          onClick={() => handleConfirmar(plano.id)}
+                          onClick={() => setConfirmDialog(plano)}
                           disabled={confirmingId === plano.id}
                           className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold gap-1.5 rounded-xl shrink-0"
                         >
@@ -288,6 +292,18 @@ export function MensalistasView({
         }}
         arenaId={arenaId}
         courtId={courtId}
+      />
+
+      <ConfirmarPagamentoDialog
+        isOpen={!!confirmDialog}
+        onClose={() => setConfirmDialog(null)}
+        onConfirm={handleConfirmarPagamento}
+        atletaNome={confirmDialog?.atleta?.nome_perfil ?? confirmDialog?.athlete_name ?? ""}
+        mesDevido={confirmDialog?.proximo_mes_reservado
+          ? format(parseISO(confirmDialog.proximo_mes_reservado), "MMMM/yyyy", { locale: ptBR })
+          : ""}
+        valorPadrao={confirmDialog?.valor_mensal ?? 0}
+        isLoading={confirmingId !== null}
       />
     </>
   )

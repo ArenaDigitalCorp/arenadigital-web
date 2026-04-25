@@ -18,6 +18,7 @@ import {
     confirmarMesMensalistaAction,
     cancelPlanoMensalistaAction,
 } from "@/modules/bookings/actions/mensalistaActions"
+import { ConfirmarPagamentoDialog } from "@/modules/bookings/components/ConfirmarPagamentoDialog"
 import type { PlanoMensalistaComDetalhes } from "@/modules/bookings/types/booking.types"
 
 const DIAS_SEMANA = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"]
@@ -51,6 +52,7 @@ export function MensalistasPageClient({ arenaId, initialPlanos }: Props) {
     const [statusFilter, setStatusFilter] = useState<"todos" | "ativo" | "cancelado">("ativo")
     const [isPending, startTransition] = useTransition()
     const [loadingId, setLoadingId] = useState<string | null>(null)
+    const [confirmDialog, setConfirmDialog] = useState<{ plano: PlanoMensalistaComDetalhes } | null>(null)
 
     const filtered = planos.filter(p => {
         const matchSearch =
@@ -66,17 +68,25 @@ export function MensalistasPageClient({ arenaId, initialPlanos }: Props) {
 
     const handleConfirmar = (plano: PlanoMensalistaComDetalhes) => {
         if (!plano.proximo_mes_reservado) return
+        setConfirmDialog({ plano })
+    }
+
+    const handleConfirmarPagamento = async (valor: number) => {
+        if (!confirmDialog) return
+        const { plano } = confirmDialog
         setLoadingId(`confirm-${plano.id}`)
-        startTransition(async () => {
-            const res = await confirmarMesMensalistaAction(arenaId, plano.id)
+        try {
+            const res = await confirmarMesMensalistaAction(arenaId, plano.id, valor)
             if (res.success) {
                 toast.success("Pagamento confirmado e próximo mês gerado!")
+                setConfirmDialog(null)
                 router.refresh()
             } else {
                 toast.error(res.error ?? "Erro ao confirmar pagamento")
             }
+        } finally {
             setLoadingId(null)
-        })
+        }
     }
 
     const handleCancelar = (plano: PlanoMensalistaComDetalhes) => {
@@ -336,6 +346,16 @@ export function MensalistasPageClient({ arenaId, initialPlanos }: Props) {
                     </table>
                 </div>
             </Card>
+
+            <ConfirmarPagamentoDialog
+                isOpen={!!confirmDialog}
+                onClose={() => setConfirmDialog(null)}
+                onConfirm={handleConfirmarPagamento}
+                atletaNome={confirmDialog?.plano.atleta?.nome_perfil ?? confirmDialog?.plano.athlete_name ?? ""}
+                mesDevido={formatMesAno(confirmDialog?.plano.proximo_mes_reservado ?? null)}
+                valorPadrao={confirmDialog?.plano.valor_mensal ?? 0}
+                isLoading={loadingId !== null}
+            />
         </div>
     )
 }

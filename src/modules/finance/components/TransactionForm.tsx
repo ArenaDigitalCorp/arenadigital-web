@@ -183,8 +183,9 @@ export function TransactionForm({
 
     return (
         <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
-                <div className="grid grid-cols-2 gap-4">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-0 pt-2">
+                <div className="overflow-y-auto max-h-[calc(100svh-14rem)] pr-1 space-y-4 pb-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <FormField
                         control={control as any}
                         name="registration_date"
@@ -409,7 +410,9 @@ export function TransactionForm({
                     />
                 )}
 
-                <div className="flex justify-end gap-3 pt-4">
+                </div>{/* fim scroll */}
+
+                <div className="flex justify-end gap-3 pt-4 border-t border-[#002B40]/5 mt-2">
                     <Button type="button" variant="outline" onClick={onCancel} className="flex-1 border-[#002B40]/20 text-[#002B40]">
                         Fechar
                     </Button>

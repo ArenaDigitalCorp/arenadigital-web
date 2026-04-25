@@ -202,7 +202,7 @@ export function TransactionsPageClient({ arenaId, type }: Props) {
 
             {/* Create / Edit modal */}
             <Dialog open={isFormOpen} onOpenChange={(open) => { if (!open) { setIsFormOpen(false); setEditingTransaction(null); } }}>
-                <DialogContent className="max-w-[420px]">
+                <DialogContent className="w-[calc(100vw-2rem)] max-w-[440px]">
                     <DialogHeader>
                         <DialogTitle className="text-2xl font-black text-[#002B40]">
                             {editingTransaction ? labels.editModal : labels.createModal}

@@ -217,7 +217,8 @@ export async function cancelPlanoMensalistaAction(
 
 export async function confirmarMesMensalistaAction(
   arenaId: string,
-  planoId: string
+  planoId: string,
+  valorOverride?: number
 ): Promise<{ success: boolean; error?: string }> {
   try {
     await assertArenaBackofficeAccess(arenaId)
@@ -232,6 +233,10 @@ export async function confirmarMesMensalistaAction(
       .single()
 
     if (planoError || !plano) throw new Error('Plano não encontrado')
+
+    const valorEfetivo = valorOverride !== undefined && valorOverride > 0
+      ? valorOverride
+      : plano.valor_mensal
 
     // Find the earliest reservado month to confirm
     const { data: reservadoBookings, error: fetchError } = await supabase
@@ -270,7 +275,7 @@ export async function confirmarMesMensalistaAction(
         .from('bookings')
         .update({
           status: 'confirmed',
-          price: pricePerSession(plano.valor_mensal, plano.sessoes_por_mes),
+          price: pricePerSession(valorEfetivo, plano.sessoes_por_mes),
         })
         .in('id', ids)
 
@@ -283,7 +288,7 @@ export async function confirmarMesMensalistaAction(
       arenaId,
       athleteId: plano.athlete_id,
       athleteName: plano.athlete_name,
-      valorMensal: plano.valor_mensal,
+      valorMensal: valorEfetivo,
       mesAno: confirmedMonthLabel,
       registeredBy: dbUserId,
     })

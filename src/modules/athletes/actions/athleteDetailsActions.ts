@@ -13,6 +13,7 @@ export interface AthleteDetailData {
     foto_url: string | null
     instagram: string | null
     membro_desde: string | null
+    data_nascimento: string | null
 
     // Fidelidade
     saldo: number
@@ -103,7 +104,7 @@ export async function getAthleteDetailsAction(
             supabase
                 .from("atleta")
                 .select(`
-                    id, nome_perfil, telefone, cpf, foto_url, instagram,
+                    id, nome_perfil, telefone, cpf, foto_url, instagram, data_nascimento,
                     users:id_users(email),
                     arenas_atleta!inner(data_criacao, id_arena)
                 `)
@@ -221,6 +222,7 @@ export async function getAthleteDetailsAction(
                 foto_url: atletaResult.data.foto_url ?? null,
                 instagram: atletaResult.data.instagram ?? null,
                 membro_desde,
+                data_nascimento: (atletaResult.data as any).data_nascimento ?? null,
 
                 saldo: Number(balanceResult.data?.balance ?? 0),
                 historico_fidelidade: (historicoResult.data ?? []).map((h: any) => ({
