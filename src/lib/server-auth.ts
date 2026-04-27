@@ -146,6 +146,21 @@ export async function assertArenaBackofficeAccess(arenaId: string): Promise<Aren
   return access
 }
 
+/**
+ * Protege rotas exclusivas de Administrador (Owner | Gestor).
+ * Bloqueia Caixa e Atendente.
+ * Uso: Espaços, Relatórios, Configurações de Arena/Usuários.
+ */
+export async function assertArenaAdminAccess(arenaId: string): Promise<ArenaAccessProfile> {
+  const access = await assertArenaAccess(arenaId)
+
+  if (!access.isOwner && access.role !== 'Gestor') {
+    throw new AuthorizationError('Forbidden', 403)
+  }
+
+  return access
+}
+
 export async function assertArenaOwnerAccess(arenaId: string): Promise<ArenaAccessProfile> {
   const access = await assertArenaAccess(arenaId)
 

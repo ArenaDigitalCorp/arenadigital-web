@@ -11,7 +11,7 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { OpenComandaModal } from "@/modules/stations/components/OpenComandaModal"
-import { RegisterCustomerModal } from "@/modules/stations/components/RegisterCustomerModal"
+import { AthleteRegistrationModal } from "@/modules/athletes/components/AthleteRegistrationModal"
 import { LaunchItemModal } from "@/modules/stations/components/LaunchItemModal"
 import { getOrdersByStationAction } from "@/modules/stations/actions/stationActions"
 import type { StationOrder } from "@/modules/stations/types/station.types"
@@ -120,9 +120,12 @@ export function StationDetailPageClient({ arenaId, stationId, initialStation, in
                 onSuccess={refreshOrders}
             />
 
-            <RegisterCustomerModal
-                isOpen={isRegisterCustomerModalOpen}
-                onClose={() => setIsRegisterCustomerModalOpen(false)}
+            <AthleteRegistrationModal
+                open={isRegisterCustomerModalOpen}
+                onOpenChange={(open) => {
+                    setIsRegisterCustomerModalOpen(open)
+                    if (!open) setIsOpenComandaModalOpen(true)
+                }}
                 arenaId={arenaId}
                 onSuccess={() => { setIsRegisterCustomerModalOpen(false); setIsOpenComandaModalOpen(true) }}
             />

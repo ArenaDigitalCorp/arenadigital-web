@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useMemo } from "react";
-import { format, parseISO, getHours, getDay, addDays, subDays, addMonths, isToday } from "date-fns";
+import { format, parseISO, getHours, getMinutes, getDay, addDays, subDays, addMonths, isToday } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { X, CalendarDays, CalendarIcon, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -134,24 +134,96 @@ const getSportStyles = (sportName: string) => {
     };
 };
 
+// ── Slot generation (mirrors CourtCalendarPageClient logic) ─────────────────
+
+interface SlotTime { hour: number; minute: number }
+
+function parseHHMM(t: string): number {
+    const [h, m] = (t || "00:00").split(':').map(Number)
+    return (h || 0) * 60 + (m || 0)
+}
+
+function generateSlotsForDayConfig(cfg: any): SlotTime[] {
+    if (!cfg?.enabled) return []
+    const startMins = parseHHMM(cfg.startTime)
+    let endMins = parseHHMM(cfg.endTime)
+    if (endMins <= startMins) endMins += 24 * 60
+
+    let firstShiftMins: number | null = null
+    if (cfg.slotShiftTime) {
+        const sm = parseHHMM(cfg.slotShiftTime)
+        firstShiftMins = sm % 60 === 30 ? sm : sm + (30 - sm % 60) % 60
+    }
+
+    const slots: SlotTime[] = []
+    let cur = startMins
+    let shifted = false
+    while (cur < endMins) {
+        if (!shifted && firstShiftMins !== null && cur + 60 > firstShiftMins) {
+            if (firstShiftMins > cur) cur = firstShiftMins
+            shifted = true
+        }
+        slots.push({ hour: Math.floor(cur / 60) % 24, minute: cur % 60 })
+        cur += 60
+    }
+    return slots
+}
+
+function generateSlotsForDate(date: Date, dayConfigs: any[] | null): SlotTime[] {
+    if (!dayConfigs) return Array.from({ length: 24 }, (_, i) => ({ hour: i, minute: 0 }))
+    const name = format(date, 'EEEE', { locale: ptBR })
+    const formatted = name.charAt(0).toUpperCase() + name.slice(1)
+    const cfg = dayConfigs.find((d: any) => d.day.toLowerCase() === formatted.toLowerCase())
+    if (!cfg?.enabled) return []
+    return generateSlotsForDayConfig(cfg)
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+
 export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts }: DayOperationModalProps) {
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [futureBookings, setFutureBookings] = useState<Booking[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [currentDate, setCurrentDate] = useState(new Date());
     const [calendarOpen, setCalendarOpen] = useState(false);
+    const [visibleCourtIds, setVisibleCourtIds] = useState<Set<string>>(
+        () => new Set(courts.map(c => c.id))
+    );
 
     // Sort courts alphabetically
     const sortedCourts = useMemo(() => {
         return [...courts].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
     }, [courts]);
 
-    // Reset to today when modal opens
+    // Courts actually shown in the grid
+    const visibleCourts = useMemo(
+        () => sortedCourts.filter(c => visibleCourtIds.has(c.id)),
+        [sortedCourts, visibleCourtIds]
+    );
+
+    const toggleCourt = (id: string) => {
+        setVisibleCourtIds(prev => {
+            const next = new Set(prev);
+            next.has(id) ? next.delete(id) : next.add(id);
+            return next;
+        });
+    };
+
+    const allVisible = visibleCourtIds.size === sortedCourts.length;
+
+    const toggleAll = () => {
+        setVisibleCourtIds(
+            allVisible ? new Set() : new Set(sortedCourts.map(c => c.id))
+        );
+    };
+
+    // Reset visibility and date when modal opens
     useEffect(() => {
         if (isOpen) {
             setCurrentDate(new Date());
+            setVisibleCourtIds(new Set(courts.map(c => c.id)));
         }
-    }, [isOpen]);
+    }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         if (isOpen && arenaId) {
@@ -198,14 +270,15 @@ export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts 
         loadFutureBookings();
     }, [isOpen, arenaId]);
 
-    // Próxima reserva futura no mesmo dia da semana + mesma hora + mesma quadra
-    const getFutureBookingForSlot = (courtId: string, hour: number): Booking | null => {
+    // Próxima reserva futura no mesmo dia da semana + mesma hora:minuto + mesma quadra
+    const getFutureBookingForSlot = (courtId: string, slot: SlotTime): Booking | null => {
         const targetDayOfWeek = getDay(currentDate);
         return futureBookings.find(b => {
             if (b.court_id !== courtId) return false;
             const bStart = parseISO(b.start_time);
             return getDay(bStart) === targetDayOfWeek
-                && getHours(bStart) === hour
+                && getHours(bStart) === slot.hour
+                && getMinutes(bStart) === slot.minute
                 && bStart > currentDate;
         }) ?? null;
     };
@@ -214,11 +287,27 @@ export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts 
     const handleNextDay = () => setCurrentDate(prev => addDays(prev, 1));
     const handleToday = () => setCurrentDate(new Date());
 
-    const hours = Array.from({ length: 24 }, (_, i) => i);
+    // Build the union of all slots across courts (from day_config) + any booking start times
+    const allSlots = useMemo<SlotTime[]>(() => {
+        const map = new Map<string, SlotTime>()
+        sortedCourts.forEach(court => {
+            generateSlotsForDate(currentDate, court.day_config ?? null).forEach(s => {
+                map.set(`${s.hour}:${s.minute}`, s)
+            })
+        })
+        // Include slots from actual bookings so they always appear even outside config
+        bookings.forEach(b => {
+            if (b.status === 'cancelled') return
+            const bStart = parseISO(b.start_time)
+            const h = getHours(bStart), m = getMinutes(bStart)
+            map.set(`${h}:${m}`, { hour: h, minute: m })
+        })
+        return Array.from(map.values()).sort((a, b) => (a.hour * 60 + a.minute) - (b.hour * 60 + b.minute))
+    }, [sortedCourts, bookings, currentDate])
 
-    const getBookingForSlot = (courtId: string, hour: number): Booking | undefined => {
+    const getBookingForSlot = (courtId: string, slot: SlotTime): Booking | undefined => {
         const slotStart = new Date(currentDate);
-        slotStart.setHours(hour, 0, 0, 0);
+        slotStart.setHours(slot.hour, slot.minute, 0, 0);
 
         return bookings.find(b => {
             if (b.court_id !== courtId) return false;
@@ -231,8 +320,7 @@ export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts 
         });
     };
 
-    // Check if court is available at given hour (based on day_config)
-    const isSlotAvailable = (court: Court, hour: number) => {
+    const isSlotAvailable = (court: Court, slot: SlotTime) => {
         if (!court.day_config || !Array.isArray(court.day_config) || court.day_config.length === 0) {
             return true;
         }
@@ -243,19 +331,13 @@ export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts 
 
         if (!config || !config.enabled) return false;
 
-        const startHour = parseInt(config.startTime.split(':')[0]);
-        const endHour = parseInt(config.endTime.split(':')[0]);
+        const slotMins = slot.hour * 60 + slot.minute;
+        const startMins = parseHHMM(config.startTime);
+        let endMins = parseHHMM(config.endTime);
+        if (endMins <= startMins) endMins += 24 * 60;
 
-        if (startHour < endHour) {
-            return hour >= startHour && hour < endHour;
-        }
-
-        // Overnight
-        if (startHour > endHour) {
-            return hour >= startHour || hour < endHour;
-        }
-
-        return false;
+        const normalizedSlot = slotMins < startMins ? slotMins + 24 * 60 : slotMins;
+        return normalizedSlot >= startMins && normalizedSlot < endMins;
     };
 
     // Get unique sport names for the legend
@@ -392,12 +474,78 @@ export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts 
                     </div>
                 </header>
 
-                {/* Content – scroll both axes */}
-                <div className="flex-1 overflow-auto bg-[#F8FAFC]">
+                {/* Content – sidebar + grid */}
+                <div className="flex-1 flex overflow-hidden">
+
+                    {/* ── Sidebar de espaços ── */}
+                    <div className="w-52 flex-shrink-0 bg-white border-r border-[#002B40]/10 flex flex-col overflow-hidden">
+                        <div className="px-4 py-3 border-b border-[#002B40]/8">
+                            <p className="text-[10px] font-black uppercase tracking-wider text-[#002B40]/40 mb-2">
+                                Espaços
+                            </p>
+                            <button
+                                onClick={toggleAll}
+                                className="text-[11px] font-semibold text-[#FF6B00] hover:text-[#E66000] transition-colors"
+                            >
+                                {allVisible ? 'Desmarcar todos' : 'Selecionar todos'}
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto py-2">
+                            {sortedCourts.map(court => {
+                                const checked = visibleCourtIds.has(court.id)
+                                const hasBooking = bookings.some(
+                                    b => b.court_id === court.id && b.status !== 'cancelled'
+                                )
+                                return (
+                                    <button
+                                        key={court.id}
+                                        onClick={() => toggleCourt(court.id)}
+                                        className={cn(
+                                            "w-full flex items-center gap-2.5 px-4 py-2.5 text-left transition-colors hover:bg-[#002B40]/5",
+                                            checked ? "opacity-100" : "opacity-40"
+                                        )}
+                                    >
+                                        <div className={cn(
+                                            "w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors",
+                                            checked
+                                                ? "bg-[#FF6B00] border-[#FF6B00]"
+                                                : "border-[#002B40]/30 bg-white"
+                                        )}>
+                                            {checked && (
+                                                <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 10 8">
+                                                    <path d="M1 4l3 3 5-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                                </svg>
+                                            )}
+                                        </div>
+                                        <span className="text-xs font-semibold text-[#002B40] leading-tight truncate flex-1">
+                                            {court.name}
+                                        </span>
+                                        {hasBooking && (
+                                            <span className="w-1.5 h-1.5 rounded-full bg-[#FF6B00] flex-shrink-0" />
+                                        )}
+                                    </button>
+                                )
+                            })}
+                        </div>
+                        {visibleCourtIds.size < sortedCourts.length && (
+                            <div className="px-4 py-2.5 border-t border-[#002B40]/8 bg-[#002B40]/[0.02]">
+                                <p className="text-[10px] text-[#002B40]/40 font-medium">
+                                    {visibleCourtIds.size} de {sortedCourts.length} visíveis
+                                </p>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* ── Grid de horários ── */}
+                    <div className="flex-1 overflow-auto bg-[#F8FAFC]">
                     {isLoading ? (
                         <div className="flex items-center justify-center h-full gap-3">
                             <Loader2 className="w-6 h-6 animate-spin text-[#002B40]/40" />
                             <span className="text-[#002B40]/60 font-medium">Carregando operação...</span>
+                        </div>
+                    ) : visibleCourts.length === 0 ? (
+                        <div className="flex items-center justify-center h-full">
+                            <p className="text-[#002B40]/30 font-semibold text-sm">Nenhum espaço selecionado.</p>
                         </div>
                     ) : (
                         <div className="inline-block min-w-full">
@@ -407,7 +555,7 @@ export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts 
                                         <th className="bg-[#002B40] text-white text-[10px] font-bold uppercase tracking-wider px-3 py-3 min-w-[70px] w-[70px] text-center border-r border-white/10 sticky left-0 z-20">
                                             Horário
                                         </th>
-                                        {sortedCourts.map(court => (
+                                        {visibleCourts.map(court => (
                                             <th
                                                 key={court.id}
                                                 className="bg-[#002B40] text-white text-xs font-bold px-4 py-3 text-center border-r border-white/10 last:border-r-0 min-w-[180px]"
@@ -418,140 +566,152 @@ export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts 
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {hours.map(hour => {
-                                        const hasAnyBooking = sortedCourts.some(court => !!getBookingForSlot(court.id, hour));
-                                        const hasAnyAvailable = sortedCourts.some(court => isSlotAvailable(court, hour));
+                                    {(() => {
+                                        // skipSlots tracks cells already covered by a rowspan
+                                        // key format: `${slotLabel}:${courtId}`
+                                        const skipSlots = new Set<string>()
 
-                                        if (!hasAnyAvailable && !hasAnyBooking) return null;
+                                        return allSlots.map((slot, slotIdx) => {
+                                            const slotLabel = `${String(slot.hour).padStart(2, '0')}:${String(slot.minute).padStart(2, '0')}`
 
-                                        return (
-                                            <tr
-                                                key={hour}
-                                                className={cn(
-                                                    "transition-all",
-                                                    hasAnyBooking ? "h-[72px]" : "h-[40px]"
-                                                )}
-                                            >
-                                                <td className={cn(
-                                                    "bg-white border-r border-b border-[#002B40]/5 text-center font-bold text-[11px] sticky left-0 z-10",
-                                                    hasAnyBooking ? "text-[#002B40]/80" : "text-[#002B40]/30"
-                                                )}>
-                                                    {String(hour).padStart(2, '0')}:00
-                                                </td>
+                                            // A booking "starts" at this slot (used for row height)
+                                            const hasAnyBookingStart = visibleCourts.some(court => {
+                                                const b = getBookingForSlot(court.id, slot)
+                                                if (!b) return false
+                                                const bs = parseISO(b.start_time)
+                                                return slot.hour === getHours(bs) && slot.minute === getMinutes(bs)
+                                            })
+                                            const hasAnyAvailable = visibleCourts.some(court => isSlotAvailable(court, slot))
+                                            const hasAnyCoveredByBooking = visibleCourts.some(court => !!getBookingForSlot(court.id, slot))
 
-                                                {sortedCourts.map(court => {
-                                                    const booking = getBookingForSlot(court.id, hour);
-                                                    const available = isSlotAvailable(court, hour);
+                                            if (!hasAnyAvailable && !hasAnyCoveredByBooking) return null
 
-                                                    if (!available && !booking) {
-                                                        return (
-                                                            <td key={court.id} className="bg-[#E2E8F0]/50 border-r border-b border-[#002B40]/5 last:border-r-0">
-                                                            </td>
-                                                        );
-                                                    }
+                                            return (
+                                                <tr
+                                                    key={slotLabel}
+                                                    className={cn("transition-all", hasAnyBookingStart ? "h-[72px]" : "h-[40px]")}
+                                                >
+                                                    <td className={cn(
+                                                        "bg-white border-r border-b border-[#002B40]/5 text-center font-bold text-[11px] sticky left-0 z-10",
+                                                        hasAnyBookingStart ? "text-[#002B40]/80" : "text-[#002B40]/30"
+                                                    )}>
+                                                        {slotLabel}
+                                                    </td>
 
-                                                    if (booking) {
-                                                        const bStart = getHours(parseISO(booking.start_time));
-                                                        const bEnd = getHours(parseISO(booking.end_time));
-                                                        const isStart = hour === bStart;
-                                                        const isEnd = hour === bEnd - 1;
-                                                        const sportName = booking.sports?.name || '';
-                                                        const sportStyles = getSportStyles(sportName);
+                                                    {visibleCourts.map(court => {
+                                                        const cellKey = `${slotLabel}:${court.id}`
 
-                                                        const responsavel = booking.atleta?.nome_perfil || booking.athlete_name || '—';
-                                                        const startStr = format(parseISO(booking.start_time), 'HH:mm');
-                                                        const endStr = format(parseISO(booking.end_time), 'HH:mm');
+                                                        // This cell is absorbed by a rowspan from a previous row — omit the td
+                                                        if (skipSlots.has(cellKey)) return null
 
-                                                        return (
-                                                            <td key={court.id} className="border-r border-[#002B40]/5 last:border-r-0 px-1 py-0">
-                                                                <div className={cn(
-                                                                    "w-full h-full flex flex-col justify-center gap-0.5 border-l-4 px-2",
-                                                                    sportStyles.bg,
-                                                                    sportStyles.border,
-                                                                    isStart ? "rounded-t pt-2 border-t" : "border-t-transparent",
-                                                                    isEnd ? "rounded-b pb-2 border-b" : "border-b-transparent",
-                                                                    !isStart && !isEnd && "border-y-transparent",
-                                                                    hasAnyBooking ? "min-h-[72px]" : "min-h-[40px]"
-                                                                )}>
-                                                                    {isStart && (
-                                                                        <>
-                                                                            <span className={cn("text-[10px] font-black leading-tight line-clamp-1", sportStyles.text)}>
-                                                                                {responsavel}
-                                                                            </span>
-                                                                            <div className="flex items-center gap-1.5">
-                                                                                {booking.price !== undefined && booking.price !== null && (
-                                                                                    <span className={cn("text-[9px] font-bold", sportStyles.textSecondary)}>
-                                                                                        R$ {Number(booking.price).toFixed(0)}
-                                                                                    </span>
-                                                                                )}
-                                                                                <span className={cn("text-[9px] font-bold", sportStyles.textSecondary)}>•</span>
+                                                        const booking = getBookingForSlot(court.id, slot)
+                                                        const available = isSlotAvailable(court, slot)
+
+                                                        if (!available && !booking) {
+                                                            return <td key={court.id} className="bg-[#E2E8F0]/50 border-r border-b border-[#002B40]/5 last:border-r-0" />
+                                                        }
+
+                                                        if (booking) {
+                                                            const bStart = parseISO(booking.start_time)
+                                                            const bEnd = parseISO(booking.end_time)
+                                                            const isBookingStart = slot.hour === getHours(bStart) && slot.minute === getMinutes(bStart)
+
+                                                            // Only render the td on the booking's first slot; skip it on continuations
+                                                            if (!isBookingStart) return null
+
+                                                            // Count how many grid slots this booking spans
+                                                            const rowspan = Math.max(1, allSlots.filter(s => {
+                                                                const sm = new Date(currentDate)
+                                                                sm.setHours(s.hour, s.minute, 0, 0)
+                                                                return sm >= bStart && sm < bEnd
+                                                            }).length)
+
+                                                            // Mark future cells for this court as covered
+                                                            for (let i = slotIdx + 1; i < slotIdx + rowspan && i < allSlots.length; i++) {
+                                                                const s = allSlots[i]
+                                                                const fl = `${String(s.hour).padStart(2, '0')}:${String(s.minute).padStart(2, '0')}`
+                                                                skipSlots.add(`${fl}:${court.id}`)
+                                                            }
+
+                                                            const sportName = booking.sports?.name || ''
+                                                            const sportStyles = getSportStyles(sportName)
+                                                            const responsavel = booking.atleta?.nome_perfil || booking.athlete_name || '—'
+
+                                                            return (
+                                                                <td
+                                                                    key={court.id}
+                                                                    rowSpan={rowspan}
+                                                                    className="border-r border-[#002B40]/5 last:border-r-0 p-1.5"
+                                                                    style={{ height: '1px' }}
+                                                                >
+                                                                    <div className={cn(
+                                                                        "w-full h-full flex flex-col gap-0.5 border-l-4 px-2 py-2 rounded-lg",
+                                                                        sportStyles.bg,
+                                                                        sportStyles.border,
+                                                                    )}>
+                                                                        <span className={cn("text-[10px] font-black leading-tight line-clamp-1", sportStyles.text)}>
+                                                                            {responsavel}
+                                                                        </span>
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            {booking.price != null && (
                                                                                 <span className={cn("text-[9px] font-bold", sportStyles.textSecondary)}>
-                                                                                    {sportName || 'Esporte'}
+                                                                                    R$ {Number(booking.price).toFixed(0)}
                                                                                 </span>
-                                                                            </div>
-                                                                            <span className={cn("text-[9px] font-medium", sportStyles.textSecondary)}>
-                                                                                {startStr} – {endStr}
+                                                                            )}
+                                                                            <span className={cn("text-[9px] font-bold", sportStyles.textSecondary)}>•</span>
+                                                                            <span className={cn("text-[9px] font-bold", sportStyles.textSecondary)}>
+                                                                                {sportName || 'Esporte'}
                                                                             </span>
-                                                                        </>
-                                                                    )}
-                                                                </div>
-                                                            </td>
-                                                        );
-                                                    }
+                                                                        </div>
+                                                                        <span className={cn("text-[9px] font-medium", sportStyles.textSecondary)}>
+                                                                            {format(bStart, 'HH:mm')} – {format(bEnd, 'HH:mm')}
+                                                                        </span>
+                                                                    </div>
+                                                                </td>
+                                                            )
+                                                        }
 
-                                                    return (
-                                                        <td key={court.id} className="bg-white border-r border-b border-[#002B40]/5 last:border-r-0 relative group/slot">
-                                                            {(() => {
-                                                                const futureB = getFutureBookingForSlot(court.id, hour);
-                                                                if (!futureB) return null;
-                                                                const fStart = parseISO(futureB.start_time);
-                                                                const fEnd = parseISO(futureB.end_time);
-                                                                return (
-                                                                    <TooltipProvider delayDuration={200}>
-                                                                        <Tooltip>
-                                                                            <TooltipTrigger
-                                                                                asChild
-                                                                                onClick={(e) => e.stopPropagation()}
-                                                                            >
-                                                                                <div className="absolute top-1.5 right-1.5 z-10 cursor-default">
-                                                                                    <div
-                                                                                        className="h-2 w-2 rounded-full bg-indigo-300 animate-pulse"
-                                                                                        style={{ boxShadow: '0 0 0 3px rgba(129,140,248,0.15)' }}
-                                                                                    />
-                                                                                </div>
-                                                                            </TooltipTrigger>
-                                                                            <TooltipContent
-                                                                                side="right"
-                                                                                sideOffset={8}
-                                                                                className="bg-[#1E293B] border-none text-white rounded-xl px-3.5 py-2.5 shadow-xl max-w-[200px]"
-                                                                            >
-                                                                                <div className="space-y-1">
-                                                                                    <p className="text-[9px] font-black uppercase tracking-wider text-indigo-300">
-                                                                                        Próximo evento
-                                                                                    </p>
-                                                                                    <p className="text-[12px] font-bold leading-tight">
-                                                                                        {futureB.athlete_name ?? 'Atleta'}
-                                                                                    </p>
-                                                                                    <p className="text-[10px] text-white/70 font-medium">
-                                                                                        {format(fStart, "EEE, dd/MM", { locale: ptBR })} &middot; {format(fStart, "HH:mm")}&ndash;{format(fEnd, "HH:mm")}
-                                                                                    </p>
-                                                                                </div>
-                                                                            </TooltipContent>
-                                                                        </Tooltip>
-                                                                    </TooltipProvider>
-                                                                );
-                                                            })()}
-                                                        </td>
-                                                    );
-                                                })}
-                                            </tr>
-                                        );
-                                    })}
+                                                        return (
+                                                            <td key={court.id} className="bg-white border-r border-b border-[#002B40]/5 last:border-r-0 relative group/slot">
+                                                                {(() => {
+                                                                    const futureB = getFutureBookingForSlot(court.id, slot)
+                                                                    if (!futureB) return null
+                                                                    const fStart = parseISO(futureB.start_time)
+                                                                    const fEnd = parseISO(futureB.end_time)
+                                                                    return (
+                                                                        <TooltipProvider delayDuration={200}>
+                                                                            <Tooltip>
+                                                                                <TooltipTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                                                                    <div className="absolute top-1.5 right-1.5 z-10 cursor-default">
+                                                                                        <div className="h-2 w-2 rounded-full bg-indigo-300 animate-pulse" style={{ boxShadow: '0 0 0 3px rgba(129,140,248,0.15)' }} />
+                                                                                    </div>
+                                                                                </TooltipTrigger>
+                                                                                <TooltipContent side="right" sideOffset={8} className="bg-[#1E293B] border-none text-white rounded-xl px-3.5 py-2.5 shadow-xl max-w-[200px]">
+                                                                                    <div className="space-y-1">
+                                                                                        <p className="text-[9px] font-black uppercase tracking-wider text-indigo-300">Próximo evento</p>
+                                                                                        <p className="text-[12px] font-bold leading-tight">{futureB.athlete_name ?? 'Atleta'}</p>
+                                                                                        <p className="text-[10px] text-white/70 font-medium">
+                                                                                            {format(fStart, "EEE, dd/MM", { locale: ptBR })} &middot; {format(fStart, "HH:mm")}&ndash;{format(fEnd, "HH:mm")}
+                                                                                        </p>
+                                                                                    </div>
+                                                                                </TooltipContent>
+                                                                            </Tooltip>
+                                                                        </TooltipProvider>
+                                                                    )
+                                                                })()}
+                                                            </td>
+                                                        )
+                                                    })}
+                                                </tr>
+                                            )
+                                        })
+                                    })()}
                                 </tbody>
                             </table>
                         </div>
                     )}
-                </div>
+                    </div>{/* end grid */}
+                </div>{/* end sidebar+grid flex */}
 
                 {/* Mobile legend */}
                 {uniqueSports.length > 0 && (

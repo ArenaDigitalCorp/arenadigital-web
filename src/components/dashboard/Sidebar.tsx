@@ -29,9 +29,12 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
     const pathname = usePathname();
     const { isCollapsed, toggleSidebar } = useSidebar();
     const { selectedArena, selectedArenaDetails } = useArena();
+
+    // Perfis de acesso
     const isCashier = selectedArenaDetails?.role === "Caixa" && !selectedArenaDetails?.isOwner;
-    const canAccessSubscription =
-        Boolean(selectedArenaDetails?.isOwner) || selectedArenaDetails?.role === "Gestor";
+    const isAdmin = selectedArenaDetails?.isOwner || selectedArenaDetails?.role === "Gestor";
+    const canAccessSubscription = Boolean(isAdmin);
+
     const arenaHref = selectedArena ? `/dashboard/arenas/${selectedArena}` : "/dashboard/arenas";
     const stationsHref = selectedArena ? `/dashboard/arenas/${selectedArena}/stations` : "/dashboard/stations";
     const financeHref = selectedArena ? `/dashboard/finance/${selectedArena}` : "/dashboard/finance";
@@ -40,7 +43,8 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
     const rotativoHref = selectedArena ? `/dashboard/rotativo/${selectedArena}` : "/dashboard/rotativo";
     const athletesHref = selectedArena ? `/dashboard/athletes/${selectedArena}` : "/dashboard/athletes";
 
-    const cashierItems = isCashier && selectedArenaDetails?.assignedStationId ? [
+    // Caixa com estação atribuída → apenas "Minha Estação"
+    const cashierWithStation = isCashier && selectedArenaDetails?.assignedStationId ? [
         {
             icon: Store,
             label: "Minha estação",
@@ -49,6 +53,20 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
         },
     ] : null;
 
+    // Caixa sem estação atribuída → apenas menu "Estações"
+    const cashierWithoutStation = isCashier && !selectedArenaDetails?.assignedStationId ? [
+        {
+            icon: Store,
+            label: "Estações",
+            href: stationsHref,
+            isActive: (p: string) => p.includes("/stations"),
+        },
+    ] : null;
+
+    // Item de menu efetivo para caixa
+    const cashierItems = cashierWithStation ?? cashierWithoutStation;
+
+    // Itens do topo: caixa vê apenas seu(s) item(ns), demais veem Dashboard + Atletas
     const topItems = cashierItems ?? [
         {
             icon: LayoutDashboard,
@@ -64,7 +82,8 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
         },
     ];
 
-    const bottomItems = cashierItems ? [] : [
+    // Itens do rodapé (visíveis apenas para não-caixas)
+    const bottomItems = isCashier ? [] : [
         {
             icon: Store,
             label: "Estações",
@@ -321,7 +340,7 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                         </div>
                         )}
 
-                        {!isCashier && (
+                        {!isCashier && isAdmin && (
                         <div className="pt-2">
                             <Button
                                 variant="ghost"

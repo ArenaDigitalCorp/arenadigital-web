@@ -66,12 +66,31 @@ Authorization: Bearer <clerk_token>
 
 ### 4.2 Autorização (RBAC)
 
-Controle de acesso baseado em **roles**:
+Controle de acesso baseado em **roles** por arena. O sistema usa 3 perfis de usuário (mapeados para as roles do banco):
 
-- `admin` → acesso total ao sistema
-- `gestor` → acesso limitado à(s) arena(s) associada(s)
+| Perfil          | Role no banco | Acesso                                                                                           |
+|-----------------|---------------|--------------------------------------------------------------------------------------------------|
+| Administrador   | `Gestor`      | Acesso **total e irrestrito** a todas as funcionalidades                                         |
+| Usuário comum   | `Atendente`   | Dashboard, Atletas, Espaços, Estações, Produtos, Financeiro, Loyalty, Rotativo, Relatórios — **sem Configurações** |
+| Caixa           | `Caixa`       | Acesso **somente ao menu Estações**                                                              |
 
-A validação ocorre no backend por middleware.
+> O `Owner` da arena equivale ao Administrador (acesso total).
+
+#### Regras de redirecionamento para o perfil Caixa
+- Caixa **com estação atribuída**: redirecionado automaticamente para `/dashboard/arenas/{id}/stations/{stationId}`
+- Caixa **sem estação atribuída**: redirecionado para `/dashboard/arenas/{id}/stations` (lista de estações)
+- A Sidebar exibe apenas o item de menu "Estações" (ou "Minha Estação" se houver estação vinculada)
+
+#### Funções de proteção de rota (server-side — `src/lib/server-auth.ts`)
+| Função                         | Quem é bloqueado       | Uso                                      |
+|--------------------------------|------------------------|------------------------------------------|
+| `assertArenaAccess`            | Nenhum (qualquer membro) | Verificação básica de acesso à arena   |
+| `assertArenaBackofficeAccess`  | Caixa                  | Financeiro, Loyalty, Rotativo, Espaços  |
+| `assertArenaAdminAccess`       | Caixa + Atendente      | Configurações exclusivas de Admin       |
+| `assertArenaOwnerAccess`       | Todos (exceto Owner)   | Ações restritas ao dono da arena        |
+| `assertArenaSubscriptionAccess`| Não-Owner e não-Gestor | Gerenciamento de assinatura             |
+
+A validação ocorre no backend via server components e API routes.
 
 ---
 

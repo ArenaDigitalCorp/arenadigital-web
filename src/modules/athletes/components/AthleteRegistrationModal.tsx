@@ -212,7 +212,7 @@ export function AthleteRegistrationModal({
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="!w-[70vw] !max-w-[70vw] p-0 border-none rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-                <div className="bg-white flex flex-col h-full">
+                <div className="bg-white flex flex-col flex-1 min-h-0">
 
                     {/* Header */}
                     <DialogHeader className="px-8 pt-7 pb-5 border-b border-[#002B40]/8 shrink-0">
@@ -222,7 +222,7 @@ export function AthleteRegistrationModal({
                     </DialogHeader>
 
                     {/* Scrollable body */}
-                    <ScrollArea className="flex-1 overflow-y-auto">
+                    <ScrollArea className="flex-1 min-h-0 overflow-y-auto">
                         <Form {...form}>
                             <form id="athlete-form" onSubmit={form.handleSubmit(onSubmit)}>
                                 <div className="px-8 py-6 space-y-5">

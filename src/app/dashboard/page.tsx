@@ -20,7 +20,11 @@ export default function DashboardPage() {
     useEffect(() => {
         if (isLoadingArenas) return
         if (selectedArenaDetails?.role === 'Caixa' && selectedArenaDetails.assignedStationId) {
+            // Caixa com estação atribuída: vai direto para a estação
             router.replace(`/dashboard/arenas/${selectedArena}/stations/${selectedArenaDetails.assignedStationId}`)
+        } else if (selectedArenaDetails?.role === 'Caixa' && !selectedArenaDetails.assignedStationId) {
+            // Caixa sem estação atribuída: vai para a lista de estações
+            router.replace(`/dashboard/arenas/${selectedArena}/stations`)
         }
     }, [isLoadingArenas, router, selectedArena, selectedArenaDetails])
 
