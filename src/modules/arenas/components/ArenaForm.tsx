@@ -2,7 +2,6 @@
 
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
-import * as z from "zod"
 import { Button } from "@/components/ui/button"
 import {
     Form,
@@ -29,8 +28,9 @@ import { ImageUpload } from "@/components/ui/image-upload"
 import { getEstadosAction, getMunicipiosByEstadoAction, getMunicipioByIbgeAction, getComodidadesAction } from "@/modules/arenas/actions/arenaActions"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { Check, ChevronsUpDown, Copy } from "lucide-react"
+import { Check, ChevronsUpDown, Copy, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { isValidCnpj, onlyDigits } from "@/lib/brasil-document"
 import { getSportsAction } from "@/modules/athletes/actions/athleteActions"
 import { useEffect, useState } from "react"
 import { Textarea } from "@/components/ui/textarea"
@@ -79,6 +79,7 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
     const [selectedEstadoId, setSelectedEstadoId] = useState<number | null>(null)
     const [isEstadoOpen, setIsEstadoOpen] = useState(false)
     const [isMunicipioOpen, setIsMunicipioOpen] = useState(false)
+    const [cnpjLookupLoading, setCnpjLookupLoading] = useState(false)
 
     useEffect(() => {
         async function loadSports() {
@@ -149,6 +150,7 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
             description: initialData?.description || "",
             banner_url: initialData?.banner_url || "",
             zip_code: initialData?.zip_code || "",
+            cpf_cnpj: initialData?.cpf_cnpj ? String(initialData.cpf_cnpj) : "",
             address: typeof initialData?.address === 'string' ? initialData.address : initialData?.address?.street || "",
             neighborhood: initialData?.neighborhood || "",
             number: initialData?.number || "",
@@ -198,6 +200,105 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
         } catch (error) {
             console.error("Erro ao buscar CEP:", error);
             toast.error("Falha ao comunicar com ViaCEP.");
+        }
+    }
+
+    async function applyCnpjFromReceitaFederal() {
+        const digits = onlyDigits(form.getValues("cpf_cnpj"))
+        if (digits.length !== 14 || !isValidCnpj(digits)) {
+            toast.error("Informe um CNPJ válido (14 dígitos) para consultar os dados na Receita.")
+            return
+        }
+        setCnpjLookupLoading(true)
+        try {
+            const res = await fetch(`/api/lookup-cnpj?cnpj=${encodeURIComponent(digits)}`)
+            const json = await res.json()
+            if (!res.ok) {
+                toast.error(typeof json.error === "string" ? json.error : "Não foi possível consultar o CNPJ.")
+                return
+            }
+            const d = json.data as {
+                razaoSocial: string
+                nomeFantasia: string | null
+                cep: string
+                logradouro: string
+                numero: string
+                complemento: string | null
+                bairro: string
+                uf: string | null
+                codigoMunicipioIbge: number | null
+            }
+            const nome =
+                (d.nomeFantasia && d.nomeFantasia.trim()) || d.razaoSocial || ""
+            if (nome) {
+                form.setValue("name", nome, { shouldValidate: true, shouldDirty: true })
+            }
+            if (d.logradouro) {
+                form.setValue("address", d.logradouro, { shouldValidate: true, shouldDirty: true })
+            }
+            const num = (d.numero ?? "").toUpperCase().trim()
+            if (num && num !== "S/N" && num !== "SN") {
+                form.setValue("number", d.numero, { shouldValidate: true, shouldDirty: true })
+            }
+            if (d.complemento) {
+                form.setValue("complement", d.complemento, { shouldValidate: true, shouldDirty: true })
+            }
+            if (d.bairro) {
+                form.setValue("neighborhood", d.bairro, { shouldValidate: true, shouldDirty: true })
+            }
+            if (d.cep && d.cep.length === 8) {
+                form.setValue("zip_code", `${d.cep.slice(0, 5)}-${d.cep.slice(5)}`, {
+                    shouldValidate: true,
+                    shouldDirty: true,
+                })
+            }
+
+            if (d.codigoMunicipioIbge) {
+                const munRes = await getMunicipioByIbgeAction(d.codigoMunicipioIbge)
+                if (munRes.success && munRes.data) {
+                    const codigoUf = (munRes.data as { codigo_uf: number }).codigo_uf
+                    setSelectedEstadoId(codigoUf)
+                    const munsRes = await getMunicipiosByEstadoAction(codigoUf)
+                    if (munsRes.success && munsRes.data) setMunicipios(munsRes.data)
+                    form.setValue("id_municipio", d.codigoMunicipioIbge, {
+                        shouldValidate: true,
+                        shouldDirty: true,
+                    })
+                    toast.success("Dados da empresa carregados. Revise os campos antes de salvar.")
+                } else if (d.uf && estados.length > 0) {
+                    const est = estados.find((e: { uf: string }) => e.uf === d.uf)
+                    if (est) {
+                        setSelectedEstadoId(est.codigo_uf)
+                        const munsRes = await getMunicipiosByEstadoAction(est.codigo_uf)
+                        if (munsRes.success && munsRes.data) setMunicipios(munsRes.data)
+                        toast.success(
+                            "Dados da empresa carregados. Selecione o município manualmente e revise os demais campos."
+                        )
+                    } else {
+                        toast.success("Dados da empresa carregados. Revise estado, cidade e endereço antes de salvar.")
+                    }
+                } else {
+                    toast.success("Dados da empresa carregados. Revise os campos antes de salvar.")
+                }
+            } else if (d.uf && estados.length > 0) {
+                const est = estados.find((e: { uf: string }) => e.uf === d.uf)
+                if (est) {
+                    setSelectedEstadoId(est.codigo_uf)
+                    const munsRes = await getMunicipiosByEstadoAction(est.codigo_uf)
+                    if (munsRes.success && munsRes.data) setMunicipios(munsRes.data)
+                    toast.success(
+                        "Dados da empresa carregados. Selecione o município manualmente e revise os demais campos."
+                    )
+                } else {
+                    toast.success("Dados da empresa carregados. Revise os campos antes de salvar.")
+                }
+            } else {
+                toast.success("Dados da empresa carregados. Revise os campos antes de salvar.")
+            }
+        } catch {
+            toast.error("Falha ao consultar o CNPJ.")
+        } finally {
+            setCnpjLookupLoading(false)
         }
     }
 
@@ -251,6 +352,8 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
             }
 
             const payload: any = { ...data };
+            const docDigits = onlyDigits(data.cpf_cnpj ?? "");
+            payload.cpf_cnpj = docDigits.length > 0 ? docDigits : null;
             if (locationPoint) {
                 payload.location = locationPoint;
             }
@@ -327,6 +430,62 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
                                     <FormControl>
                                         <Input placeholder="Informe o nome da arena" {...field} />
                                     </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+
+                        <FormField
+                            control={form.control}
+                            name="cpf_cnpj"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>CPF ou CNPJ</FormLabel>
+                                    <FormControl>
+                                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+                                            <Input
+                                                placeholder="Somente números ou com formatação"
+                                                inputMode="numeric"
+                                                autoComplete="off"
+                                                className="sm:flex-1"
+                                                {...field}
+                                            />
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                disabled={
+                                                    cnpjLookupLoading ||
+                                                    onlyDigits(field.value).length !== 14 ||
+                                                    !isValidCnpj(onlyDigits(field.value))
+                                                }
+                                                onClick={() => void applyCnpjFromReceitaFederal()}
+                                                className="shrink-0 border-[#0D3B45] text-[#0D3B45] hover:bg-[#0D3B45]/5"
+                                            >
+                                                {cnpjLookupLoading ? (
+                                                    <>
+                                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                        Consultando…
+                                                    </>
+                                                ) : (
+                                                    "Preencher com CNPJ (Receita)"
+                                                )}
+                                            </Button>
+                                        </div>
+                                    </FormControl>
+                                    <FormDescription>
+                                        Opcional no cadastro. Necessário para cobrança com Asaas. CPF não possui consulta
+                                        automática gratuita; com CNPJ válido use o botão para buscar razão social e
+                                        endereço na{" "}
+                                        <a
+                                            href="https://brasilapi.com.br/"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="font-medium text-[#FF6B00] underline underline-offset-2"
+                                        >
+                                            Brasil API
+                                        </a>
+                                        .
+                                    </FormDescription>
                                     <FormMessage />
                                 </FormItem>
                             )}

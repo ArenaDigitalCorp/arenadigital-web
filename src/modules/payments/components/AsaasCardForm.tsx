@@ -17,12 +17,7 @@ type FormState = {
   cardNumber: string
   expiry: string
   cvv: string
-  holderName: string
-  holderEmail: string
   cpfCnpj: string
-  postalCode: string
-  addressNumber: string
-  phone: string
 }
 
 const INITIAL_STATE: FormState = {
@@ -30,12 +25,7 @@ const INITIAL_STATE: FormState = {
   cardNumber: '',
   expiry: '',
   cvv: '',
-  holderName: '',
-  holderEmail: '',
-  cpfCnpj: '',
-  postalCode: '',
-  addressNumber: '',
-  phone: ''
+  cpfCnpj: ''
 }
 
 function parseExpiry(expiry: string): { month: string; year: string } | null {
@@ -86,14 +76,7 @@ export function AsaasCardForm({
             expiryYear: expiry.year,
             cvv: form.cvv
           },
-          holder: {
-            name: form.holderName,
-            email: form.holderEmail,
-            cpfCnpj: form.cpfCnpj.replace(/\D/g, ''),
-            postalCode: form.postalCode.replace(/\D/g, ''),
-            addressNumber: form.addressNumber,
-            phone: form.phone.replace(/\D/g, '')
-          }
+          cpfCnpj: form.cpfCnpj
         })
       })
 
@@ -140,62 +123,23 @@ export function AsaasCardForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <fieldset className="space-y-3">
-        <legend className="text-sm font-semibold text-[#0D3B45]">Dados do cartão</legend>
-
-        <Field
-          label="Nome impresso no cartão"
-          value={form.cardHolderName}
-          onChange={(v) => update('cardHolderName', v)}
-          required
-        />
-
+    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+      <fieldset className="space-y-4">
         <Field
           label="Número do cartão"
           value={form.cardNumber}
           onChange={(v) => update('cardNumber', v)}
           inputMode="numeric"
           maxLength={19}
-          required
-        />
-
-        <div className="grid grid-cols-2 gap-3">
-          <Field
-            label="Validade (MM/AA)"
-            value={form.expiry}
-            onChange={(v) => update('expiry', v)}
-            inputMode="numeric"
-            maxLength={5}
-            placeholder="08/28"
-            required
-          />
-          <Field
-            label="CVV"
-            value={form.cvv}
-            onChange={(v) => update('cvv', v)}
-            inputMode="numeric"
-            maxLength={4}
-            required
-          />
-        </div>
-      </fieldset>
-
-      <fieldset className="space-y-3 border-t border-border pt-4">
-        <legend className="text-sm font-semibold text-[#0D3B45]">Dados do titular</legend>
-
-        <Field
-          label="Nome completo"
-          value={form.holderName}
-          onChange={(v) => update('holderName', v)}
+          placeholder="Insira o número do cartão"
           required
         />
 
         <Field
-          label="E-mail"
-          type="email"
-          value={form.holderEmail}
-          onChange={(v) => update('holderEmail', v)}
+          label="Nome impresso no cartão"
+          value={form.cardHolderName}
+          onChange={(v) => update('cardHolderName', v)}
+          placeholder="Insira o nome impresso no cartão"
           required
         />
 
@@ -204,42 +148,39 @@ export function AsaasCardForm({
           value={form.cpfCnpj}
           onChange={(v) => update('cpfCnpj', v)}
           inputMode="numeric"
+          placeholder="Insira o CPF ou CNPJ titular do cartão"
           required
         />
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-4">
           <Field
-            label="CEP"
-            value={form.postalCode}
-            onChange={(v) => update('postalCode', v)}
+            label="Data de validade"
+            value={form.expiry}
+            onChange={(v) => update('expiry', v)}
             inputMode="numeric"
-            maxLength={9}
+            maxLength={5}
+            placeholder="00/00"
             required
           />
           <Field
-            label="Número"
-            value={form.addressNumber}
-            onChange={(v) => update('addressNumber', v)}
+            label="CVV"
+            value={form.cvv}
+            onChange={(v) => update('cvv', v)}
+            inputMode="numeric"
+            maxLength={4}
+            placeholder="000"
             required
           />
         </div>
-
-        <Field
-          label="Telefone"
-          value={form.phone}
-          onChange={(v) => update('phone', v)}
-          inputMode="tel"
-          required
-        />
       </fieldset>
 
-      <div className="flex gap-3 pt-2">
+      <div className="flex gap-4 pt-1">
         {onCancel && (
           <button
             type="button"
             onClick={onCancel}
             disabled={loading}
-            className="flex-1 rounded-lg border border-[#0D3B45] px-4 py-2.5 text-sm font-medium text-[#0D3B45] hover:bg-[#0D3B45]/5 disabled:opacity-50"
+            className="h-12 flex-1 rounded-xl border border-[#002B40] bg-white text-sm font-semibold text-[#002B40] transition-colors hover:bg-[#002B40]/5 disabled:opacity-50"
           >
             Fechar
           </button>
@@ -247,7 +188,7 @@ export function AsaasCardForm({
         <button
           type="submit"
           disabled={loading}
-          className="flex-1 rounded-lg bg-[#FF6B00] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#E66000] disabled:opacity-50"
+          className="h-12 flex-1 rounded-xl bg-[#FF6B00] text-sm font-semibold text-white transition-colors hover:bg-[#E66000] disabled:opacity-50"
         >
           {loading ? 'Processando...' : submitLabel}
         </button>
@@ -278,8 +219,8 @@ function Field({
   required
 }: FieldProps) {
   return (
-    <label className="block">
-      <span className="mb-1 block text-xs font-medium text-muted-foreground">{label}</span>
+    <label className="block space-y-1.5">
+      <span className="block text-sm font-normal text-[#64748B]">{label}</span>
       <input
         type={type}
         value={value}
@@ -288,7 +229,7 @@ function Field({
         maxLength={maxLength}
         placeholder={placeholder}
         required={required}
-        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm shadow-sm focus:border-[#FF6B00] focus:outline-none focus:ring-1 focus:ring-[#FF6B00]"
+        className="h-12 w-full rounded-xl border border-[#D1D5DB] bg-white px-4 text-sm text-[#002B40] shadow-none placeholder:text-[#94A3B8] focus:border-[#FF6B00] focus:outline-none focus:ring-1 focus:ring-[#FF6B00]"
       />
     </label>
   )

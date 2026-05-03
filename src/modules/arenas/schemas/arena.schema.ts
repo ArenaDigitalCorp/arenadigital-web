@@ -1,3 +1,4 @@
+import { isValidCpfOrCnpj } from '@/lib/brasil-document'
 import * as z from 'zod'
 
 export const arenaSchema = z.object({
@@ -15,6 +16,12 @@ export const arenaSchema = z.object({
     complement: z.string().optional(),
     id_municipio: z.number({ message: "O município é obrigatório" }),
     zip_code: z.string().optional(),
+    cpf_cnpj: z
+        .string()
+        .optional()
+        .refine((v) => isValidCpfOrCnpj(v ?? ''), {
+            message: 'Informe um CPF ou CNPJ válido, ou deixe em branco.',
+        }),
     facebook: z.string().optional(),
     instagram: z.string().optional(),
     tiktok: z.string().optional(),

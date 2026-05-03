@@ -91,15 +91,17 @@ export function PaymentSetupForm({ arenaId, planKey, onSuccess, onError, onCance
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
-      <PaymentElement />
-      <div className="flex gap-3">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+      <div className="rounded-xl border border-[#D1D5DB] bg-white p-4">
+        <PaymentElement />
+      </div>
+      <div className="flex gap-4 pt-1">
         {onCancel && (
           <button
             type="button"
             onClick={onCancel}
             disabled={loading}
-            className="flex-1 rounded-lg border border-[#0D3B45] px-4 py-2.5 text-sm font-medium text-[#0D3B45] hover:bg-[#0D3B45]/5 disabled:opacity-50"
+            className="h-12 flex-1 rounded-xl border border-[#002B40] bg-white text-sm font-semibold text-[#002B40] transition-colors hover:bg-[#002B40]/5 disabled:opacity-50"
           >
             Fechar
           </button>
@@ -107,7 +109,7 @@ export function PaymentSetupForm({ arenaId, planKey, onSuccess, onError, onCance
         <button
           type="submit"
           disabled={!stripe || !elements || loading}
-          className="flex-1 rounded-lg bg-[#FF6B00] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#E66000] disabled:opacity-50"
+          className="h-12 flex-1 rounded-xl bg-[#FF6B00] text-sm font-semibold text-white transition-colors hover:bg-[#E66000] disabled:opacity-50"
         >
           {loading ? 'Processando...' : submitLabel}
         </button>

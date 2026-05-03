@@ -13,16 +13,16 @@ const RequestSchema = z.object({
     number: z.string().min(13),
     expiryMonth: z.string().regex(/^\d{2}$/),
     expiryYear: z.string().regex(/^\d{4}$/),
-    cvv: z.string().min(3).max(4)
+    cvv: z.string().min(3).max(4),
   }),
-  holder: z.object({
-    name: z.string().min(1),
-    email: z.string().email(),
-    cpfCnpj: z.string().min(11),
-    postalCode: z.string().min(8),
-    addressNumber: z.string().min(1),
-    phone: z.string().min(8)
-  })
+  /** CPF/CNPJ do titular do cartão; demais dados de cobrança vêm do cliente Asaas (cadastro da arena). */
+  cpfCnpj: z
+    .string()
+    .min(1)
+    .transform((s) => s.replace(/\D/g, ''))
+    .refine((d) => d.length === 11 || d.length === 14, {
+      message: 'CPF/CNPJ inválido.',
+    }),
 })
 
 function extractClientIp(request: NextRequest): string {
@@ -55,8 +55,15 @@ export async function POST(request: NextRequest) {
   if (!gateway.tokenizeCard) {
     return NextResponse.json(
       {
-        error: `Provedor "${gateway.providerName}" não suporta tokenização server-side.`
+        error: `Provedor "${gateway.providerName}" não suporta tokenização server-side.`,
       },
+      { status: 400 }
+    )
+  }
+
+  if (!gateway.resolveBillingHolderForCardTokenize) {
+    return NextResponse.json(
+      { error: 'Provedor não suporta montagem automática dos dados do titular.' },
       { status: 400 }
     )
   }
@@ -76,11 +83,17 @@ export async function POST(request: NextRequest) {
 
     const remoteIp = extractClientIp(request)
 
+    const baseHolder = await gateway.resolveBillingHolderForCardTokenize(
+      subscription.gateway_customer_id
+    )
+
+    const holder = { ...baseHolder, cpfCnpj: parsed.data.cpfCnpj }
+
     const result = await gateway.tokenizeCard({
       customerId: subscription.gateway_customer_id,
       card: parsed.data.card,
-      holder: parsed.data.holder,
-      remoteIp
+      holder,
+      remoteIp,
     })
 
     return NextResponse.json({ token: result.token })
@@ -90,9 +103,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error:
-          error instanceof Error
-            ? error.message
-            : 'Falha ao tokenizar cartão.'
+          error instanceof Error ? error.message : 'Falha ao tokenizar cartão.',
       },
       { status: 500 }
     )

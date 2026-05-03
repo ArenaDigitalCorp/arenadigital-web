@@ -131,6 +131,14 @@ export interface PaymentGateway {
    */
   tokenizeCard?(input: TokenizeCardInput): Promise<{ token: string }>
 
+  /**
+   * Dados de cobrança já gravados no cliente do provedor (ex.: arena + dono no Asaas),
+   * para não repetir CEP/telefone no formulário de cartão.
+   */
+  resolveBillingHolderForCardTokenize?(
+    customerId: string
+  ): Promise<TokenizeCardInput['holder']>
+
   // ===== Subscription =====
   createSubscription(input: CreateSubscriptionInput): Promise<DomainSubscription>
 

@@ -28,6 +28,7 @@ export interface Arena {
   tiktok?: string;
   nome_moeda_virtual?: string;
   neighborhood?: string;
+  cpf_cnpj?: string | null;
   location?: Record<string, unknown>;
   created_at: string;
   // Populated by joins

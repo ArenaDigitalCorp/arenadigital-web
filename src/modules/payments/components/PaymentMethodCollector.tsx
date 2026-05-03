@@ -47,7 +47,9 @@ export function PaymentMethodCollector({
             theme: 'stripe',
             variables: {
               colorPrimary: '#FF6B00',
-              borderRadius: '8px'
+              borderRadius: '12px',
+              colorText: '#002B40',
+              colorBackground: '#ffffff'
             }
           },
           locale: 'pt-BR'
