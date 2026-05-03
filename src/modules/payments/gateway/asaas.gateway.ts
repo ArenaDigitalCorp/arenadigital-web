@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import type {
   DomainInvoice,
   DomainInvoiceStatus,
@@ -22,6 +23,10 @@ import type {
 import { PaymentApiError } from '../errors';
 
 // ===== Tipos do Asaas (apenas o que usamos) =====
+
+function normalizeIdempotencyKey(value: string) {
+  return createHash('sha256').update(value).digest('hex').slice(0, 32);
+}
 
 type AsaasCustomer = {
   id: string;
@@ -237,6 +242,8 @@ class AsaasHttpClient {
     path: string,
     options: { body?: unknown; idempotencyKey?: string } = {}
   ): Promise<T> {
+    const bodyText =
+      options.body !== undefined ? JSON.stringify(options.body) : undefined;
     const headers: Record<string, string> = {
       access_token: this.apiKey,
       'User-Agent': 'arenadigital-web/1.0',
@@ -246,15 +253,18 @@ class AsaasHttpClient {
       headers['Content-Type'] = 'application/json';
     }
 
-    if (options.idempotencyKey) {
-      headers['idempotency-key'] = options.idempotencyKey;
+    const normalizedIdempotencyKey = options.idempotencyKey
+      ? normalizeIdempotencyKey(options.idempotencyKey)
+      : undefined;
+
+    if (normalizedIdempotencyKey) {
+      headers['idempotency-key'] = normalizedIdempotencyKey;
     }
 
     const res = await fetch(`${this.baseUrl}${path}`, {
       method,
       headers,
-      body:
-        options.body !== undefined ? JSON.stringify(options.body) : undefined,
+      body: bodyText,
       cache: 'no-store',
     });
 
@@ -267,18 +277,17 @@ class AsaasHttpClient {
         typeof json === 'object' &&
         'errors' in json &&
         Array.isArray((json as { errors: unknown }).errors)
-          ? (json as { errors: Array<{ description?: string }> }).errors
-              .map((e) => e.description ?? '')
+          ? (
+              json as {
+                errors: Array<{ description?: string; message?: string }>;
+              }
+            ).errors
+              .map((e) => e.description ?? e.message ?? '')
+              .filter(Boolean)
               .join('; ')
           : null) ?? `Asaas request failed: ${res.status} ${res.statusText}`;
 
-      const error = new Error(errorMessage) as Error & {
-        status?: number;
-        payload?: unknown;
-      };
-      error.status = res.status;
-      error.payload = json;
-      throw error;
+      throw new PaymentApiError(res.status, errorMessage, JSON.stringify(json));
     }
 
     return json as T;
@@ -420,21 +429,23 @@ export class AsaasGateway implements PaymentGateway {
   ): Promise<DomainSubscription> {
     const cycle = input.plan.cycle ?? 'MONTHLY';
     const today = todayIsoDate();
+    const requestBody = {
+      customer: input.customerId,
+      billingType: 'CREDIT_CARD',
+      value: centsToReais(input.plan.priceCents),
+      nextDueDate: today,
+      cycle,
+      creditCardToken: input.paymentMethodId,
+      remoteIp: input.remoteIp,
+      description: input.plan.label,
+      externalReference: input.metadata?.arena_id,
+    };
 
     const sub = await this.http.request<AsaasSubscription>(
       'POST',
       '/v3/subscriptions',
       {
-        body: {
-          customer: input.customerId,
-          billingType: 'CREDIT_CARD',
-          value: centsToReais(input.plan.priceCents),
-          nextDueDate: today,
-          cycle,
-          creditCardToken: input.paymentMethodId,
-          description: input.plan.label,
-          externalReference: input.metadata?.arena_id,
-        },
+        body: requestBody,
         idempotencyKey: input.idempotencyKey,
       }
     );

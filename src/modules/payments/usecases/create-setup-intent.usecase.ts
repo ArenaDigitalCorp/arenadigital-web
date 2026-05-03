@@ -72,7 +72,18 @@ export async function createSetupIntent(
   let gatewayCustomerId: string | null =
     subscription?.gateway_customer_id ?? null;
 
-  if (!gatewayCustomerId) {
+  if (gateway.providerName === 'asaas') {
+    const customer = await gateway.createCustomer({
+      email: ownerEmail,
+      name: ownerName ?? arenaContact.name,
+      cpfCnpj: arenaContact.cpfCnpj,
+      phone: arenaContact.phone,
+      postalCode: arenaContact.postalCode,
+      addressNumber: arenaContact.addressNumber,
+      metadata: { arena_id: arenaId },
+    });
+    gatewayCustomerId = customer.id;
+  } else if (!gatewayCustomerId) {
     const customer = await gateway.createCustomer({
       email: ownerEmail,
       name: ownerName ?? arenaContact.name,

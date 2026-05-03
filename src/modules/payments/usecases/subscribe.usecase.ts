@@ -23,6 +23,7 @@ export const SubscribeRequestSchema = z.object({
 
 export type SubscribeRequest = z.infer<typeof SubscribeRequestSchema> & {
   actorId?: string | null
+  remoteIp?: string
 }
 
 export type SubscribeResponse =
@@ -274,12 +275,14 @@ export async function subscribe(request: SubscribeRequest): Promise<SubscribeRes
 
   let subscription: DomainSubscription
   try {
+    const idempotencyKey = `subscribe-${request.arenaId}-${plan.key}`
     subscription = await gateway.createSubscription({
       customerId: record.gateway_customer_id,
       plan: planInfo,
       paymentMethodId: request.paymentMethodId,
+      remoteIp: request.remoteIp,
       metadata: { arena_id: request.arenaId, plan_key: plan.key },
-      idempotencyKey: `subscribe-${request.arenaId}-${plan.key}`
+      idempotencyKey
     })
   } catch (error) {
     throw new CreateSubscriptionFailedError(

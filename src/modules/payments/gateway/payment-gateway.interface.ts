@@ -77,6 +77,8 @@ export type CreateSubscriptionInput = {
   plan: SubscriptionPlanInfo
   /** Token opaco do método de pagamento. Stripe: pm_xxx. Asaas: creditCardToken. */
   paymentMethodId: string
+  /** IP do usuário final usado por gateways antifraude (Asaas exige em cartão). */
+  remoteIp?: string
   metadata?: Record<string, string>
   idempotencyKey?: string
 }
