@@ -8,7 +8,7 @@ export function Footer() {
             <div className="mx-auto flex w-full max-w-[1191px] flex-col items-center gap-[30px]">
                 <div className="grid w-full max-w-[956px] gap-10 md:grid-cols-[118px_1fr_151px] md:items-start md:justify-between">
                     <Image
-                        src="/logo_arena_front_bgbranco.png"
+                        src="/logo_arena.png"
                         alt="Arena Digital Logo"
                         width={118}
                         height={40}
