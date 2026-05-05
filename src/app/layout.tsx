@@ -1,13 +1,19 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Exo, Manrope, Geist_Mono } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { ptBR } from "@clerk/localizations";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const exo = Exo({
+  variable: "--font-exo",
+  subsets: ["latin"],
+  weight: ["600", "700", "800", "900"],
+});
+
+const manrope = Manrope({
+  variable: "--font-manrope",
   subsets: ["latin"],
 });
 
@@ -30,7 +36,7 @@ export default function RootLayout({
     <ClerkProvider localization={ptBR}>
       <html lang="pt-BR">
         <body
-          className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+          className={`${exo.variable} ${manrope.variable} ${geistMono.variable} antialiased`}
         >
           <TooltipProvider>
             {children}

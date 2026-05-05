@@ -7,7 +7,8 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-manrope);
+  --font-heading: var(--font-exo);
   --font-mono: var(--font-geist-mono);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -80,6 +81,15 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  --arena-navy-950: #001524;
+  --arena-navy-900: #001d2d;
+  --arena-navy-800: #002b40;
+  --arena-navy-700: #003b55;
+  --arena-cyan: #0089a0;
+  --arena-orange: #f97415;
+  --arena-amber: #f9a91f;
+  --arena-soft: #f8fafc;
+  --arena-gradient: linear-gradient(90deg, #f97415 0%, #f9a91f 100%);
 }
 
 .dark {
@@ -122,5 +132,28 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-manrope), sans-serif;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-exo), sans-serif;
+    letter-spacing: 0;
+  }
+}
+
+@layer utilities {
+  .arena-gradient {
+    background-image: var(--arena-gradient);
+  }
+
+  .arena-gradient-text {
+    background-image: var(--arena-gradient);
+    background-clip: text;
+    color: transparent;
   }
 }

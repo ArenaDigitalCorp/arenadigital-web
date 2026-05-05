@@ -102,17 +102,17 @@ export function HeroAnimation() {
     }, []);
 
     return (
-        <div className="absolute inset-0 z-0 bg-[#001D2D] overflow-hidden">
+        <div className="absolute inset-0 z-0 overflow-hidden bg-[var(--arena-navy-900)]">
             {!isLoaded && (
-                <div className="absolute inset-0 flex items-center justify-center bg-[#001D2D]">
-                    <div className="w-8 h-8 border-4 border-[#FF6B00] border-t-transparent rounded-full animate-spin opacity-50"></div>
+                <div className="absolute inset-0 flex items-center justify-center bg-[var(--arena-navy-900)]">
+                    <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#F97415] border-t-transparent opacity-50"></div>
                 </div>
             )}
-            <canvas ref={canvasRef} className="w-full h-full opacity-60" />
+            <canvas ref={canvasRef} className="h-full w-full opacity-[0.58]" />
 
             {/* Required Overlays */}
-            <div className="absolute inset-0 bg-[#001D2D]/60 mix-blend-multiply pointer-events-none" />
-            <div className="absolute inset-0 bg-gradient-to-b from-[#001D2D]/20 via-[#001D2D]/60 to-[#001D2D] pointer-events-none" />
+            <div className="pointer-events-none absolute inset-0 bg-[rgba(0,29,45,0.62)] mix-blend-multiply" />
+            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,21,36,0.24)_0%,rgba(0,29,45,0.58)_55%,rgba(0,21,36,0.98)_100%)]" />
         </div>
     );
 }

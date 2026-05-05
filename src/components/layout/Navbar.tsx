@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { SignInButton, SignUpButton, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
+import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import { Menu, X } from "lucide-react";
 
 export function Navbar() {
@@ -14,27 +15,30 @@ export function Navbar() {
     };
 
     return (
-        <header className="fixed top-0 w-full border-b border-white/10 bg-[#001D2D]/90 backdrop-blur-md z-50">
-            <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+        <header className="fixed top-0 z-50 w-full border-b border-white/10 bg-[rgba(11,24,50,0.90)] backdrop-blur-md">
+            <div className="container mx-auto flex h-20 max-w-[1400px] items-center justify-between px-4 md:px-8">
                 <Link href="/" className="flex items-center gap-2">
-                    <img
+                    <Image
                         src="/logo_arena.png"
                         alt="Arena Digital"
+                        width={120}
+                        height={48}
                         className="h-12 w-auto object-contain"
+                        priority
                     />
                 </Link>
 
-                <nav className="hidden md:flex items-center gap-6">
-                    <Link href="#forarenas" className="text-sm font-medium text-white/80 hover:text-white transition-colors">
+                <nav className="hidden md:flex items-center gap-8">
+                    <Link href="#forarenas" className="text-sm font-medium text-white transition-colors hover:text-white/80">
                         Para Arenas
                     </Link>
-                    <Link href="#foratletas" className="text-sm font-medium text-white/80 hover:text-white transition-colors">
+                    <Link href="#foratletas" className="text-sm font-medium text-white transition-colors hover:text-white/80">
                         Para Atletas
                     </Link>
-                    <Link href="#howitworks" className="text-sm font-medium text-white/80 hover:text-white transition-colors">
+                    <Link href="#howitworks" className="text-sm font-medium text-white transition-colors hover:text-white/80">
                         Como Funciona
                     </Link>
-                    <Link href="#solution" className="text-sm font-medium text-white/80 hover:text-white transition-colors">
+                    <Link href="#solution" className="text-sm font-medium text-white transition-colors hover:text-white/80">
                         Solução
                     </Link>
                 </nav>
@@ -43,8 +47,8 @@ export function Navbar() {
                     <div className="hidden md:flex items-center gap-4">
                         <SignedOut>
                             <Link href="/sign-in">
-                                <Button className="h-10 px-6 bg-[#FF6B00] hover:bg-[#E66000] text-white font-bold rounded-lg shadow-lg shadow-[#FF6B00]/20 transition-all">
-                                    Entrar
+                                <Button className="arena-gradient h-10 rounded-xl border-0 px-5 text-sm font-semibold text-white shadow-lg shadow-[#F97415]/20 transition-all hover:brightness-105">
+                                    Começar Agora
                                 </Button>
                             </Link>
                         </SignedOut>
@@ -66,22 +70,25 @@ export function Navbar() {
 
             {/* Mobile Menu Dropdown */}
             {isMobileMenuOpen && (
-                <div className="md:hidden border-t border-white/10 bg-[#001D2D]/95 backdrop-blur-md absolute w-full left-0 top-16 shadow-xl py-4 flex flex-col items-center gap-4 animate-in fade-in slide-in-from-top-2">
-                    <Link href="#features" onClick={toggleMobileMenu} className="text-sm font-medium text-white/70 hover:text-white transition-colors">
-                        Funcionalidades
+                <div className="absolute left-0 top-20 flex w-full animate-in flex-col items-center gap-4 border-t border-white/10 bg-[rgba(11,24,50,0.95)] py-4 shadow-xl backdrop-blur-md fade-in slide-in-from-top-2 md:hidden">
+                    <Link href="#forarenas" onClick={toggleMobileMenu} className="text-sm font-semibold text-white/70 transition-colors hover:text-white">
+                        Para Arenas
                     </Link>
-                    <Link href="#benefits" onClick={toggleMobileMenu} className="text-sm font-medium text-white/70 hover:text-white transition-colors">
-                        Benefícios
+                    <Link href="#foratletas" onClick={toggleMobileMenu} className="text-sm font-semibold text-white/70 transition-colors hover:text-white">
+                        Para Atletas
                     </Link>
-                    <Link href="#contact" onClick={toggleMobileMenu} className="text-sm font-medium text-white/70 hover:text-white transition-colors">
-                        Contato
+                    <Link href="#howitworks" onClick={toggleMobileMenu} className="text-sm font-semibold text-white/70 transition-colors hover:text-white">
+                        Como Funciona
+                    </Link>
+                    <Link href="#solution" onClick={toggleMobileMenu} className="text-sm font-semibold text-white/70 transition-colors hover:text-white">
+                        Solução
                     </Link>
 
                     <div className="w-full px-4 pt-4 border-t border-white/10 flex flex-col gap-4">
                         <SignedOut>
                             <Link href="/sign-in" onClick={toggleMobileMenu} className="w-full">
-                                <Button className="w-full h-12 bg-[#FF6B00] hover:bg-[#E66000] text-white font-bold rounded-lg shadow-lg shadow-[#FF6B00]/20 transition-all">
-                                    Entrar
+                                <Button className="arena-gradient h-12 w-full rounded-xl border-0 font-extrabold text-white shadow-lg shadow-[#F97415]/20 transition-all hover:brightness-105">
+                                    Começar Agora
                                 </Button>
                             </Link>
                         </SignedOut>
