@@ -1,4 +1,5 @@
 import { Navbar } from "@/components/layout/Navbar";
+import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import {
   Building2,
@@ -24,11 +25,8 @@ import {
   QrCode,
   Apple,
   Play,
-  Instagram,
-  Facebook,
 } from "lucide-react";
 import Link from "next/link";
-import Image from "next/image";
 import { HeroAnimation } from "@/components/layout/HeroAnimation";
 
 export default function LandingPage() {
@@ -43,14 +41,14 @@ export default function LandingPage() {
 
         <div className="container mx-auto text-center relative z-10 flex flex-col items-center">
           <h1 className="mx-auto mb-6 max-w-5xl font-heading text-[clamp(2.8rem,5.2vw,5.75rem)] font-black leading-[0.96] text-white">
-            Sua arena cheia. <span className="arena-gradient-text">Sua gestão no controle.</span> Seus atletas engajados.
+            Sua arena cheia. <span className="bg-gradient-to-r from-[#F97415] to-[#F9A91F] bg-clip-text text-transparent">Sua gestão no controle.</span> Seus atletas engajados.
           </h1>
           <p className="mx-auto mb-10 max-w-3xl text-lg font-medium leading-8 text-white/70 md:text-xl">
             Plataforma completa para gestão de arenas esportivas e aplicativo para conectar atletas, organizar jogos e criar comunidade.
           </p>
           <div className="mb-16 flex w-full flex-col items-center justify-center gap-4 sm:w-auto sm:flex-row">
             <Link href="/sign-in" className="w-full sm:w-auto">
-              <Button size="lg" className="arena-gradient h-14 w-full rounded-xl border-0 px-8 text-base font-extrabold text-white shadow-2xl shadow-[#F97415]/25 transition-all hover:scale-[1.02] hover:brightness-105 sm:w-auto">
+              <Button size="lg" variant="ghost" className="h-14 w-full rounded-xl border-0 bg-[linear-gradient(90deg,#F97415_0%,#F9A91F_100%)] px-8 text-base font-extrabold text-white shadow-2xl shadow-[#F97415]/25 transition-all hover:scale-[1.02] hover:bg-[linear-gradient(90deg,#F97415_0%,#F9A91F_100%)] hover:text-white hover:brightness-105 sm:w-auto">
                 Quero transformar minha arena <span className="text-xl">→</span>
               </Button>
             </Link>
@@ -61,15 +59,15 @@ export default function LandingPage() {
 
           <div className="mt-2 flex flex-wrap items-center justify-center gap-10 text-white/85 md:gap-20">
             <div className="flex flex-col items-center">
-              <span className="arena-gradient-text mb-1 font-heading text-4xl font-black">100%</span>
+              <span className="mb-1 bg-gradient-to-r from-[#F97415] to-[#F9A91F] bg-clip-text font-heading text-4xl font-black text-transparent">100%</span>
               <span className="text-sm font-medium text-white/55">Digital</span>
             </div>
             <div className="flex flex-col items-center">
-              <span className="arena-gradient-text mb-1 font-heading text-4xl font-black">Web + App</span>
+              <span className="mb-1 bg-gradient-to-r from-[#F97415] to-[#F9A91F] bg-clip-text font-heading text-4xl font-black text-transparent">Web + App</span>
               <span className="text-sm font-medium text-white/55">Integrados</span>
             </div>
             <div className="flex flex-col items-center">
-              <span className="arena-gradient-text mb-1 font-heading text-4xl font-black">6</span>
+              <span className="mb-1 bg-gradient-to-r from-[#F97415] to-[#F9A91F] bg-clip-text font-heading text-4xl font-black text-transparent">6</span>
               <span className="text-sm font-medium text-white/55">Modalidades</span>
             </div>
           </div>
@@ -113,7 +111,7 @@ export default function LandingPage() {
             {/* Atletas Column */}
             <div className="space-y-4">
               <div className="flex items-center gap-4 mb-8">
-                <div className="arena-gradient flex h-12 w-12 shrink-0 items-center justify-center rounded-lg text-white shadow-md shadow-[#F97415]/20">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-[linear-gradient(90deg,#F97415_0%,#F9A91F_100%)] text-white shadow-md shadow-[#F97415]/20">
                   <User className="w-5 h-5" />
                 </div>
                 <div>
@@ -146,7 +144,7 @@ export default function LandingPage() {
         <div className="container mx-auto px-4 max-w-6xl">
           <div className="text-center mb-16">
             <h2 className="mb-4 font-heading text-4xl font-extrabold text-[var(--arena-navy-800)] md:text-5xl">
-              Uma plataforma. Dois lados conectados. <span className="arena-gradient-text">Um ecossistema completo.</span>
+              Uma plataforma. Dois lados conectados. <span className="bg-gradient-to-r from-[#F97415] to-[#F9A91F] bg-clip-text text-transparent">Um ecossistema completo.</span>
             </h2>
             <p className="text-slate-500 text-lg max-w-2xl mx-auto">
               O Arena Digital integra tudo que arenas e atletas precisam em um só lugar.
@@ -183,7 +181,7 @@ export default function LandingPage() {
           <div className="mb-16">
             <span className="mb-3 block text-xs font-extrabold uppercase tracking-wider text-[var(--arena-cyan)]">Para Donos de Arena</span>
             <h2 className="mx-auto max-w-4xl font-heading text-4xl font-extrabold leading-tight text-[var(--arena-navy-800)] md:text-5xl">
-              Transforme sua arena em uma <span className="arena-gradient-text">máquina organizada</span> e previsível.
+              Transforme sua arena em uma <span className="bg-gradient-to-r from-[#F97415] to-[#F9A91F] bg-clip-text text-transparent">máquina organizada</span> e previsível.
             </h2>
           </div>
 
@@ -206,7 +204,7 @@ export default function LandingPage() {
           </div>
 
           <div className="mt-16">
-            <Button className="arena-gradient h-14 border-0 px-8 text-base font-extrabold text-white shadow-lg shadow-[#F97415]/20 transition-all hover:brightness-105">
+            <Button variant="ghost" className="h-14 border-0 bg-[linear-gradient(90deg,#F97415_0%,#F9A91F_100%)] px-8 text-base font-extrabold text-white shadow-lg shadow-[#F97415]/20 transition-all hover:bg-[linear-gradient(90deg,#F97415_0%,#F9A91F_100%)] hover:text-white hover:brightness-105">
               Quero automatizar minha arena <span className="text-xl ml-2">→</span>
             </Button>
           </div>
@@ -220,7 +218,7 @@ export default function LandingPage() {
           <div className="mb-16">
             <span className="mb-3 block text-xs font-extrabold uppercase tracking-wider text-[var(--arena-cyan)]">Para Atletas</span>
             <h2 className="mx-auto max-w-4xl font-heading text-4xl font-extrabold leading-tight text-white md:text-5xl">
-              Encontre jogos. Evolua. <span className="arena-gradient-text">Faça parte da comunidade.</span>
+              Encontre jogos. Evolua. <span className="bg-gradient-to-r from-[#F97415] to-[#F9A91F] bg-clip-text text-transparent">Faça parte da comunidade.</span>
             </h2>
           </div>
 
@@ -233,7 +231,7 @@ export default function LandingPage() {
               { icon: Gift, title: "Ganhe recompensas", desc: "Programa de fidelidade integrado com a arena." }
             ].map((feature, i) => (
               <div key={i} className={`rounded-lg border border-white/5 bg-[rgba(0,43,64,0.70)] p-8 backdrop-blur-sm ${i === 4 ? 'md:col-span-2 lg:col-span-1' : ''}`}>
-                <div className="arena-gradient mb-6 flex h-12 w-12 items-center justify-center rounded-lg text-white shadow-lg shadow-[#F97415]/20">
+                <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-lg bg-[linear-gradient(90deg,#F97415_0%,#F9A91F_100%)] text-white shadow-lg shadow-[#F97415]/20">
                   <feature.icon className="w-6 h-6" />
                 </div>
                 <h3 className="mb-2 font-heading text-lg font-extrabold text-white">{feature.title}</h3>
@@ -243,7 +241,7 @@ export default function LandingPage() {
           </div>
 
           <div className="mt-16">
-            <Button className="arena-gradient h-14 border-0 px-8 text-base font-extrabold text-white shadow-lg shadow-[#F97415]/20 transition-all hover:brightness-105">
+            <Button variant="ghost" className="h-14 border-0 bg-[linear-gradient(90deg,#F97415_0%,#F9A91F_100%)] px-8 text-base font-extrabold text-white shadow-lg shadow-[#F97415]/20 transition-all hover:bg-[linear-gradient(90deg,#F97415_0%,#F9A91F_100%)] hover:text-white hover:brightness-105">
               Quero baixar o app <span className="text-xl ml-2">→</span>
             </Button>
           </div>
@@ -255,7 +253,7 @@ export default function LandingPage() {
         <div className="container mx-auto max-w-4xl px-4 text-center">
           <span className="mb-3 block text-xs font-extrabold uppercase tracking-wider text-[var(--arena-cyan)]">Para Atletas</span>
           <h2 className="font-heading text-4xl font-extrabold leading-tight text-[var(--arena-navy-800)] md:text-5xl">
-            Disponível para <span className="arena-gradient-text">Android e iOS</span>
+            Disponível para <span className="bg-gradient-to-r from-[#F97415] to-[#F9A91F] bg-clip-text text-transparent">Android e iOS</span>
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-sm leading-6 text-[#62656c]">
             Escaneie o QR Code e baixe o aplicativo para encontrar jogos, acompanhar seu nível e jogar mais.
@@ -286,7 +284,7 @@ export default function LandingPage() {
           <div className="text-center mb-16">
             <span className="mb-3 block text-xs font-extrabold uppercase tracking-wider text-[var(--arena-cyan)]">Como Funciona</span>
             <h2 className="font-heading text-4xl font-extrabold text-[var(--arena-navy-800)] md:text-5xl">
-              3 passos simples para <span className="arena-gradient-text">começar</span>
+              3 passos simples para <span className="bg-gradient-to-r from-[#F97415] to-[#F9A91F] bg-clip-text text-transparent">começar</span>
             </h2>
           </div>
 
@@ -304,7 +302,7 @@ export default function LandingPage() {
                   { step: "03", title: "Conecte atletas e opere", desc: "Comece a receber reservas e gerir tudo digitalmente." }
                 ].map((item, i) => (
                   <div key={i} className="flex gap-6">
-                    <div className="arena-gradient flex h-12 w-12 shrink-0 items-center justify-center rounded-full font-heading text-lg font-extrabold text-white shadow-md">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(90deg,#F97415_0%,#F9A91F_100%)] font-heading text-lg font-extrabold text-white shadow-md">
                       {item.step}
                     </div>
                     <div>
@@ -326,7 +324,7 @@ export default function LandingPage() {
                   { step: "03", title: "Evolua seu nível", desc: "Acompanhe estatísticas e suba no ranking." }
                 ].map((item, i) => (
                   <div key={i} className="flex gap-6">
-                    <div className="arena-gradient flex h-12 w-12 shrink-0 items-center justify-center rounded-full font-heading text-lg font-extrabold text-white shadow-md">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(90deg,#F97415_0%,#F9A91F_100%)] font-heading text-lg font-extrabold text-white shadow-md">
                       {item.step}
                     </div>
                     <div>
@@ -350,7 +348,7 @@ export default function LandingPage() {
 
         <div className="container mx-auto px-4 max-w-4xl text-center relative z-10">
           <h2 className="mb-6 font-heading text-4xl font-extrabold leading-tight text-white md:text-5xl">
-            Pronto para lotar sua arena e organizar sua operação <span className="arena-gradient-text">de verdade?</span>
+            Pronto para lotar sua arena e organizar sua operação <span className="bg-gradient-to-r from-[#F97415] to-[#F9A91F] bg-clip-text text-transparent">de verdade?</span>
           </h2>
           <p className="text-lg text-white/70 mb-12 max-w-2xl mx-auto">
             Comece hoje e transforme a gestão da sua arena ou encontre os melhores jogos da sua região.
@@ -358,7 +356,7 @@ export default function LandingPage() {
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link href="/sign-in" className="w-full sm:w-auto">
-              <Button size="lg" className="arena-gradient flex h-14 w-full items-center justify-center rounded-xl border-0 px-8 text-base font-extrabold text-white shadow-xl shadow-[#F97415]/20 transition-all hover:brightness-105 sm:w-auto">
+              <Button size="lg" variant="ghost" className="flex h-14 w-full items-center justify-center rounded-xl border-0 bg-[linear-gradient(90deg,#F97415_0%,#F9A91F_100%)] px-8 text-base font-extrabold text-white shadow-xl shadow-[#F97415]/20 transition-all hover:bg-[linear-gradient(90deg,#F97415_0%,#F9A91F_100%)] hover:text-white hover:brightness-105 sm:w-auto">
                 Quero transformar minha arena agora <span className="text-xl ml-2">→</span>
               </Button>
             </Link>
@@ -369,44 +367,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <footer className="border-t border-white/10 bg-[#0B1832] px-4 pb-10 pt-[41px]">
-        <div className="mx-auto flex w-full max-w-[1191px] flex-col items-center gap-[30px]">
-          <div className="grid w-full max-w-[956px] gap-10 md:grid-cols-[118px_1fr_151px] md:items-start md:justify-between">
-            <Image
-              src="/logo_arena_front_bgbranco.png"
-              alt="Arena Digital Logo"
-              width={118}
-              height={40}
-              className="h-10 w-[118px] object-contain"
-            />
-
-            <div className="flex flex-col gap-4 text-sm leading-5 text-[#C2C7CE] md:mx-auto">
-              <a href="#" className="flex items-center gap-2 transition-colors hover:text-white">
-                <Instagram className="h-5 w-5" strokeWidth={1.8} />
-                Instagram
-              </a>
-              <a href="#" className="flex items-center gap-2 transition-colors hover:text-white">
-                <Facebook className="h-5 w-5" strokeWidth={1.8} />
-                Facebook
-              </a>
-            </div>
-
-            <div className="flex w-[151px] flex-col gap-[15px] text-left text-xs leading-5 text-[#C2C7CE]">
-              <p className="font-bold uppercase">Legal & Social</p>
-              <div className="flex flex-col gap-2">
-                <a href="#" className="transition-colors hover:text-white">Termos de Uso</a>
-                <a href="#" className="transition-colors hover:text-white">Política de Privacidade</a>
-              </div>
-            </div>
-          </div>
-
-          <div className="h-px w-full bg-white/10" />
-
-          <p className="text-center text-sm font-normal leading-5 text-white/50">
-            © {new Date().getFullYear()} Arena Digital. Todos os direitos reservados.
-          </p>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

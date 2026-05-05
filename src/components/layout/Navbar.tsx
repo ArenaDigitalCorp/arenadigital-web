@@ -29,16 +29,16 @@ export function Navbar() {
                 </Link>
 
                 <nav className="hidden md:flex items-center gap-8">
-                    <Link href="#forarenas" className="text-sm font-medium text-white transition-colors hover:text-white/80">
+                    <Link href="/#forarenas" className="text-sm font-medium text-white transition-colors hover:text-white/80">
                         Para Arenas
                     </Link>
-                    <Link href="#foratletas" className="text-sm font-medium text-white transition-colors hover:text-white/80">
+                    <Link href="/#foratletas" className="text-sm font-medium text-white transition-colors hover:text-white/80">
                         Para Atletas
                     </Link>
-                    <Link href="#howitworks" className="text-sm font-medium text-white transition-colors hover:text-white/80">
+                    <Link href="/#howitworks" className="text-sm font-medium text-white transition-colors hover:text-white/80">
                         Como Funciona
                     </Link>
-                    <Link href="#solution" className="text-sm font-medium text-white transition-colors hover:text-white/80">
+                    <Link href="/#solution" className="text-sm font-medium text-white transition-colors hover:text-white/80">
                         Solução
                     </Link>
                 </nav>
@@ -47,7 +47,7 @@ export function Navbar() {
                     <div className="hidden md:flex items-center gap-4">
                         <SignedOut>
                             <Link href="/sign-in">
-                                <Button className="arena-gradient h-10 rounded-xl border-0 px-5 text-sm font-semibold text-white shadow-lg shadow-[#F97415]/20 transition-all hover:brightness-105">
+                                <Button variant="ghost" className="h-10 rounded-xl border-0 bg-[linear-gradient(90deg,#F97415_0%,#F9A91F_100%)] px-5 text-sm font-semibold text-white shadow-lg shadow-[#F97415]/20 transition-all hover:bg-[linear-gradient(90deg,#F97415_0%,#F9A91F_100%)] hover:text-white hover:brightness-105">
                                     Começar Agora
                                 </Button>
                             </Link>
@@ -71,23 +71,23 @@ export function Navbar() {
             {/* Mobile Menu Dropdown */}
             {isMobileMenuOpen && (
                 <div className="absolute left-0 top-20 flex w-full animate-in flex-col items-center gap-4 border-t border-white/10 bg-[rgba(11,24,50,0.95)] py-4 shadow-xl backdrop-blur-md fade-in slide-in-from-top-2 md:hidden">
-                    <Link href="#forarenas" onClick={toggleMobileMenu} className="text-sm font-semibold text-white/70 transition-colors hover:text-white">
+                    <Link href="/#forarenas" onClick={toggleMobileMenu} className="text-sm font-semibold text-white/70 transition-colors hover:text-white">
                         Para Arenas
                     </Link>
-                    <Link href="#foratletas" onClick={toggleMobileMenu} className="text-sm font-semibold text-white/70 transition-colors hover:text-white">
+                    <Link href="/#foratletas" onClick={toggleMobileMenu} className="text-sm font-semibold text-white/70 transition-colors hover:text-white">
                         Para Atletas
                     </Link>
-                    <Link href="#howitworks" onClick={toggleMobileMenu} className="text-sm font-semibold text-white/70 transition-colors hover:text-white">
+                    <Link href="/#howitworks" onClick={toggleMobileMenu} className="text-sm font-semibold text-white/70 transition-colors hover:text-white">
                         Como Funciona
                     </Link>
-                    <Link href="#solution" onClick={toggleMobileMenu} className="text-sm font-semibold text-white/70 transition-colors hover:text-white">
+                    <Link href="/#solution" onClick={toggleMobileMenu} className="text-sm font-semibold text-white/70 transition-colors hover:text-white">
                         Solução
                     </Link>
 
                     <div className="w-full px-4 pt-4 border-t border-white/10 flex flex-col gap-4">
                         <SignedOut>
                             <Link href="/sign-in" onClick={toggleMobileMenu} className="w-full">
-                                <Button className="arena-gradient h-12 w-full rounded-xl border-0 font-extrabold text-white shadow-lg shadow-[#F97415]/20 transition-all hover:brightness-105">
+                                <Button variant="ghost" className="h-12 w-full rounded-xl border-0 bg-[linear-gradient(90deg,#F97415_0%,#F9A91F_100%)] font-extrabold text-white shadow-lg shadow-[#F97415]/20 transition-all hover:bg-[linear-gradient(90deg,#F97415_0%,#F9A91F_100%)] hover:text-white hover:brightness-105">
                                     Começar Agora
                                 </Button>
                             </Link>
