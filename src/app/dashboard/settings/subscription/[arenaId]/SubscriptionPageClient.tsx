@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { AlertCircle, Check, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -27,6 +28,7 @@ import { PaymentMethodCollector } from '@/modules/payments/components/PaymentMet
 import type { CardCollectionContext } from '@/modules/payments/gateway/payment-gateway.interface';
 import type { PlanKey } from '@/modules/payments/plans';
 import type { PaymentHistoryItem } from '@/modules/payments/usecases/get-payment-history.usecase';
+import type { ArenaBillingAddress } from '@/modules/arenas/usecases/get-arena-billing-address.usecase';
 import type { ArenaSubscription } from '@/modules/payments/usecases/get-subscription.usecase';
 
 type SetupData = {
@@ -48,6 +50,7 @@ interface Props {
   arenaId: string;
   initialSubscription: ArenaSubscription;
   initialPaymentHistory: PaymentHistoryItem[];
+  billingAddress: ArenaBillingAddress;
   plans: SubscriptionPlanOption[];
   planSelectionEnabled: boolean;
 }
@@ -107,6 +110,7 @@ export function SubscriptionPageClient({
   arenaId,
   initialSubscription,
   initialPaymentHistory,
+  billingAddress,
   plans,
   planSelectionEnabled,
 }: Props) {
@@ -442,27 +446,33 @@ export function SubscriptionPageClient({
                       </div>
                     )}
 
-                  <div className="pt-1">
-                    {subscription.cancelAtPeriodEnd ? (
-                      <button
-                        onClick={handleReactivate}
-                        disabled={actionLoading}
-                        className="text-sm text-arena-button hover:underline disabled:opacity-50"
-                      >
-                        Manter assinatura
-                      </button>
-                    ) : (
-                      subscription.status === 'active' && (
-                        <button
-                          onClick={() => setCancelModalOpen(true)}
-                          disabled={actionLoading}
-                          className="text-sm text-[#1B7B8A] hover:underline disabled:opacity-50"
-                        >
-                          Cancelar assinatura
-                        </button>
-                      )
-                    )}
-                  </div>
+                  {(subscription.cancelAtPeriodEnd ||
+                    subscription.status === 'active') && (
+                    <div className="grid grid-cols-2 gap-x-8 pt-1">
+                      <div />
+                      <div>
+                        {subscription.cancelAtPeriodEnd ? (
+                          <button
+                            type="button"
+                            onClick={handleReactivate}
+                            disabled={actionLoading}
+                            className="text-sm text-arena-button hover:underline disabled:opacity-50"
+                          >
+                            Manter assinatura
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setCancelModalOpen(true)}
+                            disabled={actionLoading}
+                            className="text-sm text-[#1B7B8A] hover:underline disabled:opacity-50"
+                          >
+                            Cancelar assinatura
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -501,18 +511,22 @@ export function SubscriptionPageClient({
                         </div>
                       </div>
 
-                      <div className="flex justify-end pt-1">
-                        <button
-                          onClick={() =>
-                            handleOpenCardModal(
-                              subscription.planKey ?? selectedPlanKey
-                            )
-                          }
-                          disabled={actionLoading}
-                          className="text-sm text-[#1B7B8A] hover:underline disabled:opacity-50"
-                        >
-                          Alterar cartao
-                        </button>
+                      <div className="grid grid-cols-2 gap-x-8 pt-1">
+                        <div />
+                        <div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleOpenCardModal(
+                                subscription.planKey ?? selectedPlanKey
+                              )
+                            }
+                            disabled={actionLoading}
+                            className="text-sm text-[#1B7B8A] hover:underline disabled:opacity-50"
+                          >
+                            Alterar cartao
+                          </button>
+                        </div>
                       </div>
                     </>
                   ) : (
@@ -520,19 +534,96 @@ export function SubscriptionPageClient({
                       <p className="text-sm text-muted-foreground">
                         Nenhum cartao cadastrado.
                       </p>
-                      <button
-                        onClick={() =>
-                          handleOpenCardModal(
-                            subscription.planKey ?? selectedPlanKey
-                          )
-                        }
-                        disabled={actionLoading}
-                        className="text-sm text-[#1B7B8A] hover:underline disabled:opacity-50"
-                      >
-                        Cadastrar cartao
-                      </button>
+                      <div className="grid grid-cols-2 gap-x-8">
+                        <div />
+                        <div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleOpenCardModal(
+                                subscription.planKey ?? selectedPlanKey
+                              )
+                            }
+                            disabled={actionLoading}
+                            className="text-sm text-[#1B7B8A] hover:underline disabled:opacity-50"
+                          >
+                            Cadastrar cartao
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="space-y-5 pt-6">
+                  <h3 className="text-lg font-semibold">
+                    Endereço de cobrança
+                  </h3>
+
+                  <div className="grid grid-cols-2 gap-x-8 gap-y-5">
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        CPF / CNPJ
+                      </p>
+                      <p className="mt-0.5 text-sm font-medium">
+                        {billingAddress.cpfCnpj ?? '—'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Logradouro
+                      </p>
+                      <p className="mt-0.5 text-sm font-medium">
+                        {billingAddress.street ?? '—'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Bairro</p>
+                      <p className="mt-0.5 text-sm font-medium">
+                        {billingAddress.neighborhood ?? '—'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Cidade</p>
+                      <p className="mt-0.5 text-sm font-medium">
+                        {billingAddress.city ?? '—'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">UF</p>
+                      <p className="mt-0.5 text-sm font-medium">
+                        {billingAddress.stateUf ?? '—'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Número</p>
+                      <p className="mt-0.5 text-sm font-medium">
+                        {billingAddress.number ?? '—'}
+                      </p>
+                    </div>
+                    <div className="col-span-2">
+                      <p className="text-xs text-muted-foreground">
+                        Complemento
+                      </p>
+                      <p className="mt-0.5 text-sm font-medium">
+                        {billingAddress.complement ?? '—'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-x-8 pt-1">
+                    <div />
+                    <div>
+                      <Link
+                        href={`/dashboard/arenas/${arenaId}/edit`}
+                        className="text-sm text-[#1B7B8A] hover:underline"
+                      >
+                        Editar
+                      </Link>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             </div>

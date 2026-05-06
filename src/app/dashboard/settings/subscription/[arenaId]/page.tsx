@@ -6,6 +6,7 @@ import {
   isPlanSelectionEnabled,
   planKeySchema
 } from '@/modules/payments/plans'
+import { getArenaBillingAddress } from '@/modules/arenas/usecases/get-arena-billing-address.usecase'
 import { getPaymentHistory } from '@/modules/payments/usecases/get-payment-history.usecase'
 import { getSubscription } from '@/modules/payments/usecases/get-subscription.usecase'
 import { SubscriptionPageClient } from './SubscriptionPageClient'
@@ -29,10 +30,11 @@ export default async function SubscriptionArenaPage({
     redirect('/dashboard/settings/arenas')
   }
 
-  const [subscription, paymentHistory, plans] = await Promise.all([
+  const [subscription, paymentHistory, plans, billingAddress] = await Promise.all([
     getSubscription(arenaId),
     getPaymentHistory(arenaId),
-    fetchAllActivePlans()
+    fetchAllActivePlans(),
+    getArenaBillingAddress(arenaId),
   ])
 
   const planSelectionEnabled = isPlanSelectionEnabled()
@@ -42,6 +44,7 @@ export default async function SubscriptionArenaPage({
       arenaId={arenaId}
       initialSubscription={subscription}
       initialPaymentHistory={paymentHistory}
+      billingAddress={billingAddress}
       planSelectionEnabled={planSelectionEnabled}
       plans={plans.flatMap((plan) => {
         const parsedPlanKey = planKeySchema.safeParse(plan.key)
