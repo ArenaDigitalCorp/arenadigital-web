@@ -98,10 +98,10 @@ export default function SimulateRegistrationPage({ params }: { params: { arenaId
     return (
         <div className="max-w-4xl mx-auto space-y-8">
             <div className="space-y-1 text-center">
-                <Badge variant="outline" className="text-[#FF6B00] border-[#FF6B00]/20 bg-[#FF6B00]/5 px-3 py-1 mb-2">
+                <Badge variant="outline" className="text-arena-button border-arena-button/20 bg-arena-button/5 px-3 py-1 mb-2">
                     Área Experimental
                 </Badge>
-                <h1 className="text-3xl font-black text-[#002B40] uppercase tracking-tight">Simulador de Inscrição</h1>
+                <h1 className="text-3xl font-black text-arena-navy-800 uppercase tracking-tight">Simulador de Inscrição</h1>
                 <p className="text-muted-foreground font-medium">
                     Simule a experiência do atleta no aplicativo e valide as regras do Rotativo.
                 </p>
@@ -110,22 +110,22 @@ export default function SimulateRegistrationPage({ params }: { params: { arenaId
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* Step 1: Select Session */}
                 <Card className="border-none shadow-xl shadow-gray-100 rounded-3xl overflow-hidden">
-                    <CardHeader className="bg-[#002B40] text-white">
+                    <CardHeader className="bg-arena-navy-800 text-white">
                         <div className="flex items-center gap-2">
-                            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-[#FF6B00] text-xs font-bold">1</span>
+                            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-arena-button text-xs font-bold">1</span>
                             <CardTitle className="text-lg font-bold uppercase tracking-widest">Sessão</CardTitle>
                         </div>
                         <CardDescription className="text-white/60">Escolha o horário para jogar</CardDescription>
                     </CardHeader>
                     <CardContent className="p-6 space-y-4">
-                        <div className="flex items-center gap-2 text-sm font-bold text-[#002B40] uppercase tracking-wider mb-2">
+                        <div className="flex items-center gap-2 text-sm font-bold text-arena-navy-800 uppercase tracking-wider mb-2">
                             <CalendarIcon className="h-4 w-4" />
                             {format(date, "PPPP", { locale: ptBR })}
                         </div>
 
                         {isLoading ? (
                             <div className="flex justify-center py-8">
-                                <Loader2 className="h-8 w-8 animate-spin text-[#FF6B00]" />
+                                <Loader2 className="h-8 w-8 animate-spin text-arena-button" />
                             </div>
                         ) : rotativos.length === 0 ? (
                             <div className="text-center py-8 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-100">
@@ -144,22 +144,22 @@ export default function SimulateRegistrationPage({ params }: { params: { arenaId
                                             disabled={isFull}
                                             onClick={() => setSelectedRotativo(r.id)}
                                             className={`w-full text-left p-4 rounded-2xl border-2 transition-all ${isSelected
-                                                ? "border-[#FF6B00] bg-[#FFF5EF]"
+                                                ? "border-arena-button bg-[#FFF5EF]"
                                                 : isFull
                                                     ? "opacity-50 border-gray-50 bg-gray-50 cursor-not-allowed"
-                                                    : "border-gray-100 hover:border-[#FF6B00]/40"
+                                                    : "border-gray-100 hover:border-arena-button/40"
                                                 }`}
                                         >
                                             <div className="flex justify-between items-start">
                                                 <div className="space-y-1">
-                                                    <span className="block font-black text-[#002B40] uppercase tracking-tight">{r.esporte?.name}</span>
+                                                    <span className="block font-black text-arena-navy-800 uppercase tracking-tight">{r.esporte?.name}</span>
                                                     <div className="flex items-center gap-2 text-[10px] font-bold text-gray-500 uppercase">
                                                         <Clock className="h-3 w-3" />
                                                         {r.hora_inicio.slice(0, 5)} - {r.hora_fim.slice(0, 5)}
                                                     </div>
                                                 </div>
                                                 <div className="text-right">
-                                                    <span className="block text-sm font-bold text-[#FF6B00]">R$ {r.valor.toFixed(2)}</span>
+                                                    <span className="block text-sm font-bold text-arena-button">R$ {r.valor.toFixed(2)}</span>
                                                     <span className={`text-[10px] font-black uppercase tracking-tighter ${isFull ? "text-red-500" : "text-green-600"}`}>
                                                         {r.inscricoes_count} {r.limitado ? `/ ${r.limite_participantes}` : ""} VAGAS
                                                     </span>
@@ -175,9 +175,9 @@ export default function SimulateRegistrationPage({ params }: { params: { arenaId
 
                 {/* Step 2: Select Athlete */}
                 <Card className="border-none shadow-xl shadow-gray-100 rounded-3xl overflow-hidden">
-                    <CardHeader className="bg-[#002B40] text-white">
+                    <CardHeader className="bg-arena-navy-800 text-white">
                         <div className="flex items-center gap-2">
-                            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-[#FF6B00] text-xs font-bold">2</span>
+                            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-arena-button text-xs font-bold">2</span>
                             <CardTitle className="text-lg font-bold uppercase tracking-widest">Atleta</CardTitle>
                         </div>
                         <CardDescription className="text-white/60">Quem vai participar?</CardDescription>
@@ -199,15 +199,15 @@ export default function SimulateRegistrationPage({ params }: { params: { arenaId
                                     key={a.id}
                                     onClick={() => setSelectedAthlete(a.id)}
                                     className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${selectedAthlete === a.id
-                                        ? "border-[#FF6B00] bg-[#FFF5EF]"
+                                        ? "border-arena-button bg-[#FFF5EF]"
                                         : "border-gray-50 hover:bg-gray-50"
                                         }`}
                                 >
-                                    <div className="bg-[#002B40] text-white h-8 w-8 rounded-lg flex items-center justify-center font-bold text-xs">
+                                    <div className="bg-arena-navy-800 text-white h-8 w-8 rounded-lg flex items-center justify-center font-bold text-xs">
                                         {a.name?.[0]?.toUpperCase()}
                                     </div>
-                                    <span className="font-bold text-[#002B40] text-sm uppercase tracking-tight">{a.name}</span>
-                                    {selectedAthlete === a.id && <CheckCircle2 className="h-4 w-4 text-[#FF6B00] ml-auto" />}
+                                    <span className="font-bold text-arena-navy-800 text-sm uppercase tracking-tight">{a.name}</span>
+                                    {selectedAthlete === a.id && <CheckCircle2 className="h-4 w-4 text-arena-button ml-auto" />}
                                 </button>
                             ))}
                         </div>
@@ -219,7 +219,7 @@ export default function SimulateRegistrationPage({ params }: { params: { arenaId
                 <Button
                     onClick={handleRegister}
                     disabled={!selectedRotativo || !selectedAthlete || isSubmitting}
-                    className="h-16 px-12 bg-[#FF6B00] hover:bg-[#E66000] text-white font-black uppercase tracking-widest rounded-3xl shadow-2xl shadow-orange-500/20 active:scale-95 transition-all text-lg disabled:opacity-50 disabled:grayscale"
+                    className="h-16 px-12 bg-arena-button hover:bg-arena-button-hover text-white font-black uppercase tracking-widest rounded-3xl shadow-2xl shadow-orange-500/20 active:scale-95 transition-all text-lg disabled:opacity-50 disabled:grayscale"
                 >
                     {isSubmitting ? (
                         <div className="flex items-center gap-3">

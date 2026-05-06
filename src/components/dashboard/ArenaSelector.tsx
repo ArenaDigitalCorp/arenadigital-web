@@ -15,7 +15,14 @@ export function ArenaSelector({ isCollapsed }: { isCollapsed?: boolean }) {
     const { arenas, selectedArena, setSelectedArena, isLoadingArenas } = useArena();
 
     if (isLoadingArenas) {
-        return <Skeleton className={cn("h-10 w-full mb-6", isCollapsed ? "px-0" : "px-3")} />;
+        return (
+            <Skeleton
+                className={cn(
+                    "h-10 rounded-md",
+                    isCollapsed ? "mb-4 w-10 mx-auto shrink-0" : "mb-6 w-full px-3",
+                )}
+            />
+        );
     }
 
     if (arenas.length === 0) {
@@ -25,8 +32,13 @@ export function ArenaSelector({ isCollapsed }: { isCollapsed?: boolean }) {
     if (arenas.length === 1) {
         if (isCollapsed) {
             return (
-                <div title={arenas[0].name} className="w-10 h-10 mb-6 rounded-md bg-white/10 flex items-center justify-center text-white/70 font-bold">
-                    {arenas[0].name.charAt(0).toUpperCase()}
+                <div className="mb-4 flex w-full justify-center">
+                    <div
+                        title={arenas[0].name}
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-white/10 text-sm font-bold text-white/70"
+                    >
+                        {arenas[0].name.charAt(0).toUpperCase()}
+                    </div>
                 </div>
             );
         }
@@ -38,9 +50,12 @@ export function ArenaSelector({ isCollapsed }: { isCollapsed?: boolean }) {
     }
 
     return (
-        <div className={cn("mb-6", isCollapsed ? "px-0 flex justify-center" : "px-0")}>
+        <div className={cn(isCollapsed ? "mb-4 flex w-full justify-center px-0" : "mb-6 px-0")}>
             {isCollapsed ? (
-                <div title={arenas.find(a => a.id === selectedArena)?.name ?? ""} className="w-10 h-10 rounded-md bg-white/10 flex items-center justify-center text-white/70 font-bold">
+                <div
+                    title={arenas.find(a => a.id === selectedArena)?.name ?? ""}
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-white/10 text-sm font-bold text-white/70"
+                >
                     {(arenas.find(a => a.id === selectedArena)?.name ?? "A").charAt(0).toUpperCase()}
                 </div>
             ) : (

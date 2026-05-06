@@ -65,10 +65,10 @@ export default function FidelityStatementPage({ params }: { params: Promise<{ ar
                         onClick={() => router.back()}
                         className="h-10 w-10 rounded-full hover:bg-gray-100"
                     >
-                        <ArrowLeft className="h-5 w-5 text-[#002B40]" />
+                        <ArrowLeft className="h-5 w-5 text-arena-navy-800" />
                     </Button>
                     <div className="space-y-1">
-                        <h1 className="text-2xl font-black text-[#002B40]">Extrato de Fidelidade</h1>
+                        <h1 className="text-2xl font-black text-arena-navy-800">Extrato de Fidelidade</h1>
                         <p className="text-sm text-muted-foreground font-medium">
                             Histórico completo de movimentações da arena.
                         </p>
@@ -82,7 +82,7 @@ export default function FidelityStatementPage({ params }: { params: Promise<{ ar
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                     <Input
                         placeholder="Buscar atleta pelo nome..."
-                        className="pl-12 h-14 border-none shadow-sm bg-white rounded-2xl focus-visible:ring-[#FF6B00]"
+                        className="pl-12 h-14 border-none shadow-sm bg-white rounded-2xl focus-visible:ring-arena-button"
                         value={search}
                         onChange={(e) => {
                             setSearch(e.target.value)
@@ -94,7 +94,7 @@ export default function FidelityStatementPage({ params }: { params: Promise<{ ar
                     <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 z-10 pointer-events-none" />
                     <Input
                         type="date"
-                        className="pl-12 h-14 border-none shadow-sm bg-white rounded-2xl focus-visible:ring-[#FF6B00] block w-full"
+                        className="pl-12 h-14 border-none shadow-sm bg-white rounded-2xl focus-visible:ring-arena-button block w-full"
                         value={startDate}
                         onChange={(e) => {
                             setStartDate(e.target.value)
@@ -106,7 +106,7 @@ export default function FidelityStatementPage({ params }: { params: Promise<{ ar
                     <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 z-10 pointer-events-none" />
                     <Input
                         type="date"
-                        className="pl-12 h-14 border-none shadow-sm bg-white rounded-2xl focus-visible:ring-[#FF6B00] block w-full"
+                        className="pl-12 h-14 border-none shadow-sm bg-white rounded-2xl focus-visible:ring-arena-button block w-full"
                         value={endDate}
                         onChange={(e) => {
                             setEndDate(e.target.value)
@@ -137,7 +137,7 @@ export default function FidelityStatementPage({ params }: { params: Promise<{ ar
                                     <tr>
                                         <td colSpan={6} className="py-20 text-center">
                                             <div className="flex flex-col items-center justify-center gap-4">
-                                                <Loader2 className="h-10 w-10 animate-spin text-[#FF6B00]" />
+                                                <Loader2 className="h-10 w-10 animate-spin text-arena-button" />
                                                 <p className="text-gray-400 font-medium">Carregando extrato...</p>
                                             </div>
                                         </td>
@@ -153,7 +153,7 @@ export default function FidelityStatementPage({ params }: { params: Promise<{ ar
                                     transactions.map((tx) => (
                                         <tr key={tx.id} className="hover:bg-gray-50/50 transition-all group">
                                             <td className="px-8 py-5 whitespace-nowrap">
-                                                <p className="text-sm font-bold text-[#002B40]">
+                                                <p className="text-sm font-bold text-arena-navy-800">
                                                     {format(new Date(tx.data_registro), "dd/MM/yyyy", { locale: ptBR })}
                                                 </p>
                                                 <p className="text-[10px] text-gray-400 font-bold">
@@ -171,10 +171,10 @@ export default function FidelityStatementPage({ params }: { params: Promise<{ ar
                                             </td>
                                             <td className="px-8 py-5">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="h-8 w-8 rounded-lg bg-gray-100 flex items-center justify-center text-[#002B40] font-black text-[10px]">
+                                                    <div className="h-8 w-8 rounded-lg bg-gray-100 flex items-center justify-center text-arena-navy-800 font-black text-[10px]">
                                                         {tx.atleta?.nome_perfil?.charAt(0).toUpperCase()}
                                                     </div>
-                                                    <p className="font-bold text-[#002B40] text-sm truncate max-w-[150px]">
+                                                    <p className="font-bold text-arena-navy-800 text-sm truncate max-w-[150px]">
                                                         {tx.atleta?.nome_perfil}
                                                     </p>
                                                 </div>
@@ -219,7 +219,7 @@ export default function FidelityStatementPage({ params }: { params: Promise<{ ar
             {totalPages > 1 && (
                 <div className="flex items-center justify-between px-2">
                     <p className="text-sm text-gray-400 font-medium">
-                        Mostrando <span className="text-[#002B40] font-bold">{transactions.length}</span> de <span className="text-[#002B40] font-bold">{totalResults}</span> movimentações
+                        Mostrando <span className="text-arena-navy-800 font-bold">{transactions.length}</span> de <span className="text-arena-navy-800 font-bold">{totalResults}</span> movimentações
                     </p>
                     <div className="flex items-center gap-2">
                         <Button
@@ -227,12 +227,12 @@ export default function FidelityStatementPage({ params }: { params: Promise<{ ar
                             size="sm"
                             disabled={page === 1}
                             onClick={() => setPage(p => p - 1)}
-                            className="h-10 border-none shadow-sm bg-white rounded-xl font-bold gap-1 active:scale-95 transition-all text-[#002B40]"
+                            className="h-10 border-none shadow-sm bg-white rounded-xl font-bold gap-1 active:scale-95 transition-all text-arena-navy-800"
                         >
                             <ChevronLeft className="h-4 w-4" />
                             Anterior
                         </Button>
-                        <div className="h-10 px-4 bg-white rounded-xl shadow-sm flex items-center justify-center font-black text-[#002B40] text-sm">
+                        <div className="h-10 px-4 bg-white rounded-xl shadow-sm flex items-center justify-center font-black text-arena-navy-800 text-sm">
                             {page} / {totalPages}
                         </div>
                         <Button
@@ -240,7 +240,7 @@ export default function FidelityStatementPage({ params }: { params: Promise<{ ar
                             size="sm"
                             disabled={page === totalPages}
                             onClick={() => setPage(p => p + 1)}
-                            className="h-10 border-none shadow-sm bg-white rounded-xl font-bold gap-1 active:scale-95 transition-all text-[#002B40]"
+                            className="h-10 border-none shadow-sm bg-white rounded-xl font-bold gap-1 active:scale-95 transition-all text-arena-navy-800"
                         >
                             Próximo
                             <ChevronRight className="h-4 w-4" />

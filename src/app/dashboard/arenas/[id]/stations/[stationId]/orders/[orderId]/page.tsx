@@ -75,7 +75,7 @@ export default function OrderDetailsPage() {
     if (!order) {
         return (
             <div className="flex flex-col items-center justify-center py-20">
-                <p className="text-[#002B40]/40 font-medium text-lg">Comanda não encontrada.</p>
+                <p className="text-arena-navy-800/40 font-medium text-lg">Comanda não encontrada.</p>
                 <Button variant="ghost" onClick={() => router.back()} className="mt-4">
                     Voltar
                 </Button>
@@ -92,7 +92,7 @@ export default function OrderDetailsPage() {
             <div className="flex flex-col gap-4">
                 <button
                     onClick={() => router.back()}
-                    className="flex items-center text-[#002B40]/60 font-bold text-sm hover:text-[#002B40] transition-colors w-fit"
+                    className="flex items-center text-arena-navy-800/60 font-bold text-sm hover:text-arena-navy-800 transition-colors w-fit"
                 >
                     <ChevronLeft className="h-4 w-4 mr-1" />
                     Voltar
@@ -100,7 +100,7 @@ export default function OrderDetailsPage() {
                 <div className="flex items-start justify-between">
                     <div>
                         <div className="flex items-center gap-3">
-                            <h1 className="text-4xl font-black text-[#002B40] tracking-tight">
+                            <h1 className="text-4xl font-black text-arena-navy-800 tracking-tight">
                                 Comanda nº #{order.order_number.toString().padStart(3, '0')}
                             </h1>
                             {order.status === 'closed' && (
@@ -114,7 +114,7 @@ export default function OrderDetailsPage() {
                                 </span>
                             )}
                         </div>
-                        <p className="text-[#002B40]/60 font-medium">
+                        <p className="text-arena-navy-800/60 font-medium">
                             Cliente: {order.atleta?.nome_perfil || order.station_customer?.name || order.customer_name || "N/A"}
                         </p>
                     </div>
@@ -124,8 +124,8 @@ export default function OrderDetailsPage() {
                             ? "bg-gradient-to-r from-[#FFB01F] to-[#FFD043] shadow-orange-200/50"
                             : "bg-[#E6F8F7] shadow-[#20B2AA]/10"
                     )}>
-                        <span className="text-[#002B40]/60 font-bold uppercase text-xs">Saldo:</span>
-                        <span className="text-2xl font-black text-[#002B40]">
+                        <span className="text-arena-navy-800/60 font-bold uppercase text-xs">Saldo:</span>
+                        <span className="text-2xl font-black text-arena-navy-800">
                             R$ {balance.toFixed(2).replace('.', ',')}
                         </span>
                     </div>
@@ -136,7 +136,7 @@ export default function OrderDetailsPage() {
             <Card className="border-none shadow-sm rounded-2xl overflow-hidden bg-white">
                 <CardContent className="p-8">
                     <div className="flex items-center justify-between mb-8">
-                        <h2 className="text-xl font-black text-[#002B40]">Itens pedidos</h2>
+                        <h2 className="text-xl font-black text-arena-navy-800">Itens pedidos</h2>
                         {order.status === 'open' && (
                             <div className="flex items-center gap-3">
                                 <Button
@@ -149,13 +149,13 @@ export default function OrderDetailsPage() {
                                 </Button>
                                 <Button
                                     onClick={() => setIsLaunchModalOpen(true)}
-                                    className="bg-[#FF6B00] hover:bg-[#E66000] text-white font-bold rounded-xl"
+                                    className="bg-arena-button hover:bg-arena-button-hover text-white font-bold rounded-xl"
                                 >
                                     Lançar item
                                 </Button>
                                 <Button
                                     onClick={() => setIsPaymentModalOpen(true)}
-                                    className="bg-[#002B40] hover:bg-[#001D2B] text-white font-bold rounded-xl"
+                                    className="bg-arena-navy-800 hover:bg-arena-navy-900 text-white font-bold rounded-xl"
                                 >
                                     Registrar pagamento
                                 </Button>
@@ -165,31 +165,31 @@ export default function OrderDetailsPage() {
 
                     <div className="overflow-x-auto">
                         <table className="w-full text-left">
-                            <thead className="border-b border-[#002B40]/5">
+                            <thead className="border-b border-arena-navy-800/5">
                                 <tr>
-                                    <th className="py-4 text-xs font-bold text-[#002B40]/40 uppercase">Horário do lançamento</th>
-                                    <th className="py-4 text-xs font-bold text-[#002B40]/40 uppercase">Descrição</th>
-                                    <th className="py-4 text-xs font-bold text-[#002B40]/40 uppercase">Quantidade</th>
-                                    <th className="py-4 text-xs font-bold text-[#002B40]/40 uppercase text-right">Valor unitário</th>
-                                    <th className="py-4 text-xs font-bold text-[#002B40]/40 uppercase text-right">Subtotal</th>
+                                    <th className="py-4 text-xs font-bold text-arena-navy-800/40 uppercase">Horário do lançamento</th>
+                                    <th className="py-4 text-xs font-bold text-arena-navy-800/40 uppercase">Descrição</th>
+                                    <th className="py-4 text-xs font-bold text-arena-navy-800/40 uppercase">Quantidade</th>
+                                    <th className="py-4 text-xs font-bold text-arena-navy-800/40 uppercase text-right">Valor unitário</th>
+                                    <th className="py-4 text-xs font-bold text-arena-navy-800/40 uppercase text-right">Subtotal</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-[#002B40]/5">
+                            <tbody className="divide-y divide-arena-navy-800/5">
                                 {order.station_order_items?.map((item) => (
                                     <tr key={item.id} className="group">
-                                        <td className="py-4 text-sm font-medium text-[#002B40]/60">
+                                        <td className="py-4 text-sm font-medium text-arena-navy-800/60">
                                             {format(new Date(item.created_at), "HH:mm:ss")}
                                         </td>
-                                        <td className="py-4 text-sm font-bold text-[#002B40]">
+                                        <td className="py-4 text-sm font-bold text-arena-navy-800">
                                             {item.product?.name}
                                         </td>
-                                        <td className="py-4 text-sm font-medium text-[#002B40]/60">
+                                        <td className="py-4 text-sm font-medium text-arena-navy-800/60">
                                             {item.quantity}
                                         </td>
-                                        <td className="py-4 text-sm font-medium text-[#002B40]/60 text-right">
+                                        <td className="py-4 text-sm font-medium text-arena-navy-800/60 text-right">
                                             R$ {item.unit_price.toFixed(2).replace('.', ',')}
                                         </td>
-                                        <td className="py-4 text-sm font-bold text-[#002B40] text-right">
+                                        <td className="py-4 text-sm font-bold text-arena-navy-800 text-right">
                                             R$ {item.total_price.toFixed(2).replace('.', ',')}
                                         </td>
                                     </tr>
@@ -197,9 +197,9 @@ export default function OrderDetailsPage() {
                             </tbody>
                             <tfoot>
                                 <tr>
-                                    <td colSpan={4} className="pt-8 text-right font-bold text-[#002B40]/60">Total:</td>
+                                    <td colSpan={4} className="pt-8 text-right font-bold text-arena-navy-800/60">Total:</td>
                                     <td className="pt-8 text-right">
-                                        <span className="bg-[#FFF5EF] text-[#FF6B00] px-4 py-2 rounded-lg font-black text-sm">
+                                        <span className="bg-[#FFF5EF] text-arena-button px-4 py-2 rounded-lg font-black text-sm">
                                             R$ {order.total_value.toFixed(2).replace('.', ',')}
                                         </span>
                                     </td>
@@ -213,43 +213,43 @@ export default function OrderDetailsPage() {
             {/* Payments Table Section */}
             <Card className="border-none shadow-sm rounded-2xl overflow-hidden bg-white">
                 <CardContent className="p-8">
-                    <h2 className="text-xl font-black text-[#002B40] mb-8">Pagamentos</h2>
+                    <h2 className="text-xl font-black text-arena-navy-800 mb-8">Pagamentos</h2>
 
                     <div className="overflow-x-auto">
                         <table className="w-full text-left">
-                            <thead className="border-b border-[#002B40]/5">
+                            <thead className="border-b border-arena-navy-800/5">
                                 <tr>
-                                    <th className="py-4 text-xs font-bold text-[#002B40]/40 uppercase">Horário do pagamento</th>
-                                    <th className="py-4 text-xs font-bold text-[#002B40]/40 uppercase">Forma de pagamento</th>
-                                    <th className="py-4 text-xs font-bold text-[#002B40]/40 uppercase">Observação</th>
-                                    <th className="py-4 text-xs font-bold text-[#002B40]/40 uppercase">Pago por</th>
-                                    <th className="py-4 text-xs font-bold text-[#002B40]/40 uppercase text-right">Valor</th>
+                                    <th className="py-4 text-xs font-bold text-arena-navy-800/40 uppercase">Horário do pagamento</th>
+                                    <th className="py-4 text-xs font-bold text-arena-navy-800/40 uppercase">Forma de pagamento</th>
+                                    <th className="py-4 text-xs font-bold text-arena-navy-800/40 uppercase">Observação</th>
+                                    <th className="py-4 text-xs font-bold text-arena-navy-800/40 uppercase">Pago por</th>
+                                    <th className="py-4 text-xs font-bold text-arena-navy-800/40 uppercase text-right">Valor</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-[#002B40]/5">
+                            <tbody className="divide-y divide-arena-navy-800/5">
                                 {order.station_payments && order.station_payments.length > 0 ? (
                                     order.station_payments.map((payment) => (
                                         <tr key={payment.id}>
-                                            <td className="py-4 text-sm font-medium text-[#002B40]/60">
+                                            <td className="py-4 text-sm font-medium text-arena-navy-800/60">
                                                 {format(new Date(payment.created_at), "HH:mm:ss")}
                                             </td>
-                                            <td className="py-4 text-sm font-bold text-[#002B40]">
+                                            <td className="py-4 text-sm font-bold text-arena-navy-800">
                                                 {payment.payment_method}
                                             </td>
-                                            <td className="py-4 text-sm font-medium text-[#002B40]/60">
+                                            <td className="py-4 text-sm font-medium text-arena-navy-800/60">
                                                 {payment.observation || "--"}
                                             </td>
-                                            <td className="py-4 text-sm font-medium text-[#002B40]/60">
+                                            <td className="py-4 text-sm font-medium text-arena-navy-800/60">
                                                 {payment.paid_by_name || "--"}
                                             </td>
-                                            <td className="py-4 text-sm font-bold text-[#002B40] text-right">
+                                            <td className="py-4 text-sm font-bold text-arena-navy-800 text-right">
                                                 R$ {payment.amount.toFixed(2).replace('.', ',')}
                                             </td>
                                         </tr>
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan={5} className="py-8 text-center text-[#002B40]/20 font-medium">
+                                        <td colSpan={5} className="py-8 text-center text-arena-navy-800/20 font-medium">
                                             Nenhum pagamento registrado.
                                         </td>
                                     </tr>
@@ -257,7 +257,7 @@ export default function OrderDetailsPage() {
                             </tbody>
                             <tfoot>
                                 <tr>
-                                    <td colSpan={4} className="pt-8 text-right font-bold text-[#002B40]/60">Total pago:</td>
+                                    <td colSpan={4} className="pt-8 text-right font-bold text-arena-navy-800/60">Total pago:</td>
                                     <td className="pt-8 text-right">
                                         <span className="bg-[#E6F8F7] text-[#20B2AA] px-4 py-2 rounded-lg font-black text-sm">
                                             R$ {totalPaid.toFixed(2).replace('.', ',')}

@@ -147,7 +147,7 @@ export function DayScheduleConfig({ day, config, onChange, onReplicate }: DaySch
                         id={`enable-${day}`}
                         checked={config.enabled}
                         onCheckedChange={handleToggle}
-                        className="data-[state=checked]:bg-[#FF6B00] data-[state=checked]:border-[#FF6B00]"
+                        className="data-[state=checked]:bg-arena-button data-[state=checked]:border-arena-button"
                     />
                     <Label htmlFor={`enable-${day}`} className="font-semibold text-lg cursor-pointer select-none">
                         {day}
@@ -155,7 +155,7 @@ export function DayScheduleConfig({ day, config, onChange, onReplicate }: DaySch
                 </div>
                 <div className="flex items-center gap-2">
                     {config.enabled && slotCount > 0 && (
-                        <span className="text-[11px] text-[#002B40]/40 font-medium bg-[#002B40]/5 px-2 py-0.5 rounded-full">
+                        <span className="text-[11px] text-arena-navy-800/40 font-medium bg-arena-navy-800/5 px-2 py-0.5 rounded-full">
                             {slotCount} {slotCount === 1 ? 'slot' : 'slots'}
                             {bands.length > 0 && ` · ${bands.length + 1} faixa${bands.length + 1 > 1 ? 's' : ''} de preço`}
                         </span>
@@ -239,7 +239,7 @@ export function DayScheduleConfig({ day, config, onChange, onReplicate }: DaySch
                                 onCheckedChange={(checked) =>
                                     handleChange("slotShiftTime", checked ? "17:00" : null)
                                 }
-                                className="data-[state=checked]:bg-[#FF6B00] data-[state=checked]:border-[#FF6B00]"
+                                className="data-[state=checked]:bg-arena-button data-[state=checked]:border-arena-button"
                             />
                             <Label htmlFor={`shift-${day}`} className="text-xs text-muted-foreground cursor-pointer select-none">
                                 Slots passam para o :30 a partir de
@@ -254,7 +254,7 @@ export function DayScheduleConfig({ day, config, onChange, onReplicate }: DaySch
                             )}
                         </div>
                         {shiftExample && (
-                            <p className="text-[11px] text-[#002B40]/40 pl-6 italic">
+                            <p className="text-[11px] text-arena-navy-800/40 pl-6 italic">
                                 {shiftExample}
                             </p>
                         )}
@@ -269,7 +269,7 @@ export function DayScheduleConfig({ day, config, onChange, onReplicate }: DaySch
                                 variant="ghost"
                                 size="sm"
                                 onClick={addBand}
-                                className="h-7 text-xs text-[#FF6B00] hover:text-[#E66000] hover:bg-orange-50"
+                                className="h-7 text-xs text-arena-button hover:text-arena-button-hover hover:bg-orange-50"
                             >
                                 <Plus className="h-3 w-3 mr-1" />
                                 Adicionar faixa
@@ -278,18 +278,18 @@ export function DayScheduleConfig({ day, config, onChange, onReplicate }: DaySch
 
                         <div className="space-y-1.5">
                             {/* Faixa padrão — sempre visível */}
-                            <div className="flex items-center gap-2 bg-[#002B40]/[0.03] border border-[#002B40]/10 px-3 py-2 rounded-md text-xs">
-                                <span className="text-[#002B40]/50 w-6">Das</span>
-                                <span className="font-semibold text-[#002B40]">{config.startTime}</span>
-                                <span className="text-[#002B40]/40">até</span>
-                                <span className="font-semibold text-[#002B40]">
+                            <div className="flex items-center gap-2 bg-arena-navy-800/[0.03] border border-arena-navy-800/10 px-3 py-2 rounded-md text-xs">
+                                <span className="text-arena-navy-800/50 w-6">Das</span>
+                                <span className="font-semibold text-arena-navy-800">{config.startTime}</span>
+                                <span className="text-arena-navy-800/40">até</span>
+                                <span className="font-semibold text-arena-navy-800">
                                     {bands.length > 0
                                         ? [...bands].sort((a, b) => parseHHMM(a.from) - parseHHMM(b.from))[0].from
                                         : isOvernight ? `${config.endTime} (+1 dia)` : config.endTime}
                                 </span>
                                 <span className="flex-1" />
-                                <span className="text-[#002B40]/40">Valor padrão</span>
-                                <span className="font-bold text-[#FF6B00] ml-1">R$ {(config.price || 0).toFixed(2)}/h</span>
+                                <span className="text-arena-navy-800/40">Valor padrão</span>
+                                <span className="font-bold text-arena-button ml-1">R$ {(config.price || 0).toFixed(2)}/h</span>
                             </div>
 
                             {/* Faixas adicionais */}
@@ -297,15 +297,15 @@ export function DayScheduleConfig({ day, config, onChange, onReplicate }: DaySch
                                 .sort((a, b) => parseHHMM(a.from) - parseHHMM(b.from))
                                 .map((band, index) => (
                                     <div key={index} className="flex items-center gap-2 bg-orange-50/60 border border-orange-100 px-3 py-2 rounded-md">
-                                        <span className="text-xs text-[#002B40]/50 w-6 shrink-0">Das</span>
+                                        <span className="text-xs text-arena-navy-800/50 w-6 shrink-0">Das</span>
                                         <Input
                                             type="time"
                                             value={band.from}
                                             onChange={(e) => updateBand(index, 'from', e.target.value)}
                                             className="h-8 w-24 text-xs bg-white shrink-0"
                                         />
-                                        <span className="text-xs text-[#002B40]/40 shrink-0">até</span>
-                                        <span className="text-xs font-semibold text-[#002B40]/60 min-w-[72px] shrink-0">
+                                        <span className="text-xs text-arena-navy-800/40 shrink-0">até</span>
+                                        <span className="text-xs font-semibold text-arena-navy-800/60 min-w-[72px] shrink-0">
                                             {bandUntilLabel(index)}
                                         </span>
                                         <div className="relative w-28 shrink-0">
@@ -322,7 +322,7 @@ export function DayScheduleConfig({ day, config, onChange, onReplicate }: DaySch
                                                 min="0"
                                             />
                                         </div>
-                                        <span className="text-xs text-[#002B40]/40 shrink-0">/h</span>
+                                        <span className="text-xs text-arena-navy-800/40 shrink-0">/h</span>
                                         <Button
                                             type="button"
                                             variant="ghost"

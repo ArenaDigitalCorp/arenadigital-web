@@ -53,23 +53,23 @@ export function ConfirmarPagamentoDialog({
             <div className="h-10 w-10 rounded-2xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
               <CheckCircle2 className="h-5 w-5 text-emerald-600" />
             </div>
-            <DialogTitle className="text-xl font-black text-[#002B40]">
+            <DialogTitle className="text-xl font-black text-arena-navy-800">
               Confirmar pagamento
             </DialogTitle>
           </div>
-          <DialogDescription className="text-sm text-[#002B40]/60 font-medium pl-[52px]">
-            Mensalidade de <span className="font-bold text-[#002B40]">{atletaNome}</span> referente a{" "}
-            <span className="font-bold text-[#002B40] capitalize">{mesDevido}</span>.
+          <DialogDescription className="text-sm text-arena-navy-800/60 font-medium pl-[52px]">
+            Mensalidade de <span className="font-bold text-arena-navy-800">{atletaNome}</span> referente a{" "}
+            <span className="font-bold text-arena-navy-800 capitalize">{mesDevido}</span>.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-2 pt-2">
-          <Label className="text-xs font-bold uppercase text-[#002B40]/40 tracking-wider flex items-center gap-1.5">
+          <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider flex items-center gap-1.5">
             <DollarSign className="h-3.5 w-3.5" />
             Valor recebido (R$)
           </Label>
           <div className="relative">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#002B40]/40 font-bold text-sm">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-arena-navy-800/40 font-bold text-sm">
               R$
             </span>
             <Input
@@ -78,7 +78,7 @@ export function ConfirmarPagamentoDialog({
               step="0.01"
               value={valor}
               onChange={(e) => setValor(e.target.value)}
-              className="pl-10 h-12 border-[#002B40]/10 focus:ring-emerald-500 focus:border-emerald-500 rounded-xl font-bold text-[#002B40] text-base"
+              className="pl-10 h-12 border-arena-navy-800/10 focus:ring-emerald-500 focus:border-emerald-500 rounded-xl font-bold text-arena-navy-800 text-base"
             />
           </div>
           {valorNum !== valorPadrao && valorPadrao > 0 && (
@@ -93,7 +93,7 @@ export function ConfirmarPagamentoDialog({
             variant="outline"
             onClick={onClose}
             disabled={isLoading}
-            className="flex-1 border-[#002B40]/20 text-[#002B40] font-bold rounded-xl h-11"
+            className="flex-1 border-arena-navy-800/20 text-arena-navy-800 font-bold rounded-xl h-11"
           >
             Cancelar
           </Button>

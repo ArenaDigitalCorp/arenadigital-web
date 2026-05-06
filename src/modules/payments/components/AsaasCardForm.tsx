@@ -180,7 +180,7 @@ export function AsaasCardForm({
             type="button"
             onClick={onCancel}
             disabled={loading}
-            className="h-12 flex-1 rounded-xl border border-[#002B40] bg-white text-sm font-semibold text-[#002B40] transition-colors hover:bg-[#002B40]/5 disabled:opacity-50"
+            className="h-12 flex-1 rounded-xl border border-arena-navy-800 bg-white text-sm font-semibold text-arena-navy-800 transition-colors hover:bg-arena-navy-800/5 disabled:opacity-50"
           >
             Fechar
           </button>
@@ -188,7 +188,7 @@ export function AsaasCardForm({
         <button
           type="submit"
           disabled={loading}
-          className="h-12 flex-1 rounded-xl bg-[#FF6B00] text-sm font-semibold text-white transition-colors hover:bg-[#E66000] disabled:opacity-50"
+          className="h-12 flex-1 rounded-xl bg-arena-button text-sm font-semibold text-white transition-colors hover:bg-arena-button-hover disabled:opacity-50"
         >
           {loading ? 'Processando...' : submitLabel}
         </button>
@@ -229,7 +229,7 @@ function Field({
         maxLength={maxLength}
         placeholder={placeholder}
         required={required}
-        className="h-12 w-full rounded-xl border border-[#D1D5DB] bg-white px-4 text-sm text-[#002B40] shadow-none placeholder:text-[#94A3B8] focus:border-[#FF6B00] focus:outline-none focus:ring-1 focus:ring-[#FF6B00]"
+        className="h-12 w-full rounded-xl border border-[#D1D5DB] bg-white px-4 text-sm text-arena-navy-800 shadow-none placeholder:text-[#94A3B8] focus:border-arena-button focus:outline-none focus:ring-1 focus:ring-arena-button"
       />
     </label>
   )

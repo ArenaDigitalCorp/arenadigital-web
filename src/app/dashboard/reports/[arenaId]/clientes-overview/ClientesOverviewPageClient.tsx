@@ -71,7 +71,7 @@ function FunnelBar({
             )}
         >
             <div className="flex items-center gap-3 mb-1">
-                <span className="text-xs font-semibold text-[#002B40]/70 w-40 shrink-0 truncate">
+                <span className="text-xs font-semibold text-arena-navy-800/70 w-40 shrink-0 truncate">
                     {category.label}
                 </span>
                 <span
@@ -129,8 +129,8 @@ function SortableHeader({
         <th
             className={cn(
                 "px-4 py-3 text-left text-xs font-bold uppercase tracking-wider cursor-pointer select-none",
-                "text-[#002B40]/50 hover:text-[#FF6B00] transition-colors",
-                active && "text-[#FF6B00]",
+                "text-arena-navy-800/50 hover:text-arena-button transition-colors",
+                active && "text-arena-button",
                 className
             )}
             onClick={() => onSort(field)}
@@ -138,8 +138,8 @@ function SortableHeader({
             <div className="flex items-center gap-1">
                 {label}
                 <span className="flex flex-col">
-                    <ChevronUp className={cn("h-2.5 w-2.5 -mb-0.5", active && sortDir === 'asc' ? "text-[#FF6B00]" : "text-[#002B40]/20")} />
-                    <ChevronDown className={cn("h-2.5 w-2.5", active && sortDir === 'desc' ? "text-[#FF6B00]" : "text-[#002B40]/20")} />
+                    <ChevronUp className={cn("h-2.5 w-2.5 -mb-0.5", active && sortDir === 'asc' ? "text-arena-button" : "text-arena-navy-800/20")} />
+                    <ChevronDown className={cn("h-2.5 w-2.5", active && sortDir === 'desc' ? "text-arena-button" : "text-arena-navy-800/20")} />
                 </span>
             </div>
         </th>
@@ -208,10 +208,10 @@ export function ClientesOverviewPageClient({ arenaId, initialCategories }: Props
     }
 
     return (
-        <div className="min-h-full bg-[#F8FAFC]">
+        <div className="min-h-full bg-arena-soft">
             <div className="mb-6">
-                <h1 className="text-2xl font-black text-[#002B40]">Atletas e clientes</h1>
-                <p className="text-sm text-[#002B40]/60 mt-1">
+                <h1 className="text-2xl font-black text-arena-navy-800">Atletas e clientes</h1>
+                <p className="text-sm text-arena-navy-800/60 mt-1">
                     Selecione uma barra para visualizar os clientes de cada grupo.
                 </p>
             </div>
@@ -219,11 +219,11 @@ export function ClientesOverviewPageClient({ arenaId, initialCategories }: Props
             <div className="flex flex-col lg:flex-row gap-6">
                 {/* LEFT: Funnel bars */}
                 <div className="w-full lg:w-[360px] shrink-0">
-                    <div className="bg-white rounded-2xl shadow-sm border border-[#002B40]/5 p-6">
-                        <h2 className="text-sm font-bold text-[#002B40]/60 uppercase tracking-wider mb-5">
+                    <div className="bg-white rounded-2xl shadow-sm border border-arena-navy-800/5 p-6">
+                        <h2 className="text-sm font-bold text-arena-navy-800/60 uppercase tracking-wider mb-5">
                             Funil de clientes
                         </h2>
-                        <p className="text-xs text-[#002B40]/40 mb-6">
+                        <p className="text-xs text-arena-navy-800/40 mb-6">
                             Clique em uma barra para ver os clientes desse grupo.
                         </p>
 
@@ -241,9 +241,9 @@ export function ClientesOverviewPageClient({ arenaId, initialCategories }: Props
                         </div>
 
                         {/* Total */}
-                        <div className="mt-6 pt-4 border-t border-[#002B40]/5 flex items-center justify-between">
-                            <span className="text-xs text-[#002B40]/40 font-medium">Total de atletas</span>
-                            <span className="text-sm font-black text-[#002B40]">
+                        <div className="mt-6 pt-4 border-t border-arena-navy-800/5 flex items-center justify-between">
+                            <span className="text-xs text-arena-navy-800/40 font-medium">Total de atletas</span>
+                            <span className="text-sm font-black text-arena-navy-800">
                                 {/* unique count */}
                                 {new Set(initialCategories.flatMap(c => c.athletes.map(a => a.id))).size}
                             </span>
@@ -253,9 +253,9 @@ export function ClientesOverviewPageClient({ arenaId, initialCategories }: Props
 
                 {/* RIGHT: Detail grid */}
                 <div className="flex-1 min-w-0">
-                    <div className="bg-white rounded-2xl shadow-sm border border-[#002B40]/5 overflow-hidden">
+                    <div className="bg-white rounded-2xl shadow-sm border border-arena-navy-800/5 overflow-hidden">
                         {/* Header */}
-                        <div className="px-6 py-4 border-b border-[#002B40]/5 flex items-center gap-3">
+                        <div className="px-6 py-4 border-b border-arena-navy-800/5 flex items-center gap-3">
                             {selected && (
                                 <div
                                     className="w-2.5 h-2.5 rounded-full shrink-0"
@@ -263,17 +263,17 @@ export function ClientesOverviewPageClient({ arenaId, initialCategories }: Props
                                 />
                             )}
                             <div>
-                                <h2 className="text-sm font-bold text-[#002B40]">
+                                <h2 className="text-sm font-bold text-arena-navy-800">
                                     {selected?.label ?? 'Selecione um grupo'}
                                 </h2>
                                 {selected && (
-                                    <p className="text-xs text-[#002B40]/40 mt-0.5">
+                                    <p className="text-xs text-arena-navy-800/40 mt-0.5">
                                         {selected.description}
                                     </p>
                                 )}
                             </div>
                             {selected && (
-                                <Badge className="ml-auto shrink-0 bg-[#F1F5F9] text-[#002B40] hover:bg-[#F1F5F9] font-bold">
+                                <Badge className="ml-auto shrink-0 bg-[#F1F5F9] text-arena-navy-800 hover:bg-[#F1F5F9] font-bold">
                                     {selected.count} atleta{selected.count !== 1 ? 's' : ''}
                                 </Badge>
                             )}
@@ -281,7 +281,7 @@ export function ClientesOverviewPageClient({ arenaId, initialCategories }: Props
 
                         {/* Table */}
                         {!selected || sorted.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-20 text-[#002B40]/30">
+                            <div className="flex flex-col items-center justify-center py-20 text-arena-navy-800/30">
                                 <Users className="h-10 w-10 mb-3" />
                                 <p className="text-sm font-medium">
                                     {!selected ? 'Selecione um grupo à esquerda' : 'Nenhum atleta neste grupo'}
@@ -291,7 +291,7 @@ export function ClientesOverviewPageClient({ arenaId, initialCategories }: Props
                             <>
                                 <div className="overflow-x-auto">
                                     <table className="w-full">
-                                        <thead className="bg-[#F8FAFC]">
+                                        <thead className="bg-arena-soft">
                                             <tr>
                                                 <SortableHeader label="Nome" field="nome" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                                                 <SortableHeader label="CPF" field="cpf" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
@@ -301,12 +301,12 @@ export function ClientesOverviewPageClient({ arenaId, initialCategories }: Props
                                                 )}
                                                 <SortableHeader label="Esportes" field="esportes" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                                                 <SortableHeader label="Reservas" field="total_reservas" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="text-right" />
-                                                <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-[#002B40]/50">
+                                                <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-arena-navy-800/50">
                                                     Ações
                                                 </th>
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-[#002B40]/5">
+                                        <tbody className="divide-y divide-arena-navy-800/5">
                                             {paginated.map((athlete) => (
                                                 <AthleteRow
                                                     key={athlete.id}
@@ -321,8 +321,8 @@ export function ClientesOverviewPageClient({ arenaId, initialCategories }: Props
                                 </div>
 
                                 {/* Pagination */}
-                                <div className="px-4 py-3 border-t border-[#002B40]/5 flex items-center justify-between">
-                                    <span className="text-xs text-[#002B40]/40">
+                                <div className="px-4 py-3 border-t border-arena-navy-800/5 flex items-center justify-between">
+                                    <span className="text-xs text-arena-navy-800/40">
                                         {sorted.length === 0 ? '0 resultados' :
                                             `${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, sorted.length)} de ${sorted.length}`}
                                     </span>
@@ -345,7 +345,7 @@ export function ClientesOverviewPageClient({ arenaId, initialCategories }: Props
                                             }, [])
                                             .map((p, i) =>
                                                 p === '...' ? (
-                                                    <span key={`ellipsis-${i}`} className="px-1 text-xs text-[#002B40]/30">…</span>
+                                                    <span key={`ellipsis-${i}`} className="px-1 text-xs text-arena-navy-800/30">…</span>
                                                 ) : (
                                                     <Button
                                                         key={p}
@@ -354,8 +354,8 @@ export function ClientesOverviewPageClient({ arenaId, initialCategories }: Props
                                                         className={cn(
                                                             "h-7 w-7 text-xs font-bold",
                                                             page === p
-                                                                ? "bg-[#FF6B00] text-white hover:bg-[#E66000]"
-                                                                : "text-[#002B40]/60 hover:bg-[#002B40]/5"
+                                                                ? "bg-arena-button text-white hover:bg-arena-button-hover"
+                                                                : "text-arena-navy-800/60 hover:bg-arena-navy-800/5"
                                                         )}
                                                         onClick={() => setPage(p as number)}
                                                     >
@@ -401,7 +401,7 @@ function AthleteRow({
             "transition-colors",
             isToday
                 ? "bg-amber-50 hover:bg-amber-100/60"
-                : "hover:bg-[#F8FAFC]"
+                : "hover:bg-arena-soft"
         )}>
             <td className="px-4 py-3">
                 <div className="flex items-center gap-2">
@@ -409,7 +409,7 @@ function AthleteRow({
                         <span className="text-base" title="Aniversário hoje!">🎂</span>
                     )}
                     <span className={cn(
-                        "text-sm text-[#002B40]",
+                        "text-sm text-arena-navy-800",
                         isToday ? "font-black" : "font-semibold"
                     )}>
                         {athlete.nome}
@@ -422,12 +422,12 @@ function AthleteRow({
                 </div>
             </td>
             <td className="px-4 py-3">
-                <span className={cn("text-sm font-mono", isToday ? "text-[#002B40] font-bold" : "text-[#002B40]/60")}>
+                <span className={cn("text-sm font-mono", isToday ? "text-arena-navy-800 font-bold" : "text-arena-navy-800/60")}>
                     {formatCpf(athlete.cpf)}
                 </span>
             </td>
             <td className="px-4 py-3">
-                <span className={cn("text-sm", isToday ? "text-[#002B40] font-bold" : "text-[#002B40]/60")}>
+                <span className={cn("text-sm", isToday ? "text-arena-navy-800 font-bold" : "text-arena-navy-800/60")}>
                     {formatDate(athlete.data_nascimento)}
                 </span>
             </td>
@@ -455,12 +455,12 @@ function AthleteRow({
                                 {e}
                             </span>
                         ))
-                        : <span className="text-xs text-[#002B40]/30">—</span>
+                        : <span className="text-xs text-arena-navy-800/30">—</span>
                     }
                 </div>
             </td>
             <td className="px-4 py-3 text-right">
-                <span className={cn("text-sm", isToday ? "font-black text-[#002B40]" : "font-bold text-[#002B40]")}>
+                <span className={cn("text-sm", isToday ? "font-black text-arena-navy-800" : "font-bold text-arena-navy-800")}>
                     {athlete.total_reservas}
                 </span>
             </td>
@@ -469,7 +469,7 @@ function AthleteRow({
                     <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-[#002B40]/40 hover:text-[#002B40] hover:bg-[#002B40]/5"
+                        className="h-8 w-8 text-arena-navy-800/40 hover:text-arena-navy-800 hover:bg-arena-navy-800/5"
                         title="Ver perfil do atleta"
                         onClick={() => onNavigate(`/dashboard/athletes/${arenaId}/${athlete.id}`)}
                     >

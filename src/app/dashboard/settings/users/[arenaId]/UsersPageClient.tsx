@@ -118,7 +118,7 @@ export function UsersPageClient({ arenaId, arenaName, initialUsers, stations }: 
                         Gerencie os usuários e permissões da arena <span className="font-semibold">{arenaName}</span>
                     </p>
                 </div>
-                <Button onClick={() => { setSelectedUser(null); setIsModalOpen(true); }} className="bg-[#FF6B00] hover:bg-[#E66000]">
+                <Button onClick={() => { setSelectedUser(null); setIsModalOpen(true); }} className="bg-arena-button hover:bg-arena-button-hover">
                     <Plus className="mr-2 h-4 w-4" />
                     Cadastrar Usuário
                 </Button>
@@ -211,8 +211,8 @@ export function UsersPageClient({ arenaId, arenaName, initialUsers, stations }: 
                     <Card className="border-border">
                         <CardContent className="p-5 flex flex-col gap-3">
                             <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-lg bg-[#FF6B00]/10">
-                                    <Crown className="h-5 w-5 text-[#FF6B00]" />
+                                <div className="p-2 rounded-lg bg-arena-button/10">
+                                    <Crown className="h-5 w-5 text-arena-button" />
                                 </div>
                                 <span className="font-semibold text-sm">Administrador</span>
                             </div>
@@ -261,7 +261,7 @@ export function UsersPageClient({ arenaId, arenaName, initialUsers, stations }: 
             <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
                 <DialogContent className="sm:max-w-[425px] bg-white border-slate-200 p-6 rounded-3xl shadow-xl">
                     <DialogHeader className="mb-4">
-                        <DialogTitle className="text-[#002B40] text-2xl font-semibold">Excluir usuário</DialogTitle>
+                        <DialogTitle className="text-arena-navy-800 text-2xl font-semibold">Excluir usuário</DialogTitle>
                     </DialogHeader>
                     <div className="text-slate-600 mb-8 whitespace-pre-wrap">
                         Tem certeza que deseja excluir este usuário? A exclusão é{'\n'}
@@ -269,10 +269,10 @@ export function UsersPageClient({ arenaId, arenaName, initialUsers, stations }: 
                         pode ser desfeita.
                     </div>
                     <div className="flex justify-end gap-3 font-semibold">
-                        <Button variant="outline" onClick={() => setIsDeleteModalOpen(false)} disabled={isDeleting} className="bg-white border-[#002B40] text-[#002B40] hover:bg-slate-50 px-8 rounded-lg">
+                        <Button variant="outline" onClick={() => setIsDeleteModalOpen(false)} disabled={isDeleting} className="bg-white border-arena-navy-800 text-arena-navy-800 hover:bg-slate-50 px-8 rounded-lg">
                             Fechar
                         </Button>
-                        <Button onClick={confirmDeleteUser} disabled={isDeleting} className="bg-[#FF6B00] hover:bg-[#E66000] text-white px-8 rounded-lg border-0">
+                        <Button onClick={confirmDeleteUser} disabled={isDeleting} className="bg-arena-button hover:bg-arena-button-hover text-white px-8 rounded-lg border-0">
                             Excluir
                         </Button>
                     </div>

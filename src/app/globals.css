@@ -39,6 +39,20 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  /* Arena Digital — paleta de marca (fonte: :root --arena-*) */
+  --color-arena-navy-950: var(--arena-navy-950);
+  --color-arena-navy-900: var(--arena-navy-900);
+  --color-arena-navy-800: var(--arena-navy-800);
+  --color-arena-navy-700: var(--arena-navy-700);
+  --color-arena-cyan: var(--arena-cyan);
+  --color-arena-orange: var(--arena-orange);
+  --color-arena-amber: var(--arena-amber);
+  --color-arena-soft: var(--arena-soft);
+  --color-arena-accent: var(--arena-accent);
+  --color-arena-accent-hover: var(--arena-accent-hover);
+  --color-arena-button: var(--arena-button);
+  --color-arena-button-hover: var(--arena-button-hover);
+  --color-arena-app-surface: var(--arena-app-surface);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -89,6 +103,14 @@
   --arena-orange: #f97415;
   --arena-amber: #f9a91f;
   --arena-soft: #f8fafc;
+  /* Navegação: item ativo (sidebar) */
+  --arena-accent: #ff8e3d;
+  --arena-accent-hover: #e87828;
+  /* CTAs do painel (botões laranja) */
+  --arena-button: #ff6b00;
+  --arena-button-hover: #e66000;
+  /* Fundo do conteúdo logado */
+  --arena-app-surface: #f8f9fa;
   --arena-gradient: linear-gradient(90deg, #f97415 0%, #f9a91f 100%);
 }
 

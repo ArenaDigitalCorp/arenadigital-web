@@ -18,7 +18,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-[100dvh] flex-col md:flex-row">
       {/* Mobile Menu Wrapper (Sheet) */}
       <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
-        <SheetContent side="left" className="p-0 bg-[#002B40] border-none w-64">
+        <SheetContent side="left" className="p-0 bg-arena-navy-800 border-none w-64">
           <Sidebar
             className="w-full"
             onNavItemClick={() => setIsMobileMenuOpen(false)}
@@ -41,12 +41,12 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
         />
       </div>
 
-      <div className="flex-1 flex flex-col transition-all duration-300 ease-in-out bg-[#F8F9FA]">
+      <div className="flex-1 flex flex-col transition-all duration-300 ease-in-out bg-arena-app-surface">
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          className="fixed top-4 left-4 z-50 h-10 w-10 rounded-lg bg-[#002B40] text-white shadow-md hover:bg-[#003a55] hover:text-white md:hidden"
+          className="fixed top-4 left-4 z-50 h-10 w-10 rounded-lg bg-arena-navy-800 text-white shadow-md hover:bg-arena-navy-700 hover:text-white md:hidden"
           onClick={() => setIsMobileMenuOpen(true)}
           aria-label="Abrir menu"
         >

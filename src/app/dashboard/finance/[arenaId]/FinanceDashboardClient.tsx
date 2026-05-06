@@ -177,8 +177,8 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
     return (
         <div className="space-y-8 pb-10">
             <div className="flex flex-col gap-1">
-                <h1 className="text-3xl font-black text-[#002B40] tracking-tight">Financeiro</h1>
-                <p className="text-[#002B40]/60 font-medium">Controle suas entradas e saídas em um só lugar.</p>
+                <h1 className="text-3xl font-black text-arena-navy-800 tracking-tight">Financeiro</h1>
+                <p className="text-arena-navy-800/60 font-medium">Controle suas entradas e saídas em um só lugar.</p>
             </div>
 
             <div className="grid gap-6 lg:grid-cols-2 items-stretch">
@@ -195,7 +195,7 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1">
                         <Card className="p-8 border-none shadow-lg rounded-2xl bg-white flex flex-col justify-between h-full">
                             <div>
-                                <p className="text-[#002B40]/40 font-bold text-xs uppercase tracking-widest mb-1">Entradas do Mês</p>
+                                <p className="text-arena-navy-800/40 font-bold text-xs uppercase tracking-widest mb-1">Entradas do Mês</p>
                                 <h3 className="text-3xl font-black text-[#20B2AA] mb-1">{formatCurrency(monthlyComparison.entradas.current)}</h3>
                             </div>
                             <p className={cn(
@@ -208,8 +208,8 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                         </Card>
                         <Card className="p-8 border-none shadow-lg rounded-2xl bg-white flex flex-col justify-between h-full">
                             <div>
-                                <p className="text-[#002B40]/40 font-bold text-xs uppercase tracking-widest mb-1">Despesas do Mês</p>
-                                <h3 className="text-3xl font-black text-[#FF6B00] mb-1">{formatCurrency(monthlyComparison.saidas.current)}</h3>
+                                <p className="text-arena-navy-800/40 font-bold text-xs uppercase tracking-widest mb-1">Despesas do Mês</p>
+                                <h3 className="text-3xl font-black text-arena-button mb-1">{formatCurrency(monthlyComparison.saidas.current)}</h3>
                             </div>
                             <p className={cn(
                                 "font-bold text-xs",
@@ -226,15 +226,15 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                 <Card className="p-8 border-none shadow-lg rounded-2xl bg-white flex flex-col h-full min-h-[420px]">
                     <div className="flex items-center justify-between mb-8">
                         <div className="flex items-center gap-3">
-                            <div className="bg-[#FF6B00]/10 p-2 rounded-lg">
-                                <BarChart3 className="h-5 w-5 text-[#FF6B00]" />
+                            <div className="bg-arena-button/10 p-2 rounded-lg">
+                                <BarChart3 className="h-5 w-5 text-arena-button" />
                             </div>
-                            <h3 className="text-xl font-bold text-[#002B40]">Comparativo</h3>
+                            <h3 className="text-xl font-bold text-arena-navy-800">Comparativo</h3>
                         </div>
                         <select
                             value={period}
                             onChange={(e) => setPeriod(e.target.value as '7d' | '30d')}
-                            className="bg-white border border-[#002B40]/10 rounded-lg px-3 py-2 text-sm text-[#002B40]/60 focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 transition-all font-bold"
+                            className="bg-white border border-arena-navy-800/10 rounded-lg px-3 py-2 text-sm text-arena-navy-800/60 focus:outline-none focus:ring-2 focus:ring-arena-button/20 transition-all font-bold"
                         >
                             <option value="7d">Última semana</option>
                             <option value="30d">Últimos 30 dias</option>
@@ -244,7 +244,7 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                     <div className="flex gap-8 flex-1">
                         {/* Sidebar Filters */}
                         <div className="flex flex-col gap-3 w-48">
-                            <p className="text-[#002B40]/40 font-bold text-[10px] uppercase tracking-widest mb-1">Selecione a visualização desejada:</p>
+                            <p className="text-arena-navy-800/40 font-bold text-[10px] uppercase tracking-widest mb-1">Selecione a visualização desejada:</p>
                             {[
                                 { id: 'saldo', label: 'Saldo total' },
                                 { id: 'entrada', label: 'Entradas' },
@@ -256,21 +256,21 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                                     className={cn(
                                         "flex items-center justify-between p-4 rounded-xl border transition-all duration-300 group",
                                         viewType === filter.id
-                                            ? "bg-[#FFF5EF] border-[#FF6B00]/20"
-                                            : "bg-white border-[#002B40]/5 hover:border-[#002B40]/10"
+                                            ? "bg-[#FFF5EF] border-arena-button/20"
+                                            : "bg-white border-arena-navy-800/5 hover:border-arena-navy-800/10"
                                     )}
                                 >
                                     <span className={cn(
                                         "text-sm font-bold transition-colors",
-                                        viewType === filter.id ? "text-[#002B40]" : "text-[#002B40]/40 group-hover:text-[#002B40]/60"
+                                        viewType === filter.id ? "text-arena-navy-800" : "text-arena-navy-800/40 group-hover:text-arena-navy-800/60"
                                     )}>
                                         {filter.label}
                                     </span>
                                     <div className={cn(
                                         "h-5 w-5 rounded-full border-2 flex items-center justify-center transition-all",
-                                        viewType === filter.id ? "border-[#FF6B00]" : "border-[#002B40]/10"
+                                        viewType === filter.id ? "border-arena-button" : "border-arena-navy-800/10"
                                     )}>
-                                        {viewType === filter.id && <div className="h-2.5 w-2.5 rounded-full bg-[#FF6B00]" />}
+                                        {viewType === filter.id && <div className="h-2.5 w-2.5 rounded-full bg-arena-button" />}
                                     </div>
                                 </button>
                             ))}
@@ -284,7 +284,7 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                             )}>
                                 <div className="absolute inset-x-0 bottom-2 top-0 flex flex-col justify-between pointer-events-none opacity-[0.03]">
                                     {[10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0].map(n => (
-                                        <div key={n} className="w-full border-t border-[#002B40] flex items-center">
+                                        <div key={n} className="w-full border-t border-arena-navy-800 flex items-center">
                                             <span className="text-[10px] font-bold pr-2 -translate-y-1/2">{n}</span>
                                         </div>
                                     ))}
@@ -296,24 +296,24 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                                             className={cn(
                                                 "w-full rounded-full transition-all duration-700 relative flex items-end justify-center",
                                                 d.isCurrentDay || (d.percentage === 100 && d.value !== 0)
-                                                    ? "bg-gradient-to-t from-[#FF6B00] to-[#FF9E58]"
-                                                    : (viewType === 'saldo' && d.value < 0 ? "bg-gradient-to-t from-[#475569] to-[#94a3b8]" : "bg-[#002B40]/5 group-hover/bar:bg-[#002B40]/10")
+                                                    ? "bg-gradient-to-t from-arena-button to-arena-accent"
+                                                    : (viewType === 'saldo' && d.value < 0 ? "bg-gradient-to-t from-[#475569] to-[#94a3b8]" : "bg-arena-navy-800/5 group-hover/bar:bg-arena-navy-800/10")
                                             )}
                                             style={{ height: `${Math.max(d.percentage, 5)}%` }}
                                         >
-                                            <div className="absolute -top-10 bg-[#002B40] text-white text-[10px] font-black px-2 py-1 rounded-md opacity-0 group-hover/bar:opacity-100 transition-opacity whitespace-nowrap shadow-xl z-20 pointer-events-none">
+                                            <div className="absolute -top-10 bg-arena-navy-800 text-white text-[10px] font-black px-2 py-1 rounded-md opacity-0 group-hover/bar:opacity-100 transition-opacity whitespace-nowrap shadow-xl z-20 pointer-events-none">
                                                 {formatCurrency(d.value)}
                                             </div>
                                             {(d.isCurrentDay || (d.percentage === 100 && d.value !== 0)) && (
-                                                <div className="absolute -top-10 bg-white border border-[#002B40]/5 shadow-xl text-[#002B40] font-black text-[10px] px-2 py-1.5 rounded-lg z-10 transition-transform group-hover/bar:scale-110">
+                                                <div className="absolute -top-10 bg-white border border-arena-navy-800/5 shadow-xl text-arena-navy-800 font-black text-[10px] px-2 py-1.5 rounded-lg z-10 transition-transform group-hover/bar:scale-110">
                                                     {formatCurrency(d.value).replace('R$', '').trim()}
-                                                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-white border-b border-r border-[#002B40]/5 rotate-45" />
+                                                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-white border-b border-r border-arena-navy-800/5 rotate-45" />
                                                 </div>
                                             )}
                                         </div>
                                         <span className={cn(
                                             "text-[10px] font-bold transition-colors whitespace-nowrap",
-                                            d.isCurrentDay ? "text-[#FF6B00]" : "text-[#002B40]/40"
+                                            d.isCurrentDay ? "text-arena-button" : "text-arena-navy-800/40"
                                         )}>
                                             {d.label}
                                         </span>
@@ -329,8 +329,8 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                 {/* Recent Incomes */}
                 <Card className="p-8 border-none shadow-lg rounded-2xl bg-white">
                     <div className="flex items-center justify-between mb-8">
-                        <h3 className="text-xl font-bold text-[#002B40]">Últimas Entradas</h3>
-                        <Button onClick={() => setIsAddingEntry(true)} variant="ghost" className="text-[#002B40]/60 hover:text-[#002B40] gap-2 font-bold text-sm">
+                        <h3 className="text-xl font-bold text-arena-navy-800">Últimas Entradas</h3>
+                        <Button onClick={() => setIsAddingEntry(true)} variant="ghost" className="text-arena-navy-800/60 hover:text-arena-navy-800 gap-2 font-bold text-sm">
                             Nova entrada <Plus className="h-4 w-4" />
                         </Button>
                     </div>
@@ -338,8 +338,8 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                         {recentEntradas.map(t => (
                             <div key={t.id} className="bg-[#FFF8F1] p-4 rounded-xl flex items-center justify-between">
                                 <div>
-                                    <p className="text-[#002B40] font-bold text-sm">{t.category} - {t.description}</p>
-                                    <p className="text-[#002B40]/40 text-xs font-medium">{new Date(t.launch_date).toLocaleDateString('pt-BR')}</p>
+                                    <p className="text-arena-navy-800 font-bold text-sm">{t.category} - {t.description}</p>
+                                    <p className="text-arena-navy-800/40 text-xs font-medium">{new Date(t.launch_date).toLocaleDateString('pt-BR')}</p>
                                     {t.atleta?.nome_perfil && (
                                         <span className="inline-flex items-center gap-1 mt-1 bg-blue-50 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded">
                                             👤 {t.atleta.nome_perfil}
@@ -348,12 +348,12 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                                 </div>
                                 <div className="text-right">
                                     <p className="text-[#20B2AA] font-black text-sm">+ {formatCurrency(t.total_value)}</p>
-                                    <span className="bg-[#FFC145]/20 text-[#002B40]/60 text-[10px] font-bold px-2 py-0.5 rounded uppercase">{t.category}</span>
+                                    <span className="bg-[#FFC145]/20 text-arena-navy-800/60 text-[10px] font-bold px-2 py-0.5 rounded uppercase">{t.category}</span>
                                 </div>
                             </div>
                         ))}
                     </div>
-                    <Link href={`/dashboard/finance/${arenaId}/entradas`} className="mt-8 text-center block text-[#002B40]/40 hover:text-[#002B40] text-sm font-bold underline">
+                    <Link href={`/dashboard/finance/${arenaId}/entradas`} className="mt-8 text-center block text-arena-navy-800/40 hover:text-arena-navy-800 text-sm font-bold underline">
                         Ver tudo
                     </Link>
                 </Card>
@@ -361,8 +361,8 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                 {/* Recent Expenses */}
                 <Card className="p-8 border-none shadow-lg rounded-2xl bg-white">
                     <div className="flex items-center justify-between mb-8">
-                        <h3 className="text-xl font-bold text-[#002B40]">Últimas Saídas</h3>
-                        <Button onClick={() => setIsAddingExpense(true)} variant="ghost" className="text-[#002B40]/60 hover:text-[#002B40] gap-2 font-bold text-sm">
+                        <h3 className="text-xl font-bold text-arena-navy-800">Últimas Saídas</h3>
+                        <Button onClick={() => setIsAddingExpense(true)} variant="ghost" className="text-arena-navy-800/60 hover:text-arena-navy-800 gap-2 font-bold text-sm">
                             Nova saída <Plus className="h-4 w-4" />
                         </Button>
                     </div>
@@ -370,17 +370,17 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                         {recentSaidas.map(t => (
                             <div key={t.id} className="bg-[#FFF8F1] p-4 rounded-xl flex items-center justify-between">
                                 <div>
-                                    <p className="text-[#002B40] font-bold text-sm">{t.category} - {t.description}</p>
-                                    <p className="text-[#002B40]/40 text-xs font-medium">{new Date(t.launch_date).toLocaleDateString('pt-BR')}</p>
+                                    <p className="text-arena-navy-800 font-bold text-sm">{t.category} - {t.description}</p>
+                                    <p className="text-arena-navy-800/40 text-xs font-medium">{new Date(t.launch_date).toLocaleDateString('pt-BR')}</p>
                                 </div>
                                 <div className="text-right">
-                                    <p className="text-[#FF6B00] font-black text-sm">- {formatCurrency(t.total_value)}</p>
-                                    <span className="bg-[#FFC145]/20 text-[#002B40]/60 text-[10px] font-bold px-2 py-0.5 rounded uppercase">{t.category}</span>
+                                    <p className="text-arena-button font-black text-sm">- {formatCurrency(t.total_value)}</p>
+                                    <span className="bg-[#FFC145]/20 text-arena-navy-800/60 text-[10px] font-bold px-2 py-0.5 rounded uppercase">{t.category}</span>
                                 </div>
                             </div>
                         ))}
                     </div>
-                    <Link href={`/dashboard/finance/${arenaId}/saidas`} className="mt-8 text-center block text-[#002B40]/40 hover:text-[#002B40] text-sm font-bold underline">
+                    <Link href={`/dashboard/finance/${arenaId}/saidas`} className="mt-8 text-center block text-arena-navy-800/40 hover:text-arena-navy-800 text-sm font-bold underline">
                         Ver tudo
                     </Link>
                 </Card>
@@ -400,7 +400,7 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                             }
                         </div>
                         <div>
-                            <h3 className="text-lg font-bold text-[#002B40]">Cobranças Pendentes — Mensalistas</h3>
+                            <h3 className="text-lg font-bold text-arena-navy-800">Cobranças Pendentes — Mensalistas</h3>
                             {pendingMensalistas.length > 0 && (
                                 <p className="text-xs text-amber-600 font-bold">
                                     {pendingMensalistas.length} pagamento{pendingMensalistas.length !== 1 ? "s" : ""} aguardando confirmação
@@ -410,7 +410,7 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                     </div>
                     <Link
                         href={`/dashboard/arenas/${arenaId}/mensalistas`}
-                        className="text-sm font-bold text-[#002B40]/50 hover:text-[#002B40] underline"
+                        className="text-sm font-bold text-arena-navy-800/50 hover:text-arena-navy-800 underline"
                     >
                         Ver todos mensalistas
                     </Link>
@@ -442,9 +442,9 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                                             <Users className="h-5 w-5 text-amber-600" />
                                         </div>
                                         <div className="min-w-0">
-                                            <p className="font-bold text-[#002B40] text-sm truncate">{nome}</p>
+                                            <p className="font-bold text-arena-navy-800 text-sm truncate">{nome}</p>
                                             <div className="flex items-center gap-3 mt-0.5">
-                                                <span className="flex items-center gap-1 text-[11px] text-[#002B40]/50">
+                                                <span className="flex items-center gap-1 text-[11px] text-arena-navy-800/50">
                                                     <MapPin className="h-3 w-3" />{courtName}
                                                 </span>
                                                 <span className="flex items-center gap-1 text-[11px] text-amber-600 font-bold capitalize">
@@ -454,7 +454,7 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-4 flex-shrink-0">
-                                        <p className="font-black text-[#FF6B00] text-base">
+                                        <p className="font-black text-arena-button text-base">
                                             {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(plano.valor_mensal)}
                                         </p>
                                         <Button
@@ -496,7 +496,7 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
             <Dialog open={isAddingEntry} onOpenChange={setIsAddingEntry}>
                 <DialogContent className="w-[calc(100vw-2rem)] max-w-[440px]">
                     <DialogHeader>
-                        <DialogTitle className="text-2xl font-black text-[#002B40]">Nova entrada</DialogTitle>
+                        <DialogTitle className="text-2xl font-black text-arena-navy-800">Nova entrada</DialogTitle>
                     </DialogHeader>
                     <TransactionForm
                         arenaId={arenaId}
@@ -511,7 +511,7 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
             <Dialog open={isAddingExpense} onOpenChange={setIsAddingExpense}>
                 <DialogContent className="w-[calc(100vw-2rem)] max-w-[440px]">
                     <DialogHeader>
-                        <DialogTitle className="text-2xl font-black text-[#002B40]">Nova saída</DialogTitle>
+                        <DialogTitle className="text-2xl font-black text-arena-navy-800">Nova saída</DialogTitle>
                     </DialogHeader>
                     <TransactionForm
                         arenaId={arenaId}

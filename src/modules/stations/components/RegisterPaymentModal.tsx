@@ -142,10 +142,10 @@ export function RegisterPaymentModal({
             <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
                 <DialogContent className="sm:max-w-[450px] p-8 border-none shadow-2xl rounded-3xl">
                     <DialogHeader className="space-y-4">
-                        <DialogTitle className="text-2xl font-black text-[#002B40]">
+                        <DialogTitle className="text-2xl font-black text-arena-navy-800">
                             Quer fechar a comanda?
                         </DialogTitle>
-                        <p className="text-[#002B40]/60 font-medium leading-relaxed">
+                        <p className="text-arena-navy-800/60 font-medium leading-relaxed">
                             O saldo da comanda agora é zero, com isso, deseja dar baixar ou continuar com ela aberta?
                         </p>
                     </DialogHeader>
@@ -157,14 +157,14 @@ export function RegisterPaymentModal({
                                 onSuccess()
                                 handleClose()
                             }}
-                            className="flex-1 font-bold h-12 rounded-xl text-[#002B40]/60 border-[#002B40]/10"
+                            className="flex-1 font-bold h-12 rounded-xl text-arena-navy-800/60 border-arena-navy-800/10"
                         >
                             Continuar aberta
                         </Button>
                         <Button
                             onClick={handleCloseComanda}
                             disabled={isSubmitting}
-                            className="flex-1 bg-[#FF6B00] hover:bg-[#E66000] text-white font-bold h-12 rounded-xl shadow-lg shadow-[#FF6B00]/20"
+                            className="flex-1 bg-arena-button hover:bg-arena-button-hover text-white font-bold h-12 rounded-xl shadow-lg shadow-arena-button/20"
                         >
                             {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Fechar comanda"}
                         </Button>
@@ -178,7 +178,7 @@ export function RegisterPaymentModal({
         <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
             <DialogContent className="sm:max-w-[450px] p-0 overflow-hidden border-none shadow-2xl rounded-3xl">
                 <DialogHeader className="p-8 pb-0">
-                    <DialogTitle className="text-2xl font-black text-[#002B40]">
+                    <DialogTitle className="text-2xl font-black text-arena-navy-800">
                         Registrar pagamento
                     </DialogTitle>
                 </DialogHeader>
@@ -186,7 +186,7 @@ export function RegisterPaymentModal({
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="p-8 space-y-6">
                         <div className="space-y-2">
-                            <FormLabel className="text-[#002B40]/60 font-bold text-sm">Valor pago</FormLabel>
+                            <FormLabel className="text-arena-navy-800/60 font-bold text-sm">Valor pago</FormLabel>
                             <FormField
                                 control={form.control}
                                 name="amount"
@@ -196,7 +196,7 @@ export function RegisterPaymentModal({
                                             <Input
                                                 placeholder="R$ 0,00"
                                                 {...field}
-                                                className="h-12 border-[#002B40]/10 focus:ring-[#FF6B00] focus:border-[#FF6B00] rounded-xl font-bold text-[#002B40]"
+                                                className="h-12 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-xl font-bold text-arena-navy-800"
                                             />
                                         </FormControl>
                                     </FormItem>
@@ -205,7 +205,7 @@ export function RegisterPaymentModal({
                         </div>
 
                         <div className="space-y-2">
-                            <FormLabel className="text-[#002B40]/60 font-bold text-sm">Forma de pagamento</FormLabel>
+                            <FormLabel className="text-arena-navy-800/60 font-bold text-sm">Forma de pagamento</FormLabel>
                             <FormField
                                 control={form.control}
                                 name="payment_method"
@@ -213,11 +213,11 @@ export function RegisterPaymentModal({
                                     <FormItem>
                                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                                             <FormControl>
-                                                <SelectTrigger className="h-12 border-[#002B40]/10 rounded-xl font-bold text-[#002B40]/40">
+                                                <SelectTrigger className="h-12 border-arena-navy-800/10 rounded-xl font-bold text-arena-navy-800/40">
                                                     <SelectValue placeholder="Selecione a forma de pagamento" />
                                                 </SelectTrigger>
                                             </FormControl>
-                                            <SelectContent className="rounded-xl border-[#002B40]/10">
+                                            <SelectContent className="rounded-xl border-arena-navy-800/10">
                                                 <SelectItem value="Cartão de crédito">Cartão de crédito</SelectItem>
                                                 <SelectItem value="Cartão de débito">Cartão de débito</SelectItem>
                                                 <SelectItem value="Dinheiro">Dinheiro</SelectItem>
@@ -230,7 +230,7 @@ export function RegisterPaymentModal({
                         </div>
 
                         <div className="space-y-2">
-                            <FormLabel className="text-[#002B40]/60 font-bold text-sm">Observação (opcional)</FormLabel>
+                            <FormLabel className="text-arena-navy-800/60 font-bold text-sm">Observação (opcional)</FormLabel>
                             <FormField
                                 control={form.control}
                                 name="observation"
@@ -239,7 +239,7 @@ export function RegisterPaymentModal({
                                         <FormControl>
                                             <Input
                                                 {...field}
-                                                className="h-12 border-[#002B40]/10 focus:ring-[#FF6B00] focus:border-[#FF6B00] rounded-xl font-medium text-[#002B40]"
+                                                className="h-12 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-xl font-medium text-arena-navy-800"
                                             />
                                         </FormControl>
                                     </FormItem>
@@ -248,7 +248,7 @@ export function RegisterPaymentModal({
                         </div>
 
                         <div className="space-y-2">
-                            <FormLabel className="text-[#002B40]/60 font-bold text-sm">Pago por (opcional)</FormLabel>
+                            <FormLabel className="text-arena-navy-800/60 font-bold text-sm">Pago por (opcional)</FormLabel>
                             <FormField
                                 control={form.control}
                                 name="paid_by_name"
@@ -258,7 +258,7 @@ export function RegisterPaymentModal({
                                             <Input
                                                 placeholder="Nome de quem pagou"
                                                 {...field}
-                                                className="h-12 border-[#002B40]/10 focus:ring-[#FF6B00] focus:border-[#FF6B00] rounded-xl font-medium text-[#002B40]"
+                                                className="h-12 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-xl font-medium text-arena-navy-800"
                                             />
                                         </FormControl>
                                     </FormItem>
@@ -271,14 +271,14 @@ export function RegisterPaymentModal({
                                 type="button"
                                 variant="outline"
                                 onClick={handleClose}
-                                className="flex-1 font-bold h-12 rounded-xl text-[#002B40]/60 border-[#002B40]/10"
+                                className="flex-1 font-bold h-12 rounded-xl text-arena-navy-800/60 border-arena-navy-800/10"
                             >
                                 Fechar
                             </Button>
                             <Button
                                 type="submit"
                                 disabled={isSubmitting}
-                                className="flex-1 bg-[#FF6B00] hover:bg-[#E66000] text-white font-bold h-12 rounded-xl shadow-lg shadow-[#FF6B00]/20"
+                                className="flex-1 bg-arena-button hover:bg-arena-button-hover text-white font-bold h-12 rounded-xl shadow-lg shadow-arena-button/20"
                             >
                                 {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Salvar"}
                             </Button>

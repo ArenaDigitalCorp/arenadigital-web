@@ -170,7 +170,7 @@ export function StationForm({ initialData, arenaId, onSuccess }: StationFormProp
                     )}
                 />
 
-                <Button type="submit" className="w-full bg-[#FF6B00] hover:bg-[#E66000] text-white">
+                <Button type="submit" className="w-full bg-arena-button hover:bg-arena-button-hover text-white">
                     {initialData ? "Salvar Alterações" : "Cadastrar Estação"}
                 </Button>
             </form>

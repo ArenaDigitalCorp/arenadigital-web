@@ -166,14 +166,14 @@ export function RotativoPageClient({ arenaId, initialSports, initialRotativos, i
         <div className="space-y-8">
             <div className="flex items-start justify-between">
                 <div className="space-y-1">
-                    <h1 className="text-3xl font-bold text-[#002B40]">Gestão de Rotativo</h1>
+                    <h1 className="text-3xl font-bold text-arena-navy-800">Gestão de Rotativo</h1>
                     <p className="text-muted-foreground">
                         Organize sessões de jogo aberto e gerencie os participantes.
                     </p>
                 </div>
                 <Button
                     onClick={() => setIsCreateModalOpen(true)}
-                    className="bg-[#FF6B00] hover:bg-[#E66000] text-white gap-2 px-6 py-6 h-auto text-base rounded-lg font-semibold shadow-md active:scale-95 transition-all"
+                    className="bg-arena-button hover:bg-arena-button-hover text-white gap-2 px-6 py-6 h-auto text-base rounded-lg font-semibold shadow-md active:scale-95 transition-all"
                 >
                     Abrir Rotativo
                     <Plus className="h-5 w-5" />
@@ -185,7 +185,7 @@ export function RotativoPageClient({ arenaId, initialSports, initialRotativos, i
                 <div className="md:col-span-4 lg:col-span-3">
                     <Card className="border-none shadow-sm h-fit">
                         <CardHeader className="pb-2">
-                            <CardTitle className="text-lg font-bold text-[#002B40]">Selecionar Dia</CardTitle>
+                            <CardTitle className="text-lg font-bold text-arena-navy-800">Selecionar Dia</CardTitle>
                         </CardHeader>
                         <CardContent className="p-0">
                             <Calendar
@@ -212,7 +212,10 @@ export function RotativoPageClient({ arenaId, initialSports, initialRotativos, i
                                                         width: '5px',
                                                         height: '5px',
                                                         borderRadius: '50%',
-                                                        backgroundColor: status === 'green' ? '#22c55e' : '#FF6B00',
+                                                        backgroundColor:
+                                                            status === 'green'
+                                                                ? '#22c55e'
+                                                                : 'var(--arena-button)',
                                                         display: 'block',
                                                     }} />
                                                 )}
@@ -229,17 +232,17 @@ export function RotativoPageClient({ arenaId, initialSports, initialRotativos, i
                 <div className="md:col-span-8 lg:col-span-9 space-y-6">
                     <Card className="border-none shadow-sm">
                         <CardHeader className="flex flex-row items-center justify-between">
-                            <CardTitle className="text-xl font-bold text-[#002B40]">
+                            <CardTitle className="text-xl font-bold text-arena-navy-800">
                                 {selectedDate ? format(selectedDate, "dd 'de' MMMM", { locale: ptBR }) : "Selecione uma data"}
                             </CardTitle>
-                            <Badge variant="outline" className="text-[#FF6B00] border-[#FF6B00]/20 bg-[#FF6B00]/5 px-3 py-1">
+                            <Badge variant="outline" className="text-arena-button border-arena-button/20 bg-arena-button/5 px-3 py-1">
                                 {rotativos.length} sessões
                             </Badge>
                         </CardHeader>
                         <CardContent>
                             {isLoading ? (
                                 <div className="flex justify-center py-12">
-                                    <Loader2 className="h-10 w-10 animate-spin text-[#FF6B00]" />
+                                    <Loader2 className="h-10 w-10 animate-spin text-arena-button" />
                                 </div>
                             ) : rotativos.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
@@ -247,27 +250,27 @@ export function RotativoPageClient({ arenaId, initialSports, initialRotativos, i
                                         <Activity className="h-10 w-10 text-gray-400" />
                                     </div>
                                     <div className="space-y-1">
-                                        <p className="text-lg font-semibold text-[#002B40]">Nenhum rotativo aberto</p>
+                                        <p className="text-lg font-semibold text-arena-navy-800">Nenhum rotativo aberto</p>
                                         <p className="text-sm text-muted-foreground">Clique no botão "Abrir Rotativo" para começar.</p>
                                     </div>
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                                     {rotativos.map((r) => (
-                                        <div key={r.id} className="relative group overflow-hidden bg-white border border-gray-100 rounded-2xl p-6 hover:shadow-xl hover:border-[#FF6B00]/20 transition-all duration-300">
+                                        <div key={r.id} className="relative group overflow-hidden bg-white border border-gray-100 rounded-2xl p-6 hover:shadow-xl hover:border-arena-button/20 transition-all duration-300">
                                             <div className="flex justify-between items-start mb-6">
                                                 <div className="bg-[#FFF5EF] p-3 rounded-xl">
-                                                    <Activity className="h-6 w-6 text-[#FF6B00]" />
+                                                    <Activity className="h-6 w-6 text-arena-button" />
                                                 </div>
                                                 <div className="text-right">
-                                                    <span className="block text-2xl font-black text-[#FF6B00]">R$ {r.valor.toFixed(2)}</span>
+                                                    <span className="block text-2xl font-black text-arena-button">R$ {r.valor.toFixed(2)}</span>
                                                     <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Investimento</span>
                                                 </div>
                                             </div>
 
                                             <div className="space-y-4">
                                                 <div>
-                                                    <h3 className="text-lg font-bold text-[#002B40] uppercase tracking-tight">{r.esporte?.name}</h3>
+                                                    <h3 className="text-lg font-bold text-arena-navy-800 uppercase tracking-tight">{r.esporte?.name}</h3>
                                                 </div>
 
                                                 <div className="grid grid-cols-2 gap-4">
@@ -277,7 +280,7 @@ export function RotativoPageClient({ arenaId, initialSports, initialRotativos, i
                                                         </div>
                                                         <div>
                                                             <span className="block text-[10px] text-muted-foreground font-bold uppercase">Horário</span>
-                                                            <span className="text-sm font-semibold text-[#002B40]">{r.hora_inicio.slice(0, 5)} - {r.hora_fim.slice(0, 5)}</span>
+                                                            <span className="text-sm font-semibold text-arena-navy-800">{r.hora_inicio.slice(0, 5)} - {r.hora_fim.slice(0, 5)}</span>
                                                         </div>
                                                     </div>
 
@@ -287,7 +290,7 @@ export function RotativoPageClient({ arenaId, initialSports, initialRotativos, i
                                                         </div>
                                                         <div>
                                                             <span className="block text-[10px] text-muted-foreground font-bold uppercase">Inscritos</span>
-                                                            <span className="text-sm font-semibold text-[#002B40]">
+                                                            <span className="text-sm font-semibold text-arena-navy-800">
                                                                 {r.inscricoes_count} {r.limitado ? `/ ${r.limite_participantes}` : ""}
                                                             </span>
                                                         </div>
@@ -297,7 +300,7 @@ export function RotativoPageClient({ arenaId, initialSports, initialRotativos, i
                                                 <Button
                                                     variant="secondary"
                                                     onClick={() => viewParticipants(r)}
-                                                    className="w-full mt-4 bg-[#002B40] text-white hover:bg-[#003650] gap-2 font-bold py-6 rounded-xl transition-all"
+                                                    className="w-full mt-4 bg-arena-navy-800 text-white hover:bg-[#003650] gap-2 font-bold py-6 rounded-xl transition-all"
                                                 >
                                                     <ClipboardList className="h-5 w-5" />
                                                     Ver Inscritos
@@ -315,7 +318,7 @@ export function RotativoPageClient({ arenaId, initialSports, initialRotativos, i
             {/* Modal de Abertura */}
             <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
                 <DialogContent className="sm:max-w-[500px] p-0 border-none overflow-hidden rounded-3xl">
-                    <div className="bg-[#002B40] p-8 text-white relative">
+                    <div className="bg-arena-navy-800 p-8 text-white relative">
                         <DialogHeader>
                             <DialogTitle className="text-2xl font-black uppercase tracking-tight">Novo Rotativo</DialogTitle>
                             <DialogDescription className="text-white/60 font-medium">
@@ -332,7 +335,7 @@ export function RotativoPageClient({ arenaId, initialSports, initialRotativos, i
                                     name="id_esporte"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel className="text-[#002B40] font-bold uppercase text-[10px] tracking-widest">Esporte</FormLabel>
+                                            <FormLabel className="text-arena-navy-800 font-bold uppercase text-[10px] tracking-widest">Esporte</FormLabel>
                                             <Select onValueChange={field.onChange} defaultValue={field.value}>
                                                 <FormControl>
                                                     <SelectTrigger className="h-12 rounded-xl border-gray-100 bg-gray-50/50">
@@ -356,7 +359,7 @@ export function RotativoPageClient({ arenaId, initialSports, initialRotativos, i
                                         name="hora_inicio"
                                         render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel className="text-[#002B40] font-bold uppercase text-[10px] tracking-widest">Início</FormLabel>
+                                                <FormLabel className="text-arena-navy-800 font-bold uppercase text-[10px] tracking-widest">Início</FormLabel>
                                                 <FormControl>
                                                     <Input type="time" {...field} className="h-12 rounded-xl border-gray-100 bg-gray-50/50" />
                                                 </FormControl>
@@ -369,7 +372,7 @@ export function RotativoPageClient({ arenaId, initialSports, initialRotativos, i
                                         name="hora_fim"
                                         render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel className="text-[#002B40] font-bold uppercase text-[10px] tracking-widest">Término</FormLabel>
+                                                <FormLabel className="text-arena-navy-800 font-bold uppercase text-[10px] tracking-widest">Término</FormLabel>
                                                 <FormControl>
                                                     <Input type="time" {...field} className="h-12 rounded-xl border-gray-100 bg-gray-50/50" />
                                                 </FormControl>
@@ -384,7 +387,7 @@ export function RotativoPageClient({ arenaId, initialSports, initialRotativos, i
                                     name="valor"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel className="text-[#002B40] font-bold uppercase text-[10px] tracking-widest">Valor da Inscrição (R$)</FormLabel>
+                                            <FormLabel className="text-arena-navy-800 font-bold uppercase text-[10px] tracking-widest">Valor da Inscrição (R$)</FormLabel>
                                             <FormControl>
                                                 <div className="relative">
                                                     <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -399,7 +402,7 @@ export function RotativoPageClient({ arenaId, initialSports, initialRotativos, i
                                 <div className="space-y-4 pt-4 border-t border-gray-50">
                                     <div className="flex items-center justify-between">
                                         <div className="space-y-0.5">
-                                            <FormLabel className="text-[#002B40] font-bold text-sm">Limitar Participantes</FormLabel>
+                                            <FormLabel className="text-arena-navy-800 font-bold text-sm">Limitar Participantes</FormLabel>
                                             <p className="text-xs text-muted-foreground font-medium">Controle o número máximo de inscritos.</p>
                                         </div>
                                         <FormField
@@ -432,7 +435,7 @@ export function RotativoPageClient({ arenaId, initialSports, initialRotativos, i
                                     )}
                                 </div>
 
-                                <Button type="submit" className="w-full h-14 bg-[#FF6B00] hover:bg-[#E66000] text-white font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-orange-500/20 active:scale-95 transition-all">
+                                <Button type="submit" className="w-full h-14 bg-arena-button hover:bg-arena-button-hover text-white font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-orange-500/20 active:scale-95 transition-all">
                                     Abrir Sessão
                                 </Button>
                             </form>
@@ -444,7 +447,7 @@ export function RotativoPageClient({ arenaId, initialSports, initialRotativos, i
             {/* Modal de Inscritos */}
             <Dialog open={isParticipantsModalOpen} onOpenChange={setIsParticipantsModalOpen}>
                 <DialogContent className="sm:max-w-[600px] p-0 border-none rounded-3xl overflow-hidden">
-                    <div className="bg-[#002B40] p-8 text-white relative">
+                    <div className="bg-arena-navy-800 p-8 text-white relative">
                         <DialogHeader>
                             <DialogTitle className="text-2xl font-black uppercase tracking-tight">Inscritos no Rotativo</DialogTitle>
                             <DialogDescription className="text-white/60 font-medium">
@@ -456,15 +459,15 @@ export function RotativoPageClient({ arenaId, initialSports, initialRotativos, i
                     <div className="p-8 bg-white min-h-[400px]">
                         {isLoadingParticipants ? (
                             <div className="flex justify-center items-center h-[300px]">
-                                <Loader2 className="h-10 w-10 animate-spin text-[#FF6B00]" />
+                                <Loader2 className="h-10 w-10 animate-spin text-arena-button" />
                             </div>
                         ) : participants.length === 0 ? (
                             <div className="flex flex-col items-center justify-center h-[300px] text-center space-y-4">
                                 <div className="bg-orange-50 p-6 rounded-full">
-                                    <Users className="h-10 w-10 text-[#FF6B00]" />
+                                    <Users className="h-10 w-10 text-arena-button" />
                                 </div>
                                 <div className="space-y-1">
-                                    <p className="text-lg font-bold text-[#002B40]">Nenhum inscrito ainda</p>
+                                    <p className="text-lg font-bold text-arena-navy-800">Nenhum inscrito ainda</p>
                                     <p className="text-sm text-muted-foreground">As inscrições realizadas via App aparecerão aqui.</p>
                                 </div>
                             </div>
@@ -476,14 +479,14 @@ export function RotativoPageClient({ arenaId, initialSports, initialRotativos, i
                                 </div>
                                 <div className="space-y-2">
                                     {participants.map((p) => (
-                                        <div key={p.id} className="flex items-center justify-between p-4 bg-white border border-gray-100 rounded-2xl hover:border-[#FF6B00]/20 hover:bg-[#FFF5EF]/10 transition-all">
+                                        <div key={p.id} className="flex items-center justify-between p-4 bg-white border border-gray-100 rounded-2xl hover:border-arena-button/20 hover:bg-[#FFF5EF]/10 transition-all">
                                             <div className="flex items-center gap-3">
-                                                <div className="bg-[#002B40] text-white h-10 w-10 rounded-xl flex items-center justify-center font-bold">
+                                                <div className="bg-arena-navy-800 text-white h-10 w-10 rounded-xl flex items-center justify-center font-bold">
                                                     {p.atleta?.nome_perfil?.[0]?.toUpperCase()}
                                                 </div>
                                                 <div>
-                                                    <span className="block font-bold text-[#002B40] uppercase tracking-tight">{p.atleta?.nome_perfil}</span>
-                                                    <span className="text-[10px] text-[#FF6B00] font-black tracking-widest uppercase">PAGO</span>
+                                                    <span className="block font-bold text-arena-navy-800 uppercase tracking-tight">{p.atleta?.nome_perfil}</span>
+                                                    <span className="text-[10px] text-arena-button font-black tracking-widest uppercase">PAGO</span>
                                                 </div>
                                             </div>
                                             <div className="text-right text-xs font-medium text-gray-500">

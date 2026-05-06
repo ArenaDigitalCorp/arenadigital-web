@@ -412,11 +412,11 @@ export function TransactionForm({
 
                 </div>{/* fim scroll */}
 
-                <div className="flex justify-end gap-3 pt-4 border-t border-[#002B40]/5 mt-2">
-                    <Button type="button" variant="outline" onClick={onCancel} className="flex-1 border-[#002B40]/20 text-[#002B40]">
+                <div className="flex justify-end gap-3 pt-4 border-t border-arena-navy-800/5 mt-2">
+                    <Button type="button" variant="outline" onClick={onCancel} className="flex-1 border-arena-navy-800/20 text-arena-navy-800">
                         Fechar
                     </Button>
-                    <Button type="submit" className="flex-1 bg-[#FF6B00] hover:bg-[#E66000] text-white font-bold">
+                    <Button type="submit" className="flex-1 bg-arena-button hover:bg-arena-button-hover text-white font-bold">
                         {isEditing ? "Salvar alterações" : "Salvar"}
                     </Button>
                 </div>

@@ -134,12 +134,12 @@ export function StockEntryModal({
                                 name="entry_date"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel className="text-[#002B40] font-bold text-xs uppercase tracking-wider">Data de Entrada</FormLabel>
+                                        <FormLabel className="text-arena-navy-800 font-bold text-xs uppercase tracking-wider">Data de Entrada</FormLabel>
                                         <FormControl>
                                             <Input
                                                 type="date"
                                                 {...field}
-                                                className="h-11 border-[#002B40]/10 focus:ring-emerald-500 focus:border-emerald-500 rounded-xl"
+                                                className="h-11 border-arena-navy-800/10 focus:ring-emerald-500 focus:border-emerald-500 rounded-xl"
                                             />
                                         </FormControl>
                                         <FormMessage />
@@ -152,14 +152,14 @@ export function StockEntryModal({
                                 name="quantity"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel className="text-[#002B40] font-bold text-xs uppercase tracking-wider">Quantidade</FormLabel>
+                                        <FormLabel className="text-arena-navy-800 font-bold text-xs uppercase tracking-wider">Quantidade</FormLabel>
                                         <FormControl>
                                             <Input
                                                 type="number"
                                                 min="1"
                                                 placeholder="0"
                                                 {...field}
-                                                className="h-11 border-[#002B40]/10 focus:ring-emerald-500 focus:border-emerald-500 rounded-xl text-lg font-bold text-center"
+                                                className="h-11 border-arena-navy-800/10 focus:ring-emerald-500 focus:border-emerald-500 rounded-xl text-lg font-bold text-center"
                                             />
                                         </FormControl>
                                         <FormMessage />
@@ -173,12 +173,12 @@ export function StockEntryModal({
                             name="supplier"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel className="text-[#002B40] font-bold text-xs uppercase tracking-wider">Fornecedor</FormLabel>
+                                    <FormLabel className="text-arena-navy-800 font-bold text-xs uppercase tracking-wider">Fornecedor</FormLabel>
                                     <FormControl>
                                         <Input
                                             placeholder="Nome do fornecedor"
                                             {...field}
-                                            className="h-11 border-[#002B40]/10 focus:ring-emerald-500 focus:border-emerald-500 rounded-xl"
+                                            className="h-11 border-arena-navy-800/10 focus:ring-emerald-500 focus:border-emerald-500 rounded-xl"
                                         />
                                     </FormControl>
                                     <FormMessage />
@@ -191,14 +191,14 @@ export function StockEntryModal({
                             name="invoice_number"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel className="text-[#002B40] font-bold text-xs uppercase tracking-wider">
-                                        Nota Fiscal <span className="text-[#002B40]/30 font-normal normal-case">(opcional)</span>
+                                    <FormLabel className="text-arena-navy-800 font-bold text-xs uppercase tracking-wider">
+                                        Nota Fiscal <span className="text-arena-navy-800/30 font-normal normal-case">(opcional)</span>
                                     </FormLabel>
                                     <FormControl>
                                         <Input
                                             placeholder="Número da nota fiscal"
                                             {...field}
-                                            className="h-11 border-[#002B40]/10 focus:ring-emerald-500 focus:border-emerald-500 rounded-xl"
+                                            className="h-11 border-arena-navy-800/10 focus:ring-emerald-500 focus:border-emerald-500 rounded-xl"
                                         />
                                     </FormControl>
                                     <FormMessage />
@@ -211,15 +211,15 @@ export function StockEntryModal({
                             name="description"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel className="text-[#002B40] font-bold text-xs uppercase tracking-wider">
-                                        Descrição <span className="text-[#002B40]/30 font-normal normal-case">(opcional)</span>
+                                    <FormLabel className="text-arena-navy-800 font-bold text-xs uppercase tracking-wider">
+                                        Descrição <span className="text-arena-navy-800/30 font-normal normal-case">(opcional)</span>
                                     </FormLabel>
                                     <FormControl>
                                         <Textarea
                                             placeholder="Observações sobre esta entrada..."
                                             rows={2}
                                             {...field}
-                                            className="border-[#002B40]/10 focus:ring-emerald-500 focus:border-emerald-500 rounded-xl resize-none"
+                                            className="border-arena-navy-800/10 focus:ring-emerald-500 focus:border-emerald-500 rounded-xl resize-none"
                                         />
                                     </FormControl>
                                     <FormMessage />
@@ -232,7 +232,7 @@ export function StockEntryModal({
                                 type="button"
                                 variant="outline"
                                 onClick={() => onOpenChange(false)}
-                                className="flex-1 font-bold h-12 rounded-xl text-[#002B40]/60 border-[#002B40]/10"
+                                className="flex-1 font-bold h-12 rounded-xl text-arena-navy-800/60 border-arena-navy-800/10"
                             >
                                 Cancelar
                             </Button>

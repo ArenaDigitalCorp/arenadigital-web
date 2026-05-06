@@ -141,13 +141,13 @@ export function DayOpportunitiesModal({ isOpen, onClose, arenaId, courtId, curre
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden border-none shadow-2xl rounded-3xl bg-[#F8FAFC]">
-                <DialogHeader className="p-6 bg-white border-b border-[#002B40]/5">
+            <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden border-none shadow-2xl rounded-3xl bg-arena-soft">
+                <DialogHeader className="p-6 bg-white border-b border-arena-navy-800/5">
                     <div className="space-y-1">
-                        <DialogTitle className="text-xl font-black text-[#002B40] tracking-tight">
+                        <DialogTitle className="text-xl font-black text-arena-navy-800 tracking-tight">
                             Oportunidades
                         </DialogTitle>
-                        <p className="text-sm font-medium text-[#002B40]/60 flex items-center gap-2">
+                        <p className="text-sm font-medium text-arena-navy-800/60 flex items-center gap-2">
                             <CalendarIcon className="w-4 h-4" />
                             {format(currentDate, "EEEE, dd 'de' MMMM", { locale: ptBR })} · horários livres
                         </p>
@@ -158,21 +158,21 @@ export function DayOpportunitiesModal({ isOpen, onClose, arenaId, courtId, curre
                     {isLoading ? (
                         <div className="flex flex-col items-center justify-center py-12 gap-3">
                             <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
-                            <p className="text-sm text-[#002B40]/60 font-medium">Buscando oportunidades...</p>
+                            <p className="text-sm text-arena-navy-800/60 font-medium">Buscando oportunidades...</p>
                         </div>
                     ) : leads.length > 0 ? (
                         <div className="space-y-3">
-                            <p className="text-xs font-bold uppercase text-[#002B40]/40 tracking-wider pb-1">
+                            <p className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider pb-1">
                                 {leads.length} atleta{leads.length !== 1 ? 's' : ''} com histórico nos horários livres
                             </p>
                             {leads.map((lead) => (
-                                <div key={lead.key} className="bg-white p-4 rounded-2xl border border-[#002B40]/5 shadow-sm flex items-center justify-between gap-4 hover:border-emerald-200 transition-colors">
+                                <div key={lead.key} className="bg-white p-4 rounded-2xl border border-arena-navy-800/5 shadow-sm flex items-center justify-between gap-4 hover:border-emerald-200 transition-colors">
                                     <div className="flex items-center gap-3 min-w-0">
                                         <div className="h-10 w-10 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
                                             <Users className="w-5 h-5 text-emerald-600" />
                                         </div>
                                         <div className="min-w-0">
-                                            <p className="font-bold text-[#002B40] text-sm truncate">{lead.athleteName}</p>
+                                            <p className="font-bold text-arena-navy-800 text-sm truncate">{lead.athleteName}</p>
                                             <p className="text-[10px] font-bold text-emerald-600/80 uppercase tracking-wide">
                                                 Jogou às {[...lead.freeSlots].sort((a, b) => a - b).map(h => `${String(h).padStart(2, '0')}h`).join(' · ')} neste dia
                                             </p>
@@ -191,12 +191,12 @@ export function DayOpportunitiesModal({ isOpen, onClose, arenaId, courtId, curre
                         </div>
                     ) : (
                         <div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
-                            <div className="h-16 w-16 bg-[#002B40]/5 rounded-full flex items-center justify-center">
-                                <CalendarIcon className="w-8 h-8 text-[#002B40]/20" />
+                            <div className="h-16 w-16 bg-arena-navy-800/5 rounded-full flex items-center justify-center">
+                                <CalendarIcon className="w-8 h-8 text-arena-navy-800/20" />
                             </div>
                             <div className="space-y-1">
-                                <p className="font-bold text-[#002B40]">Nenhuma oportunidade</p>
-                                <p className="text-sm text-[#002B40]/60">
+                                <p className="font-bold text-arena-navy-800">Nenhuma oportunidade</p>
+                                <p className="text-sm text-arena-navy-800/60">
                                     Nenhum atleta com histórico neste dia da semana nos horários disponíveis.
                                 </p>
                             </div>
@@ -204,11 +204,11 @@ export function DayOpportunitiesModal({ isOpen, onClose, arenaId, courtId, curre
                     )}
                 </ScrollArea>
 
-                <div className="p-6 bg-white border-t border-[#002B40]/5">
+                <div className="p-6 bg-white border-t border-arena-navy-800/5">
                     <Button
                         variant="outline"
                         onClick={onClose}
-                        className="w-full h-12 border-[#002B40]/10 text-[#002B40] font-bold rounded-xl hover:bg-gray-50 active:scale-95 transition-all"
+                        className="w-full h-12 border-arena-navy-800/10 text-arena-navy-800 font-bold rounded-xl hover:bg-gray-50 active:scale-95 transition-all"
                     >
                         Fechar
                     </Button>

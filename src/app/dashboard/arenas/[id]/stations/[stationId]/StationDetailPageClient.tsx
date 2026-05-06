@@ -57,29 +57,29 @@ export function StationDetailPageClient({ arenaId, stationId, initialStation, in
             <div className="flex flex-col gap-4">
                 <button
                     onClick={() => router.back()}
-                    className="flex items-center text-[#002B40]/60 font-bold text-sm hover:text-[#002B40] transition-colors w-fit"
+                    className="flex items-center text-arena-navy-800/60 font-bold text-sm hover:text-arena-navy-800 transition-colors w-fit"
                 >
                     <ChevronLeft className="h-4 w-4 mr-1" />
                     Voltar
                 </button>
-                <h1 className="text-4xl font-black text-[#002B40] tracking-tight">{initialStation?.name || "Estação"}</h1>
+                <h1 className="text-4xl font-black text-arena-navy-800 tracking-tight">{initialStation?.name || "Estação"}</h1>
             </div>
 
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 py-2">
                 <div className="relative flex-1 max-w-md">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#002B40]/20" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-arena-navy-800/20" />
                     <Input
                         placeholder="Buscar por cliente"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10 h-11 bg-white border-[#002B40]/10 rounded-xl"
+                        className="pl-10 h-11 bg-white border-arena-navy-800/10 rounded-xl"
                     />
                 </div>
                 <div className="flex items-center gap-3">
-                    <div className="flex items-center bg-white border border-[#002B40]/10 rounded-xl px-3 h-11">
-                        <Filter className="h-4 w-4 text-[#002B40]/20 mr-2" />
+                    <div className="flex items-center bg-white border border-arena-navy-800/10 rounded-xl px-3 h-11">
+                        <Filter className="h-4 w-4 text-arena-navy-800/20 mr-2" />
                         <Select value={statusFilter} onValueChange={setStatusFilter}>
-                            <SelectTrigger className="border-none shadow-none focus:ring-0 h-full p-0 font-bold text-[#002B40]/60">
+                            <SelectTrigger className="border-none shadow-none focus:ring-0 h-full p-0 font-bold text-arena-navy-800/60">
                                 <SelectValue placeholder="Todos os status" />
                             </SelectTrigger>
                             <SelectContent>
@@ -91,7 +91,7 @@ export function StationDetailPageClient({ arenaId, stationId, initialStation, in
                     </div>
                     <Button
                         onClick={() => setIsOpenComandaModalOpen(true)}
-                        className="bg-[#002B40] hover:bg-[#001D2B] text-white font-bold h-11 px-6 rounded-xl"
+                        className="bg-arena-navy-800 hover:bg-arena-navy-900 text-white font-bold h-11 px-6 rounded-xl"
                     >
                         Abrir comanda
                     </Button>
@@ -132,10 +132,10 @@ export function StationDetailPageClient({ arenaId, stationId, initialStation, in
 
             {filteredOrders.length === 0 ? (
                 <div className="py-20 flex flex-col items-center justify-center text-center">
-                    <div className="bg-[#002B40]/5 p-4 rounded-full mb-4">
-                        <Plus className="h-8 w-8 text-[#002B40]/20" />
+                    <div className="bg-arena-navy-800/5 p-4 rounded-full mb-4">
+                        <Plus className="h-8 w-8 text-arena-navy-800/20" />
                     </div>
-                    <p className="text-[#002B40]/40 font-medium text-lg">Nenhuma comanda encontrada.</p>
+                    <p className="text-arena-navy-800/40 font-medium text-lg">Nenhuma comanda encontrada.</p>
                 </div>
             ) : (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
@@ -149,29 +149,29 @@ export function StationDetailPageClient({ arenaId, stationId, initialStation, in
                             )}
                         >
                             <CardContent className="p-4 relative min-h-[140px] flex flex-col justify-between">
-                                <div className="absolute top-4 right-4 text-[#002B40]/40">
+                                <div className="absolute top-4 right-4 text-arena-navy-800/40">
                                     <Eye className="h-4 w-4" />
                                 </div>
                                 <div>
-                                    <span className="text-[10px] font-bold text-[#002B40]/40 uppercase">
+                                    <span className="text-[10px] font-bold text-arena-navy-800/40 uppercase">
                                         Comanda nº #{order.order_number.toString().padStart(3, '0')}
                                     </span>
-                                    <div className="text-2xl font-black text-[#002B40] mt-1">
+                                    <div className="text-2xl font-black text-arena-navy-800 mt-1">
                                         R$ {order.total_value.toFixed(2).replace('.', ',')}
                                     </div>
                                 </div>
                                 <div className="mt-4">
-                                    <div className="text-[11px] font-bold text-[#002B40]/80">
+                                    <div className="text-[11px] font-bold text-arena-navy-800/80">
                                         Cliente: {order.atleta?.nome_perfil || order.customer_name || "N/A"}
                                     </div>
-                                    <div className="text-[11px] font-bold text-[#002B40]/40">
+                                    <div className="text-[11px] font-bold text-arena-navy-800/40">
                                         Itens: {order.station_order_items?.length || 0}
                                     </div>
                                 </div>
                                 {order.status === 'open' && (
                                     <button
                                         onClick={(e) => { e.stopPropagation(); handleLaunchItem(order) }}
-                                        className="mt-2 text-[10px] font-black text-white bg-[#002B40]/20 hover:bg-[#002B40]/30 py-1.5 px-3 rounded-lg w-fit transition-colors"
+                                        className="mt-2 text-[10px] font-black text-white bg-arena-navy-800/20 hover:bg-arena-navy-800/30 py-1.5 px-3 rounded-lg w-fit transition-colors"
                                     >
                                         Lançar item +
                                     </button>

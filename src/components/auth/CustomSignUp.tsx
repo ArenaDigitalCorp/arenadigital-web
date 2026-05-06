@@ -246,7 +246,7 @@ export function CustomSignUp() {
                 <Button
                     type="submit"
                     disabled={loading}
-                    className="w-full bg-[#FF6B00] hover:bg-[#E66000] h-12 rounded-lg text-lg font-bold shadow-lg"
+                    className="w-full bg-arena-button hover:bg-arena-button-hover h-12 rounded-lg text-lg font-bold shadow-lg"
                 >
                     {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Verificar E-mail"}
                 </Button>
@@ -439,7 +439,7 @@ export function CustomSignUp() {
             <Button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-[#FF6B00] hover:bg-[#E66000] h-12 rounded-lg text-lg font-bold shadow-lg mt-8"
+                className="w-full bg-arena-button hover:bg-arena-button-hover h-12 rounded-lg text-lg font-bold shadow-lg mt-8"
             >
                 {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Criar Conta"}
             </Button>

@@ -37,9 +37,9 @@ function StatCard({ icon: Icon, label, value, sub, color }: {
                 <Icon className="h-6 w-6 text-white" />
             </div>
             <div>
-                <p className="text-[10px] font-black uppercase text-[#002B40]/40 tracking-wider">{label}</p>
-                <p className="text-2xl font-black text-[#002B40]">{value}</p>
-                {sub && <p className="text-[11px] text-[#002B40]/40 font-medium">{sub}</p>}
+                <p className="text-[10px] font-black uppercase text-arena-navy-800/40 tracking-wider">{label}</p>
+                <p className="text-2xl font-black text-arena-navy-800">{value}</p>
+                {sub && <p className="text-[11px] text-arena-navy-800/40 font-medium">{sub}</p>}
             </div>
         </Card>
     )
@@ -118,8 +118,8 @@ export function MensalistasPageClient({ arenaId, initialPlanos }: Props) {
         <div className="space-y-8">
             {/* Page header */}
             <div className="flex flex-col gap-1">
-                <h1 className="text-3xl font-black text-[#002B40] tracking-tight">Mensalistas</h1>
-                <p className="text-[#002B40]/60 font-medium">
+                <h1 className="text-3xl font-black text-arena-navy-800 tracking-tight">Mensalistas</h1>
+                <p className="text-arena-navy-800/60 font-medium">
                     Gerencie todos os planos mensais de todos os espaços da arena.
                 </p>
             </div>
@@ -144,7 +144,7 @@ export function MensalistasPageClient({ arenaId, initialPlanos }: Props) {
                     label="Aguardando confirmação"
                     value={String(comPendencia)}
                     sub="pagamentos do próximo mês"
-                    color={comPendencia > 0 ? "bg-[#FF6B00]" : "bg-slate-400"}
+                    color={comPendencia > 0 ? "bg-arena-button" : "bg-slate-400"}
                 />
             </div>
 
@@ -160,8 +160,8 @@ export function MensalistasPageClient({ arenaId, initialPlanos }: Props) {
                                 className={cn(
                                     "px-3 py-1.5 rounded-lg text-xs font-bold transition-colors capitalize",
                                     statusFilter === f
-                                        ? "bg-[#002B40] text-white"
-                                        : "bg-[#F1F5F9] text-[#002B40]/60 hover:bg-[#002B40]/10"
+                                        ? "bg-arena-navy-800 text-white"
+                                        : "bg-[#F1F5F9] text-arena-navy-800/60 hover:bg-arena-navy-800/10"
                                 )}
                             >
                                 {f === "ativo" ? "Ativos" : f === "cancelado" ? "Cancelados" : "Todos"}
@@ -169,12 +169,12 @@ export function MensalistasPageClient({ arenaId, initialPlanos }: Props) {
                         ))}
                     </div>
                     <div className="relative w-full sm:w-[280px]">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#002B40]/30" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-arena-navy-800/30" />
                         <Input
                             placeholder="Buscar responsável ou espaço..."
                             value={search}
                             onChange={e => setSearch(e.target.value)}
-                            className="pl-9 border-[#002B40]/10"
+                            className="pl-9 border-arena-navy-800/10"
                         />
                     </div>
                 </div>
@@ -183,7 +183,7 @@ export function MensalistasPageClient({ arenaId, initialPlanos }: Props) {
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                         <thead>
-                            <tr className="border-b border-[#002B40]/5">
+                            <tr className="border-b border-arena-navy-800/5">
                                 {[
                                     "Responsável",
                                     "Espaço",
@@ -194,7 +194,7 @@ export function MensalistasPageClient({ arenaId, initialPlanos }: Props) {
                                     "Status",
                                     "Ações",
                                 ].map(h => (
-                                    <th key={h} className="py-4 pr-4 font-bold text-[10px] uppercase tracking-wider text-[#002B40]/40 whitespace-nowrap">
+                                    <th key={h} className="py-4 pr-4 font-bold text-[10px] uppercase tracking-wider text-arena-navy-800/40 whitespace-nowrap">
                                         {h}
                                     </th>
                                 ))}
@@ -203,7 +203,7 @@ export function MensalistasPageClient({ arenaId, initialPlanos }: Props) {
                         <tbody>
                             {filtered.length === 0 && (
                                 <tr>
-                                    <td colSpan={8} className="py-16 text-center text-[#002B40]/30 font-medium">
+                                    <td colSpan={8} className="py-16 text-center text-arena-navy-800/30 font-medium">
                                         Nenhum mensalista encontrado.
                                     </td>
                                 </tr>
@@ -219,7 +219,7 @@ export function MensalistasPageClient({ arenaId, initialPlanos }: Props) {
                                 const isCancelling = loadingId === `cancel-${plano.id}`
 
                                 return (
-                                    <tr key={plano.id} className="border-b border-[#002B40]/5 hover:bg-[#F8FAFC] transition-colors">
+                                    <tr key={plano.id} className="border-b border-arena-navy-800/5 hover:bg-arena-soft transition-colors">
                                         {/* Responsável */}
                                         <td className="py-4 pr-4">
                                             <div className="flex items-center gap-3">
@@ -227,9 +227,9 @@ export function MensalistasPageClient({ arenaId, initialPlanos }: Props) {
                                                     <Users className="h-4 w-4 text-amber-600" />
                                                 </div>
                                                 <div>
-                                                    <p className="font-bold text-[#002B40] text-sm">{nome}</p>
+                                                    <p className="font-bold text-arena-navy-800 text-sm">{nome}</p>
                                                     {plano.atleta?.telefone && (
-                                                        <p className="text-[11px] text-[#002B40]/40">{plano.atleta.telefone}</p>
+                                                        <p className="text-[11px] text-arena-navy-800/40">{plano.atleta.telefone}</p>
                                                     )}
                                                 </div>
                                             </div>
@@ -237,41 +237,41 @@ export function MensalistasPageClient({ arenaId, initialPlanos }: Props) {
 
                                         {/* Espaço */}
                                         <td className="py-4 pr-4">
-                                            <div className="flex items-center gap-1.5 text-sm font-medium text-[#002B40]">
-                                                <MapPin className="h-3.5 w-3.5 text-[#002B40]/30 flex-shrink-0" />
+                                            <div className="flex items-center gap-1.5 text-sm font-medium text-arena-navy-800">
+                                                <MapPin className="h-3.5 w-3.5 text-arena-navy-800/30 flex-shrink-0" />
                                                 {courtName}
                                             </div>
                                             {plano.sports?.name && (
-                                                <p className="text-[11px] text-[#002B40]/40 mt-0.5">{plano.sports.name}</p>
+                                                <p className="text-[11px] text-arena-navy-800/40 mt-0.5">{plano.sports.name}</p>
                                             )}
                                         </td>
 
                                         {/* Dia / Horário */}
                                         <td className="py-4 pr-4">
-                                            <div className="flex items-center gap-1.5 text-sm font-bold text-[#002B40]">
-                                                <CalendarDays className="h-3.5 w-3.5 text-[#002B40]/30 flex-shrink-0" />
+                                            <div className="flex items-center gap-1.5 text-sm font-bold text-arena-navy-800">
+                                                <CalendarDays className="h-3.5 w-3.5 text-arena-navy-800/30 flex-shrink-0" />
                                                 {dia}
                                             </div>
-                                            <div className="flex items-center gap-1.5 text-[11px] text-[#002B40]/50 mt-0.5">
+                                            <div className="flex items-center gap-1.5 text-[11px] text-arena-navy-800/50 mt-0.5">
                                                 <Clock className="h-3 w-3" />
                                                 {horario}
                                             </div>
-                                            <p className="text-[11px] text-[#002B40]/40 mt-0.5">
+                                            <p className="text-[11px] text-arena-navy-800/40 mt-0.5">
                                                 {plano.sessoes_por_mes}x/mês
                                             </p>
                                         </td>
 
                                         {/* Início */}
-                                        <td className="py-4 pr-4 text-sm text-[#002B40]/70 font-medium whitespace-nowrap">
+                                        <td className="py-4 pr-4 text-sm text-arena-navy-800/70 font-medium whitespace-nowrap">
                                             {formatDataInicio(plano.data_inicio)}
                                         </td>
 
                                         {/* Valor mensal */}
                                         <td className="py-4 pr-4">
-                                            <p className="text-base font-black text-[#FF6B00]">
+                                            <p className="text-base font-black text-arena-button">
                                                 {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(plano.valor_mensal)}
                                             </p>
-                                            <p className="text-[11px] text-[#002B40]/40">
+                                            <p className="text-[11px] text-arena-navy-800/40">
                                                 {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
                                                     .format(plano.valor_mensal / plano.sessoes_por_mes)}/sessão
                                             </p>
@@ -286,7 +286,7 @@ export function MensalistasPageClient({ arenaId, initialPlanos }: Props) {
                                             ) : isAtivo ? (
                                                 <span className="text-xs text-emerald-600 font-bold">Em dia</span>
                                             ) : (
-                                                <span className="text-xs text-[#002B40]/30">—</span>
+                                                <span className="text-xs text-arena-navy-800/30">—</span>
                                             )}
                                         </td>
 
@@ -335,7 +335,7 @@ export function MensalistasPageClient({ arenaId, initialPlanos }: Props) {
                                                     </Button>
                                                 )}
                                                 {!isAtivo && (
-                                                    <span className="text-xs text-[#002B40]/30 font-medium">—</span>
+                                                    <span className="text-xs text-arena-navy-800/30 font-medium">—</span>
                                                 )}
                                             </div>
                                         </td>

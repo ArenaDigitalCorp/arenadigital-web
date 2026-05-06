@@ -6,6 +6,7 @@ import { AsaasCardForm } from './AsaasCardForm'
 import { PaymentSetupForm } from './PaymentSetupForm'
 import type { CardCollectionContext } from '@/modules/payments/gateway/payment-gateway.interface'
 import type { PlanKey } from '@/modules/payments/plans'
+import { ARENA_BRAND_HEX } from '@/constants/arena-brand-hex'
 
 let stripePromiseCache: Promise<Stripe | null> | null = null
 
@@ -46,9 +47,9 @@ export function PaymentMethodCollector({
           appearance: {
             theme: 'stripe',
             variables: {
-              colorPrimary: '#FF6B00',
+              colorPrimary: ARENA_BRAND_HEX.button,
               borderRadius: '12px',
-              colorText: '#002B40',
+              colorText: ARENA_BRAND_HEX.navy800,
               colorBackground: '#ffffff'
             }
           },

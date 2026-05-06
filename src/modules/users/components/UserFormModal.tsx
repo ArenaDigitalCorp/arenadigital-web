@@ -74,7 +74,7 @@ export function UserFormModal({ isOpen, onClose, user, stations, onSave }: UserF
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="sm:max-w-[500px] bg-white border-slate-200 text-slate-800 p-6 rounded-3xl shadow-xl">
                 <DialogHeader className="mb-2">
-                    <DialogTitle className="text-[#002B40] text-2xl font-semibold">
+                    <DialogTitle className="text-arena-navy-800 text-2xl font-semibold">
                         {isEditMode ? "Editar usuário" : "Novo usuário"}
                     </DialogTitle>
                 </DialogHeader>
@@ -173,14 +173,14 @@ export function UserFormModal({ isOpen, onClose, user, stations, onSave }: UserF
                             type="button"
                             variant="outline"
                             onClick={onClose}
-                            className="bg-white border-[#002B40] text-[#002B40] hover:bg-slate-50 font-semibold px-8 rounded-lg"
+                            className="bg-white border-arena-navy-800 text-arena-navy-800 hover:bg-slate-50 font-semibold px-8 rounded-lg"
                             disabled={isLoading}
                         >
                             Fechar
                         </Button>
                         <Button
                             type="submit"
-                            className="bg-[#FF6B00] hover:bg-[#E66000] text-white font-semibold px-8 rounded-lg border-0"
+                            className="bg-arena-button hover:bg-arena-button-hover text-white font-semibold px-8 rounded-lg border-0"
                             disabled={isLoading}
                         >
                             {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : (isEditMode ? "Salvar" : "Cadastrar")}

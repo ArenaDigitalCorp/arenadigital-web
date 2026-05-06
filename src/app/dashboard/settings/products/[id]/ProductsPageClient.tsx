@@ -70,7 +70,7 @@ export function ProductsPageClient({ arenaId, arenaName, initialProducts }: Prop
                         Gerenciando produtos da arena: <span className="font-semibold">{arenaName}</span>
                     </p>
                 </div>
-                <Button onClick={() => { setEditingProduct(null); setIsModalOpen(true) }} className="bg-[#FF6B00] hover:bg-[#E66000] text-white">
+                <Button onClick={() => { setEditingProduct(null); setIsModalOpen(true) }} className="bg-arena-button hover:bg-arena-button-hover text-white">
                     <Plus className="mr-2 h-4 w-4" />
                     Cadastrar Produto
                 </Button>

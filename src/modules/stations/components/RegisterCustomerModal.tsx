@@ -75,7 +75,7 @@ export function RegisterCustomerModal({ isOpen, onClose, arenaId, onSuccess }: R
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
-                    <DialogTitle className="text-2xl font-black text-[#002B40]">
+                    <DialogTitle className="text-2xl font-black text-arena-navy-800">
                         Cadastro novo cliente
                     </DialogTitle>
                 </DialogHeader>
@@ -87,7 +87,7 @@ export function RegisterCustomerModal({ isOpen, onClose, arenaId, onSuccess }: R
                             name="name"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel className="text-[#002B40] font-bold">Nome</FormLabel>
+                                    <FormLabel className="text-arena-navy-800 font-bold">Nome</FormLabel>
                                     <FormControl>
                                         <Input placeholder="Informe o nome do cliente" {...field} className="h-11 rounded-xl" />
                                     </FormControl>
@@ -101,7 +101,7 @@ export function RegisterCustomerModal({ isOpen, onClose, arenaId, onSuccess }: R
                             name="cpf"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel className="text-[#002B40] font-bold">CPF</FormLabel>
+                                    <FormLabel className="text-arena-navy-800 font-bold">CPF</FormLabel>
                                     <FormControl>
                                         <Input placeholder="Informe o CPF do cliente" {...field} className="h-11 rounded-xl" />
                                     </FormControl>
@@ -115,7 +115,7 @@ export function RegisterCustomerModal({ isOpen, onClose, arenaId, onSuccess }: R
                             name="phone"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel className="text-[#002B40] font-bold">Telefone (Opcional)</FormLabel>
+                                    <FormLabel className="text-arena-navy-800 font-bold">Telefone (Opcional)</FormLabel>
                                     <FormControl>
                                         <Input placeholder="Informe o telefone de contato" {...field} className="h-11 rounded-xl" />
                                     </FormControl>
@@ -129,7 +129,7 @@ export function RegisterCustomerModal({ isOpen, onClose, arenaId, onSuccess }: R
                             name="email"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel className="text-[#002B40] font-bold">E-mail (Opcional)</FormLabel>
+                                    <FormLabel className="text-arena-navy-800 font-bold">E-mail (Opcional)</FormLabel>
                                     <FormControl>
                                         <Input placeholder="Informe o e-mail do cliente" {...field} className="h-11 rounded-xl" />
                                     </FormControl>
@@ -143,14 +143,14 @@ export function RegisterCustomerModal({ isOpen, onClose, arenaId, onSuccess }: R
                                 type="button"
                                 variant="outline"
                                 onClick={onClose}
-                                className="w-full font-bold h-11 rounded-xl text-[#002B40]/60"
+                                className="w-full font-bold h-11 rounded-xl text-arena-navy-800/60"
                             >
                                 Voltar
                             </Button>
                             <Button
                                 type="submit"
                                 disabled={isSubmitting}
-                                className="w-full bg-[#FF6B00] hover:bg-[#E66000] text-white font-bold h-11 rounded-xl"
+                                className="w-full bg-arena-button hover:bg-arena-button-hover text-white font-bold h-11 rounded-xl"
                             >
                                 {isSubmitting ? "Salvando..." : "Salvar"}
                             </Button>

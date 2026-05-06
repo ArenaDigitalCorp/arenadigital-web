@@ -126,20 +126,20 @@ export function ArenaDetailPageClient({
     <TooltipProvider>
       <div className="space-y-8">
         <div className="flex flex-col gap-1">
-          <h1 className="text-3xl font-black text-[#002B40] tracking-tight">
+          <h1 className="text-3xl font-black text-arena-navy-800 tracking-tight">
             Espaços
           </h1>
-          <p className="text-[#002B40]/60 font-medium">
+          <p className="text-arena-navy-800/60 font-medium">
             Gerencie quadras, reservas e disponibilidades.
           </p>
         </div>
 
-        <div className="flex items-center border-b border-[#002B40]/10 gap-8">
+        <div className="flex items-center border-b border-arena-navy-800/10 gap-8">
           <button
             onClick={() => setActiveTab('espacos')}
             className={cn(
               'pb-4 font-bold text-sm transition-all relative',
-              activeTab === 'espacos' ? 'text-[#002B40]' : 'text-[#002B40]/40'
+              activeTab === 'espacos' ? 'text-arena-navy-800' : 'text-arena-navy-800/40'
             )}
           >
             Visão geral
@@ -151,7 +151,7 @@ export function ArenaDetailPageClient({
             onClick={() => setActiveTab('cadastro')}
             className={cn(
               'pb-4 font-bold text-sm transition-all relative',
-              activeTab === 'cadastro' ? 'text-[#002B40]' : 'text-[#002B40]/40'
+              activeTab === 'cadastro' ? 'text-arena-navy-800' : 'text-arena-navy-800/40'
             )}
           >
             Cadastro
@@ -167,14 +167,14 @@ export function ArenaDetailPageClient({
               <div className="flex justify-end gap-3">
                 <Button
                   onClick={() => setIsAvailableTimesOpen(true)}
-                  className="bg-[#002B40]/10 hover:bg-[#002B40]/20 text-[#002B40] font-bold gap-2"
+                  className="bg-arena-navy-800/10 hover:bg-arena-navy-800/20 text-arena-navy-800 font-bold gap-2"
                 >
                   <Clock className="w-4 h-4" />
                   Horários disponíveis
                 </Button>
                 <Button
                   onClick={() => setIsDayOperationOpen(true)}
-                  className="bg-[#002B40] hover:bg-[#001D2C] text-white font-bold gap-2"
+                  className="bg-arena-navy-800 hover:bg-[#001D2C] text-white font-bold gap-2"
                 >
                   <CalendarDays className="w-4 h-4" />
                   Ver operação do dia
@@ -183,8 +183,8 @@ export function ArenaDetailPageClient({
             )}
             {courts.length === 0 ? (
               <Card className="bg-white/50 border-dashed border-2 py-20 flex flex-col items-center justify-center">
-                <PlusCircle className="h-12 w-12 text-[#002B40]/20 mb-4" />
-                <p className="text-[#002B40]/40 font-medium text-lg">
+                <PlusCircle className="h-12 w-12 text-arena-navy-800/20 mb-4" />
+                <p className="text-arena-navy-800/40 font-medium text-lg">
                   Nenhum espaço cadastrado aqui.
                 </p>
               </Card>
@@ -208,7 +208,7 @@ export function ArenaDetailPageClient({
                       <CardContent className="p-0">
                         <div className="bg-gradient-to-br from-[#FFD043] to-[#FFB01F] p-4 relative">
                           <div className="flex justify-between items-start mb-0">
-                            <h4 className="font-extrabold text-[#002B40] text-sm uppercase tracking-tight">
+                            <h4 className="font-extrabold text-arena-navy-800 text-sm uppercase tracking-tight">
                               {court.name}
                             </h4>
                             <DropdownMenu>
@@ -216,7 +216,7 @@ export function ArenaDetailPageClient({
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-6 w-6 text-[#002B40]/40 hover:bg-black/5"
+                                  className="h-6 w-6 text-arena-navy-800/40 hover:bg-black/5"
                                 >
                                   <MoreVertical className="h-3 w-3" />
                                 </Button>
@@ -244,18 +244,18 @@ export function ArenaDetailPageClient({
                             <div>
                               {statusInfo.status === 'open' ? (
                                 <>
-                                  <div className="text-[#002B40] font-black text-3xl flex items-baseline gap-1 -mt-1">
+                                  <div className="text-arena-navy-800 font-black text-3xl flex items-baseline gap-1 -mt-1">
                                     {statusInfo.booked}{' '}
                                     <span className="text-sm font-bold opacity-60">
                                       / {statusInfo.total} reservas
                                     </span>
                                   </div>
-                                  <span className="text-[#002B40] text-[10px] font-black opacity-40 uppercase tracking-tighter">
+                                  <span className="text-arena-navy-800 text-[10px] font-black opacity-40 uppercase tracking-tighter">
                                     hoje
                                   </span>
                                 </>
                               ) : (
-                                <div className="text-[#002B40] font-black text-xl flex items-baseline gap-1">
+                                <div className="text-arena-navy-800 font-black text-xl flex items-baseline gap-1">
                                   {statusInfo.message}
                                 </div>
                               )}
@@ -264,7 +264,7 @@ export function ArenaDetailPageClient({
                               <TooltipTrigger asChild>
                                 <Link
                                   href={`/dashboard/arenas/${arenaId}/courts/${court.id}/calendar`}
-                                  className="text-[#002B40]/40 hover:text-[#002B40] transition-colors mb-1"
+                                  className="text-arena-navy-800/40 hover:text-arena-navy-800 transition-colors mb-1"
                                 >
                                   <Eye className="h-4 w-4" />
                                 </Link>
@@ -299,25 +299,25 @@ export function ArenaDetailPageClient({
             <Card className="p-8 border-none shadow-lg rounded-xl bg-white">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                 <div>
-                  <h3 className="text-2xl font-bold text-[#002B40]">
+                  <h3 className="text-2xl font-bold text-arena-navy-800">
                     Espaços Cadastrados
                   </h3>
-                  <p className="text-[#002B40]/60">
+                  <p className="text-arena-navy-800/60">
                     Gerencie quadras, reservas e disponibilidades.
                   </p>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#002B40]/40" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-arena-navy-800/40" />
                     <Input
                       placeholder="Buscar espaço..."
-                      className="pl-9 w-[240px] border-[#002B40]/10"
+                      className="pl-9 w-[240px] border-arena-navy-800/10"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                     />
                   </div>
                   <Button
-                    className="bg-[#FF6B00] hover:bg-[#E66000] text-white font-bold"
+                    className="bg-arena-button hover:bg-arena-button-hover text-white font-bold"
                     asChild
                   >
                     <Link href={`/dashboard/arenas/${arenaId}/spaces/new`}>
@@ -330,20 +330,20 @@ export function ArenaDetailPageClient({
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="border-b border-[#002B40]/5">
-                      <th className="py-4 font-bold text-xs uppercase tracking-wider text-[#002B40]/40">
+                    <tr className="border-b border-arena-navy-800/5">
+                      <th className="py-4 font-bold text-xs uppercase tracking-wider text-arena-navy-800/40">
                         Nome
                       </th>
-                      <th className="py-4 font-bold text-xs uppercase tracking-wider text-[#002B40]/40">
+                      <th className="py-4 font-bold text-xs uppercase tracking-wider text-arena-navy-800/40">
                         Tipo
                       </th>
-                      <th className="py-4 font-bold text-xs uppercase tracking-wider text-[#002B40]/40">
+                      <th className="py-4 font-bold text-xs uppercase tracking-wider text-arena-navy-800/40">
                         Status
                       </th>
-                      <th className="py-4 font-bold text-xs uppercase tracking-wider text-[#002B40]/40">
+                      <th className="py-4 font-bold text-xs uppercase tracking-wider text-arena-navy-800/40">
                         Coberta/Descoberta
                       </th>
-                      <th className="py-4 font-bold text-xs uppercase tracking-wider text-[#002B40]/40 text-right">
+                      <th className="py-4 font-bold text-xs uppercase tracking-wider text-arena-navy-800/40 text-right">
                         Ações
                       </th>
                     </tr>
@@ -362,12 +362,12 @@ export function ArenaDetailPageClient({
                       .map((court) => (
                         <tr
                           key={court.id}
-                          className="border-b border-[#002B40]/5 hover:bg-[#F8FAFC] transition-colors"
+                          className="border-b border-arena-navy-800/5 hover:bg-arena-soft transition-colors"
                         >
-                          <td className="py-4 font-bold text-[#002B40]">
+                          <td className="py-4 font-bold text-arena-navy-800">
                             {court.name}
                           </td>
-                          <td className="py-4 text-[#002B40]/60 text-sm font-medium">
+                          <td className="py-4 text-arena-navy-800/60 text-sm font-medium">
                             {court.sports?.map((s: any) => s.name).join(', ') ||
                               court.type}
                           </td>
@@ -376,7 +376,7 @@ export function ArenaDetailPageClient({
                               className={cn(
                                 'font-bold text-[10px] uppercase h-5',
                                 court.status === 'ativo'
-                                  ? 'bg-[#FFC145]/20 text-[#002B40] hover:bg-[#FFC145]/30 border-none'
+                                  ? 'bg-[#FFC145]/20 text-arena-navy-800 hover:bg-[#FFC145]/30 border-none'
                                   : court.status === 'Em manutenção'
                                     ? 'bg-orange-100 text-orange-700 hover:bg-orange-100 border-none'
                                     : 'bg-gray-100 text-gray-500 hover:bg-gray-100 border-none'
@@ -385,7 +385,7 @@ export function ArenaDetailPageClient({
                               {court.status}
                             </Badge>
                           </td>
-                          <td className="py-4 text-[#002B40]/60 text-sm font-medium">
+                          <td className="py-4 text-arena-navy-800/60 text-sm font-medium">
                             {court.is_covered ? 'Coberto' : 'Descoberto'}
                           </td>
                           <td className="py-4 text-right">
@@ -394,7 +394,7 @@ export function ArenaDetailPageClient({
                                 variant="ghost"
                                 size="icon"
                                 asChild
-                                className="h-8 w-8 text-[#002B40]/60 bg-[#F1F5F9] hover:bg-[#E2E8F0]"
+                                className="h-8 w-8 text-arena-navy-800/60 bg-[#F1F5F9] hover:bg-[#E2E8F0]"
                               >
                                 <Link
                                   href={`/dashboard/arenas/${arenaId}/spaces/${court.id}/edit`}
@@ -406,7 +406,7 @@ export function ArenaDetailPageClient({
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => handleDeleteCourt(court.id)}
-                                className="h-8 w-8 text-[#FF6B00]/60 bg-[#FF6B00]/10 hover:bg-[#FF6B00]/20 hover:text-[#FF6B00]"
+                                className="h-8 w-8 text-arena-button/60 bg-arena-button/10 hover:bg-arena-button/20 hover:text-arena-button"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
@@ -432,7 +432,7 @@ export function ArenaDetailPageClient({
                   </tbody>
                 </table>
                 {courts.length === 0 && (
-                  <div className="text-center py-20 text-[#002B40]/40">
+                  <div className="text-center py-20 text-arena-navy-800/40">
                     Nenhum espaço cadastrado.
                   </div>
                 )}
@@ -447,7 +447,7 @@ export function ArenaDetailPageClient({
         >
           <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle className="text-2xl font-black text-[#002B40]">
+              <DialogTitle className="text-2xl font-black text-arena-navy-800">
                 {selectedSpace?.name}
               </DialogTitle>
             </DialogHeader>
@@ -455,50 +455,50 @@ export function ArenaDetailPageClient({
               <div className="grid gap-6 py-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase text-[#002B40]/40 tracking-wider">
+                    <label className="text-[10px] font-bold uppercase text-arena-navy-800/40 tracking-wider">
                       Status
                     </label>
-                    <p className="font-bold text-[#002B40]">
+                    <p className="font-bold text-arena-navy-800">
                       {selectedSpace.status}
                     </p>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase text-[#002B40]/40 tracking-wider">
+                    <label className="text-[10px] font-bold uppercase text-arena-navy-800/40 tracking-wider">
                       Tipo do espaço
                     </label>
-                    <p className="font-bold text-[#002B40]">
+                    <p className="font-bold text-arena-navy-800">
                       {selectedSpace.type}
                     </p>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase text-[#002B40]/40 tracking-wider">
+                    <label className="text-[10px] font-bold uppercase text-arena-navy-800/40 tracking-wider">
                       Esporte
                     </label>
-                    <p className="font-bold text-[#002B40]">
+                    <p className="font-bold text-arena-navy-800">
                       {selectedSpace.sports?.map((s: any) => s.name).join(', ')}
                     </p>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase text-[#002B40]/40 tracking-wider">
+                    <label className="text-[10px] font-bold uppercase text-arena-navy-800/40 tracking-wider">
                       Coberta/Descoberta
                     </label>
-                    <p className="font-bold text-[#002B40]">
+                    <p className="font-bold text-arena-navy-800">
                       {selectedSpace.is_covered ? 'Coberta' : 'Descoberta'}
                     </p>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase text-[#002B40]/40 tracking-wider">
+                    <label className="text-[10px] font-bold uppercase text-arena-navy-800/40 tracking-wider">
                       Valor da reserva
                     </label>
-                    <p className="font-bold text-[#002B40]">
+                    <p className="font-bold text-arena-navy-800">
                       R$ {selectedSpace.price.toFixed(2)}
                     </p>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase text-[#002B40]/40 tracking-wider">
+                    <label className="text-[10px] font-bold uppercase text-arena-navy-800/40 tracking-wider">
                       Tipo de reserva
                     </label>
-                    <p className="font-bold text-[#002B40]">
+                    <p className="font-bold text-arena-navy-800">
                       {selectedSpace.booking_type === 'hourly'
                         ? 'Por hora'
                         : 'Único'}
@@ -506,19 +506,19 @@ export function ArenaDetailPageClient({
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase text-[#002B40]/40 tracking-wider">
+                  <label className="text-[10px] font-bold uppercase text-arena-navy-800/40 tracking-wider">
                     Dias disponíveis
                   </label>
-                  <p className="text-sm font-medium text-[#002B40]/80">
+                  <p className="text-sm font-medium text-arena-navy-800/80">
                     {selectedSpace.available_days?.join(', ')}
                   </p>
                 </div>
                 {selectedSpace.observations && (
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase text-[#002B40]/40 tracking-wider">
+                    <label className="text-[10px] font-bold uppercase text-arena-navy-800/40 tracking-wider">
                       Observações
                     </label>
-                    <p className="text-sm font-medium text-[#002B40]/80">
+                    <p className="text-sm font-medium text-arena-navy-800/80">
                       {selectedSpace.observations}
                     </p>
                   </div>
@@ -532,7 +532,7 @@ export function ArenaDetailPageClient({
                     Fechar
                   </Button>
                   <Button
-                    className="flex-1 bg-[#FF6B00] hover:bg-[#E66000]"
+                    className="flex-1 bg-arena-button hover:bg-arena-button-hover"
                     asChild
                   >
                     <Link

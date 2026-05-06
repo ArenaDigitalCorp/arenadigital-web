@@ -28,14 +28,14 @@ export default function AthletesPage({ params }: { params: Promise<{ arenaId: st
         <div className="space-y-8">
             <div className="flex items-start justify-between">
                 <div className="space-y-1">
-                    <h1 className="text-3xl font-bold text-[#002B40]">Atletas</h1>
+                    <h1 className="text-3xl font-bold text-arena-navy-800">Atletas</h1>
                     <p className="text-muted-foreground">
                         Faça a gestão dos atletas, envie e desconte moedas.
                     </p>
                 </div>
                 <Button
                     onClick={() => setIsModalOpen(true)}
-                    className="bg-[#FF6B00] hover:bg-[#E66000] text-white gap-2 px-6 py-6 h-auto text-base rounded-lg font-semibold shadow-md active:scale-95 transition-all"
+                    className="bg-arena-button hover:bg-arena-button-hover text-white gap-2 px-6 py-6 h-auto text-base rounded-lg font-semibold shadow-md active:scale-95 transition-all"
                 >
                     Vincular atleta
                     <Plus className="h-5 w-5" />

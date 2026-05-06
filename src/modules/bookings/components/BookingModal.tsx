@@ -78,21 +78,21 @@ function AthleteSearchField({
     const showDropdown = search.length >= 2 && !selectedAthlete
     return (
         <div className="space-y-2 relative">
-            <Label className="text-xs font-bold uppercase text-[#002B40]/40 tracking-wider">
+            <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">
                 {mensalista ? "Atleta" : "Nome do responsável"}
             </Label>
             {!selectedAthlete ? (
                 <div className="relative">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#002B40]/20" />
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-arena-navy-800/20" />
                     <Input
                         placeholder={mensalista ? "Buscar atleta vinculado à arena" : "Selecione um atleta vinculado ou insira um novo"}
                         value={search}
                         onChange={(e) => onSearch(e.target.value)}
-                        className="pl-12 h-14 border-[#002B40]/10 focus:ring-[#FF6B00] focus:border-[#FF6B00] rounded-xl font-bold text-[#002B40]"
+                        className="pl-12 h-14 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-xl font-bold text-arena-navy-800"
                     />
-                    {isSearching && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-[#FF6B00]" />}
+                    {isSearching && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-arena-button" />}
                     {showDropdown && (athletes.length > 0 || !isSearching) && (
-                        <div className="absolute z-50 w-full mt-2 bg-white border border-[#002B40]/10 rounded-2xl shadow-2xl max-h-48 overflow-auto p-2">
+                        <div className="absolute z-50 w-full mt-2 bg-white border border-arena-navy-800/10 rounded-2xl shadow-2xl max-h-48 overflow-auto p-2">
                             {athletes.map((athlete) => (
                                 <button
                                     key={athlete.id}
@@ -104,8 +104,8 @@ function AthleteSearchField({
                                     )}
                                 >
                                     <div>
-                                        <p className="font-bold text-[#002B40] text-sm">{athlete.nome_perfil}</p>
-                                        <p className="text-[10px] uppercase font-black text-[#002B40]/40 tracking-tight">{athlete.telefone}</p>
+                                        <p className="font-bold text-arena-navy-800 text-sm">{athlete.nome_perfil}</p>
+                                        <p className="text-[10px] uppercase font-black text-arena-navy-800/40 tracking-tight">{athlete.telefone}</p>
                                     </div>
                                 </button>
                             ))}
@@ -115,12 +115,12 @@ function AthleteSearchField({
                                     onClick={onRegisterNew}
                                     className="w-full text-left px-4 py-3 transition-colors flex items-center gap-3 rounded-xl hover:bg-[#FFF5EF]"
                                 >
-                                    <div className="h-8 w-8 rounded-full bg-[#FF6B00]/10 flex items-center justify-center flex-shrink-0">
-                                        <UserPlus className="h-4 w-4 text-[#FF6B00]" />
+                                    <div className="h-8 w-8 rounded-full bg-arena-button/10 flex items-center justify-center flex-shrink-0">
+                                        <UserPlus className="h-4 w-4 text-arena-button" />
                                     </div>
                                     <div>
-                                        <p className="font-bold text-[#FF6B00] text-sm">Cadastrar &ldquo;{search}&rdquo;</p>
-                                        <p className="text-[10px] text-[#002B40]/40">Nenhum atleta encontrado · Criar novo</p>
+                                        <p className="font-bold text-arena-button text-sm">Cadastrar &ldquo;{search}&rdquo;</p>
+                                        <p className="text-[10px] text-arena-navy-800/40">Nenhum atleta encontrado · Criar novo</p>
                                     </div>
                                 </button>
                             )}
@@ -135,13 +135,13 @@ function AthleteSearchField({
                     <div className="flex items-center gap-3">
                         <div className={cn(
                             "h-9 w-9 rounded-full flex items-center justify-center",
-                            mensalista ? "bg-amber-100" : "bg-[#FF6B00]/10"
+                            mensalista ? "bg-amber-100" : "bg-arena-button/10"
                         )}>
-                            <Check className={cn("h-4 w-4", mensalista ? "text-amber-600" : "text-[#FF6B00]")} />
+                            <Check className={cn("h-4 w-4", mensalista ? "text-amber-600" : "text-arena-button")} />
                         </div>
                         <div>
-                            <p className="font-bold text-[#002B40] text-sm">{selectedAthlete.nome_perfil}</p>
-                            <p className="text-[10px] uppercase font-black text-[#002B40]/40 tracking-tight">{selectedAthlete.telefone}</p>
+                            <p className="font-bold text-arena-navy-800 text-sm">{selectedAthlete.nome_perfil}</p>
+                            <p className="text-[10px] uppercase font-black text-arena-navy-800/40 tracking-tight">{selectedAthlete.telefone}</p>
                         </div>
                     </div>
                     <Button variant="ghost" size="icon" onClick={onClearAthlete} className="h-8 w-8 hover:bg-red-50 text-red-500 rounded-lg">
@@ -504,7 +504,7 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
             <DialogContent className="sm:max-w-[480px] p-0 overflow-hidden border-none shadow-2xl rounded-3xl">
                 <DialogHeader className="p-8 pb-4">
-                    <DialogTitle className="text-2xl font-black text-[#002B40] tracking-tight">
+                    <DialogTitle className="text-2xl font-black text-arena-navy-800 tracking-tight">
                         {bookingType === "avulso" ? "Cadastrar nova reserva" : "Novo Mensalista"}
                     </DialogTitle>
                 </DialogHeader>
@@ -520,8 +520,8 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                                 className={cn(
                                     "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all",
                                     bookingType === "avulso"
-                                        ? "bg-white text-[#FF6B00] shadow-sm"
-                                        : "text-[#002B40]/50 hover:text-[#002B40]"
+                                        ? "bg-white text-arena-button shadow-sm"
+                                        : "text-arena-navy-800/50 hover:text-arena-navy-800"
                                 )}
                             >
                                 <CalendarIcon className="h-4 w-4" />
@@ -534,7 +534,7 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                                     "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all",
                                     bookingType === "mensal"
                                         ? "bg-white text-amber-600 shadow-sm"
-                                        : "text-[#002B40]/50 hover:text-[#002B40]"
+                                        : "text-arena-navy-800/50 hover:text-arena-navy-800"
                                 )}
                             >
                                 <Users className="h-4 w-4" />
@@ -549,44 +549,44 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
 
                                 {/* Data */}
                                 <div className="space-y-2">
-                                    <Label className="text-xs font-bold uppercase text-[#002B40]/40 tracking-wider">Data</Label>
+                                    <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">Data</Label>
                                     <div className="relative">
-                                        <CalendarIcon className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#002B40]/20" />
+                                        <CalendarIcon className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-arena-navy-800/20" />
                                         <Input
                                             value={format(selectedDate, "dd/MM/yyyy", { locale: ptBR })}
                                             readOnly
-                                            className="pl-12 h-14 border-[#002B40]/10 bg-gray-50 focus:ring-0 rounded-xl font-bold text-[#002B40]"
+                                            className="pl-12 h-14 border-arena-navy-800/10 bg-gray-50 focus:ring-0 rounded-xl font-bold text-arena-navy-800"
                                         />
                                     </div>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
-                                        <Label className="text-xs font-bold uppercase text-[#002B40]/40 tracking-wider">Horário início</Label>
+                                        <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">Horário início</Label>
                                         <div className="relative">
-                                            <Clock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#002B40]/20" />
-                                            <Input value={startTime} onChange={(e) => setStartTime(e.target.value)} placeholder="00:00" className="pl-12 h-14 border-[#002B40]/10 focus:ring-[#FF6B00] focus:border-[#FF6B00] rounded-xl font-bold text-[#002B40]" />
+                                            <Clock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-arena-navy-800/20" />
+                                            <Input value={startTime} onChange={(e) => setStartTime(e.target.value)} placeholder="00:00" className="pl-12 h-14 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-xl font-bold text-arena-navy-800" />
                                         </div>
                                     </div>
                                     <div className="space-y-2">
-                                        <Label className="text-xs font-bold uppercase text-[#002B40]/40 tracking-wider">Horário fim</Label>
+                                        <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">Horário fim</Label>
                                         <div className="relative">
-                                            <Clock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#002B40]/20" />
-                                            <Input value={endTime} onChange={(e) => setEndTime(e.target.value)} placeholder="00:00" className="pl-12 h-14 border-[#002B40]/10 focus:ring-[#FF6B00] focus:border-[#FF6B00] rounded-xl font-bold text-[#002B40]" />
+                                            <Clock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-arena-navy-800/20" />
+                                            <Input value={endTime} onChange={(e) => setEndTime(e.target.value)} placeholder="00:00" className="pl-12 h-14 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-xl font-bold text-arena-navy-800" />
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* Esporte */}
                                 <div className="space-y-2">
-                                    <Label className="text-xs font-bold uppercase text-[#002B40]/40 tracking-wider">Esporte</Label>
+                                    <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">Esporte</Label>
                                     <Select value={selectedSport} onValueChange={setSelectedSport}>
-                                        <SelectTrigger className="h-14 border-[#002B40]/10 focus:ring-[#FF6B00] focus:border-[#FF6B00] rounded-xl font-bold text-[#002B40]">
+                                        <SelectTrigger className="h-14 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-xl font-bold text-arena-navy-800">
                                             <SelectValue placeholder="Selecione o tipo de esporte" />
                                         </SelectTrigger>
-                                        <SelectContent className="rounded-2xl border-[#002B40]/10 p-2">
+                                        <SelectContent className="rounded-2xl border-arena-navy-800/10 p-2">
                                             {arenaSports.map((sport) => (
-                                                <SelectItem key={sport.id} value={sport.id} className="rounded-xl py-3 font-bold text-[#002B40]">{sport.name}</SelectItem>
+                                                <SelectItem key={sport.id} value={sport.id} className="rounded-xl py-3 font-bold text-arena-navy-800">{sport.name}</SelectItem>
                                             ))}
                                             {arenaSports.length === 0 && !isLoadingSports && (
                                                 <div className="p-4 text-center text-xs text-muted-foreground">Nenhum esporte vinculado à arena</div>
@@ -597,40 +597,40 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
 
                                 {/* Valor Pago */}
                                 <div className="space-y-2">
-                                    <Label className="text-xs font-bold uppercase text-[#002B40]/40 tracking-wider">Valor pago</Label>
+                                    <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">Valor pago</Label>
                                     <div className="relative">
-                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#002B40]/40 font-bold">R$</span>
-                                        <Input value={price} onChange={(e) => setPrice(e.target.value)} className="pl-12 h-14 border-[#002B40]/10 focus:ring-[#FF6B00] focus:border-[#FF6B00] rounded-xl font-bold text-[#002B40]" />
+                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-arena-navy-800/40 font-bold">R$</span>
+                                        <Input value={price} onChange={(e) => setPrice(e.target.value)} className="pl-12 h-14 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-xl font-bold text-arena-navy-800" />
                                     </div>
                                 </div>
 
                                 {/* Recorrência */}
-                                <div className="pt-4 border-t border-dashed border-[#002B40]/10 flex flex-col gap-4">
+                                <div className="pt-4 border-t border-dashed border-arena-navy-800/10 flex flex-col gap-4">
                                     <div className="flex items-center justify-between">
                                         <div className="space-y-0.5">
-                                            <Label className="text-sm font-bold text-[#002B40]">Reserva Recorrente</Label>
-                                            <p className="text-[10px] text-[#002B40]/40 font-medium">Repetir este horário toda semana</p>
+                                            <Label className="text-sm font-bold text-arena-navy-800">Reserva Recorrente</Label>
+                                            <p className="text-[10px] text-arena-navy-800/40 font-medium">Repetir este horário toda semana</p>
                                         </div>
                                         <button
                                             type="button"
                                             onClick={() => setIsRecurring(!isRecurring)}
-                                            className={cn("w-12 h-6 rounded-full transition-colors relative", isRecurring ? "bg-[#FF6B00]" : "bg-gray-200")}
+                                            className={cn("w-12 h-6 rounded-full transition-colors relative", isRecurring ? "bg-arena-button" : "bg-gray-200")}
                                         >
                                             <div className={cn("absolute top-1 w-4 h-4 bg-white rounded-full transition-transform", isRecurring ? "left-7" : "left-1")} />
                                         </button>
                                     </div>
                                     {isRecurring && (
-                                        <div className="bg-[#FFF5EF] p-4 rounded-2xl border border-[#FF6B00]/10 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                                        <div className="bg-[#FFF5EF] p-4 rounded-2xl border border-arena-button/10 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
                                             <div className="space-y-1.5">
-                                                <Label className="text-xs font-black uppercase text-[#FF6B00]/60 tracking-wider">Duração (semanas)</Label>
+                                                <Label className="text-xs font-black uppercase text-arena-button/60 tracking-wider">Duração (semanas)</Label>
                                                 <div className="flex items-center gap-4">
                                                     <Input
                                                         type="number"
                                                         value={recurrenceWeeks}
                                                         onChange={(e) => setRecurrenceWeeks(parseInt(e.target.value) || 1)}
-                                                        className="h-12 border-[#FF6B00]/10 rounded-xl font-bold text-[#002B40] bg-white"
+                                                        className="h-12 border-arena-button/10 rounded-xl font-bold text-arena-navy-800 bg-white"
                                                     />
-                                                    <div className="text-[10px] font-bold text-[#FF6B00]/60 leading-tight">
+                                                    <div className="text-[10px] font-bold text-arena-button/60 leading-tight">
                                                         Serão criadas {recurrenceWeeks} reservas<br />
                                                         nas próximas {Math.ceil(recurrenceWeeks / 4)} meses
                                                     </div>
@@ -649,14 +649,14 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
 
                                 {/* Dia da semana */}
                                 <div className="space-y-2">
-                                    <Label className="text-xs font-bold uppercase text-[#002B40]/40 tracking-wider">Dia da semana</Label>
+                                    <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">Dia da semana</Label>
                                     <Select value={diaSemana} onValueChange={setDiaSemana}>
-                                        <SelectTrigger className="h-14 border-[#002B40]/10 focus:ring-amber-500 rounded-xl font-bold text-[#002B40]">
+                                        <SelectTrigger className="h-14 border-arena-navy-800/10 focus:ring-amber-500 rounded-xl font-bold text-arena-navy-800">
                                             <SelectValue />
                                         </SelectTrigger>
-                                        <SelectContent className="rounded-2xl border-[#002B40]/10 p-2">
+                                        <SelectContent className="rounded-2xl border-arena-navy-800/10 p-2">
                                             {DIAS_SEMANA.map((d) => (
-                                                <SelectItem key={d.value} value={String(d.value)} className="rounded-xl py-3 font-bold text-[#002B40]">
+                                                <SelectItem key={d.value} value={String(d.value)} className="rounded-xl py-3 font-bold text-arena-navy-800">
                                                     {d.label}
                                                 </SelectItem>
                                             ))}
@@ -667,25 +667,25 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                                 {/* Horários */}
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
-                                        <Label className="text-xs font-bold uppercase text-[#002B40]/40 tracking-wider">Horário início</Label>
-                                        <Input type="time" value={horarioInicio} onChange={(e) => setHorarioInicio(e.target.value)} className="h-14 border-[#002B40]/10 focus:ring-amber-500 rounded-xl font-bold text-[#002B40]" />
+                                        <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">Horário início</Label>
+                                        <Input type="time" value={horarioInicio} onChange={(e) => setHorarioInicio(e.target.value)} className="h-14 border-arena-navy-800/10 focus:ring-amber-500 rounded-xl font-bold text-arena-navy-800" />
                                     </div>
                                     <div className="space-y-2">
-                                        <Label className="text-xs font-bold uppercase text-[#002B40]/40 tracking-wider">Horário fim</Label>
-                                        <Input type="time" value={horarioFim} onChange={(e) => setHorarioFim(e.target.value)} className="h-14 border-[#002B40]/10 focus:ring-amber-500 rounded-xl font-bold text-[#002B40]" />
+                                        <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">Horário fim</Label>
+                                        <Input type="time" value={horarioFim} onChange={(e) => setHorarioFim(e.target.value)} className="h-14 border-arena-navy-800/10 focus:ring-amber-500 rounded-xl font-bold text-arena-navy-800" />
                                     </div>
                                 </div>
 
                                 {/* Esporte */}
                                 <div className="space-y-2">
-                                    <Label className="text-xs font-bold uppercase text-[#002B40]/40 tracking-wider">Esporte</Label>
+                                    <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">Esporte</Label>
                                     <Select value={selectedSport} onValueChange={setSelectedSport}>
-                                        <SelectTrigger className="h-14 border-[#002B40]/10 focus:ring-amber-500 rounded-xl font-bold text-[#002B40]">
+                                        <SelectTrigger className="h-14 border-arena-navy-800/10 focus:ring-amber-500 rounded-xl font-bold text-arena-navy-800">
                                             <SelectValue placeholder="Selecione o esporte" />
                                         </SelectTrigger>
-                                        <SelectContent className="rounded-2xl border-[#002B40]/10 p-2">
+                                        <SelectContent className="rounded-2xl border-arena-navy-800/10 p-2">
                                             {arenaSports.map((sport) => (
-                                                <SelectItem key={sport.id} value={sport.id} className="rounded-xl py-3 font-bold text-[#002B40]">{sport.name}</SelectItem>
+                                                <SelectItem key={sport.id} value={sport.id} className="rounded-xl py-3 font-bold text-arena-navy-800">{sport.name}</SelectItem>
                                             ))}
                                             {arenaSports.length === 0 && !isLoadingSports && (
                                                 <div className="p-4 text-center text-xs text-muted-foreground">Nenhum esporte vinculado</div>
@@ -697,14 +697,14 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                                 {/* Sessões e valor */}
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
-                                        <Label className="text-xs font-bold uppercase text-[#002B40]/40 tracking-wider">Sessões/mês</Label>
-                                        <Input type="number" min={1} max={8} value={sessoesPorMes} onChange={(e) => setSessoesPorMes(e.target.value)} className="h-14 border-[#002B40]/10 focus:ring-amber-500 rounded-xl font-bold text-[#002B40]" />
+                                        <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">Sessões/mês</Label>
+                                        <Input type="number" min={1} max={8} value={sessoesPorMes} onChange={(e) => setSessoesPorMes(e.target.value)} className="h-14 border-arena-navy-800/10 focus:ring-amber-500 rounded-xl font-bold text-arena-navy-800" />
                                     </div>
                                     <div className="space-y-2">
-                                        <Label className="text-xs font-bold uppercase text-[#002B40]/40 tracking-wider">Valor mensal (R$)</Label>
+                                        <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">Valor mensal (R$)</Label>
                                         <div className="relative">
-                                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#002B40]/40 font-bold text-sm">R$</span>
-                                            <Input type="number" min={0} value={valorMensal} onChange={(e) => setValorMensal(e.target.value)} className="pl-10 h-14 border-[#002B40]/10 focus:ring-amber-500 rounded-xl font-bold text-[#002B40]" />
+                                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-arena-navy-800/40 font-bold text-sm">R$</span>
+                                            <Input type="number" min={0} value={valorMensal} onChange={(e) => setValorMensal(e.target.value)} className="pl-10 h-14 border-arena-navy-800/10 focus:ring-amber-500 rounded-xl font-bold text-arena-navy-800" />
                                         </div>
                                     </div>
                                 </div>
@@ -713,10 +713,10 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                                 {valorPorSessao && (
                                     <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-1">
                                         <p className="text-xs font-black uppercase text-amber-600 tracking-wider">Resumo do plano</p>
-                                        <p className="text-sm font-bold text-[#002B40]">
+                                        <p className="text-sm font-bold text-arena-navy-800">
                                             {sessoesPorMes}x por mês &middot; R$ {valorPorSessao}/sessão &middot; R$ {Number(valorMensal).toFixed(2)}/mês
                                         </p>
-                                        <p className="text-[11px] text-[#002B40]/50">
+                                        <p className="text-[11px] text-arena-navy-800/50">
                                             Reservas geradas para o mês atual (confirmado) e os próximos 2 meses (reservado)
                                         </p>
                                     </div>
@@ -765,7 +765,7 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                     <Button
                         variant="outline"
                         onClick={onClose}
-                        className="flex-1 h-14 border-[#002B40]/20 text-[#002B40] hover:bg-white font-bold rounded-xl active:scale-95 transition-all"
+                        className="flex-1 h-14 border-arena-navy-800/20 text-arena-navy-800 hover:bg-white font-bold rounded-xl active:scale-95 transition-all"
                     >
                         Fechar
                     </Button>
@@ -775,7 +775,7 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                         className={cn(
                             "flex-1 h-14 text-white font-black uppercase tracking-widest text-xs rounded-xl shadow-xl transition-all active:scale-95 gap-2",
                             bookingType === "avulso"
-                                ? "bg-[#FF6B00] hover:bg-[#E66000] shadow-[#FF6B00]/20"
+                                ? "bg-arena-button hover:bg-arena-button-hover shadow-arena-button/20"
                                 : "bg-amber-500 hover:bg-amber-600 shadow-amber-500/20"
                         )}
                     >

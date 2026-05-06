@@ -33,12 +33,12 @@ export default async function EditSpacePage({ params }: { params: Promise<{ id: 
             <div className="flex items-center gap-4">
                 <Button variant="ghost" size="icon" asChild className="rounded-full">
                     <Link href={`/dashboard/arenas/${id}`}>
-                        <ArrowLeft className="w-6 h-6 text-[#002B40]" />
+                        <ArrowLeft className="w-6 h-6 text-arena-navy-800" />
                     </Link>
                 </Button>
                 <div className="flex flex-col">
-                    <span className="text-sm font-medium text-[#002B40]/60">Voltar</span>
-                    <h1 className="text-3xl font-black text-[#002B40] tracking-tight">Editar espaço</h1>
+                    <span className="text-sm font-medium text-arena-navy-800/60">Voltar</span>
+                    <h1 className="text-3xl font-black text-arena-navy-800 tracking-tight">Editar espaço</h1>
                 </div>
             </div>
 

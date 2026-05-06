@@ -262,7 +262,7 @@ export function SubscriptionPageClient({
             {selectedPlan && (
               <Badge
                 variant="outline"
-                className="border-[#FF6B00]/30 bg-[#FF6B00]/5 text-[#C65100]"
+                className="border-arena-button/30 bg-arena-button/5 text-[#C65100]"
               >
                 Selecionado: {selectedPlan.label}
               </Badge>
@@ -279,7 +279,7 @@ export function SubscriptionPageClient({
                   key={plan.key}
                   className={
                     isSelected
-                      ? 'border-[#FF6B00] shadow-[0_0_0_1px_rgba(255,107,0,0.15)]'
+                      ? 'border-arena-button shadow-[0_0_0_1px_rgba(255,107,0,0.15)]'
                       : 'border-border'
                   }
                 >
@@ -320,7 +320,7 @@ export function SubscriptionPageClient({
                       variant={isSelected ? 'default' : 'outline'}
                       className={
                         isSelected
-                          ? 'w-full bg-[#FF6B00] text-white hover:bg-[#E66000]'
+                          ? 'w-full bg-arena-button text-white hover:bg-arena-button-hover'
                           : 'w-full border-[#0D3B45] text-[#0D3B45]'
                       }
                       onClick={() => setSelectedPlanKey(plan.key)}
@@ -352,7 +352,7 @@ export function SubscriptionPageClient({
             <Button
               onClick={() => handleOpenCardModal()}
               disabled={actionLoading || !selectedPlan}
-              className="bg-[#FF6B00] text-white hover:bg-[#E66000]"
+              className="bg-arena-button text-white hover:bg-arena-button-hover"
             >
               {actionLoading ? 'Aguarde...' : 'Cadastrar cartao e ativar'}
             </Button>
@@ -419,7 +419,7 @@ export function SubscriptionPageClient({
                   {planSelectionEnabled &&
                     selectedPlan &&
                     selectedPlan.key !== subscription.planKey && (
-                      <div className="space-y-3 rounded-lg border border-[#FF6B00]/20 bg-[#FF6B00]/5 p-4">
+                      <div className="space-y-3 rounded-lg border border-arena-button/20 bg-arena-button/5 p-4">
                         <div>
                           <p className="text-sm font-medium text-[#0D3B45]">
                             Plano selecionado para troca
@@ -433,7 +433,7 @@ export function SubscriptionPageClient({
                           type="button"
                           onClick={() => handleOpenCardModal(selectedPlan.key)}
                           disabled={actionLoading}
-                          className="bg-[#FF6B00] text-white hover:bg-[#E66000]"
+                          className="bg-arena-button text-white hover:bg-arena-button-hover"
                         >
                           {actionLoading
                             ? 'Processando...'
@@ -447,7 +447,7 @@ export function SubscriptionPageClient({
                       <button
                         onClick={handleReactivate}
                         disabled={actionLoading}
-                        className="text-sm text-[#FF6B00] hover:underline disabled:opacity-50"
+                        className="text-sm text-arena-button hover:underline disabled:opacity-50"
                       >
                         Manter assinatura
                       </button>
@@ -596,7 +596,7 @@ export function SubscriptionPageClient({
           className="flex h-[min(594px,90vh)] w-[min(588px,calc(100%-2rem))] max-w-[588px] flex-col gap-0 overflow-hidden rounded-xl border-[#E2E8F0] p-0 shadow-xl sm:max-w-[588px]"
         >
           <DialogHeader className="shrink-0 space-y-1 border-b border-[#E2E8F0] px-8 pb-5 pt-7 text-left sm:text-left">
-            <DialogTitle className="pr-10 text-xl font-bold tracking-tight text-[#002B40]">
+            <DialogTitle className="pr-10 text-xl font-bold tracking-tight text-arena-navy-800">
               {setupData?.planLabel
                 ? `Cartão — ${setupData.planLabel}`
                 : 'Alterar cartão'}
@@ -626,7 +626,7 @@ export function SubscriptionPageClient({
               />
             ) : (
               <div className="flex items-center justify-center py-16">
-                <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#CBD5E1] border-t-[#FF6B00]" />
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#CBD5E1] border-t-arena-button" />
               </div>
             )}
           </div>
@@ -656,7 +656,7 @@ export function SubscriptionPageClient({
               Fechar
             </Button>
             <Button
-              className="flex-1 bg-[#FF6B00] text-white hover:bg-[#E66000]"
+              className="flex-1 bg-arena-button text-white hover:bg-arena-button-hover"
               onClick={handleCancel}
               disabled={actionLoading}
             >

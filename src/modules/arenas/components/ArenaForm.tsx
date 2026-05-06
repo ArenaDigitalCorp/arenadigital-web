@@ -480,7 +480,7 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
                                             href="https://brasilapi.com.br/"
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="font-medium text-[#FF6B00] underline underline-offset-2"
+                                            className="font-medium text-arena-button underline underline-offset-2"
                                         >
                                             Brasil API
                                         </a>
@@ -577,7 +577,7 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
                         />
 
                         <div className="pt-4 border-t border-gray-100 mt-6">
-                            <h3 className="text-lg font-semibold text-[#002B40] mb-4">Endereço</h3>
+                            <h3 className="text-lg font-semibold text-arena-navy-800 mb-4">Endereço</h3>
                             <div className="flex flex-col gap-5">
                                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                                     <div className="md:col-span-1">
@@ -783,7 +783,7 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
                         </div>
 
                         <div className="pt-4 border-t border-gray-100">
-                            <h3 className="text-lg font-semibold text-[#002B40] mb-4">Redes Sociais</h3>
+                            <h3 className="text-lg font-semibold text-arena-navy-800 mb-4">Redes Sociais</h3>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <FormField
                                     control={form.control}
@@ -830,7 +830,7 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
                         {/* Opening Hours */}
                         <div className="pt-4 border-t border-gray-100 mt-6">
                             <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-lg font-semibold text-[#002B40]">Dias de funcionamento</h3>
+                                <h3 className="text-lg font-semibold text-arena-navy-800">Dias de funcionamento</h3>
                             </div>
 
                             <div className="flex flex-col gap-4">
@@ -961,7 +961,7 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
                 </div>
 
                 <div className="flex justify-end">
-                    <Button type="submit" size="lg" className="bg-[#FF6B00] hover:bg-[#E66000] text-white min-w-[150px]" disabled={isUploading}>
+                    <Button type="submit" size="lg" className="bg-arena-button hover:bg-arena-button-hover text-white min-w-[150px]" disabled={isUploading}>
                         {isUploading ? "Salvando..." : "Salvar"}
                     </Button>
                 </div>

@@ -18,6 +18,7 @@ import {
 } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { cn } from "@/lib/utils"
+import { ARENA_BRAND_HEX } from "@/constants/arena-brand-hex"
 
 interface AvailableTimesModalProps {
     isOpen: boolean
@@ -36,7 +37,7 @@ interface CourtSlot {
 
 const STATUS_STYLES: Record<SlotStatus, { dot: string; text: string; row: string }> = {
     available:          { dot: 'bg-emerald-500',  text: 'text-emerald-700',     row: '' },
-    'booked-avulso':    { dot: 'bg-[#FF6B00]',    text: 'text-[#FF6B00]/80',    row: 'opacity-70' },
+    'booked-avulso':    { dot: 'bg-arena-button',    text: 'text-arena-button/80',    row: 'opacity-70' },
     'booked-mensalista':{ dot: 'bg-amber-400',     text: 'text-amber-700/80',    row: 'opacity-70' },
     closed:             { dot: 'bg-slate-200',     text: 'text-slate-300',       row: 'opacity-40' },
 }
@@ -120,7 +121,7 @@ export function AvailableTimesModal({ isOpen, onClose, arenaId, currentDate }: A
 
         const dotColor = (s: SlotStatus) => ({
             available:            '#10b981',
-            'booked-avulso':      '#FF6B00',
+            'booked-avulso':      ARENA_BRAND_HEX.button,
             'booked-mensalista':  '#f59e0b',
             closed:               '#e2e8f0',
         }[s])
@@ -148,13 +149,13 @@ export function AvailableTimesModal({ isOpen, onClose, arenaId, currentDate }: A
 <style>
   @page { size: landscape; margin: 6mm; }
   * { -webkit-print-color-adjust:exact!important; print-color-adjust:exact!important; box-sizing:border-box; }
-  body { font-family: ui-sans-serif,system-ui,sans-serif; color:#002B40; background:#fff; padding:8px; }
+  body { font-family: ui-sans-serif,system-ui,sans-serif; color:${ARENA_BRAND_HEX.navy800}; background:#fff; padding:8px; }
   h1  { font-size:1.2rem; font-weight:900; letter-spacing:-.02em; margin:0 }
   .meta { color:#64748b; font-size:.65rem; font-weight:600; text-align:right }
   table { width:100%; border-collapse:collapse; margin-top:10px; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden }
   th,td { border:1px solid #f1f5f9; padding:3px 4px; vertical-align:top }
   .th-time { width:52px; background:#f8fafc; font-size:.6rem; font-weight:800; color:#64748b; text-align:center }
-  .th-day  { background:#f8fafc; font-size:.65rem; font-weight:800; text-align:center; color:#002B40; text-transform:capitalize }
+  .th-day  { background:${ARENA_BRAND_HEX.soft}; font-size:.65rem; font-weight:800; text-align:center; color:${ARENA_BRAND_HEX.navy800}; text-transform:capitalize }
   .th-date { font-weight:500; color:#94a3b8; font-size:.55rem }
   .td-time { text-align:center; font-size:.6rem; font-weight:800; color:#94a3b8; background:#fafafa }
   .td-cell { min-width:80px; padding:3px 5px }
@@ -187,12 +188,12 @@ export function AvailableTimesModal({ isOpen, onClose, arenaId, currentDate }: A
 </table>
 <div class="legend">
   <span><span class="dot" style="background:#10b981"></span>Disponível</span>
-  <span><span class="dot" style="background:#FF6B00"></span>Reservado (Avulso)</span>
+  <span><span class="dot" style="background:${ARENA_BRAND_HEX.button}"></span>Reservado (Avulso)</span>
   <span><span class="dot" style="background:#f59e0b"></span>Reservado (Mensalista)</span>
 </div>
 ${courts.length > 0 ? `
 <div style="margin-top:8px;font-size:.65rem;">
-  <strong style="color:#002B40;text-transform:uppercase;font-size:.55rem;letter-spacing:.06em">Esportes por espaço: </strong>
+  <strong style="color:${ARENA_BRAND_HEX.navy800};text-transform:uppercase;font-size:.55rem;letter-spacing:.06em">Esportes por espaço: </strong>
   ${courts.map(c => `<span style="margin-right:12px"><b>${c.name}</b> — ${c.sports?.map((s:any)=>s.name).join(', ')||'—'}</span>`).join('')}
 </div>` : ''}
 <footer>Arena Digital · Relatório gerado automaticamente</footer>
@@ -204,12 +205,12 @@ ${courts.length > 0 ? `
     // ── Render ───────────────────────────────────────────────────────────────
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="sm:max-w-[95vw] w-[98vw] max-h-[95vh] overflow-auto p-0 border-none shadow-2xl rounded-3xl bg-[#F8FAFC]">
+            <DialogContent className="sm:max-w-[95vw] w-[98vw] max-h-[95vh] overflow-auto p-0 border-none shadow-2xl rounded-3xl bg-arena-soft">
 
                 {/* ── Header ── */}
-                <DialogHeader className="p-6 pb-4 bg-white sticky top-0 z-20 border-b border-[#002B40]/5">
+                <DialogHeader className="p-6 pb-4 bg-white sticky top-0 z-20 border-b border-arena-navy-800/5">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <DialogTitle className="text-xl font-black text-[#002B40] tracking-tight">
+                        <DialogTitle className="text-xl font-black text-arena-navy-800 tracking-tight">
                             Grade de horários disponíveis
                         </DialogTitle>
 
@@ -223,7 +224,7 @@ ${courts.length > 0 ? `
                                 >
                                     <ChevronLeft className="w-4 h-4" />
                                 </Button>
-                                <span className="px-3 text-sm font-bold text-[#002B40] min-w-[160px] text-center">
+                                <span className="px-3 text-sm font-bold text-arena-navy-800 min-w-[160px] text-center">
                                     {format(weekDays[0], "dd/MM")} – {format(weekDays[6], "dd/MM/yyyy")}
                                 </span>
                                 <Button
@@ -238,7 +239,7 @@ ${courts.length > 0 ? `
                                 <Button
                                     variant="outline" size="sm"
                                     onClick={() => setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))}
-                                    className="h-9 font-bold gap-1.5 border-[#002B40]/10 text-[#002B40]/60 hover:text-[#002B40]"
+                                    className="h-9 font-bold gap-1.5 border-arena-navy-800/10 text-arena-navy-800/60 hover:text-arena-navy-800"
                                 >
                                     <CalendarDays className="h-4 w-4" />
                                     Hoje
@@ -247,7 +248,7 @@ ${courts.length > 0 ? `
                             <Button
                                 variant="outline" size="sm"
                                 onClick={handlePrint}
-                                className="h-9 font-bold gap-2 border-[#002B40]/10 text-[#002B40]/60 hover:text-[#002B40]"
+                                className="h-9 font-bold gap-2 border-arena-navy-800/10 text-arena-navy-800/60 hover:text-arena-navy-800"
                             >
                                 <Printer className="h-4 w-4" />
                                 Imprimir
@@ -266,20 +267,20 @@ ${courts.length > 0 ? `
                 {/* ── Content ── */}
                 <div className="p-6 space-y-5">
                     {isLoading ? (
-                        <div className="h-96 flex flex-col items-center justify-center gap-4 text-[#002B40]/40 font-bold">
-                            <Loader2 className="h-8 w-8 animate-spin text-[#FF6B00]" />
+                        <div className="h-96 flex flex-col items-center justify-center gap-4 text-arena-navy-800/40 font-bold">
+                            <Loader2 className="h-8 w-8 animate-spin text-arena-button" />
                             Carregando horários…
                         </div>
                     ) : (
                         <>
                             {/* Legend */}
-                            <div className="flex flex-wrap items-center gap-4 text-xs font-bold text-[#002B40]/60">
+                            <div className="flex flex-wrap items-center gap-4 text-xs font-bold text-arena-navy-800/60">
                                 <div className="flex items-center gap-1.5">
                                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
                                     Disponível
                                 </div>
                                 <div className="flex items-center gap-1.5">
-                                    <span className="w-2.5 h-2.5 rounded-full bg-[#FF6B00] inline-block" />
+                                    <span className="w-2.5 h-2.5 rounded-full bg-arena-button inline-block" />
                                     Reservado — Avulso
                                 </div>
                                 <div className="flex items-center gap-1.5">
@@ -293,25 +294,25 @@ ${courts.length > 0 ? `
                                 <div className="w-full min-w-[900px]">
 
                                     {/* Header row */}
-                                    <div className="grid grid-cols-[72px_repeat(7,1fr)] border-b border-[#002B40]/5 bg-[#F8FAFC]">
-                                        <div className="p-3 border-r border-[#002B40]/5 font-bold text-[#002B40]/40 text-[10px] text-center flex items-center justify-center">
+                                    <div className="grid grid-cols-[72px_repeat(7,1fr)] border-b border-arena-navy-800/5 bg-arena-soft">
+                                        <div className="p-3 border-r border-arena-navy-800/5 font-bold text-arena-navy-800/40 text-[10px] text-center flex items-center justify-center">
                                             Horário
                                         </div>
                                         {weekDays.map((day, i) => (
                                             <div key={i} className={cn(
-                                                "p-3 font-bold text-[#002B40] text-xs text-center border-r border-[#002B40]/5 last:border-none",
+                                                "p-3 font-bold text-arena-navy-800 text-xs text-center border-r border-arena-navy-800/5 last:border-none",
                                                 format(day, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd') && "bg-[#FFF5EF]"
                                             )}>
                                                 <div className="capitalize font-black">{format(day, "EEEE", { locale: ptBR })}</div>
-                                                <div className="text-[#002B40]/40 text-[10px] font-medium">{format(day, "dd/MM")}</div>
+                                                <div className="text-arena-navy-800/40 text-[10px] font-medium">{format(day, "dd/MM")}</div>
                                             </div>
                                         ))}
                                     </div>
 
                                     {/* Hour rows */}
                                     {hours.map((hour) => (
-                                        <div key={hour} className="grid grid-cols-[72px_repeat(7,1fr)] border-b border-[#002B40]/5 last:border-none">
-                                            <div className="p-2 border-r border-[#002B40]/5 font-bold text-[#002B40]/50 text-[10px] text-center flex items-center justify-center bg-white">
+                                        <div key={hour} className="grid grid-cols-[72px_repeat(7,1fr)] border-b border-arena-navy-800/5 last:border-none">
+                                            <div className="p-2 border-r border-arena-navy-800/5 font-bold text-arena-navy-800/50 text-[10px] text-center flex items-center justify-center bg-white">
                                                 {String(hour).padStart(2, '0')}h00
                                             </div>
                                             {weekDays.map((day, i) => {
@@ -320,7 +321,7 @@ ${courts.length > 0 ? `
 
                                                 return (
                                                     <div key={i} className={cn(
-                                                        "p-1.5 border-r border-[#002B40]/5 last:border-none min-h-[52px]",
+                                                        "p-1.5 border-r border-arena-navy-800/5 last:border-none min-h-[52px]",
                                                         slots.length === 0 && "bg-slate-50/60",
                                                         hasAvailable && "bg-white",
                                                         format(day, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd') && "bg-[#FFFBF8]"
@@ -352,15 +353,15 @@ ${courts.length > 0 ? `
 
                             {/* Footer — sports per court */}
                             {courts.length > 0 && (
-                                <div className="bg-white rounded-2xl border border-[#002B40]/5 p-5 shadow-sm">
-                                    <h3 className="text-[10px] font-black text-[#002B40]/40 uppercase tracking-wider mb-3">
+                                <div className="bg-white rounded-2xl border border-arena-navy-800/5 p-5 shadow-sm">
+                                    <h3 className="text-[10px] font-black text-arena-navy-800/40 uppercase tracking-wider mb-3">
                                         Esportes por espaço
                                     </h3>
                                     <div className="flex flex-wrap gap-x-8 gap-y-1.5">
                                         {courts.map(c => (
                                             <div key={c.id} className="flex items-center gap-2 text-xs">
-                                                <span className="font-black text-[#002B40]">{c.name}</span>
-                                                <span className="text-[#002B40]/40 font-medium">
+                                                <span className="font-black text-arena-navy-800">{c.name}</span>
+                                                <span className="text-arena-navy-800/40 font-medium">
                                                     {c.sports?.map((s: any) => s.name).join(', ') || '—'}
                                                 </span>
                                             </div>

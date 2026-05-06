@@ -224,7 +224,7 @@ export function ProductFormModal({
                             <Button type="button" variant="outline" className="mr-2" onClick={() => onOpenChange(false)}>
                                 Cancelar
                             </Button>
-                            <Button type="submit" className="bg-[#FF6B00] hover:bg-[#E66000] text-white">
+                            <Button type="submit" className="bg-arena-button hover:bg-arena-button-hover text-white">
                                 {product ? "Salvar Alterações" : "Cadastrar"}
                             </Button>
                         </div>

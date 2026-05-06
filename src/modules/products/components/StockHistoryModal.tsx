@@ -58,7 +58,7 @@ export function StockHistoryModal({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden border-none shadow-2xl rounded-2xl max-h-[85vh]">
                 {/* Header */}
-                <div className="bg-gradient-to-r from-[#002B40] to-[#003d5c] p-6 text-white">
+                <div className="bg-gradient-to-r from-arena-navy-800 to-[#003d5c] p-6 text-white">
                     <DialogHeader>
                         <div className="flex items-center gap-3">
                             <div className="p-2 bg-white/10 rounded-xl backdrop-blur-sm">
@@ -86,17 +86,17 @@ export function StockHistoryModal({
                 <div className="p-6 overflow-y-auto max-h-[55vh] custom-scrollbar">
                     {isLoading ? (
                         <div className="flex items-center justify-center py-12">
-                            <Loader2 className="h-8 w-8 animate-spin text-[#FF6B00]" />
+                            <Loader2 className="h-8 w-8 animate-spin text-arena-button" />
                         </div>
                     ) : movements.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-12 text-center">
-                            <div className="p-4 bg-[#002B40]/5 rounded-full mb-4">
-                                <Package className="h-8 w-8 text-[#002B40]/20" />
+                            <div className="p-4 bg-arena-navy-800/5 rounded-full mb-4">
+                                <Package className="h-8 w-8 text-arena-navy-800/20" />
                             </div>
-                            <p className="text-[#002B40]/40 font-medium">
+                            <p className="text-arena-navy-800/40 font-medium">
                                 Nenhuma movimentação registrada.
                             </p>
-                            <p className="text-[#002B40]/25 text-sm mt-1">
+                            <p className="text-arena-navy-800/25 text-sm mt-1">
                                 Faça o primeiro lançamento de entrada.
                             </p>
                         </div>
@@ -141,7 +141,7 @@ export function StockHistoryModal({
                                                 {movement.type === 'entrada' ? 'Entrada' : 'Saída'}
                                             </Badge>
                                             {movement.reference_type && (
-                                                <span className="text-[10px] text-[#002B40]/30 font-medium">
+                                                <span className="text-[10px] text-arena-navy-800/30 font-medium">
                                                     {referenceTypeLabels[movement.reference_type] || movement.reference_type}
                                                 </span>
                                             )}
@@ -155,17 +155,17 @@ export function StockHistoryModal({
                                                 )}>
                                                     {movement.type === 'entrada' ? '+' : '-'}{movement.quantity}
                                                 </span>
-                                                <span className="text-[#002B40]/30 text-xs ml-1">un.</span>
+                                                <span className="text-arena-navy-800/30 text-xs ml-1">un.</span>
                                             </div>
                                             <div className="text-right">
-                                                <div className="text-xs text-[#002B40]/40">Saldo após</div>
-                                                <div className="text-sm font-bold text-[#002B40]">
+                                                <div className="text-xs text-arena-navy-800/40">Saldo após</div>
+                                                <div className="text-sm font-bold text-arena-navy-800">
                                                     {movement.balance_after} un.
                                                 </div>
                                             </div>
                                         </div>
 
-                                        <div className="flex items-center justify-between mt-2 text-[11px] text-[#002B40]/30">
+                                        <div className="flex items-center justify-between mt-2 text-[11px] text-arena-navy-800/30">
                                             <span>
                                                 {format(new Date(movement.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                                             </span>

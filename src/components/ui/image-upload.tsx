@@ -52,7 +52,7 @@ export function ImageUpload({ value, onChange, disabled, className }: ImageUploa
     return (
         <div
             className={cn(
-                "border-2 border-dashed border-gray-200 rounded-lg p-4 h-[240px] flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors relative overflow-hidden bg-[#F8FAFC]",
+                "border-2 border-dashed border-gray-200 rounded-lg p-4 h-[240px] flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors relative overflow-hidden bg-arena-soft",
                 disabled && "opacity-50 cursor-not-allowed",
                 className
             )}
@@ -84,9 +84,9 @@ export function ImageUpload({ value, onChange, disabled, className }: ImageUploa
             ) : (
                 <div className="text-center space-y-2">
                     <div className="bg-white p-3 rounded-full shadow-sm inline-block">
-                        <ImageIcon className="w-6 h-6 text-[#002B40]/40" />
+                        <ImageIcon className="w-6 h-6 text-arena-navy-800/40" />
                     </div>
-                    <p className="text-xs text-[#002B40]/40 px-4">
+                    <p className="text-xs text-arena-navy-800/40 px-4">
                         Arraste ou clique aqui para inserir a foto.
                     </p>
                 </div>

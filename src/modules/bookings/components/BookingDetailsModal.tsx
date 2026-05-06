@@ -51,28 +51,28 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, booking, court
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden border-none shadow-2xl rounded-3xl bg-[#F8FAFC]">
-                <DialogHeader className="p-8 pb-4 bg-white flex flex-row items-center justify-between border-b border-[#002B40]/5">
-                    <DialogTitle className="text-2xl font-black text-[#002B40] tracking-tight">
+            <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden border-none shadow-2xl rounded-3xl bg-arena-soft">
+                <DialogHeader className="p-8 pb-4 bg-white flex flex-row items-center justify-between border-b border-arena-navy-800/5">
+                    <DialogTitle className="text-2xl font-black text-arena-navy-800 tracking-tight">
                         Detalhes do Agendamento
                     </DialogTitle>
                 </DialogHeader>
 
                 <div className="p-8 space-y-8">
                     {/* Main Info Card */}
-                    <div className="bg-white rounded-2xl border border-[#002B40]/5 p-6 shadow-sm space-y-6">
+                    <div className="bg-white rounded-2xl border border-arena-navy-800/5 p-6 shadow-sm space-y-6">
                         <div className="grid grid-cols-2 gap-y-6 gap-x-8">
                             {/* Atleta */}
                             <div className="space-y-1">
-                                <p className="text-[10px] font-black uppercase text-[#002B40]/40 tracking-widest flex items-center gap-1.5">
+                                <p className="text-[10px] font-black uppercase text-arena-navy-800/40 tracking-widest flex items-center gap-1.5">
                                     <User className="w-3 h-3" /> Responsável
                                 </p>
-                                <p className="text-sm font-bold text-[#002B40]">{booking.athlete_name}</p>
+                                <p className="text-sm font-bold text-arena-navy-800">{booking.athlete_name}</p>
                             </div>
 
                             {/* Status */}
                             <div className="space-y-1">
-                                <p className="text-[10px] font-black uppercase text-[#002B40]/40 tracking-widest flex items-center gap-1.5">
+                                <p className="text-[10px] font-black uppercase text-arena-navy-800/40 tracking-widest flex items-center gap-1.5">
                                     <Shield className="w-3 h-3" /> Status
                                 </p>
                                 <Badge className={cn(
@@ -94,38 +94,38 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, booking, court
 
                             {/* Esporte */}
                             <div className="space-y-1">
-                                <p className="text-[10px] font-black uppercase text-[#002B40]/40 tracking-widest flex items-center gap-1.5">
+                                <p className="text-[10px] font-black uppercase text-arena-navy-800/40 tracking-widest flex items-center gap-1.5">
                                     <Trophy className="w-3 h-3" /> Esporte
                                 </p>
-                                <p className="text-sm font-bold text-[#002B40]">{booking.sports?.name || court.sports?.[0]?.name || 'Não informado'}</p>
+                                <p className="text-sm font-bold text-arena-navy-800">{booking.sports?.name || court.sports?.[0]?.name || 'Não informado'}</p>
                             </div>
 
                             {/* Espaço */}
                             <div className="space-y-1">
-                                <p className="text-[10px] font-black uppercase text-[#002B40]/40 tracking-widest flex items-center gap-1.5">
+                                <p className="text-[10px] font-black uppercase text-arena-navy-800/40 tracking-widest flex items-center gap-1.5">
                                     <Info className="w-3 h-3" /> Espaço
                                 </p>
-                                <p className="text-sm font-bold text-[#002B40]">{court.name}</p>
+                                <p className="text-sm font-bold text-arena-navy-800">{court.name}</p>
                             </div>
 
                             {/* Horário */}
-                            <div className="col-span-2 space-y-1 pt-2 border-t border-[#002B40]/5">
-                                <p className="text-[10px] font-black uppercase text-[#002B40]/40 tracking-widest flex items-center gap-1.5">
+                            <div className="col-span-2 space-y-1 pt-2 border-t border-arena-navy-800/5">
+                                <p className="text-[10px] font-black uppercase text-arena-navy-800/40 tracking-widest flex items-center gap-1.5">
                                     <Clock className="w-3 h-3" /> Período do Agendamento
                                 </p>
                                 <div className="flex items-center gap-3">
                                     <div className="bg-[#F1F5F9] px-3 py-1.5 rounded-lg flex items-center gap-2">
-                                        <CalendarIcon className="w-3.5 h-3.5 text-[#002B40]/40" />
-                                        <span className="text-sm font-bold text-[#002B40]">
+                                        <CalendarIcon className="w-3.5 h-3.5 text-arena-navy-800/40" />
+                                        <span className="text-sm font-bold text-arena-navy-800">
                                             {format(startTime, "dd/MM/yyyy", { locale: ptBR })}
                                         </span>
                                     </div>
                                     <div className="bg-[#FFF5EF] px-3 py-1.5 rounded-lg flex items-center gap-2">
-                                        <span className="text-sm font-black text-[#FF6B00]">
+                                        <span className="text-sm font-black text-arena-button">
                                             {format(startTime, "HH:mm")}
                                         </span>
-                                        <ArrowRight className="w-3 h-3 text-[#FF6B00]/40" />
-                                        <span className="text-sm font-black text-[#FF6B00]">
+                                        <ArrowRight className="w-3 h-3 text-arena-button/40" />
+                                        <span className="text-sm font-black text-arena-button">
                                             {format(endTime, "HH:mm")}
                                         </span>
                                     </div>
@@ -133,9 +133,9 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, booking, court
                             </div>
 
                             {/* Valor */}
-                            <div className="col-span-2 space-y-1 pt-2 border-t border-[#002B40]/5">
-                                <p className="text-[10px] font-black uppercase text-[#002B40]/40 tracking-widest">Valor Total</p>
-                                <p className="text-2xl font-black text-[#FF6B00]">
+                            <div className="col-span-2 space-y-1 pt-2 border-t border-arena-navy-800/5">
+                                <p className="text-[10px] font-black uppercase text-arena-navy-800/40 tracking-widest">Valor Total</p>
+                                <p className="text-2xl font-black text-arena-button">
                                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(booking.price || 0)}
                                 </p>
                             </div>
@@ -147,7 +147,7 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, booking, court
                         <Button
                             variant="outline"
                             onClick={onClose}
-                            className="flex-1 h-14 border-[#002B40]/10 text-[#002B40] font-bold rounded-2xl hover:bg-white active:scale-95 transition-all"
+                            className="flex-1 h-14 border-arena-navy-800/10 text-arena-navy-800 font-bold rounded-2xl hover:bg-white active:scale-95 transition-all"
                         >
                             Fechar
                         </Button>

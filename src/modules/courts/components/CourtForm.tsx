@@ -233,7 +233,7 @@ export function CourtForm({ initialData, arenaId, onSuccess }: CourtFormProps) {
                     <div className="lg:col-span-1">
                         <FormLabel className="block mb-2">Foto do espaço</FormLabel>
                         <div
-                            className="border-2 border-dashed border-gray-200 rounded-lg p-4 h-[240px] flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors relative overflow-hidden bg-[#F8FAFC]"
+                            className="border-2 border-dashed border-gray-200 rounded-lg p-4 h-[240px] flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors relative overflow-hidden bg-arena-soft"
                             onDragOver={(e) => e.preventDefault()}
                             onDrop={handleDrop}
                             onClick={() => fileInputRef.current?.click()}
@@ -261,9 +261,9 @@ export function CourtForm({ initialData, arenaId, onSuccess }: CourtFormProps) {
                             ) : (
                                 <div className="text-center space-y-2">
                                     <div className="bg-white p-3 rounded-full shadow-sm inline-block">
-                                        <ImageIcon className="w-6 h-6 text-[#002B40]/40" />
+                                        <ImageIcon className="w-6 h-6 text-arena-navy-800/40" />
                                     </div>
-                                    <p className="text-xs text-[#002B40]/40 px-4">
+                                    <p className="text-xs text-arena-navy-800/40 px-4">
                                         Arraste ou clique aqui para inserir a foto do espaço.
                                     </p>
                                 </div>
@@ -438,7 +438,7 @@ export function CourtForm({ initialData, arenaId, onSuccess }: CourtFormProps) {
                 </div>
 
                 <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-[#002B40]">Configuração de Horários e Preços</h3>
+                    <h3 className="text-lg font-semibold text-arena-navy-800">Configuração de Horários e Preços</h3>
                     <div className="grid grid-cols-1 gap-4">
                         {dayConfigs.map((config, index) => (
                             <DayScheduleConfig
@@ -469,7 +469,7 @@ export function CourtForm({ initialData, arenaId, onSuccess }: CourtFormProps) {
                     )}
                 />
 
-                <Button type="submit" className="w-full bg-[#FF6B00] hover:bg-[#E66000] text-white">
+                <Button type="submit" className="w-full bg-arena-button hover:bg-arena-button-hover text-white">
                     {initialData ? "Salvar Alterações" : "Cadastrar Espaço"}
                 </Button>
             </form>

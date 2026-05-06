@@ -70,7 +70,7 @@ export function AthleteDetailsModal({ arenaId, athleteId, isOpen, onClose }: Ath
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
             <DialogContent className="sm:max-w-[680px] p-0 overflow-hidden border-none shadow-2xl rounded-2xl max-h-[92vh] flex flex-col">
                 {/* Header fixo */}
-                <div className="bg-gradient-to-br from-[#002B40] to-[#003D5C] p-6 flex-shrink-0">
+                <div className="bg-gradient-to-br from-arena-navy-800 to-[#003D5C] p-6 flex-shrink-0">
                     <DialogHeader className="mb-4">
                         <DialogTitle className="text-white text-xl font-bold">Detalhes do Atleta</DialogTitle>
                     </DialogHeader>
@@ -94,7 +94,7 @@ export function AthleteDetailsModal({ arenaId, athleteId, isOpen, onClose }: Ath
                                         className="h-16 w-16 rounded-2xl object-cover ring-2 ring-white/20"
                                     />
                                 ) : (
-                                    <div className="h-16 w-16 rounded-2xl bg-[#FF6B00] flex items-center justify-center text-white font-black text-xl ring-2 ring-white/20">
+                                    <div className="h-16 w-16 rounded-2xl bg-arena-button flex items-center justify-center text-white font-black text-xl ring-2 ring-white/20">
                                         {initials}
                                     </div>
                                 )}
@@ -122,7 +122,7 @@ export function AthleteDetailsModal({ arenaId, athleteId, isOpen, onClose }: Ath
                 <div className="overflow-y-auto flex-1 bg-gray-50">
                     {isLoading ? (
                         <div className="flex flex-col items-center justify-center py-16 gap-3">
-                            <Loader2 className="h-8 w-8 animate-spin text-[#FF6B00]" />
+                            <Loader2 className="h-8 w-8 animate-spin text-arena-button" />
                             <p className="text-sm text-gray-400 font-medium">Carregando informações...</p>
                         </div>
                     ) : data ? (
@@ -130,29 +130,29 @@ export function AthleteDetailsModal({ arenaId, athleteId, isOpen, onClose }: Ath
 
                             {/* Informações de contato */}
                             <div className="bg-white rounded-2xl p-5 shadow-sm space-y-3">
-                                <h3 className="text-sm font-bold text-[#002B40]/50 uppercase tracking-widest">Contato</h3>
+                                <h3 className="text-sm font-bold text-arena-navy-800/50 uppercase tracking-widest">Contato</h3>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <InfoRow icon={<Mail className="h-4 w-4 text-[#FF6B00]" />} label="E-mail" value={data.email} />
-                                    <InfoRow icon={<Phone className="h-4 w-4 text-[#FF6B00]" />} label="Telefone" value={data.telefone} />
-                                    <InfoRow icon={<CreditCard className="h-4 w-4 text-[#FF6B00]" />} label="CPF" value={data.cpf} />
+                                    <InfoRow icon={<Mail className="h-4 w-4 text-arena-button" />} label="E-mail" value={data.email} />
+                                    <InfoRow icon={<Phone className="h-4 w-4 text-arena-button" />} label="Telefone" value={data.telefone} />
+                                    <InfoRow icon={<CreditCard className="h-4 w-4 text-arena-button" />} label="CPF" value={data.cpf} />
                                 </div>
                             </div>
 
                             {/* Cards de métricas */}
                             <div className="grid grid-cols-3 gap-3">
                                 <MetricCard
-                                    icon={<Trophy className="h-5 w-5 text-[#FF6B00]" />}
+                                    icon={<Trophy className="h-5 w-5 text-arena-button" />}
                                     label="Saldo"
                                     value={`$ ${data.saldo.toFixed(2)}`}
                                     highlight
                                 />
                                 <MetricCard
-                                    icon={<CalendarDays className="h-5 w-5 text-[#002B40]" />}
+                                    icon={<CalendarDays className="h-5 w-5 text-arena-navy-800" />}
                                     label="Reservas (mês)"
                                     value={String(data.reservas_este_mes)}
                                 />
                                 <MetricCard
-                                    icon={<TrendingUp className="h-5 w-5 text-[#002B40]" />}
+                                    icon={<TrendingUp className="h-5 w-5 text-arena-navy-800" />}
                                     label="Total reservas"
                                     value={String(data.total_reservas)}
                                 />
@@ -161,13 +161,13 @@ export function AthleteDetailsModal({ arenaId, athleteId, isOpen, onClose }: Ath
                             {/* Esportes */}
                             {data.esportes.length > 0 && (
                                 <div className="bg-white rounded-2xl p-5 shadow-sm">
-                                    <h3 className="text-sm font-bold text-[#002B40]/50 uppercase tracking-widest mb-3">Esportes</h3>
+                                    <h3 className="text-sm font-bold text-arena-navy-800/50 uppercase tracking-widest mb-3">Esportes</h3>
                                     <div className="flex flex-wrap gap-2">
                                         {data.esportes.map((e, i) => (
                                             <div key={i} className="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2">
-                                                <span className="font-semibold text-[#002B40] text-sm">{e.nome}</span>
+                                                <span className="font-semibold text-arena-navy-800 text-sm">{e.nome}</span>
                                                 {e.nivel && (
-                                                    <span className="text-xs text-[#FF6B00] font-bold bg-[#FF6B00]/10 px-2 py-0.5 rounded-full">
+                                                    <span className="text-xs text-arena-button font-bold bg-arena-button/10 px-2 py-0.5 rounded-full">
                                                         {e.nivel}
                                                     </span>
                                                 )}
@@ -179,7 +179,7 @@ export function AthleteDetailsModal({ arenaId, athleteId, isOpen, onClose }: Ath
 
                             {/* Histórico de Fidelidade */}
                             <div className="bg-white rounded-2xl p-5 shadow-sm">
-                                <h3 className="text-sm font-bold text-[#002B40]/50 uppercase tracking-widest mb-4">
+                                <h3 className="text-sm font-bold text-arena-navy-800/50 uppercase tracking-widest mb-4">
                                     Histórico de Fidelidade
                                 </h3>
                                 {data.historico_fidelidade.length === 0 ? (
@@ -194,7 +194,7 @@ export function AthleteDetailsModal({ arenaId, athleteId, isOpen, onClose }: Ath
                                                 <div className="flex items-center gap-3">
                                                     <TipoChip tipo={h.tipo} />
                                                     <div>
-                                                        <p className="text-sm font-medium text-[#002B40]">
+                                                        <p className="text-sm font-medium text-arena-navy-800">
                                                             {h.descricao || "Sem descrição"}
                                                         </p>
                                                         <p className="text-xs text-gray-400">
@@ -228,12 +228,12 @@ export function AthleteDetailsModal({ arenaId, athleteId, isOpen, onClose }: Ath
 function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string | null }) {
     return (
         <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-lg bg-[#FF6B00]/10 flex items-center justify-center flex-shrink-0">
+            <div className="h-8 w-8 rounded-lg bg-arena-button/10 flex items-center justify-center flex-shrink-0">
                 {icon}
             </div>
             <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{label}</p>
-                <p className="text-sm font-semibold text-[#002B40]">{value || "---"}</p>
+                <p className="text-sm font-semibold text-arena-navy-800">{value || "---"}</p>
             </div>
         </div>
     )
@@ -241,14 +241,14 @@ function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string;
 
 function MetricCard({ icon, label, value, highlight }: { icon: React.ReactNode; label: string; value: string; highlight?: boolean }) {
     return (
-        <div className={`rounded-2xl p-4 shadow-sm flex flex-col gap-2 ${highlight ? "bg-[#FF6B00]" : "bg-white"}`}>
+        <div className={`rounded-2xl p-4 shadow-sm flex flex-col gap-2 ${highlight ? "bg-arena-button" : "bg-white"}`}>
             <div className={`h-9 w-9 rounded-xl flex items-center justify-center ${highlight ? "bg-white/20" : "bg-gray-50"}`}>
                 {icon}
             </div>
             <p className={`text-[10px] font-bold uppercase tracking-widest ${highlight ? "text-white/70" : "text-gray-400"}`}>
                 {label}
             </p>
-            <p className={`text-xl font-black ${highlight ? "text-white" : "text-[#002B40]"}`}>
+            <p className={`text-xl font-black ${highlight ? "text-white" : "text-arena-navy-800"}`}>
                 {value}
             </p>
         </div>

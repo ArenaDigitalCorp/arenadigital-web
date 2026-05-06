@@ -118,13 +118,13 @@ export function NewRedemptionModal({ arenaId, isOpen, onClose, onSuccess }: NewR
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
             <DialogContent className="sm:max-w-[450px] p-0 overflow-hidden border-none shadow-2xl rounded-2xl">
                 <DialogHeader className="p-6 pb-0">
-                    <DialogTitle className="text-2xl font-bold text-[#002B40]">Novo desconto</DialogTitle>
+                    <DialogTitle className="text-2xl font-bold text-arena-navy-800">Novo desconto</DialogTitle>
                 </DialogHeader>
 
                 <div className="p-6 space-y-6">
                     {/* Atleta Search */}
                     <div className="space-y-2 relative">
-                        <Label className="text-sm font-semibold text-[#002B40]/70">Selecione o atleta</Label>
+                        <Label className="text-sm font-semibold text-arena-navy-800/70">Selecione o atleta</Label>
                         {!selectedAthlete ? (
                             <div className="relative">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -132,12 +132,12 @@ export function NewRedemptionModal({ arenaId, isOpen, onClose, onSuccess }: NewR
                                     placeholder="Nome do atleta"
                                     value={search}
                                     onChange={(e) => handleSearch(e.target.value)}
-                                    className="pl-10 h-12 border-[#002B40]/10 focus:ring-[#FF6B00] focus:border-[#FF6B00] rounded-lg"
+                                    className="pl-10 h-12 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-lg"
                                 />
-                                {isSearching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-[#FF6B00]" />}
+                                {isSearching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-arena-button" />}
 
                                 {athletes.length > 0 && (
-                                    <div className="absolute z-50 w-full mt-1 bg-white border border-[#002B40]/10 rounded-lg shadow-lg max-h-48 overflow-auto">
+                                    <div className="absolute z-50 w-full mt-1 bg-white border border-arena-navy-800/10 rounded-lg shadow-lg max-h-48 overflow-auto">
                                         {athletes.map((athlete) => athlete && (
                                             <button
                                                 key={athlete.id}
@@ -146,10 +146,10 @@ export function NewRedemptionModal({ arenaId, isOpen, onClose, onSuccess }: NewR
                                                     setSearch(athlete.nome_perfil)
                                                     setAthletes([])
                                                 }}
-                                                className="w-full text-left px-4 py-3 hover:bg-[#FFF5EF] transition-colors flex items-center justify-between border-b border-[#002B40]/5 last:border-0"
+                                                className="w-full text-left px-4 py-3 hover:bg-[#FFF5EF] transition-colors flex items-center justify-between border-b border-arena-navy-800/5 last:border-0"
                                             >
                                                 <div>
-                                                    <p className="font-semibold text-[#002B40] text-sm">{athlete.nome_perfil}</p>
+                                                    <p className="font-semibold text-arena-navy-800 text-sm">{athlete.nome_perfil}</p>
                                                     <p className="text-xs text-muted-foreground">{athlete.telefone}</p>
                                                 </div>
                                             </button>
@@ -160,11 +160,11 @@ export function NewRedemptionModal({ arenaId, isOpen, onClose, onSuccess }: NewR
                         ) : (
                             <div className="flex items-center justify-between p-3 bg-[#FFF5EF] border border-[#FFE4D3] rounded-lg">
                                 <div className="flex items-center gap-3">
-                                    <div className="h-8 w-8 rounded-full bg-[#FF6B00]/10 flex items-center justify-center">
-                                        <Check className="h-4 w-4 text-[#FF6B00]" />
+                                    <div className="h-8 w-8 rounded-full bg-arena-button/10 flex items-center justify-center">
+                                        <Check className="h-4 w-4 text-arena-button" />
                                     </div>
                                     <div>
-                                        <p className="font-semibold text-[#002B40] text-sm">{selectedAthlete.nome_perfil}</p>
+                                        <p className="font-semibold text-arena-navy-800 text-sm">{selectedAthlete.nome_perfil}</p>
                                         <p className="text-xs text-muted-foreground">{selectedAthlete.telefone}</p>
                                     </div>
                                 </div>
@@ -182,7 +182,7 @@ export function NewRedemptionModal({ arenaId, isOpen, onClose, onSuccess }: NewR
 
                     {/* Quantidade */}
                     <div className="space-y-2 text-left">
-                        <Label className="text-sm font-semibold text-[#002B40]/70">Quantidade</Label>
+                        <Label className="text-sm font-semibold text-arena-navy-800/70">Quantidade</Label>
                         <div className="relative">
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold">$</span>
                             <Input
@@ -190,19 +190,19 @@ export function NewRedemptionModal({ arenaId, isOpen, onClose, onSuccess }: NewR
                                 type="number"
                                 value={quantity}
                                 onChange={(e) => setQuantity(e.target.value)}
-                                className="pl-7 h-12 border-[#002B40]/10 focus:ring-[#FF6B00] focus:border-[#FF6B00] rounded-lg"
+                                className="pl-7 h-12 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-lg"
                             />
                         </div>
                     </div>
 
                     {/* Descrição */}
                     <div className="space-y-2 text-left">
-                        <Label className="text-sm font-semibold text-[#002B40]/70">Descrição (opcional)</Label>
+                        <Label className="text-sm font-semibold text-arena-navy-800/70">Descrição (opcional)</Label>
                         <Input
                             placeholder="Ex: Compra de produto"
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
-                            className="h-12 border-[#002B40]/10 focus:ring-[#FF6B00] focus:border-[#FF6B00] rounded-lg"
+                            className="h-12 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-lg"
                         />
                     </div>
                 </div>
@@ -211,14 +211,14 @@ export function NewRedemptionModal({ arenaId, isOpen, onClose, onSuccess }: NewR
                     <Button
                         variant="outline"
                         onClick={onClose}
-                        className="flex-1 h-12 border-[#002B40]/10 text-[#002B40] hover:bg-gray-100 font-semibold rounded-xl"
+                        className="flex-1 h-12 border-arena-navy-800/10 text-arena-navy-800 hover:bg-gray-100 font-semibold rounded-xl"
                     >
                         Fechar
                     </Button>
                     <Button
                         onClick={handleSave}
                         disabled={isSaving}
-                        className="flex-1 h-12 bg-[#FF6B00] hover:bg-[#E66000] text-white font-bold rounded-xl shadow-lg shadow-[#FF6B00]/20 transition-all active:scale-95 gap-2"
+                        className="flex-1 h-12 bg-arena-button hover:bg-arena-button-hover text-white font-bold rounded-xl shadow-lg shadow-arena-button/20 transition-all active:scale-95 gap-2"
                     >
                         {isSaving ? (
                             <Loader2 className="h-5 w-5 animate-spin" />

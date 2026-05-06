@@ -191,7 +191,7 @@ export function MensalistaModal({
             <div className="h-10 w-10 rounded-2xl bg-amber-100 flex items-center justify-center">
               <Users className="h-5 w-5 text-amber-600" />
             </div>
-            <DialogTitle className="text-2xl font-black text-[#002B40] tracking-tight">
+            <DialogTitle className="text-2xl font-black text-arena-navy-800 tracking-tight">
               Novo Mensalista
             </DialogTitle>
           </div>
@@ -201,23 +201,23 @@ export function MensalistaModal({
           <div className="space-y-5 pb-8">
             {/* Atleta */}
             <div className="space-y-2 relative">
-              <Label className="text-xs font-bold uppercase text-[#002B40]/40 tracking-wider">
+              <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">
                 Atleta
               </Label>
               {!selectedAthlete ? (
                 <div className="relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#002B40]/20" />
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-arena-navy-800/20" />
                   <Input
                     placeholder="Buscar atleta vinculado à arena"
                     value={search}
                     onChange={(e) => handleSearch(e.target.value)}
-                    className="pl-12 h-14 border-[#002B40]/10 focus:ring-[#FF6B00] focus:border-[#FF6B00] rounded-xl font-bold text-[#002B40]"
+                    className="pl-12 h-14 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-xl font-bold text-arena-navy-800"
                   />
                   {isSearching && (
-                    <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-[#FF6B00]" />
+                    <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-arena-button" />
                   )}
                   {athletes.length > 0 && (
-                    <div className="absolute z-50 w-full mt-2 bg-white border border-[#002B40]/10 rounded-2xl shadow-2xl max-h-48 overflow-auto p-2">
+                    <div className="absolute z-50 w-full mt-2 bg-white border border-arena-navy-800/10 rounded-2xl shadow-2xl max-h-48 overflow-auto p-2">
                       {athletes.map((athlete) => (
                         <button
                           key={athlete.id}
@@ -229,8 +229,8 @@ export function MensalistaModal({
                           className="w-full text-left px-4 py-3 hover:bg-amber-50 transition-colors flex items-center justify-between rounded-xl mb-1 last:mb-0"
                         >
                           <div>
-                            <p className="font-bold text-[#002B40] text-sm">{athlete.nome_perfil}</p>
-                            <p className="text-[10px] uppercase font-black text-[#002B40]/40 tracking-tight">
+                            <p className="font-bold text-arena-navy-800 text-sm">{athlete.nome_perfil}</p>
+                            <p className="text-[10px] uppercase font-black text-arena-navy-800/40 tracking-tight">
                               {athlete.telefone}
                             </p>
                           </div>
@@ -246,8 +246,8 @@ export function MensalistaModal({
                       <Check className="h-4 w-4 text-amber-600" />
                     </div>
                     <div>
-                      <p className="font-bold text-[#002B40] text-sm">{selectedAthlete.nome_perfil}</p>
-                      <p className="text-[10px] uppercase font-black text-[#002B40]/40 tracking-tight">
+                      <p className="font-bold text-arena-navy-800 text-sm">{selectedAthlete.nome_perfil}</p>
+                      <p className="text-[10px] uppercase font-black text-arena-navy-800/40 tracking-tight">
                         {selectedAthlete.telefone}
                       </p>
                     </div>
@@ -266,19 +266,19 @@ export function MensalistaModal({
 
             {/* Dia da semana */}
             <div className="space-y-2">
-              <Label className="text-xs font-bold uppercase text-[#002B40]/40 tracking-wider">
+              <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">
                 Dia da semana
               </Label>
               <Select value={diaSemana} onValueChange={setDiaSemana}>
-                <SelectTrigger className="h-14 border-[#002B40]/10 focus:ring-[#FF6B00] rounded-xl font-bold text-[#002B40]">
+                <SelectTrigger className="h-14 border-arena-navy-800/10 focus:ring-arena-button rounded-xl font-bold text-arena-navy-800">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="rounded-2xl border-[#002B40]/10 p-2">
+                <SelectContent className="rounded-2xl border-arena-navy-800/10 p-2">
                   {DIAS_SEMANA.map((d) => (
                     <SelectItem
                       key={d.value}
                       value={String(d.value)}
-                      className="rounded-xl py-3 font-bold text-[#002B40]"
+                      className="rounded-xl py-3 font-bold text-arena-navy-800"
                     >
                       {d.label}
                     </SelectItem>
@@ -290,44 +290,44 @@ export function MensalistaModal({
             {/* Horários */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-xs font-bold uppercase text-[#002B40]/40 tracking-wider">
+                <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">
                   Horário início
                 </Label>
                 <Input
                   type="time"
                   value={horarioInicio}
                   onChange={(e) => setHorarioInicio(e.target.value)}
-                  className="h-14 border-[#002B40]/10 focus:ring-[#FF6B00] rounded-xl font-bold text-[#002B40]"
+                  className="h-14 border-arena-navy-800/10 focus:ring-arena-button rounded-xl font-bold text-arena-navy-800"
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-xs font-bold uppercase text-[#002B40]/40 tracking-wider">
+                <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">
                   Horário fim
                 </Label>
                 <Input
                   type="time"
                   value={horarioFim}
                   onChange={(e) => setHorarioFim(e.target.value)}
-                  className="h-14 border-[#002B40]/10 focus:ring-[#FF6B00] rounded-xl font-bold text-[#002B40]"
+                  className="h-14 border-arena-navy-800/10 focus:ring-arena-button rounded-xl font-bold text-arena-navy-800"
                 />
               </div>
             </div>
 
             {/* Esporte */}
             <div className="space-y-2">
-              <Label className="text-xs font-bold uppercase text-[#002B40]/40 tracking-wider">
+              <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">
                 Esporte
               </Label>
               <Select value={selectedSport} onValueChange={setSelectedSport}>
-                <SelectTrigger className="h-14 border-[#002B40]/10 focus:ring-[#FF6B00] rounded-xl font-bold text-[#002B40]">
+                <SelectTrigger className="h-14 border-arena-navy-800/10 focus:ring-arena-button rounded-xl font-bold text-arena-navy-800">
                   <SelectValue placeholder="Selecione o esporte" />
                 </SelectTrigger>
-                <SelectContent className="rounded-2xl border-[#002B40]/10 p-2">
+                <SelectContent className="rounded-2xl border-arena-navy-800/10 p-2">
                   {arenaSports.map((sport) => (
                     <SelectItem
                       key={sport.id}
                       value={sport.id}
-                      className="rounded-xl py-3 font-bold text-[#002B40]"
+                      className="rounded-xl py-3 font-bold text-arena-navy-800"
                     >
                       {sport.name}
                     </SelectItem>
@@ -344,7 +344,7 @@ export function MensalistaModal({
             {/* Sessões e valor */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-xs font-bold uppercase text-[#002B40]/40 tracking-wider">
+                <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">
                   Sessões/mês
                 </Label>
                 <Input
@@ -353,15 +353,15 @@ export function MensalistaModal({
                   max={8}
                   value={sessoesPorMes}
                   onChange={(e) => setSessoesPorMes(e.target.value)}
-                  className="h-14 border-[#002B40]/10 focus:ring-[#FF6B00] rounded-xl font-bold text-[#002B40]"
+                  className="h-14 border-arena-navy-800/10 focus:ring-arena-button rounded-xl font-bold text-arena-navy-800"
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-xs font-bold uppercase text-[#002B40]/40 tracking-wider">
+                <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">
                   Valor mensal (R$)
                 </Label>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#002B40]/40 font-bold text-sm">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-arena-navy-800/40 font-bold text-sm">
                     R$
                   </span>
                   <Input
@@ -369,7 +369,7 @@ export function MensalistaModal({
                     min={0}
                     value={valorMensal}
                     onChange={(e) => setValorMensal(e.target.value)}
-                    className="pl-10 h-14 border-[#002B40]/10 focus:ring-[#FF6B00] rounded-xl font-bold text-[#002B40]"
+                    className="pl-10 h-14 border-arena-navy-800/10 focus:ring-arena-button rounded-xl font-bold text-arena-navy-800"
                   />
                 </div>
               </div>
@@ -379,11 +379,11 @@ export function MensalistaModal({
             {valorPorSessao && (
               <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-1">
                 <p className="text-xs font-black uppercase text-amber-600 tracking-wider">Resumo do plano</p>
-                <p className="text-sm font-bold text-[#002B40]">
+                <p className="text-sm font-bold text-arena-navy-800">
                   {sessoesPorMes}x por mês &middot; R$ {valorPorSessao}/sessão &middot; R${" "}
                   {Number(valorMensal).toFixed(2)}/mês
                 </p>
-                <p className="text-[11px] text-[#002B40]/50">
+                <p className="text-[11px] text-arena-navy-800/50">
                   Serão criadas reservas para o mês atual (confirmado) e os próximos 2 meses (reservado)
                 </p>
               </div>
@@ -395,7 +395,7 @@ export function MensalistaModal({
           <Button
             variant="outline"
             onClick={onClose}
-            className="flex-1 h-14 border-[#002B40]/20 text-[#002B40] hover:bg-white font-bold rounded-xl"
+            className="flex-1 h-14 border-arena-navy-800/20 text-arena-navy-800 hover:bg-white font-bold rounded-xl"
           >
             Fechar
           </Button>

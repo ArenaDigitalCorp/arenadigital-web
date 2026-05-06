@@ -207,7 +207,7 @@ export function AthleteRegistrationModal({
     }
 
     const labelCls = "text-[#007BFF] font-medium text-sm"
-    const inputCls = "h-11 border-[#002B40]/15 rounded-lg"
+    const inputCls = "h-11 border-arena-navy-800/15 rounded-lg"
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -215,8 +215,8 @@ export function AthleteRegistrationModal({
                 <div className="bg-white flex flex-col flex-1 min-h-0">
 
                     {/* Header */}
-                    <DialogHeader className="px-8 pt-7 pb-5 border-b border-[#002B40]/8 shrink-0">
-                        <DialogTitle className="text-xl font-bold text-[#002B40]">
+                    <DialogHeader className="px-8 pt-7 pb-5 border-b border-arena-navy-800/8 shrink-0">
+                        <DialogTitle className="text-xl font-bold text-arena-navy-800">
                             Cadastrar novo atleta
                         </DialogTitle>
                     </DialogHeader>
@@ -342,7 +342,7 @@ export function AthleteRegistrationModal({
                                                             onBlur={handleCepBlur}
                                                             className={inputCls} />
                                                         {isFetchingCep && (
-                                                            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-[#002B40]/40" />
+                                                            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-arena-navy-800/40" />
                                                         )}
                                                     </div>
                                                 </FormControl>
@@ -389,7 +389,7 @@ export function AthleteRegistrationModal({
                                             <Popover open={isEstadoOpen} onOpenChange={setIsEstadoOpen}>
                                                 <PopoverTrigger asChild>
                                                     <Button variant="outline" role="combobox"
-                                                        className={cn("w-full justify-between h-11 border-[#002B40]/15 rounded-lg font-normal",
+                                                        className={cn("w-full justify-between h-11 border-arena-navy-800/15 rounded-lg font-normal",
                                                             !selectedEstadoId && "text-muted-foreground")}>
                                                         {selectedEstadoId
                                                             ? estados.find(e => e.codigo_uf === selectedEstadoId)?.uf
@@ -429,7 +429,7 @@ export function AthleteRegistrationModal({
                                                 <PopoverTrigger asChild>
                                                     <Button variant="outline" role="combobox"
                                                         disabled={!selectedEstadoId}
-                                                        className={cn("w-full justify-between h-11 border-[#002B40]/15 rounded-lg font-normal",
+                                                        className={cn("w-full justify-between h-11 border-arena-navy-800/15 rounded-lg font-normal",
                                                             !municipioId && "text-muted-foreground")}>
                                                         {municipioId
                                                             ? municipios.find(m => m.codigo_ibge === municipioId)?.nome
@@ -469,14 +469,14 @@ export function AthleteRegistrationModal({
                     </ScrollArea>
 
                     {/* Footer — fora do ScrollArea para não ficar sobreposto */}
-                    <div className="px-8 py-5 border-t border-[#002B40]/10 flex gap-3 justify-end shrink-0 bg-white">
+                    <div className="px-8 py-5 border-t border-arena-navy-800/10 flex gap-3 justify-end shrink-0 bg-white">
                         <Button type="button" variant="outline"
                             onClick={() => onOpenChange(false)}
-                            className="h-12 px-8 border-[#002B40]/20 text-[#002B40] font-semibold rounded-lg hover:bg-gray-50">
+                            className="h-12 px-8 border-arena-navy-800/20 text-arena-navy-800 font-semibold rounded-lg hover:bg-gray-50">
                             Fechar
                         </Button>
                         <Button type="submit" form="athlete-form" disabled={isSubmitting}
-                            className="h-12 px-8 bg-[#FF6B00] hover:bg-[#E66000] text-white font-semibold rounded-lg shadow-md active:scale-95 transition-all disabled:opacity-50">
+                            className="h-12 px-8 bg-arena-button hover:bg-arena-button-hover text-white font-semibold rounded-lg shadow-md active:scale-95 transition-all disabled:opacity-50">
                             {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Salvando...</> : "Salvar"}
                         </Button>
                     </div>

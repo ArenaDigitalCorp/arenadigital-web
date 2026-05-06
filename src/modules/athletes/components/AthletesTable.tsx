@@ -34,12 +34,12 @@ export function AthletesTable({ athletes, isLoading, arenaId }: Props) {
             <Table>
                 <TableHeader className="bg-gray-50/50">
                     <TableRow className="hover:bg-transparent">
-                        <TableHead className="text-[#002B40] font-semibold">Nome</TableHead>
-                        <TableHead className="text-[#002B40] font-semibold">CPF</TableHead>
-                        <TableHead className="text-[#002B40] font-semibold">E-mail</TableHead>
-                        <TableHead className="text-[#002B40] font-semibold">Telefone</TableHead>
-                        <TableHead className="text-[#002B40] font-semibold">Esporte</TableHead>
-                        <TableHead className="text-[#002B40] font-semibold w-14 text-center">Ações</TableHead>
+                        <TableHead className="text-arena-navy-800 font-semibold">Nome</TableHead>
+                        <TableHead className="text-arena-navy-800 font-semibold">CPF</TableHead>
+                        <TableHead className="text-arena-navy-800 font-semibold">E-mail</TableHead>
+                        <TableHead className="text-arena-navy-800 font-semibold">Telefone</TableHead>
+                        <TableHead className="text-arena-navy-800 font-semibold">Esporte</TableHead>
+                        <TableHead className="text-arena-navy-800 font-semibold w-14 text-center">Ações</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -47,7 +47,7 @@ export function AthletesTable({ athletes, isLoading, arenaId }: Props) {
                         <TableRow>
                             <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
                                 <div className="flex flex-col items-center gap-2">
-                                    <Loader2 className="h-6 w-6 animate-spin text-[#FF6B00]" />
+                                    <Loader2 className="h-6 w-6 animate-spin text-arena-button" />
                                     Buscando atletas...
                                 </div>
                             </TableCell>
@@ -61,12 +61,12 @@ export function AthletesTable({ athletes, isLoading, arenaId }: Props) {
                     ) : (
                         athletes.map((athlete) => (
                             <TableRow key={athlete.id} className="group transition-colors">
-                                <TableCell className="font-medium text-[#002B40]">{athlete.name}</TableCell>
+                                <TableCell className="font-medium text-arena-navy-800">{athlete.name}</TableCell>
                                 <TableCell className="text-muted-foreground">{athlete.cpf || "---"}</TableCell>
                                 <TableCell className="text-muted-foreground">{athlete.email || "---"}</TableCell>
                                 <TableCell className="text-muted-foreground">{athlete.telefone || "---"}</TableCell>
                                 <TableCell>
-                                    <span className="inline-flex items-center rounded-full bg-[#002B40]/5 px-2.5 py-0.5 text-xs font-medium text-[#002B40]">
+                                    <span className="inline-flex items-center rounded-full bg-arena-navy-800/5 px-2.5 py-0.5 text-xs font-medium text-arena-navy-800">
                                         {athlete.sport}
                                     </span>
                                 </TableCell>
@@ -76,7 +76,7 @@ export function AthletesTable({ athletes, isLoading, arenaId }: Props) {
                                             if (arenaId) router.push(`/dashboard/athletes/${arenaId}/${athlete.id}`)
                                         }}
                                         title="Ver detalhes"
-                                        className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-[#002B40]/40 hover:text-[#FF6B00] hover:bg-[#FF6B00]/10 transition-all active:scale-95"
+                                        className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-arena-navy-800/40 hover:text-arena-button hover:bg-arena-button/10 transition-all active:scale-95"
                                     >
                                         <Eye className="h-4 w-4" />
                                     </button>
@@ -92,7 +92,7 @@ export function AthletesTable({ athletes, isLoading, arenaId }: Props) {
                     <Button variant="outline" size="icon" className="h-9 w-9 bg-white" disabled>
                         <ChevronLeft className="h-4 w-4" />
                     </Button>
-                    <Button variant="outline" size="sm" className="h-9 w-9 p-0 bg-[#002B40] text-white hover:bg-[#002B40]/90 hover:text-white border-transparent">
+                    <Button variant="outline" size="sm" className="h-9 w-9 p-0 bg-arena-navy-800 text-white hover:bg-arena-navy-800/90 hover:text-white border-transparent">
                         01
                     </Button>
                     <Button variant="outline" size="icon" className="h-9 w-9 bg-white" disabled>

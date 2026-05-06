@@ -53,7 +53,7 @@ function SectionCard({ title, action, children }: { title: string, action?: Reac
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-6">
             <div className="px-6 py-5 border-b border-gray-50 flex justify-between items-center">
                 <h3 className="text-lg font-bold text-gray-900">{title}</h3>
-                {action && <div className="text-sm font-medium text-[#FF6B00] hover:text-[#e55f00] cursor-pointer">{action}</div>}
+                {action && <div className="text-sm font-medium text-arena-button hover:text-arena-button-hover cursor-pointer">{action}</div>}
             </div>
             <div className="p-6">
                 {children}
@@ -82,8 +82,8 @@ const STATUS_CLASS: Record<string, string> = {
 function SortIcon({ field, active, dir }: { field: string; active: boolean; dir: SortDir }) {
     if (!active) return <ArrowUpDown className="inline ml-1 h-3 w-3 opacity-40" />
     return dir === 'asc'
-        ? <ArrowUp className="inline ml-1 h-3 w-3 text-[#FF6B00]" />
-        : <ArrowDown className="inline ml-1 h-3 w-3 text-[#FF6B00]" />
+        ? <ArrowUp className="inline ml-1 h-3 w-3 text-arena-button" />
+        : <ArrowDown className="inline ml-1 h-3 w-3 text-arena-button" />
 }
 
 function ReservasTable({ reservas, limit, showTime }: { reservas: any[], limit?: number, showTime?: boolean }) {
@@ -122,7 +122,7 @@ function ReservasTable({ reservas, limit, showTime }: { reservas: any[], limit?:
 
     if (reservas.length === 0) return <p className="text-gray-400 text-sm text-center py-4">Nenhuma reserva encontrada.</p>
 
-    const thCls = "pb-3 font-bold cursor-pointer select-none hover:text-[#FF6B00] transition-colors whitespace-nowrap"
+    const thCls = "pb-3 font-bold cursor-pointer select-none hover:text-arena-button transition-colors whitespace-nowrap"
 
     return (
         <div className="overflow-x-auto">
@@ -316,8 +316,8 @@ export default function AthleteDetailPage({
 
     if (isLoading) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 bg-[#F8F9FA]">
-                <Loader2 className="h-10 w-10 animate-spin text-[#FF6B00]" />
+            <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 bg-arena-app-surface">
+                <Loader2 className="h-10 w-10 animate-spin text-arena-button" />
                 <p className="text-gray-400 font-medium">Carregando perfil do atleta...</p>
             </div>
         )
@@ -325,7 +325,7 @@ export default function AthleteDetailPage({
 
     if (!data) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 bg-[#F8F9FA] p-8">
+            <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 bg-arena-app-surface p-8">
                 <p className="text-red-500 font-semibold">Atleta não encontrado.</p>
                 <Button variant="outline" onClick={() => router.back()}>Voltar</Button>
             </div>
@@ -335,7 +335,7 @@ export default function AthleteDetailPage({
     const totalSpent = data.total_pago_arena + data.total_gasto_comandas + data.valor_total_rotativos;
 
     return (
-        <div className="min-h-screen bg-[#F8F9FA]">
+        <div className="min-h-screen bg-arena-app-surface">
             <div className="max-w-6xl mx-auto">
                 
                 {/* ── HEADER ── */}
@@ -348,7 +348,7 @@ export default function AthleteDetailPage({
                     </div>
                     <Button 
                         onClick={() => router.back()}
-                        className="bg-[#FF6B00] hover:bg-[#e55f00] text-white font-semibold shadow-sm"
+                        className="bg-arena-button hover:bg-arena-button-hover text-white font-semibold shadow-sm"
                     >
                         <ArrowLeft className="mr-2 h-4 w-4" />
                         Voltar para Lista
@@ -365,7 +365,7 @@ export default function AthleteDetailPage({
                                 className="h-28 w-28 rounded-full object-cover ring-4 ring-gray-50"
                             />
                         ) : (
-                            <div className="h-28 w-28 rounded-full bg-[#002B40] flex items-center justify-center text-white font-black text-3xl ring-4 ring-gray-50">
+                            <div className="h-28 w-28 rounded-full bg-arena-navy-800 flex items-center justify-center text-white font-black text-3xl ring-4 ring-gray-50">
                                 {initials}
                             </div>
                         )}
@@ -413,7 +413,7 @@ export default function AthleteDetailPage({
                         title="Saldo Fidelidade" 
                         value={`$ ${data.saldo.toFixed(2)}`} 
                         icon={<Trophy className="h-5 w-5" />} 
-                        valueColor="text-[#FF6B00]"
+                        valueColor="text-arena-button"
                     />
                     <MetricCard 
                         title="Reservas no Mês" 
@@ -483,7 +483,7 @@ export default function AthleteDetailPage({
                                                     <span className="text-xs text-gray-500 font-medium">{e.nivel || "N/A"}</span>
                                                 </div>
                                                 <div className="w-full bg-gray-100 rounded-full h-2">
-                                                    <div className={`h-2 rounded-full ${isPrimary ? 'bg-[#FF6B00]' : 'bg-[#002B40]'} ${widthClass}`}></div>
+                                                    <div className={`h-2 rounded-full ${isPrimary ? 'bg-arena-button' : 'bg-arena-navy-800'} ${widthClass}`}></div>
                                                 </div>
                                             </div>
                                         )
@@ -491,7 +491,7 @@ export default function AthleteDetailPage({
                                     
                                     <div className="mt-8 pt-5 border-t border-gray-100 flex items-center gap-2 text-sm text-gray-600">
                                         <div className="bg-orange-100 p-1.5 rounded-full">
-                                            <Star className="h-4 w-4 text-[#FF6B00] fill-[#FF6B00]"/>
+                                            <Star className="h-4 w-4 text-arena-button fill-arena-button"/>
                                         </div>
                                         <span>Atleta frequente na arena.</span>
                                     </div>

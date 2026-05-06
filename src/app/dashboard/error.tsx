@@ -19,12 +19,12 @@ export default function DashboardError({
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 p-8">
       <div className="flex flex-col items-center gap-3 text-center">
         <AlertCircle className="h-12 w-12 text-destructive" />
-        <h2 className="text-xl font-semibold text-[#002B40]">Algo deu errado</h2>
+        <h2 className="text-xl font-semibold text-arena-navy-800">Algo deu errado</h2>
         <p className="text-muted-foreground max-w-sm">
           {error.message || "Ocorreu um erro inesperado. Tente novamente."}
         </p>
       </div>
-      <Button onClick={reset} className="bg-[#FF6B00] hover:bg-[#E66000] text-white">
+      <Button onClick={reset} className="bg-arena-button hover:bg-arena-button-hover text-white">
         Tentar novamente
       </Button>
     </div>

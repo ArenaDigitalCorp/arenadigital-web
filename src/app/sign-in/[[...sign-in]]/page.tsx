@@ -10,7 +10,7 @@ const inputLight =
   'w-full rounded-lg border border-zinc-700 bg-white px-3 py-2.5 text-sm text-black placeholder-zinc-500 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400';
 
 const btnPrimary =
-  'flex w-full items-center justify-center gap-2 rounded-lg bg-[#FF6B00] py-2.5 text-sm font-semibold text-white transition hover:bg-[#E66600] active:scale-[.98]';
+  'flex w-full items-center justify-center gap-2 rounded-lg bg-arena-button py-2.5 text-sm font-semibold text-white transition hover:bg-arena-button-hover active:scale-[.98]';
 
 const otpCell =
   'flex size-11 shrink-0 items-center justify-center rounded-lg bg-white text-lg font-semibold tabular-nums text-black shadow-none outline-none sm:size-12';
@@ -18,7 +18,7 @@ const otpCell =
 export default function Page() {
   return (
     <div className="flex flex-col min-h-screen bg-[#F0E6D2] overflow-y-auto">
-      <div className="m-auto w-full max-w-[500px] bg-[#002B40] rounded-3xl p-6 sm:p-10 md:p-20 shadow-2xl flex flex-col items-center">
+      <div className="m-auto w-full max-w-[500px] bg-arena-navy-800 rounded-3xl p-6 sm:p-10 md:p-20 shadow-2xl flex flex-col items-center">
         <Logo className="mb-12 hover:opacity-80 transition-opacity cursor-pointer" />
         <SignIn.Root>
           <Clerk.GlobalError className="mb-6 block w-full max-w-sm rounded-lg bg-red-500/10 px-3 py-2 text-center text-sm text-red-200" />
@@ -139,7 +139,7 @@ export default function Page() {
                       className={cn(
                         otpCell,
                         (status === 'cursor' || status === 'selected') &&
-                          'ring-2 ring-[#FF6B00] ring-offset-2 ring-offset-[#002B40]'
+                          'ring-2 ring-arena-button ring-offset-2 ring-offset-arena-navy-800'
                       )}
                     >
                       {value || '\u00a0'}
@@ -192,7 +192,7 @@ export default function Page() {
                       className={cn(
                         otpCell,
                         (status === 'cursor' || status === 'selected') &&
-                          'ring-2 ring-[#FF6B00] ring-offset-2 ring-offset-[#002B40]'
+                          'ring-2 ring-arena-button ring-offset-2 ring-offset-arena-navy-800'
                       )}
                     >
                       {value || '\u00a0'}

@@ -362,7 +362,7 @@ export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts 
             {/* Modal Container */}
             <div className="relative w-[90vw] h-[90vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                 {/* Header */}
-                <header className="bg-gradient-to-r from-[#002B40] to-[#004060] px-6 py-4 flex items-center justify-between flex-shrink-0 rounded-t-2xl">
+                <header className="bg-gradient-to-r from-arena-navy-800 to-arena-navy-700 px-6 py-4 flex items-center justify-between flex-shrink-0 rounded-t-2xl">
                     <div className="flex items-center gap-4">
                         <div className="bg-white/10 p-2 rounded-lg">
                             <CalendarDays className="w-5 h-5 text-white" />
@@ -478,14 +478,14 @@ export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts 
                 <div className="flex-1 flex overflow-hidden">
 
                     {/* ── Sidebar de espaços ── */}
-                    <div className="w-52 flex-shrink-0 bg-white border-r border-[#002B40]/10 flex flex-col overflow-hidden">
-                        <div className="px-4 py-3 border-b border-[#002B40]/8">
-                            <p className="text-[10px] font-black uppercase tracking-wider text-[#002B40]/40 mb-2">
+                    <div className="w-52 flex-shrink-0 bg-white border-r border-arena-navy-800/10 flex flex-col overflow-hidden">
+                        <div className="px-4 py-3 border-b border-arena-navy-800/8">
+                            <p className="text-[10px] font-black uppercase tracking-wider text-arena-navy-800/40 mb-2">
                                 Espaços
                             </p>
                             <button
                                 onClick={toggleAll}
-                                className="text-[11px] font-semibold text-[#FF6B00] hover:text-[#E66000] transition-colors"
+                                className="text-[11px] font-semibold text-arena-button hover:text-arena-button-hover transition-colors"
                             >
                                 {allVisible ? 'Desmarcar todos' : 'Selecionar todos'}
                             </button>
@@ -501,15 +501,15 @@ export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts 
                                         key={court.id}
                                         onClick={() => toggleCourt(court.id)}
                                         className={cn(
-                                            "w-full flex items-center gap-2.5 px-4 py-2.5 text-left transition-colors hover:bg-[#002B40]/5",
+                                            "w-full flex items-center gap-2.5 px-4 py-2.5 text-left transition-colors hover:bg-arena-navy-800/5",
                                             checked ? "opacity-100" : "opacity-40"
                                         )}
                                     >
                                         <div className={cn(
                                             "w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors",
                                             checked
-                                                ? "bg-[#FF6B00] border-[#FF6B00]"
-                                                : "border-[#002B40]/30 bg-white"
+                                                ? "bg-arena-button border-arena-button"
+                                                : "border-arena-navy-800/30 bg-white"
                                         )}>
                                             {checked && (
                                                 <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 10 8">
@@ -517,19 +517,19 @@ export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts 
                                                 </svg>
                                             )}
                                         </div>
-                                        <span className="text-xs font-semibold text-[#002B40] leading-tight truncate flex-1">
+                                        <span className="text-xs font-semibold text-arena-navy-800 leading-tight truncate flex-1">
                                             {court.name}
                                         </span>
                                         {hasBooking && (
-                                            <span className="w-1.5 h-1.5 rounded-full bg-[#FF6B00] flex-shrink-0" />
+                                            <span className="w-1.5 h-1.5 rounded-full bg-arena-button flex-shrink-0" />
                                         )}
                                     </button>
                                 )
                             })}
                         </div>
                         {visibleCourtIds.size < sortedCourts.length && (
-                            <div className="px-4 py-2.5 border-t border-[#002B40]/8 bg-[#002B40]/[0.02]">
-                                <p className="text-[10px] text-[#002B40]/40 font-medium">
+                            <div className="px-4 py-2.5 border-t border-arena-navy-800/8 bg-arena-navy-800/[0.02]">
+                                <p className="text-[10px] text-arena-navy-800/40 font-medium">
                                     {visibleCourtIds.size} de {sortedCourts.length} visíveis
                                 </p>
                             </div>
@@ -537,28 +537,28 @@ export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts 
                     </div>
 
                     {/* ── Grid de horários ── */}
-                    <div className="flex-1 overflow-auto bg-[#F8FAFC]">
+                    <div className="flex-1 overflow-auto bg-arena-soft">
                     {isLoading ? (
                         <div className="flex items-center justify-center h-full gap-3">
-                            <Loader2 className="w-6 h-6 animate-spin text-[#002B40]/40" />
-                            <span className="text-[#002B40]/60 font-medium">Carregando operação...</span>
+                            <Loader2 className="w-6 h-6 animate-spin text-arena-navy-800/40" />
+                            <span className="text-arena-navy-800/60 font-medium">Carregando operação...</span>
                         </div>
                     ) : visibleCourts.length === 0 ? (
                         <div className="flex items-center justify-center h-full">
-                            <p className="text-[#002B40]/30 font-semibold text-sm">Nenhum espaço selecionado.</p>
+                            <p className="text-arena-navy-800/30 font-semibold text-sm">Nenhum espaço selecionado.</p>
                         </div>
                     ) : (
                         <div className="inline-block min-w-full">
                             <table className="border-collapse">
                                 <thead className="sticky top-0 z-10">
                                     <tr>
-                                        <th className="bg-[#002B40] text-white text-[10px] font-bold uppercase tracking-wider px-3 py-3 min-w-[70px] w-[70px] text-center border-r border-white/10 sticky left-0 z-20">
+                                        <th className="bg-arena-navy-800 text-white text-[10px] font-bold uppercase tracking-wider px-3 py-3 min-w-[70px] w-[70px] text-center border-r border-white/10 sticky left-0 z-20">
                                             Horário
                                         </th>
                                         {visibleCourts.map(court => (
                                             <th
                                                 key={court.id}
-                                                className="bg-[#002B40] text-white text-xs font-bold px-4 py-3 text-center border-r border-white/10 last:border-r-0 min-w-[180px]"
+                                                className="bg-arena-navy-800 text-white text-xs font-bold px-4 py-3 text-center border-r border-white/10 last:border-r-0 min-w-[180px]"
                                             >
                                                 {court.name}
                                             </th>
@@ -592,8 +592,8 @@ export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts 
                                                     className={cn("transition-all", hasAnyBookingStart ? "h-[72px]" : "h-[40px]")}
                                                 >
                                                     <td className={cn(
-                                                        "bg-white border-r border-b border-[#002B40]/5 text-center font-bold text-[11px] sticky left-0 z-10",
-                                                        hasAnyBookingStart ? "text-[#002B40]/80" : "text-[#002B40]/30"
+                                                        "bg-white border-r border-b border-arena-navy-800/5 text-center font-bold text-[11px] sticky left-0 z-10",
+                                                        hasAnyBookingStart ? "text-arena-navy-800/80" : "text-arena-navy-800/30"
                                                     )}>
                                                         {slotLabel}
                                                     </td>
@@ -608,7 +608,7 @@ export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts 
                                                         const available = isSlotAvailable(court, slot)
 
                                                         if (!available && !booking) {
-                                                            return <td key={court.id} className="bg-[#E2E8F0]/50 border-r border-b border-[#002B40]/5 last:border-r-0" />
+                                                            return <td key={court.id} className="bg-[#E2E8F0]/50 border-r border-b border-arena-navy-800/5 last:border-r-0" />
                                                         }
 
                                                         if (booking) {
@@ -641,7 +641,7 @@ export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts 
                                                                 <td
                                                                     key={court.id}
                                                                     rowSpan={rowspan}
-                                                                    className="border-r border-[#002B40]/5 last:border-r-0 p-1.5"
+                                                                    className="border-r border-arena-navy-800/5 last:border-r-0 p-1.5"
                                                                     style={{ height: '1px' }}
                                                                 >
                                                                     <div className={cn(
@@ -672,7 +672,7 @@ export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts 
                                                         }
 
                                                         return (
-                                                            <td key={court.id} className="bg-white border-r border-b border-[#002B40]/5 last:border-r-0 relative group/slot">
+                                                            <td key={court.id} className="bg-white border-r border-b border-arena-navy-800/5 last:border-r-0 relative group/slot">
                                                                 {(() => {
                                                                     const futureB = getFutureBookingForSlot(court.id, slot)
                                                                     if (!futureB) return null
@@ -715,13 +715,13 @@ export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts 
 
                 {/* Mobile legend */}
                 {uniqueSports.length > 0 && (
-                    <div className="md:hidden bg-white border-t border-[#002B40]/10 px-4 py-3 flex flex-wrap items-center gap-3 flex-shrink-0 rounded-b-2xl">
+                    <div className="md:hidden bg-white border-t border-arena-navy-800/10 px-4 py-3 flex flex-wrap items-center gap-3 flex-shrink-0 rounded-b-2xl">
                         {uniqueSports.map(sport => {
                             const styles = getSportStyles(sport);
                             return (
                                 <div key={sport} className="flex items-center gap-1.5">
                                     <div className={cn("w-2.5 h-2.5 rounded-full", styles.dot)} />
-                                    <span className="text-[#002B40]/70 text-xs font-medium">{sport}</span>
+                                    <span className="text-arena-navy-800/70 text-xs font-medium">{sport}</span>
                                 </div>
                             );
                         })}

@@ -46,7 +46,7 @@ export function AthletesList({ arenaId }: AthletesListProps) {
         <Card className="border-none shadow-sm">
             <CardContent className="p-0">
                 <div className="p-6 space-y-6">
-                    <h2 className="text-xl font-semibold text-[#002B40]">Atletas vinculados</h2>
+                    <h2 className="text-xl font-semibold text-arena-navy-800">Atletas vinculados</h2>
 
                     <div className="relative max-w-sm">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />

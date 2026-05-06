@@ -163,7 +163,7 @@ function buildCategories(
             label: 'Cadastrados sem reserva',
             description: 'Atletas cadastrados na arena mas que nunca fizeram uma reserva',
             count: semReserva.length,
-            color: '#FF6B00',
+            color: 'var(--arena-button)',
             athletes: semReserva,
         },
         {

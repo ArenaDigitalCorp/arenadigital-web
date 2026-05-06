@@ -109,17 +109,17 @@ export function MensalistasView({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-        <DialogContent className="sm:max-w-[680px] p-0 overflow-hidden border-none shadow-2xl rounded-3xl bg-[#F8FAFC]">
-          <DialogHeader className="p-8 pb-4 bg-white border-b border-[#002B40]/5 flex flex-row items-center justify-between">
+        <DialogContent className="sm:max-w-[680px] p-0 overflow-hidden border-none shadow-2xl rounded-3xl bg-arena-soft">
+          <DialogHeader className="p-8 pb-4 bg-white border-b border-arena-navy-800/5 flex flex-row items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-2xl bg-amber-100 flex items-center justify-center">
                 <Users className="h-5 w-5 text-amber-600" />
               </div>
               <div>
-                <DialogTitle className="text-xl font-black text-[#002B40] tracking-tight">
+                <DialogTitle className="text-xl font-black text-arena-navy-800 tracking-tight">
                   Mensalistas
                 </DialogTitle>
-                <p className="text-xs text-[#002B40]/50 font-medium">
+                <p className="text-xs text-arena-navy-800/50 font-medium">
                   {planos.length} plano{planos.length !== 1 ? "s" : ""} ativo{planos.length !== 1 ? "s" : ""}
                 </p>
               </div>
@@ -144,8 +144,8 @@ export function MensalistasView({
                   <div className="h-16 w-16 rounded-3xl bg-amber-100 flex items-center justify-center mx-auto">
                     <Users className="h-8 w-8 text-amber-500" />
                   </div>
-                  <p className="font-bold text-[#002B40]">Nenhum mensalista ativo</p>
-                  <p className="text-sm text-[#002B40]/50">
+                  <p className="font-bold text-arena-navy-800">Nenhum mensalista ativo</p>
+                  <p className="text-sm text-arena-navy-800/50">
                     Clique em "Novo mensalista" para criar o primeiro plano
                   </p>
                 </div>
@@ -153,12 +153,12 @@ export function MensalistasView({
                 planos.map((plano) => (
                   <div
                     key={plano.id}
-                    className="bg-white rounded-2xl border border-[#002B40]/5 p-5 shadow-sm space-y-4"
+                    className="bg-white rounded-2xl border border-arena-navy-800/5 p-5 shadow-sm space-y-4"
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 space-y-1">
                         <div className="flex items-center gap-2">
-                          <p className="font-black text-[#002B40]">
+                          <p className="font-black text-arena-navy-800">
                             {plano.atleta?.nome_perfil || plano.athlete_name}
                           </p>
                           <Badge className="bg-amber-100 text-amber-700 border-none text-[10px] font-black uppercase px-2">
@@ -166,45 +166,45 @@ export function MensalistasView({
                           </Badge>
                         </div>
                         {plano.atleta?.telefone && (
-                          <p className="text-xs text-[#002B40]/50">{plano.atleta.telefone}</p>
+                          <p className="text-xs text-arena-navy-800/50">{plano.atleta.telefone}</p>
                         )}
                       </div>
                       <div className="text-right">
-                        <p className="text-lg font-black text-[#FF6B00]">
+                        <p className="text-lg font-black text-arena-button">
                           {new Intl.NumberFormat("pt-BR", {
                             style: "currency",
                             currency: "BRL",
                           }).format(plano.valor_mensal)}
-                          <span className="text-xs font-medium text-[#002B40]/40">/mês</span>
+                          <span className="text-xs font-medium text-arena-navy-800/40">/mês</span>
                         </p>
-                        <p className="text-xs text-[#002B40]/40">
+                        <p className="text-xs text-arena-navy-800/40">
                           {plano.sessoes_por_mes}x por mês
                         </p>
                       </div>
                     </div>
 
                     <div className="grid grid-cols-3 gap-3">
-                      <div className="bg-[#F8FAFC] rounded-xl p-3 space-y-0.5">
-                        <p className="text-[10px] font-black uppercase text-[#002B40]/40 tracking-wider flex items-center gap-1">
+                      <div className="bg-arena-soft rounded-xl p-3 space-y-0.5">
+                        <p className="text-[10px] font-black uppercase text-arena-navy-800/40 tracking-wider flex items-center gap-1">
                           <Calendar className="h-3 w-3" /> Dia fixo
                         </p>
-                        <p className="text-sm font-bold text-[#002B40]">
+                        <p className="text-sm font-bold text-arena-navy-800">
                           {DIAS_SEMANA[plano.dia_semana]}
                         </p>
                       </div>
-                      <div className="bg-[#F8FAFC] rounded-xl p-3 space-y-0.5">
-                        <p className="text-[10px] font-black uppercase text-[#002B40]/40 tracking-wider flex items-center gap-1">
+                      <div className="bg-arena-soft rounded-xl p-3 space-y-0.5">
+                        <p className="text-[10px] font-black uppercase text-arena-navy-800/40 tracking-wider flex items-center gap-1">
                           <Clock className="h-3 w-3" /> Horário
                         </p>
-                        <p className="text-sm font-bold text-[#002B40]">
+                        <p className="text-sm font-bold text-arena-navy-800">
                           {plano.horario_inicio} – {plano.horario_fim}
                         </p>
                       </div>
-                      <div className="bg-[#F8FAFC] rounded-xl p-3 space-y-0.5">
-                        <p className="text-[10px] font-black uppercase text-[#002B40]/40 tracking-wider">
+                      <div className="bg-arena-soft rounded-xl p-3 space-y-0.5">
+                        <p className="text-[10px] font-black uppercase text-arena-navy-800/40 tracking-wider">
                           Esporte
                         </p>
-                        <p className="text-sm font-bold text-[#002B40]">
+                        <p className="text-sm font-bold text-arena-navy-800">
                           {plano.sports?.name || "—"}
                         </p>
                       </div>
@@ -216,7 +216,7 @@ export function MensalistasView({
                           <p className="text-[10px] font-black uppercase text-amber-600 tracking-wider">
                             Ag. confirmação de pagamento
                           </p>
-                          <p className="text-sm font-bold text-[#002B40] capitalize">
+                          <p className="text-sm font-bold text-arena-navy-800 capitalize">
                             {formatNextMonth(plano.proximo_mes_reservado)}
                           </p>
                         </div>
@@ -271,11 +271,11 @@ export function MensalistasView({
             </div>
           </ScrollArea>
 
-          <div className="p-8 pt-4 bg-white border-t border-[#002B40]/5">
+          <div className="p-8 pt-4 bg-white border-t border-arena-navy-800/5">
             <Button
               variant="outline"
               onClick={onClose}
-              className="w-full h-12 border-[#002B40]/10 text-[#002B40] font-bold rounded-xl"
+              className="w-full h-12 border-arena-navy-800/10 text-arena-navy-800 font-bold rounded-xl"
             >
               Fechar
             </Button>
