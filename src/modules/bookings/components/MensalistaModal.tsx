@@ -7,7 +7,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
@@ -188,8 +187,8 @@ export function MensalistaModal({
       <DialogContent className="sm:max-w-[480px] p-0 overflow-hidden border-none shadow-2xl rounded-3xl">
         <DialogHeader className="p-8 pb-4">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-2xl bg-amber-100 flex items-center justify-center">
-              <Users className="h-5 w-5 text-amber-600" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-arena-button/10">
+              <Users className="h-5 w-5 text-arena-button" />
             </div>
             <DialogTitle className="text-2xl font-black text-arena-navy-800 tracking-tight">
               Novo Mensalista
@@ -226,7 +225,7 @@ export function MensalistaModal({
                             setSearch(athlete.nome_perfil)
                             setAthletes([])
                           }}
-                          className="w-full text-left px-4 py-3 hover:bg-amber-50 transition-colors flex items-center justify-between rounded-xl mb-1 last:mb-0"
+                          className="mb-1 flex w-full items-center justify-between rounded-xl px-4 py-3 text-left transition-colors last:mb-0 hover:bg-[#FFF5EF]"
                         >
                           <div>
                             <p className="font-bold text-arena-navy-800 text-sm">{athlete.nome_perfil}</p>
@@ -240,10 +239,10 @@ export function MensalistaModal({
                   )}
                 </div>
               ) : (
-                <div className="flex items-center justify-between p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                <div className="flex items-center justify-between rounded-xl border border-[#FFE4D3] bg-[#FFF5EF] p-4">
                   <div className="flex items-center gap-3">
-                    <div className="h-9 w-9 rounded-full bg-amber-100 flex items-center justify-center">
-                      <Check className="h-4 w-4 text-amber-600" />
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-arena-button/10">
+                      <Check className="h-4 w-4 text-arena-button" />
                     </div>
                     <div>
                       <p className="font-bold text-arena-navy-800 text-sm">{selectedAthlete.nome_perfil}</p>
@@ -377,8 +376,8 @@ export function MensalistaModal({
 
             {/* Resumo */}
             {valorPorSessao && (
-              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-1">
-                <p className="text-xs font-black uppercase text-amber-600 tracking-wider">Resumo do plano</p>
+              <div className="space-y-1 rounded-2xl border border-arena-button/10 bg-[#FFF5EF] p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-arena-button/80">Resumo do plano</p>
                 <p className="text-sm font-bold text-arena-navy-800">
                   {sessoesPorMes}x por mês &middot; R$ {valorPorSessao}/sessão &middot; R${" "}
                   {Number(valorMensal).toFixed(2)}/mês
@@ -391,23 +390,25 @@ export function MensalistaModal({
           </div>
         </ScrollArea>
 
-        <DialogFooter className="p-8 bg-gray-50 flex gap-4 sm:justify-between items-center rounded-b-3xl">
+        <div className="flex w-full shrink-0 flex-row items-stretch gap-3 border-t border-slate-100 px-6 py-4">
           <Button
+            type="button"
             variant="outline"
             onClick={onClose}
-            className="flex-1 h-14 border-arena-navy-800/20 text-arena-navy-800 hover:bg-white font-bold rounded-xl"
+            className="min-w-0 flex-1 basis-0 border-arena-navy-800/20 font-semibold text-arena-navy-800 hover:bg-slate-50"
           >
             Fechar
           </Button>
           <Button
+            type="button"
             onClick={handleSave}
             disabled={isSaving}
-            className="flex-1 h-14 bg-amber-500 hover:bg-amber-600 text-white font-black uppercase tracking-widest text-xs rounded-xl shadow-xl shadow-amber-500/20 gap-2"
+            className="min-w-0 flex-1 basis-0 bg-arena-button font-semibold text-white shadow-sm hover:bg-arena-button-hover disabled:opacity-50"
           >
-            {isSaving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
+            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             Criar Plano
           </Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   )

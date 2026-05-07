@@ -7,9 +7,7 @@ import {
     DialogContent,
     DialogHeader,
     DialogTitle,
-    DialogFooter
 } from "@/components/ui/dialog"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -99,10 +97,7 @@ function AthleteSearchField({
                                     key={athlete.id}
                                     type="button"
                                     onClick={() => onSelectAthlete(athlete)}
-                                    className={cn(
-                                        "w-full text-left px-4 py-3 transition-colors flex items-center justify-between rounded-xl mb-1 last:mb-0",
-                                        mensalista ? "hover:bg-amber-50" : "hover:bg-[#FFF5EF]"
-                                    )}
+                                    className="w-full text-left px-4 py-3 transition-colors flex items-center justify-between rounded-xl mb-1 last:mb-0 hover:bg-[#FFF5EF]"
                                 >
                                     <div>
                                         <p className="font-bold text-arena-navy-800 text-sm">{athlete.nome_perfil}</p>
@@ -129,16 +124,10 @@ function AthleteSearchField({
                     )}
                 </div>
             ) : (
-                <div className={cn(
-                    "flex items-center justify-between p-4 rounded-xl border",
-                    mensalista ? "bg-amber-50 border-amber-200" : "bg-[#FFF5EF] border-[#FFE4D3]"
-                )}>
+                <div className="flex items-center justify-between p-4 rounded-xl border bg-[#FFF5EF] border-[#FFE4D3]">
                     <div className="flex items-center gap-3">
-                        <div className={cn(
-                            "h-9 w-9 rounded-full flex items-center justify-center",
-                            mensalista ? "bg-amber-100" : "bg-arena-button/10"
-                        )}>
-                            <Check className={cn("h-4 w-4", mensalista ? "text-amber-600" : "text-arena-button")} />
+                        <div className="h-9 w-9 rounded-full flex items-center justify-center bg-arena-button/10">
+                            <Check className="h-4 w-4 text-arena-button" />
                         </div>
                         <div>
                             <p className="font-bold text-arena-navy-800 text-sm">{selectedAthlete.nome_perfil}</p>
@@ -561,14 +550,19 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
     return (
         <>
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="sm:max-w-[480px] p-0 overflow-hidden border-none shadow-2xl rounded-3xl">
-                <DialogHeader className="p-8 pb-4">
+            <DialogContent
+                className={cn(
+                    "!flex max-h-[90vh] min-h-0 w-full max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden rounded-3xl border-none p-0 shadow-2xl",
+                    "sm:min-w-[588px] sm:w-[588px] sm:max-w-[588px]"
+                )}
+            >
+                <DialogHeader className="shrink-0 space-y-0 p-8 pb-4 text-left">
                     <DialogTitle className="text-2xl font-black text-arena-navy-800 tracking-tight">
                         {existingBooking ? "Editar reserva" : bookingType === "avulso" ? "Cadastrar nova reserva" : "Novo Mensalista"}
                     </DialogTitle>
                 </DialogHeader>
 
-                <ScrollArea className="max-h-[70vh] px-8">
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-8">
                     <div className="space-y-6 pb-8">
 
                         {/* Tipo de reserva */}
@@ -593,7 +587,7 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                                 className={cn(
                                     "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all",
                                     bookingType === "mensal"
-                                        ? "bg-white text-amber-600 shadow-sm"
+                                        ? "bg-white text-arena-button shadow-sm"
                                         : "text-arena-navy-800/50 hover:text-arena-navy-800"
                                 )}
                             >
@@ -714,7 +708,7 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                                 <div className="space-y-2">
                                     <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">Dia da semana</Label>
                                     <Select value={diaSemana} onValueChange={setDiaSemana}>
-                                        <SelectTrigger className="h-14 border-arena-navy-800/10 focus:ring-amber-500 rounded-xl font-bold text-arena-navy-800">
+                                        <SelectTrigger className="h-14 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-xl font-bold text-arena-navy-800">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent className="rounded-2xl border-arena-navy-800/10 p-2">
@@ -731,11 +725,11 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
                                         <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">Horário início</Label>
-                                        <Input type="time" value={horarioInicio} onChange={(e) => setHorarioInicio(e.target.value)} className="h-14 border-arena-navy-800/10 focus:ring-amber-500 rounded-xl font-bold text-arena-navy-800" />
+                                        <Input type="time" value={horarioInicio} onChange={(e) => setHorarioInicio(e.target.value)} className="h-14 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-xl font-bold text-arena-navy-800" />
                                     </div>
                                     <div className="space-y-2">
                                         <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">Horário fim</Label>
-                                        <Input type="time" value={horarioFim} onChange={(e) => setHorarioFim(e.target.value)} className="h-14 border-arena-navy-800/10 focus:ring-amber-500 rounded-xl font-bold text-arena-navy-800" />
+                                        <Input type="time" value={horarioFim} onChange={(e) => setHorarioFim(e.target.value)} className="h-14 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-xl font-bold text-arena-navy-800" />
                                     </div>
                                 </div>
 
@@ -743,7 +737,7 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                                 <div className="space-y-2">
                                     <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">Esporte</Label>
                                     <Select value={selectedSport} onValueChange={setSelectedSport}>
-                                        <SelectTrigger className="h-14 border-arena-navy-800/10 focus:ring-amber-500 rounded-xl font-bold text-arena-navy-800">
+                                        <SelectTrigger className="h-14 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-xl font-bold text-arena-navy-800">
                                             <SelectValue placeholder="Selecione o esporte" />
                                         </SelectTrigger>
                                         <SelectContent className="rounded-2xl border-arena-navy-800/10 p-2">
@@ -761,21 +755,21 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
                                         <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">Sessões/mês</Label>
-                                        <Input type="number" min={1} max={8} value={sessoesPorMes} onChange={(e) => setSessoesPorMes(e.target.value)} className="h-14 border-arena-navy-800/10 focus:ring-amber-500 rounded-xl font-bold text-arena-navy-800" />
+                                        <Input type="number" min={1} max={8} value={sessoesPorMes} onChange={(e) => setSessoesPorMes(e.target.value)} className="h-14 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-xl font-bold text-arena-navy-800" />
                                     </div>
                                     <div className="space-y-2">
                                         <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">Valor mensal (R$)</Label>
                                         <div className="relative">
                                             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-arena-navy-800/40 font-bold text-sm">R$</span>
-                                            <Input type="number" min={0} value={valorMensal} onChange={(e) => setValorMensal(e.target.value)} className="pl-10 h-14 border-arena-navy-800/10 focus:ring-amber-500 rounded-xl font-bold text-arena-navy-800" />
+                                            <Input type="number" min={0} value={valorMensal} onChange={(e) => setValorMensal(e.target.value)} className="pl-10 h-14 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-xl font-bold text-arena-navy-800" />
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* Resumo */}
                                 {valorPorSessao && (
-                                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-1">
-                                        <p className="text-xs font-black uppercase text-amber-600 tracking-wider">Resumo do plano</p>
+                                    <div className="rounded-2xl border border-arena-button/10 bg-[#FFF5EF] p-4 space-y-1">
+                                        <p className="text-xs font-semibold uppercase tracking-wide text-arena-button/80">Resumo do plano</p>
                                         <p className="text-sm font-bold text-arena-navy-800">
                                             {sessoesPorMes}x por mês &middot; R$ {valorPorSessao}/sessão &middot; R$ {Number(valorMensal).toFixed(2)}/mês
                                         </p>
@@ -822,32 +816,29 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                         )}
 
                     </div>
-                </ScrollArea>
+                </div>
 
-                <DialogFooter className="p-8 bg-gray-50 flex gap-4 sm:justify-between items-center rounded-b-3xl">
+                <div className="flex w-full shrink-0 flex-row items-stretch gap-3 border-t border-slate-100 px-6 py-4">
                     <Button
+                        type="button"
                         variant="outline"
                         onClick={onClose}
-                        className="flex-1 h-14 border-arena-navy-800/20 text-arena-navy-800 hover:bg-white font-bold rounded-xl active:scale-95 transition-all"
+                        className="min-w-0 flex-1 basis-0 border-arena-navy-800/20 font-semibold text-arena-navy-800 hover:bg-slate-50"
                     >
                         Fechar
                     </Button>
                     <Button
+                        type="button"
                         onClick={handlePreSave}
                         disabled={isSaving || isCheckingConflicts}
-                        className={cn(
-                            "flex-1 h-14 text-white font-black uppercase tracking-widest text-xs rounded-xl shadow-xl transition-all active:scale-95 gap-2",
-                            bookingType === "avulso"
-                                ? "bg-arena-button hover:bg-arena-button-hover shadow-arena-button/20"
-                                : "bg-amber-500 hover:bg-amber-600 shadow-amber-500/20"
-                        )}
+                        className="min-w-0 flex-1 basis-0 bg-arena-button font-semibold text-white shadow-sm hover:bg-arena-button-hover disabled:opacity-50"
                     >
                         {(isSaving || isCheckingConflicts) ? (
-                            <Loader2 className="h-5 w-5 animate-spin" />
+                            <Loader2 className="h-4 w-4 animate-spin" />
                         ) : bookingType === "avulso" ? (
-                            <Check className="h-5 w-5" />
+                            <Check className="h-4 w-4" />
                         ) : (
-                            <Save className="h-5 w-5" />
+                            <Save className="h-4 w-4" />
                         )}
                         {isCheckingConflicts ? 'Verificando...' : existingBooking
                             ? 'Salvar alterações'
@@ -855,7 +846,7 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                               ? "Salvar"
                               : "Criar Plano"}
                     </Button>
-                </DialogFooter>
+                </div>
             </DialogContent>
         </Dialog>
 
