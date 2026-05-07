@@ -459,10 +459,10 @@ export function ArenaDetailPageClient({
           <DialogContent
             showCloseButton
             style={{
-              width: 'min(760px, calc(100vw - 32px))',
-              maxWidth: '760px',
+              width: 'min(560px, calc(100vw - 32px))',
+              maxWidth: '560px',
             }}
-            className="max-h-[92vh] overflow-y-auto rounded-lg border border-slate-200 bg-white p-6 shadow-lg sm:p-7"
+            className="max-h-[92vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl sm:p-7 [&_[data-slot=dialog-close]]:text-[#0D3B45] [&_[data-slot=dialog-close]]:opacity-100"
           >
             <DialogHeader className="text-left">
               <DialogTitle className="font-heading text-xl font-bold leading-tight tracking-normal text-[#0D3B45] sm:text-2xl">
@@ -471,89 +471,87 @@ export function ArenaDetailPageClient({
             </DialogHeader>
             {selectedSpace && (
               <div className="pt-4">
-                <div className="rounded-lg border border-slate-100 bg-white p-5 shadow-sm">
-                  <div className="grid gap-x-12 gap-y-5 md:grid-cols-2">
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium text-[#5F636E]">
-                        Status
-                      </label>
-                      <p className="text-base font-medium text-arena-navy-800">
-                        {formatStatus(selectedSpace.status)}
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium text-[#5F636E]">
-                        Tipo do espaço
-                      </label>
-                      <p className="text-base font-medium text-arena-navy-800">
-                        {selectedSpace.type}
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium text-[#5F636E]">
-                        Esporte
-                      </label>
-                      <p className="text-base font-medium text-arena-navy-800">
-                        {selectedSpace.sports
-                          ?.map((s: any) => s.name)
-                          .join(', ') || '—'}
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium text-[#5F636E]">
-                        Coberta/Descoberta
-                      </label>
-                      <p className="text-base font-medium text-arena-navy-800">
-                        {selectedSpace.is_covered ? 'Coberta' : 'Descoberta'}
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium text-[#5F636E]">
-                        Valor da reserva
-                      </label>
-                      <p className="text-base font-medium text-arena-navy-800">
-                        {formatCurrency(selectedSpace.price)}
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium text-[#5F636E]">
-                        Tipo de reserva
-                      </label>
-                      <p className="text-base font-medium text-arena-navy-800">
-                        {selectedSpace.booking_type === 'hourly'
-                          ? 'Por hora'
-                          : 'Único'}
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium text-[#5F636E]">
-                        Dias disponíveis
-                      </label>
-                      <p className="text-base font-medium leading-snug text-arena-navy-800">
-                        {formatAvailableDays(selectedSpace.available_days)}
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium text-[#5F636E]">
-                        Observações
-                      </label>
-                      <p className="text-base font-medium leading-snug text-arena-navy-800">
-                        {selectedSpace.observations || '—'}
-                      </p>
-                    </div>
+                <div className="grid gap-x-10 gap-y-5 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Status
+                    </label>
+                    <p className="text-base font-semibold text-arena-navy-800">
+                      {formatStatus(selectedSpace.status)}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Tipo do espaço
+                    </label>
+                    <p className="text-base font-semibold text-arena-navy-800">
+                      {selectedSpace.type}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Esporte
+                    </label>
+                    <p className="text-base font-semibold text-arena-navy-800">
+                      {selectedSpace.sports
+                        ?.map((s: any) => s.name)
+                        .join(', ') || '—'}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Coberta/Descoberta
+                    </label>
+                    <p className="text-base font-semibold text-arena-navy-800">
+                      {selectedSpace.is_covered ? 'Coberta' : 'Descoberta'}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Valor da reserva
+                    </label>
+                    <p className="text-base font-semibold text-arena-navy-800">
+                      {formatCurrency(selectedSpace.price)}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Tipo de reserva
+                    </label>
+                    <p className="text-base font-semibold text-arena-navy-800">
+                      {selectedSpace.booking_type === 'hourly'
+                        ? 'Por hora'
+                        : 'Único'}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Dias disponíveis
+                    </label>
+                    <p className="text-base font-semibold leading-snug text-arena-navy-800">
+                      {formatAvailableDays(selectedSpace.available_days)}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Observações
+                    </label>
+                    <p className="text-base font-semibold leading-snug text-arena-navy-800">
+                      {selectedSpace.observations || '—'}
+                    </p>
                   </div>
                 </div>
 
-                <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                <div className="mt-6 flex flex-col gap-3 sm:flex-row">
                   <Button
                     variant="outline"
-                    className="flex-1 border-[#0D3B45] text-[#0D3B45]"
+                    className="h-11 flex-1 rounded-lg border-[#0D3B45] text-[#0D3B45]"
                     onClick={() => setSelectedSpace(null)}
                   >
                     Fechar
                   </Button>
                   <Button
-                    className="flex-1 bg-arena-button text-white hover:bg-arena-button-hover"
+                    className="h-11 flex-1 rounded-lg bg-arena-button text-white hover:bg-arena-button-hover"
                     asChild
                   >
                     <Link
@@ -579,7 +577,6 @@ export function ArenaDetailPageClient({
           loadingLabel="Excluindo..."
           loading={isDeletingSpace}
           onConfirm={handleDeleteCourt}
-          confirmVariant="danger"
         />
 
         <DayOperationModal

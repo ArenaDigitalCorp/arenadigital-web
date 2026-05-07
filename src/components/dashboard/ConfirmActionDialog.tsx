@@ -20,7 +20,6 @@ interface ConfirmActionDialogProps {
   loadingLabel?: string;
   loading?: boolean;
   onConfirm: () => void;
-  confirmVariant?: 'default' | 'danger';
 }
 
 export function ConfirmActionDialog({
@@ -33,35 +32,32 @@ export function ConfirmActionDialog({
   loadingLabel,
   loading = false,
   onConfirm,
-  confirmVariant = 'default',
 }: ConfirmActionDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent
+        className="gap-0 rounded-2xl border border-slate-200 bg-white p-6 shadow-xl sm:max-w-md sm:p-7 [&_[data-slot=dialog-close]]:text-[#0D3B45] [&_[data-slot=dialog-close]]:opacity-100"
+      >
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-[#0D3B45]">
             {title}
           </DialogTitle>
-          <DialogDescription className="mt-2 text-sm text-foreground">
+          <DialogDescription className="mt-3 text-sm leading-relaxed text-slate-700">
             {description}
           </DialogDescription>
         </DialogHeader>
 
-        <DialogFooter className="mt-2 flex-row gap-3 sm:justify-start">
+        <DialogFooter className="mt-6 flex w-full flex-row gap-3">
           <Button
             variant="outline"
-            className="flex-1 border-[#0D3B45] text-[#0D3B45]"
+            className="h-11 flex-1 rounded-lg border-[#0D3B45] text-[#0D3B45]"
             onClick={() => onOpenChange(false)}
             disabled={loading}
           >
             {cancelLabel}
           </Button>
           <Button
-            className={
-              confirmVariant === 'danger'
-                ? 'flex-1 bg-arena-button text-white hover:bg-arena-button-hover'
-                : 'flex-1 bg-arena-button text-white hover:bg-arena-button-hover'
-            }
+            className="h-11 flex-1 rounded-lg bg-arena-button text-white hover:bg-arena-button-hover"
             onClick={onConfirm}
             disabled={loading}
           >

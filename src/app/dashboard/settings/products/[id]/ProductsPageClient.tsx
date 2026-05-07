@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Plus, Search, MoreHorizontal, Edit, Trash, PackagePlus, History, Filter } from "lucide-react"
+import { Plus, Search, MoreHorizontal, Edit, Trash, PackagePlus, History, Filter, Eye } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import {
     Select,
@@ -32,6 +32,13 @@ import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { cn } from "@/lib/utils"
 import { arenaDataTable } from "@/lib/arena-data-table"
+import { ConfirmActionDialog } from "@/components/dashboard/ConfirmActionDialog"
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog"
 
 const searchInputClass =
     "h-10 w-full rounded-md border-slate-300 pl-3 pr-10 text-sm text-arena-navy-800 shadow-none placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-[#20B2AA] sm:max-w-[280px] sm:w-[280px]"
@@ -55,6 +62,13 @@ function getListStatusLabel(p: Product): "Em estoque" | "Em falta" {
 
 const primaryCtaClass =
     "h-10 shrink-0 rounded-md bg-arena-button px-4 text-sm font-bold text-white shadow-none hover:bg-arena-button-hover"
+
+const detailLabelClass =
+    "text-[11px] font-semibold uppercase tracking-wide text-slate-500"
+
+function formatBRL(n: number) {
+    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n)
+}
 
 interface Props {
     arenaId: string
@@ -139,6 +153,10 @@ export function ProductsPageClient({ arenaId, arenaName, initialProducts }: Prop
     const [stockHistoryProduct, setStockHistoryProduct] = useState<Product | null>(null)
     const [isStockHistoryOpen, setIsStockHistoryOpen] = useState(false)
 
+    const [productPendingDelete, setProductPendingDelete] = useState<Product | null>(null)
+    const [isDeletingCatalog, setIsDeletingCatalog] = useState(false)
+    const [detailProduct, setDetailProduct] = useState<Product | null>(null)
+
     const refreshProducts = () => {
         getProductsByArenaAction(arenaId).then((res) => setProducts(res.data ?? []))
     }
@@ -169,15 +187,19 @@ export function ProductsPageClient({ arenaId, arenaName, initialProducts }: Prop
         if (!open) setEditingProduct(null)
     }
 
-    const handleDelete = async (p: Product) => {
-        const label = isCatalogService(p) ? "este serviço" : "este produto"
-        if (!confirm(`Tem certeza que deseja excluir ${label}?`)) return
+    const confirmDeleteCatalog = async () => {
+        if (!productPendingDelete) return
+        const p = productPendingDelete
+        setIsDeletingCatalog(true)
         try {
             await deleteProductAction(arenaId, p.id)
             setProducts((prev) => prev.filter((x) => x.id !== p.id))
             toast.success(isCatalogService(p) ? "Serviço excluído com sucesso" : "Produto excluído com sucesso")
+            setProductPendingDelete(null)
         } catch {
             toast.error("Erro ao excluir")
+        } finally {
+            setIsDeletingCatalog(false)
         }
     }
 
@@ -346,13 +368,17 @@ export function ProductsPageClient({ arenaId, arenaName, initialProducts }: Prop
                                                                         Ver movimentações
                                                                     </DropdownMenuItem>
                                                                     <DropdownMenuSeparator />
+                                                                    <DropdownMenuItem onClick={() => setDetailProduct(product)}>
+                                                                        <Eye className="mr-2 h-4 w-4 text-slate-600" />
+                                                                        Ver detalhes
+                                                                    </DropdownMenuItem>
                                                                     <DropdownMenuItem onClick={() => openEdit(product)}>
                                                                         <Edit className="mr-2 h-4 w-4" />
                                                                         Editar
                                                                     </DropdownMenuItem>
                                                                     <DropdownMenuSeparator />
                                                                     <DropdownMenuItem
-                                                                        onClick={() => handleDelete(product)}
+                                                                        onClick={() => setProductPendingDelete(product)}
                                                                         className="text-red-600 focus:text-red-600"
                                                                     >
                                                                         <Trash className="mr-2 h-4 w-4" />
@@ -439,13 +465,18 @@ export function ProductsPageClient({ arenaId, arenaName, initialProducts }: Prop
                                                             </DropdownMenuTrigger>
                                                             <DropdownMenuContent align="end">
                                                                 <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                                                                <DropdownMenuItem onClick={() => setDetailProduct(product)}>
+                                                                    <Eye className="mr-2 h-4 w-4 text-slate-600" />
+                                                                    Ver detalhes
+                                                                </DropdownMenuItem>
+                                                                <DropdownMenuSeparator />
                                                                 <DropdownMenuItem onClick={() => openEdit(product)}>
                                                                     <Edit className="mr-2 h-4 w-4" />
                                                                     Editar
                                                                 </DropdownMenuItem>
                                                                 <DropdownMenuSeparator />
                                                                 <DropdownMenuItem
-                                                                    onClick={() => handleDelete(product)}
+                                                                    onClick={() => setProductPendingDelete(product)}
                                                                     className="text-red-600 focus:text-red-600"
                                                                 >
                                                                     <Trash className="mr-2 h-4 w-4" />
@@ -464,6 +495,137 @@ export function ProductsPageClient({ arenaId, arenaName, initialProducts }: Prop
                     </>
                 )}
             </Card>
+
+            <Dialog
+                open={!!detailProduct}
+                onOpenChange={(open) => {
+                    if (!open) setDetailProduct(null)
+                }}
+            >
+                <DialogContent
+                    showCloseButton
+                    className="max-h-[92vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl sm:max-w-lg sm:p-7 [&_[data-slot=dialog-close]]:text-[#0D3B45] [&_[data-slot=dialog-close]]:opacity-100"
+                >
+                    {detailProduct && (
+                        <>
+                            <DialogHeader className="text-left">
+                                <DialogTitle className="text-xl font-bold text-[#0D3B45]">
+                                    {isCatalogService(detailProduct)
+                                        ? "Detalhes do serviço"
+                                        : "Detalhes do produto"}
+                                </DialogTitle>
+                            </DialogHeader>
+                            <div className="mt-4 space-y-4">
+                                <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
+                                    <div className="space-y-1">
+                                        <p className={detailLabelClass}>Nome</p>
+                                        <p className="text-base font-semibold text-arena-navy-800">
+                                            {detailProduct.name}
+                                        </p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p className={detailLabelClass}>Status</p>
+                                        {getListStatusLabel(detailProduct) === "Em estoque" ? (
+                                            <Badge className="bg-emerald-500 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-white hover:bg-emerald-600">
+                                                Ativo
+                                            </Badge>
+                                        ) : (
+                                            <Badge className="bg-red-600 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-white hover:bg-red-700">
+                                                Em falta
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    {!isCatalogService(detailProduct) ? (
+                                        <>
+                                            <div className="space-y-1">
+                                                <p className={detailLabelClass}>Tipo de item</p>
+                                                <p className="text-base font-semibold text-arena-navy-800">
+                                                    {detailProduct.item_type}
+                                                </p>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <p className={detailLabelClass}>Estação</p>
+                                                <p className="text-base font-semibold text-arena-navy-800">
+                                                    {detailProduct.station_type?.name ?? "—"}
+                                                </p>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div className="space-y-1 sm:col-span-2">
+                                            <p className={detailLabelClass}>Estação</p>
+                                            <p className="text-base font-semibold text-arena-navy-800">
+                                                {detailProduct.station_type?.name ?? "—"}
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                                <hr className="border-slate-200" />
+                                <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
+                                    <div className="space-y-1">
+                                        <p className={detailLabelClass}>Valor</p>
+                                        <p className="text-2xl font-bold text-[#0D3B45]">
+                                            {formatBRL(detailProduct.price)}
+                                        </p>
+                                    </div>
+                                    {!isCatalogService(detailProduct) && (
+                                        <div className="space-y-1">
+                                            <p className={detailLabelClass}>Estoque</p>
+                                            <p
+                                                className={cn(
+                                                    "text-2xl font-bold",
+                                                    detailProduct.stock_quantity > 0
+                                                        ? "text-emerald-600"
+                                                        : "text-red-500"
+                                                )}
+                                            >
+                                                {detailProduct.stock_quantity}
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="h-11 flex-1 rounded-lg border-[#0D3B45] text-[#0D3B45]"
+                                    onClick={() => setDetailProduct(null)}
+                                >
+                                    Fechar
+                                </Button>
+                                <Button
+                                    type="button"
+                                    className="h-11 flex-1 rounded-lg bg-arena-button text-white hover:bg-arena-button-hover"
+                                    onClick={() => {
+                                        const p = detailProduct
+                                        setDetailProduct(null)
+                                        openEdit(p)
+                                    }}
+                                >
+                                    Editar
+                                </Button>
+                            </div>
+                        </>
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            <ConfirmActionDialog
+                open={!!productPendingDelete}
+                onOpenChange={(open) => {
+                    if (!open && !isDeletingCatalog) setProductPendingDelete(null)
+                }}
+                title={
+                    productPendingDelete && isCatalogService(productPendingDelete)
+                        ? "Excluir serviço"
+                        : "Excluir produto"
+                }
+                description="Tem certeza que deseja excluir este item? A exclusão é permanente e todos os seus dados serão removidos. Essa ação não pode ser desfeita."
+                confirmLabel="Excluir"
+                loadingLabel="Excluindo..."
+                loading={isDeletingCatalog}
+                onConfirm={confirmDeleteCatalog}
+            />
 
             <ProductFormModal
                 arenaId={arenaId}
