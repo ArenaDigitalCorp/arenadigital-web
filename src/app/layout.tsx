@@ -15,6 +15,7 @@ const exo = Exo({
 const manrope = Manrope({
   variable: "--font-manrope",
   subsets: ["latin"],
+  display: "swap",
 });
 
 const geistMono = Geist_Mono({
@@ -36,7 +37,7 @@ export default function RootLayout({
     <ClerkProvider localization={ptBR}>
       <html lang="pt-BR">
         <body
-          className={`${exo.variable} ${manrope.variable} ${geistMono.variable} antialiased`}
+          className={`${exo.variable} ${manrope.variable} ${manrope.className} ${geistMono.variable} antialiased`}
         >
           <TooltipProvider>
             {children}

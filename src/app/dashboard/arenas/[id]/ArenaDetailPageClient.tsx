@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
   PlusCircle,
@@ -35,8 +35,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import Image from 'next/image';
 import { cn } from '@/lib/utils';
+import { GradientMediaCard } from '@/components/dashboard/GradientMediaCard';
 import { DayOperationModal } from '@/modules/bookings/components/DayOperationModal';
 import { AvailableTimesModal } from '@/modules/bookings/components/AvailableTimesModal';
 import { deleteCourtAction } from '@/modules/courts/actions/courtActions';
@@ -189,106 +189,89 @@ export function ArenaDetailPageClient({
                 </p>
               </Card>
             ) : (
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+              <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:overflow-visible sm:px-0">
+                <div className="flex flex-wrap gap-6 pb-1">
                 {courts.map((court) => {
                   const statusInfo = getCourtStatus(court);
                   return (
-                    <Card
+                    <GradientMediaCard
                       key={court.id}
-                      className="overflow-hidden border-none shadow-lg rounded-xl group relative"
+                      inactive={court.status === 'inativo'}
+                      imageSrc={court.image_url || '/placeholder-court.jpg'}
+                      imageAlt={court.name}
+                      ariaLabel={`Abrir detalhes do espaço ${court.name}`}
+                      onClick={() => setSelectedSpace(court)}
+                      actions={
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              className="pointer-events-auto p-0 text-white hover:bg-white/15"
+                              aria-label="Menu do espaço"
+                            >
+                              <MoreVertical className="size-6" strokeWidth={2} />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem asChild>
+                              <Link
+                                href={`/dashboard/arenas/${arenaId}/spaces/${court.id}/edit`}
+                                className="flex w-full cursor-pointer items-center"
+                              >
+                                <Edit className="mr-2 h-4 w-4" /> Editar
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem asChild>
+                              <Link
+                                href={`/dashboard/arenas/${arenaId}/courts/${court.id}/calendar`}
+                                className="flex w-full cursor-pointer items-center"
+                              >
+                                <Eye className="mr-2 h-4 w-4" /> Ver calendário
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-destructive"
+                              onClick={() => handleDeleteCourt(court.id)}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      }
+                      badge={
+                        court.status === 'inativo' ? (
+                          <Badge variant="warning">Inativo</Badge>
+                        ) : undefined
+                      }
                     >
-                      <div className="aspect-[16/9] relative bg-muted">
-                        <Image
-                          src={court.image_url || '/placeholder-court.jpg'}
-                          alt={court.name}
-                          fill
-                          className="object-cover group-hover:scale-105 transition-transform duration-500"
-                        />
-                      </div>
-                      <CardContent className="p-0">
-                        <div className="bg-gradient-to-br from-[#FFD043] to-[#FFB01F] p-4 relative">
-                          <div className="flex justify-between items-start mb-0">
-                            <h4 className="font-extrabold text-arena-navy-800 text-sm uppercase tracking-tight">
-                              {court.name}
-                            </h4>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6 text-arena-navy-800/40 hover:bg-black/5"
-                                >
-                                  <MoreVertical className="h-3 w-3" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem asChild>
-                                  <Link
-                                    href={`/dashboard/arenas/${arenaId}/spaces/${court.id}/edit`}
-                                    className="w-full cursor-pointer flex items-center"
-                                  >
-                                    <Edit className="mr-2 h-4 w-4" /> Editar
-                                  </Link>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  className="text-destructive"
-                                  onClick={() => handleDeleteCourt(court.id)}
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" /> Excluir
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                      <h4 className="text-[14px] font-semibold leading-tight text-white">
+                        {court.name}
+                      </h4>
+                      {statusInfo.status === 'open' ? (
+                        <>
+                          <div className="mt-1 flex flex-wrap items-baseline gap-x-1 gap-y-0 leading-none">
+                            <span className="text-[24px] font-extrabold tracking-tight text-white">
+                              {statusInfo.booked}
+                            </span>
+                            <span className="text-[12px] font-semibold text-white/90">
+                              / {statusInfo.total} reservas
+                            </span>
                           </div>
-
-                          <div className="flex items-end justify-between">
-                            <div>
-                              {statusInfo.status === 'open' ? (
-                                <>
-                                  <div className="text-arena-navy-800 font-black text-3xl flex items-baseline gap-1 -mt-1">
-                                    {statusInfo.booked}{' '}
-                                    <span className="text-sm font-bold opacity-60">
-                                      / {statusInfo.total} reservas
-                                    </span>
-                                  </div>
-                                  <span className="text-arena-navy-800 text-[10px] font-black opacity-40 uppercase tracking-tighter">
-                                    hoje
-                                  </span>
-                                </>
-                              ) : (
-                                <div className="text-arena-navy-800 font-black text-xl flex items-baseline gap-1">
-                                  {statusInfo.message}
-                                </div>
-                              )}
-                            </div>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Link
-                                  href={`/dashboard/arenas/${arenaId}/courts/${court.id}/calendar`}
-                                  className="text-arena-navy-800/40 hover:text-arena-navy-800 transition-colors mb-1"
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </Link>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Ver Calendário</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </div>
-                        </div>
-                      </CardContent>
-                      {court.status === 'inativo' && (
-                        <div className="absolute top-2 right-2">
-                          <Badge
-                            variant="secondary"
-                            className="bg-black/50 text-white backdrop-blur-sm"
-                          >
-                            Inativo
-                          </Badge>
-                        </div>
+                          <p className="mt-0.5 text-[12px] font-semibold text-white/95">
+                            hoje
+                          </p>
+                        </>
+                      ) : (
+                        <p className="mt-1 line-clamp-2 text-[24px] font-extrabold leading-tight text-white">
+                          {statusInfo.message}
+                        </p>
                       )}
-                    </Card>
+                    </GradientMediaCard>
                   );
                 })}
+                </div>
               </div>
             )}
           </div>
@@ -443,7 +426,9 @@ export function ArenaDetailPageClient({
 
         <Dialog
           open={!!selectedSpace}
-          onOpenChange={() => setSelectedSpace(null)}
+          onOpenChange={(open) => {
+            if (!open) setSelectedSpace(null);
+          }}
         >
           <DialogContent className="max-w-2xl">
             <DialogHeader>

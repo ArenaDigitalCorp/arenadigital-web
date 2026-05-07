@@ -53,6 +53,9 @@
   --color-arena-button: var(--arena-button);
   --color-arena-button-hover: var(--arena-button-hover);
   --color-arena-app-surface: var(--arena-app-surface);
+  --color-arena-charcoal: var(--arena-charcoal);
+  --color-arena-inactive-pill-bg: var(--arena-inactive-pill-bg);
+  --color-arena-inactive-pill-fg: var(--arena-inactive-pill-fg);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -112,6 +115,11 @@
   /* Fundo do conteúdo logado */
   --arena-app-surface: #f8f9fa;
   --arena-gradient: linear-gradient(90deg, #f97415 0%, #f9a91f 100%);
+  /* Overlay escuro (ex.: espaço inativo) */
+  --arena-charcoal: #383838;
+  /* Tag pill “inativo” sobre cards (Figma) */
+  --arena-inactive-pill-bg: #f6e7c1;
+  --arena-inactive-pill-fg: #003049;
 }
 
 .dark {
