@@ -37,6 +37,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { arenaDataTable } from '@/lib/arena-data-table';
 import { GradientMediaCard } from '@/components/dashboard/GradientMediaCard';
 import { DashboardTabs } from '@/components/dashboard/DashboardTabs';
 import { ConfirmActionDialog } from '@/components/dashboard/ConfirmActionDialog';
@@ -337,24 +338,14 @@ export function ArenaDetailPageClient({
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+                <table className={arenaDataTable.table}>
                   <thead>
-                    <tr className="border-b border-slate-100">
-                      <th className="py-4 pr-6 text-sm font-medium text-[#007793]">
-                        Nome
-                      </th>
-                      <th className="py-4 pr-6 text-sm font-medium text-[#007793]">
-                        Tipo
-                      </th>
-                      <th className="py-4 pr-6 text-sm font-medium text-[#007793]">
-                        Status
-                      </th>
-                      <th className="py-4 pr-6 text-sm font-medium text-[#007793]">
-                        Coberta/Descoberta
-                      </th>
-                      <th className="py-4 text-right text-sm font-medium text-[#007793]">
-                        Ações
-                      </th>
+                    <tr className={arenaDataTable.theadRow}>
+                      <th className={arenaDataTable.th}>Nome</th>
+                      <th className={arenaDataTable.th}>Tipo</th>
+                      <th className={arenaDataTable.th}>Status</th>
+                      <th className={arenaDataTable.th}>Coberta/Descoberta</th>
+                      <th className={arenaDataTable.thRight}>Ações</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -371,12 +362,10 @@ export function ArenaDetailPageClient({
                       .map((court) => (
                         <tr
                           key={court.id}
-                          className="border-b border-slate-100 transition-colors hover:bg-slate-50/60"
+                          className={arenaDataTable.tbodyRow}
                         >
-                          <td className="py-5 pr-6 text-sm font-bold text-arena-navy-800">
-                            {court.name}
-                          </td>
-                          <td className="py-5 pr-6 text-sm font-medium text-arena-navy-800">
+                          <td className={arenaDataTable.tdBold}>{court.name}</td>
+                          <td className={arenaDataTable.td}>
                             {court.sports?.map((s: any) => s.name).join(', ') ||
                               court.type}
                           </td>
@@ -394,10 +383,10 @@ export function ArenaDetailPageClient({
                               {court.status}
                             </Badge>
                           </td>
-                          <td className="py-5 pr-6 text-sm font-medium text-arena-navy-800">
+                          <td className={arenaDataTable.td}>
                             {court.is_covered ? 'Coberto' : 'Descoberto'}
                           </td>
-                          <td className="py-5 text-right">
+                          <td className={arenaDataTable.tdRight}>
                             <div className="flex items-center justify-end gap-2">
                               <Button
                                 variant="ghost"

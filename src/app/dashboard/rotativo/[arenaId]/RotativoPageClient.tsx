@@ -173,10 +173,10 @@ export function RotativoPageClient({ arenaId, initialSports, initialRotativos, i
                 </div>
                 <Button
                     onClick={() => setIsCreateModalOpen(true)}
-                    className="bg-arena-button hover:bg-arena-button-hover text-white gap-2 px-6 py-6 h-auto text-base rounded-lg font-semibold shadow-md active:scale-95 transition-all"
+                    className="bg-arena-button hover:bg-arena-button-hover text-white font-semibold shadow-sm"
                 >
+                    <Plus className="mr-2 h-4 w-4" />
                     Abrir Rotativo
-                    <Plus className="h-5 w-5" />
                 </Button>
             </div>
 
@@ -300,9 +300,9 @@ export function RotativoPageClient({ arenaId, initialSports, initialRotativos, i
                                                 <Button
                                                     variant="secondary"
                                                     onClick={() => viewParticipants(r)}
-                                                    className="w-full mt-4 bg-arena-navy-800 text-white hover:bg-[#003650] gap-2 font-bold py-6 rounded-xl transition-all"
+                                                    className="w-full mt-4 bg-arena-navy-800 text-white hover:bg-[#003650] gap-2 font-semibold rounded-lg shadow-sm"
                                                 >
-                                                    <ClipboardList className="h-5 w-5" />
+                                                    <ClipboardList className="h-4 w-4" />
                                                     Ver Inscritos
                                                 </Button>
                                             </div>
@@ -435,7 +435,7 @@ export function RotativoPageClient({ arenaId, initialSports, initialRotativos, i
                                     )}
                                 </div>
 
-                                <Button type="submit" className="w-full h-14 bg-arena-button hover:bg-arena-button-hover text-white font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-orange-500/20 active:scale-95 transition-all">
+                                <Button type="submit" className="w-full bg-arena-button hover:bg-arena-button-hover text-white font-semibold shadow-sm">
                                     Abrir Sessão
                                 </Button>
                             </form>

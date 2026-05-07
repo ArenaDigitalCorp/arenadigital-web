@@ -24,6 +24,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { cn } from '@/lib/utils';
+import { arenaDataTable } from '@/lib/arena-data-table';
 import { PaymentMethodCollector } from '@/modules/payments/components/PaymentMethodCollector';
 import type { CardCollectionContext } from '@/modules/payments/gateway/payment-gateway.interface';
 import type { PlanKey } from '@/modules/payments/plans';
@@ -639,30 +641,30 @@ export function SubscriptionPageClient({
                     Nenhum pagamento registrado.
                   </p>
                 ) : (
-                  <Table>
+                  <Table className={arenaDataTable.table}>
                     <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-[#1B7B8A]">Valor</TableHead>
-                        <TableHead className="text-[#1B7B8A]">Status</TableHead>
-                        <TableHead className="text-[#1B7B8A]">
+                      <TableRow className={arenaDataTable.theadRow}>
+                        <TableHead className={arenaDataTable.th}>Valor</TableHead>
+                        <TableHead className={arenaDataTable.th}>Status</TableHead>
+                        <TableHead className={arenaDataTable.th}>
                           N do pedido
                         </TableHead>
-                        <TableHead className="text-[#1B7B8A]">Data</TableHead>
+                        <TableHead className={arenaDataTable.th}>Data</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {initialPaymentHistory.map((payment) => (
-                        <TableRow key={payment.id}>
-                          <TableCell>
+                        <TableRow key={payment.id} className={arenaDataTable.tbodyRow}>
+                          <TableCell className={arenaDataTable.tdBold}>
                             {formatPrice(payment.amountCents)}
                           </TableCell>
-                          <TableCell>
+                          <TableCell className={arenaDataTable.td}>
                             <PaymentStatusBadge status={payment.status} />
                           </TableCell>
-                          <TableCell className="text-muted-foreground">
+                          <TableCell className={cn(arenaDataTable.td, 'text-arena-navy-800/60')}>
                             {payment.invoiceNumber ?? '—'}
                           </TableCell>
-                          <TableCell className="text-muted-foreground">
+                          <TableCell className={cn(arenaDataTable.td, 'text-arena-navy-800/60')}>
                             {formatDate(payment.createdAt)}
                           </TableCell>
                         </TableRow>

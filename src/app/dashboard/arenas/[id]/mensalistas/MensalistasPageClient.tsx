@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
+import { arenaDataTable } from "@/lib/arena-data-table"
 import { toast } from "sonner"
 import {
     confirmarMesMensalistaAction,
@@ -181,9 +182,9 @@ export function MensalistasPageClient({ arenaId, initialPlanos }: Props) {
 
                 {/* Table */}
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                    <table className={arenaDataTable.table}>
                         <thead>
-                            <tr className="border-b border-arena-navy-800/5">
+                            <tr className={arenaDataTable.theadRow}>
                                 {[
                                     "Responsável",
                                     "Espaço",
@@ -193,8 +194,11 @@ export function MensalistasPageClient({ arenaId, initialPlanos }: Props) {
                                     "Próx. vencimento",
                                     "Status",
                                     "Ações",
-                                ].map(h => (
-                                    <th key={h} className="py-4 pr-4 font-bold text-[10px] uppercase tracking-wider text-arena-navy-800/40 whitespace-nowrap">
+                                ].map((h, i, arr) => (
+                                    <th
+                                        key={h}
+                                        className={i === arr.length - 1 ? arenaDataTable.thRight : arenaDataTable.th}
+                                    >
                                         {h}
                                     </th>
                                 ))}
@@ -203,7 +207,7 @@ export function MensalistasPageClient({ arenaId, initialPlanos }: Props) {
                         <tbody>
                             {filtered.length === 0 && (
                                 <tr>
-                                    <td colSpan={8} className="py-16 text-center text-arena-navy-800/30 font-medium">
+                                    <td colSpan={8} className={arenaDataTable.emptyCell}>
                                         Nenhum mensalista encontrado.
                                     </td>
                                 </tr>
@@ -219,9 +223,9 @@ export function MensalistasPageClient({ arenaId, initialPlanos }: Props) {
                                 const isCancelling = loadingId === `cancel-${plano.id}`
 
                                 return (
-                                    <tr key={plano.id} className="border-b border-arena-navy-800/5 hover:bg-arena-soft transition-colors">
+                                    <tr key={plano.id} className={arenaDataTable.tbodyRow}>
                                         {/* Responsável */}
-                                        <td className="py-4 pr-4">
+                                        <td className={arenaDataTable.tdBold}>
                                             <div className="flex items-center gap-3">
                                                 <div className="h-9 w-9 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
                                                     <Users className="h-4 w-4 text-amber-600" />
@@ -236,7 +240,7 @@ export function MensalistasPageClient({ arenaId, initialPlanos }: Props) {
                                         </td>
 
                                         {/* Espaço */}
-                                        <td className="py-4 pr-4">
+                                        <td className={arenaDataTable.td}>
                                             <div className="flex items-center gap-1.5 text-sm font-medium text-arena-navy-800">
                                                 <MapPin className="h-3.5 w-3.5 text-arena-navy-800/30 flex-shrink-0" />
                                                 {courtName}
@@ -247,7 +251,7 @@ export function MensalistasPageClient({ arenaId, initialPlanos }: Props) {
                                         </td>
 
                                         {/* Dia / Horário */}
-                                        <td className="py-4 pr-4">
+                                        <td className={cn(arenaDataTable.td, "align-top")}>
                                             <div className="flex items-center gap-1.5 text-sm font-bold text-arena-navy-800">
                                                 <CalendarDays className="h-3.5 w-3.5 text-arena-navy-800/30 flex-shrink-0" />
                                                 {dia}
@@ -262,12 +266,12 @@ export function MensalistasPageClient({ arenaId, initialPlanos }: Props) {
                                         </td>
 
                                         {/* Início */}
-                                        <td className="py-4 pr-4 text-sm text-arena-navy-800/70 font-medium whitespace-nowrap">
+                                        <td className={cn(arenaDataTable.td, "whitespace-nowrap")}>
                                             {formatDataInicio(plano.data_inicio)}
                                         </td>
 
                                         {/* Valor mensal */}
-                                        <td className="py-4 pr-4">
+                                        <td className={cn(arenaDataTable.td, "align-top")}>
                                             <p className="text-base font-black text-arena-button">
                                                 {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(plano.valor_mensal)}
                                             </p>
@@ -278,7 +282,7 @@ export function MensalistasPageClient({ arenaId, initialPlanos }: Props) {
                                         </td>
 
                                         {/* Próx. vencimento */}
-                                        <td className="py-4 pr-4 whitespace-nowrap">
+                                        <td className={cn(arenaDataTable.td, "whitespace-nowrap")}>
                                             {hasPendente ? (
                                                 <Badge className="bg-amber-100 text-amber-700 border-none font-bold capitalize">
                                                     {formatMesAno(plano.proximo_mes_reservado)}
@@ -291,7 +295,7 @@ export function MensalistasPageClient({ arenaId, initialPlanos }: Props) {
                                         </td>
 
                                         {/* Status */}
-                                        <td className="py-4 pr-4">
+                                        <td className={arenaDataTable.td}>
                                             <Badge className={cn(
                                                 "font-bold text-[10px] uppercase border-none",
                                                 isAtivo
@@ -303,8 +307,8 @@ export function MensalistasPageClient({ arenaId, initialPlanos }: Props) {
                                         </td>
 
                                         {/* Ações */}
-                                        <td className="py-4">
-                                            <div className="flex items-center gap-2">
+                                        <td className={arenaDataTable.tdRight}>
+                                            <div className="flex items-center justify-end gap-2">
                                                 {isAtivo && hasPendente && (
                                                     <Button
                                                         size="sm"

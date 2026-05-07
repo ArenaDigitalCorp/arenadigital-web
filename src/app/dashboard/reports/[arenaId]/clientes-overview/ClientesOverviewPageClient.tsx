@@ -8,6 +8,7 @@ import { MessageCircle, Eye, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
+import { arenaDataTable } from "@/lib/arena-data-table"
 import type { BarCategory, AthleteOverviewItem } from "@/modules/reports/actions/clientesOverviewActions"
 
 interface Props {
@@ -128,9 +129,10 @@ function SortableHeader({
     return (
         <th
             className={cn(
-                "px-4 py-3 text-left text-xs font-bold uppercase tracking-wider cursor-pointer select-none",
-                "text-arena-navy-800/50 hover:text-arena-button transition-colors",
-                active && "text-arena-button",
+                arenaDataTable.th,
+                "cursor-pointer select-none transition-colors",
+                !active && "text-[#007793]/70 hover:text-[#007793]",
+                active && "!text-arena-button",
                 className
             )}
             onClick={() => onSort(field)}
@@ -290,9 +292,9 @@ export function ClientesOverviewPageClient({ arenaId, initialCategories }: Props
                         ) : (
                             <>
                                 <div className="overflow-x-auto">
-                                    <table className="w-full">
-                                        <thead className="bg-arena-soft">
-                                            <tr>
+                                    <table className={arenaDataTable.table}>
+                                        <thead>
+                                            <tr className={arenaDataTable.theadRow}>
                                                 <SortableHeader label="Nome" field="nome" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                                                 <SortableHeader label="CPF" field="cpf" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                                                 <SortableHeader label="Nascimento" field="data_nascimento" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
@@ -301,12 +303,12 @@ export function ClientesOverviewPageClient({ arenaId, initialCategories }: Props
                                                 )}
                                                 <SortableHeader label="Esportes" field="esportes" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                                                 <SortableHeader label="Reservas" field="total_reservas" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="text-right" />
-                                                <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-arena-navy-800/50">
+                                                <th className={arenaDataTable.thRight}>
                                                     Ações
                                                 </th>
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-arena-navy-800/5">
+                                        <tbody>
                                             {paginated.map((athlete) => (
                                                 <AthleteRow
                                                     key={athlete.id}
@@ -398,12 +400,10 @@ function AthleteRow({
 
     return (
         <tr className={cn(
-            "transition-colors",
-            isToday
-                ? "bg-amber-50 hover:bg-amber-100/60"
-                : "hover:bg-arena-soft"
+            arenaDataTable.tbodyRow,
+            isToday && "bg-amber-50 hover:bg-amber-100/60",
         )}>
-            <td className="px-4 py-3">
+            <td className={arenaDataTable.tdBold}>
                 <div className="flex items-center gap-2">
                     {isToday && (
                         <span className="text-base" title="Aniversário hoje!">🎂</span>
@@ -421,18 +421,18 @@ function AthleteRow({
                     )}
                 </div>
             </td>
-            <td className="px-4 py-3">
+            <td className={cn(arenaDataTable.td, "font-mono")}>
                 <span className={cn("text-sm font-mono", isToday ? "text-arena-navy-800 font-bold" : "text-arena-navy-800/60")}>
                     {formatCpf(athlete.cpf)}
                 </span>
             </td>
-            <td className="px-4 py-3">
+            <td className={arenaDataTable.td}>
                 <span className={cn("text-sm", isToday ? "text-arena-navy-800 font-bold" : "text-arena-navy-800/60")}>
                     {formatDate(athlete.data_nascimento)}
                 </span>
             </td>
             {showBirthdayColumn && (
-                <td className="px-4 py-3">
+                <td className={arenaDataTable.td}>
                     {athlete.dias_ate_aniversario === 0 ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-black bg-amber-400 text-white">
                             🎂 Hoje
@@ -444,7 +444,7 @@ function AthleteRow({
                     )}
                 </td>
             )}
-            <td className="px-4 py-3">
+            <td className={arenaDataTable.td}>
                 <div className="flex flex-wrap gap-1">
                     {athlete.esportes.length > 0
                         ? athlete.esportes.map(e => (
@@ -459,12 +459,12 @@ function AthleteRow({
                     }
                 </div>
             </td>
-            <td className="px-4 py-3 text-right">
+            <td className={arenaDataTable.tdRight}>
                 <span className={cn("text-sm", isToday ? "font-black text-arena-navy-800" : "font-bold text-arena-navy-800")}>
                     {athlete.total_reservas}
                 </span>
             </td>
-            <td className="px-4 py-3">
+            <td className={arenaDataTable.tdRight}>
                 <div className="flex items-center justify-end gap-2">
                     <Button
                         variant="ghost"

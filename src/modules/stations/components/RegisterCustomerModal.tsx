@@ -143,14 +143,14 @@ export function RegisterCustomerModal({ isOpen, onClose, arenaId, onSuccess }: R
                                 type="button"
                                 variant="outline"
                                 onClick={onClose}
-                                className="w-full font-bold h-11 rounded-xl text-arena-navy-800/60"
+                                className="w-full font-semibold rounded-lg text-arena-navy-800/60"
                             >
                                 Voltar
                             </Button>
                             <Button
                                 type="submit"
                                 disabled={isSubmitting}
-                                className="w-full bg-arena-button hover:bg-arena-button-hover text-white font-bold h-11 rounded-xl"
+                                className="w-full bg-arena-button hover:bg-arena-button-hover text-white font-semibold shadow-sm rounded-lg"
                             >
                                 {isSubmitting ? "Salvando..." : "Salvar"}
                             </Button>

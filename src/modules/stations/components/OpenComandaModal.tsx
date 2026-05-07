@@ -440,9 +440,9 @@ export function OpenComandaModal({
                             <Button
                                 type="submit"
                                 disabled={isSubmitting}
-                                className="flex-1 bg-arena-button hover:bg-arena-button-hover text-white font-bold h-12 rounded-xl shadow-lg shadow-arena-button/20"
+                                className="flex-1 bg-arena-button hover:bg-arena-button-hover text-white font-semibold shadow-sm rounded-lg"
                             >
-                                {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Abrir"}
+                                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Abrir"}
                             </Button>
                         </DialogFooter>
                     </form>

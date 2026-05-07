@@ -219,15 +219,15 @@ export default function SimulateRegistrationPage({ params }: { params: { arenaId
                 <Button
                     onClick={handleRegister}
                     disabled={!selectedRotativo || !selectedAthlete || isSubmitting}
-                    className="h-16 px-12 bg-arena-button hover:bg-arena-button-hover text-white font-black uppercase tracking-widest rounded-3xl shadow-2xl shadow-orange-500/20 active:scale-95 transition-all text-lg disabled:opacity-50 disabled:grayscale"
+                    className="bg-arena-button hover:bg-arena-button-hover text-white font-semibold shadow-sm disabled:opacity-50"
                 >
                     {isSubmitting ? (
-                        <div className="flex items-center gap-3">
-                            <Loader2 className="h-6 w-6 animate-spin" />
-                            PROCESSANDO...
+                        <div className="flex items-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Processando…
                         </div>
                     ) : (
-                        "Confirmar Inscrição"
+                        "Confirmar inscrição"
                     )}
                 </Button>
             </div>

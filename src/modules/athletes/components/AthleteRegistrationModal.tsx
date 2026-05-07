@@ -493,11 +493,11 @@ export function AthleteRegistrationModal({
                     <div className="px-8 py-5 border-t border-arena-navy-800/10 flex gap-3 justify-end shrink-0 bg-white">
                         <Button type="button" variant="outline"
                             onClick={() => onOpenChange(false)}
-                            className="h-12 px-8 border-arena-navy-800/20 text-arena-navy-800 font-semibold rounded-lg hover:bg-gray-50">
+                            className="border-arena-navy-800/20 text-arena-navy-800 font-semibold rounded-lg hover:bg-gray-50">
                             Fechar
                         </Button>
                         <Button type="submit" form="athlete-form" disabled={isSubmitting}
-                            className="h-12 px-8 bg-arena-button hover:bg-arena-button-hover text-white font-semibold rounded-lg shadow-md active:scale-95 transition-all disabled:opacity-50">
+                            className="bg-arena-button hover:bg-arena-button-hover text-white font-semibold rounded-lg shadow-sm disabled:opacity-50">
                             {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Salvando...</> : "Salvar"}
                         </Button>
                     </div>

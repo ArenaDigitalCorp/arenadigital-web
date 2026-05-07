@@ -65,9 +65,10 @@ export function StationsPageClient({ arenaId, initialStations }: Props) {
               Gerencie suas estações, caixas, comandas e itens.
             </p>
           </div>
-          <Link href={`/dashboard/arenas/${arenaId}/stations/new`}>
-            <Button className="h-11 rounded-xl bg-arena-button px-6 font-bold text-white shadow-lg shadow-orange-500/20 hover:bg-arena-button-hover">
-              Cadastrar Estação +
+            <Link href={`/dashboard/arenas/${arenaId}/stations/new`}>
+            <Button className="bg-arena-button hover:bg-arena-button-hover text-white font-semibold shadow-sm">
+              <Plus className="mr-2 h-4 w-4" />
+              Cadastrar Estação
             </Button>
           </Link>
         </div>

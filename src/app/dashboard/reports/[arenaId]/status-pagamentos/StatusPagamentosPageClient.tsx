@@ -22,6 +22,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
+import { arenaDataTable } from '@/lib/arena-data-table'
 import { getPaymentStatusReportAction } from '@/modules/reports/actions/reportActions'
 import type {
   PaymentStatusRow,
@@ -338,28 +340,28 @@ export function StatusPagamentosPageClient({
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className={arenaDataTable.table}>
               <thead>
-                <tr className="border-b bg-gray-50">
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Data</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Atleta</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Serviço</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Espaço</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Esporte</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Valor</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
+                <tr className={arenaDataTable.theadRow}>
+                  <th className={arenaDataTable.th}>Data</th>
+                  <th className={arenaDataTable.th}>Atleta</th>
+                  <th className={arenaDataTable.th}>Serviço</th>
+                  <th className={arenaDataTable.th}>Espaço</th>
+                  <th className={arenaDataTable.th}>Esporte</th>
+                  <th className={arenaDataTable.th}>Valor</th>
+                  <th className={arenaDataTable.th}>Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody>
                 {isPending ? (
                   <tr>
-                    <td colSpan={7} className="px-5 py-10 text-center text-gray-400 text-sm">
+                    <td colSpan={7} className={arenaDataTable.emptyCell}>
                       Carregando...
                     </td>
                   </tr>
                 ) : paginatedRows.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-5 py-10 text-center text-gray-400 text-sm">
+                    <td colSpan={7} className={arenaDataTable.emptyCell}>
                       Nenhuma reserva encontrada para os filtros selecionados.
                     </td>
                   </tr>
@@ -367,26 +369,26 @@ export function StatusPagamentosPageClient({
                   paginatedRows.map((row) => {
                     const sc = statusConfig[row.status]
                     return (
-                      <tr key={row.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-5 py-3 text-gray-700 whitespace-nowrap">
+                      <tr key={row.id} className={arenaDataTable.tbodyRow}>
+                        <td className={cn(arenaDataTable.td, "whitespace-nowrap text-arena-navy-800/60")}>
                           {formatDateTime(row.data)}
                         </td>
-                        <td className="px-5 py-3 font-medium text-gray-900">
-                          {row.atleta ?? <span className="text-gray-400">—</span>}
+                        <td className={arenaDataTable.tdBold}>
+                          {row.atleta ?? <span className="text-arena-navy-800/30">—</span>}
                         </td>
-                        <td className="px-5 py-3 text-gray-600">
+                        <td className={cn(arenaDataTable.td, "text-arena-navy-800/60")}>
                           {row.servico}
                         </td>
-                        <td className="px-5 py-3 text-gray-600">
-                          {row.espaco ?? <span className="text-gray-400">—</span>}
+                        <td className={cn(arenaDataTable.td, "text-arena-navy-800/60")}>
+                          {row.espaco ?? <span className="text-arena-navy-800/30">—</span>}
                         </td>
-                        <td className="px-5 py-3 text-gray-600">
-                          {row.esporte ?? <span className="text-gray-400">—</span>}
+                        <td className={cn(arenaDataTable.td, "text-arena-navy-800/60")}>
+                          {row.esporte ?? <span className="text-arena-navy-800/30">—</span>}
                         </td>
-                        <td className="px-5 py-3 text-gray-900 font-medium whitespace-nowrap">
-                          {row.valor != null ? formatCurrency(row.valor) : <span className="text-gray-400">—</span>}
+                        <td className={cn(arenaDataTable.td, "whitespace-nowrap")}>
+                          {row.valor != null ? formatCurrency(row.valor) : <span className="text-arena-navy-800/30">—</span>}
                         </td>
-                        <td className="px-5 py-3">
+                        <td className={arenaDataTable.td}>
                           <Badge variant="outline" className={sc.className}>
                             {sc.label}
                           </Badge>

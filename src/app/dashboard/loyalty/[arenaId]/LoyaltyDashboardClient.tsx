@@ -99,10 +99,10 @@ export function LoyaltyDashboardClient({ arenaId, initialCurrencyName, initialCr
                 <Link href={`/dashboard/loyalty/${arenaId}/statement`}>
                     <Button
                         variant="outline"
-                        className="border-arena-button text-arena-button hover:bg-arena-button hover:text-white gap-2 px-6 py-6 h-auto text-base rounded-lg font-semibold transition-all"
+                        className="border-arena-button text-arena-button hover:bg-arena-button hover:text-white font-semibold shadow-sm"
                     >
+                        <History className="mr-2 h-4 w-4" />
                         Ver extrato
-                        <History className="h-5 w-5" />
                     </Button>
                 </Link>
             </div>
@@ -259,12 +259,12 @@ export function LoyaltyDashboardClient({ arenaId, initialCurrencyName, initialCr
                         <Button
                             onClick={handleSave}
                             disabled={isSaving}
-                            className="w-full bg-arena-button hover:bg-arena-button-hover text-white h-14 text-lg font-bold rounded-xl shadow-lg shadow-arena-button/20 transition-all active:scale-95 gap-2"
+                            className="w-full bg-arena-button hover:bg-arena-button-hover text-white font-semibold shadow-sm disabled:opacity-50"
                         >
                             {isSaving ? (
-                                <Loader2 className="h-5 w-5 animate-spin" />
+                                <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
-                                <Save className="h-5 w-5" />
+                                <Save className="mr-2 h-4 w-4" />
                             )}
                             Salvar
                         </Button>

@@ -149,13 +149,13 @@ export default function OrderDetailsPage() {
                                 </Button>
                                 <Button
                                     onClick={() => setIsLaunchModalOpen(true)}
-                                    className="bg-arena-button hover:bg-arena-button-hover text-white font-bold rounded-xl"
+                                    className="bg-arena-button hover:bg-arena-button-hover text-white font-semibold shadow-sm"
                                 >
                                     Lançar item
                                 </Button>
                                 <Button
                                     onClick={() => setIsPaymentModalOpen(true)}
-                                    className="bg-arena-navy-800 hover:bg-arena-navy-900 text-white font-bold rounded-xl"
+                                    className="bg-arena-navy-800 hover:bg-arena-navy-900 text-white font-semibold shadow-sm"
                                 >
                                     Registrar pagamento
                                 </Button>

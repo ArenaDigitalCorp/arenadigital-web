@@ -232,16 +232,16 @@ export function StockEntryModal({
                                 type="button"
                                 variant="outline"
                                 onClick={() => onOpenChange(false)}
-                                className="flex-1 font-bold h-12 rounded-xl text-arena-navy-800/60 border-arena-navy-800/10"
+                                className="flex-1 font-semibold rounded-lg text-arena-navy-800/60 border-arena-navy-800/10"
                             >
                                 Cancelar
                             </Button>
                             <Button
                                 type="submit"
                                 disabled={isSubmitting}
-                                className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold h-12 rounded-xl shadow-lg shadow-emerald-500/20"
+                                className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold shadow-sm rounded-lg"
                             >
-                                {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Registrar Entrada"}
+                                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Registrar Entrada"}
                             </Button>
                         </DialogFooter>
                     </form>

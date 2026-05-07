@@ -20,6 +20,8 @@ import { StockEntryModal } from "@/modules/products/components/StockEntryModal"
 import { StockHistoryModal } from "@/modules/products/components/StockHistoryModal"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { cn } from "@/lib/utils"
+import { arenaDataTable } from "@/lib/arena-data-table"
 
 interface Props {
     arenaId: string
@@ -89,23 +91,23 @@ export function ProductsPageClient({ arenaId, arenaName, initialProducts }: Prop
             </div>
 
             <div className="border rounded-md">
-                <Table>
+                <Table className={arenaDataTable.table}>
                     <TableHeader>
-                        <TableRow>
-                            <TableHead>Nome</TableHead>
-                            <TableHead>Tipo de Item</TableHead>
-                            <TableHead>Tipo de Estação</TableHead>
-                            <TableHead>Valor</TableHead>
-                            <TableHead>Estoque</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Criado em</TableHead>
-                            <TableHead className="w-[50px]"></TableHead>
+                        <TableRow className={arenaDataTable.theadRow}>
+                            <TableHead className={arenaDataTable.th}>Nome</TableHead>
+                            <TableHead className={arenaDataTable.th}>Tipo de Item</TableHead>
+                            <TableHead className={arenaDataTable.th}>Tipo de Estação</TableHead>
+                            <TableHead className={arenaDataTable.th}>Valor</TableHead>
+                            <TableHead className={arenaDataTable.th}>Estoque</TableHead>
+                            <TableHead className={arenaDataTable.th}>Status</TableHead>
+                            <TableHead className={arenaDataTable.th}>Criado em</TableHead>
+                            <TableHead className={cn(arenaDataTable.thRight, "w-[50px]")} />
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {filteredProducts.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={8} className="h-24 text-center">
+                                <TableCell colSpan={8} className={arenaDataTable.emptyCell}>
                                     Nenhum produto encontrado.
                                 </TableCell>
                             </TableRow>
@@ -113,24 +115,24 @@ export function ProductsPageClient({ arenaId, arenaName, initialProducts }: Prop
                             filteredProducts.map((product) => {
                                 const stockStatus = getStockStatus(product.stock_quantity)
                                 return (
-                                    <TableRow key={product.id}>
-                                        <TableCell className="font-medium">{product.name}</TableCell>
-                                        <TableCell>{product.item_type}</TableCell>
-                                        <TableCell>
+                                    <TableRow key={product.id} className={arenaDataTable.tbodyRow}>
+                                        <TableCell className={arenaDataTable.tdBold}>{product.name}</TableCell>
+                                        <TableCell className={arenaDataTable.td}>{product.item_type}</TableCell>
+                                        <TableCell className={arenaDataTable.td}>
                                             <Badge variant="outline">
                                                 {product.station_type?.name || 'N/A'}
                                             </Badge>
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell className={arenaDataTable.td}>
                                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.price)}
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell className={arenaDataTable.td}>
                                             <span className={`font-bold text-lg ${product.stock_quantity > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                                                 {product.stock_quantity}
                                             </span>
                                             <span className="text-muted-foreground text-xs ml-1">un.</span>
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell className={arenaDataTable.td}>
                                             <Badge
                                                 variant={stockStatus === 'Em estoque' ? 'default' : 'destructive'}
                                                 className={stockStatus === 'Em estoque' ? 'bg-emerald-500 hover:bg-emerald-600' : ''}
@@ -138,10 +140,11 @@ export function ProductsPageClient({ arenaId, arenaName, initialProducts }: Prop
                                                 {stockStatus}
                                             </Badge>
                                         </TableCell>
-                                        <TableCell className="text-muted-foreground text-sm">
+                                        <TableCell className={cn(arenaDataTable.td, "text-arena-navy-800/60")}>
                                             {format(new Date(product.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell className={arenaDataTable.tdRight}>
+                                            <div className="flex justify-end">
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
                                                     <Button variant="ghost" className="h-8 w-8 p-0">
@@ -174,6 +177,7 @@ export function ProductsPageClient({ arenaId, arenaName, initialProducts }: Prop
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
+                                            </div>
                                         </TableCell>
                                     </TableRow>
                                 )

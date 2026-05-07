@@ -164,9 +164,9 @@ export function RegisterPaymentModal({
                         <Button
                             onClick={handleCloseComanda}
                             disabled={isSubmitting}
-                            className="flex-1 bg-arena-button hover:bg-arena-button-hover text-white font-bold h-12 rounded-xl shadow-lg shadow-arena-button/20"
+                            className="flex-1 bg-arena-button hover:bg-arena-button-hover text-white font-semibold shadow-sm rounded-lg"
                         >
-                            {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Fechar comanda"}
+                            {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Fechar comanda"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -278,9 +278,9 @@ export function RegisterPaymentModal({
                             <Button
                                 type="submit"
                                 disabled={isSubmitting}
-                                className="flex-1 bg-arena-button hover:bg-arena-button-hover text-white font-bold h-12 rounded-xl shadow-lg shadow-arena-button/20"
+                                className="flex-1 bg-arena-button hover:bg-arena-button-hover text-white font-semibold shadow-sm rounded-lg"
                             >
-                                {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Salvar"}
+                                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar"}
                             </Button>
                         </DialogFooter>
                     </form>

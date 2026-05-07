@@ -11,6 +11,8 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
+import { cn } from "@/lib/utils"
+import { arenaDataTable } from "@/lib/arena-data-table"
 
 export interface Athlete {
     id: string
@@ -31,21 +33,21 @@ export function AthletesTable({ athletes, isLoading, arenaId }: Props) {
     const router = useRouter()
     return (
         <div className="rounded-md border border-gray-100 overflow-hidden">
-            <Table>
-                <TableHeader className="bg-gray-50/50">
-                    <TableRow className="hover:bg-transparent">
-                        <TableHead className="text-arena-navy-800 font-semibold">Nome</TableHead>
-                        <TableHead className="text-arena-navy-800 font-semibold">CPF</TableHead>
-                        <TableHead className="text-arena-navy-800 font-semibold">E-mail</TableHead>
-                        <TableHead className="text-arena-navy-800 font-semibold">Telefone</TableHead>
-                        <TableHead className="text-arena-navy-800 font-semibold">Esporte</TableHead>
-                        <TableHead className="text-arena-navy-800 font-semibold w-14 text-center">Ações</TableHead>
+            <Table className={arenaDataTable.table}>
+                <TableHeader>
+                    <TableRow className={cn(arenaDataTable.theadRow, "hover:bg-transparent")}>
+                        <TableHead className={arenaDataTable.th}>Nome</TableHead>
+                        <TableHead className={arenaDataTable.th}>CPF</TableHead>
+                        <TableHead className={arenaDataTable.th}>E-mail</TableHead>
+                        <TableHead className={arenaDataTable.th}>Telefone</TableHead>
+                        <TableHead className={arenaDataTable.th}>Esporte</TableHead>
+                        <TableHead className={cn(arenaDataTable.th, "text-center w-14")}>Ações</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
                     {isLoading ? (
                         <TableRow>
-                            <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
+                            <TableCell colSpan={6} className={arenaDataTable.emptyCell}>
                                 <div className="flex flex-col items-center gap-2">
                                     <Loader2 className="h-6 w-6 animate-spin text-arena-button" />
                                     Buscando atletas...
@@ -54,23 +56,23 @@ export function AthletesTable({ athletes, isLoading, arenaId }: Props) {
                         </TableRow>
                     ) : athletes.length === 0 ? (
                         <TableRow>
-                            <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+                            <TableCell colSpan={6} className={arenaDataTable.emptyCell}>
                                 Nenhum atleta encontrado.
                             </TableCell>
                         </TableRow>
                     ) : (
                         athletes.map((athlete) => (
-                            <TableRow key={athlete.id} className="group transition-colors">
-                                <TableCell className="font-medium text-arena-navy-800">{athlete.name}</TableCell>
-                                <TableCell className="text-muted-foreground">{athlete.cpf || "---"}</TableCell>
-                                <TableCell className="text-muted-foreground">{athlete.email || "---"}</TableCell>
-                                <TableCell className="text-muted-foreground">{athlete.telefone || "---"}</TableCell>
-                                <TableCell>
+                            <TableRow key={athlete.id} className={arenaDataTable.tbodyRow}>
+                                <TableCell className={arenaDataTable.tdBold}>{athlete.name}</TableCell>
+                                <TableCell className={cn(arenaDataTable.td, "text-arena-navy-800/60")}>{athlete.cpf || "---"}</TableCell>
+                                <TableCell className={cn(arenaDataTable.td, "text-arena-navy-800/60")}>{athlete.email || "---"}</TableCell>
+                                <TableCell className={cn(arenaDataTable.td, "text-arena-navy-800/60")}>{athlete.telefone || "---"}</TableCell>
+                                <TableCell className={arenaDataTable.td}>
                                     <span className="inline-flex items-center rounded-full bg-arena-navy-800/5 px-2.5 py-0.5 text-xs font-medium text-arena-navy-800">
                                         {athlete.sport}
                                     </span>
                                 </TableCell>
-                                <TableCell className="text-center">
+                                <TableCell className={cn(arenaDataTable.td, "text-center")}>
                                     <button
                                         onClick={() => {
                                             if (arenaId) router.push(`/dashboard/athletes/${arenaId}/${athlete.id}`)

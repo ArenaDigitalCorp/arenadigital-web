@@ -16,6 +16,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { toast } from "sonner";
 import { UserFormModal } from "@/modules/users/components/UserFormModal";
 import { getArenaUsersAction, createArenaUserAction, updateArenaUserAction, deleteArenaUserAction } from "@/modules/users/actions/userActions";
+import { cn } from "@/lib/utils";
+import { arenaDataTable } from "@/lib/arena-data-table";
 
 type SelectedUser = {
     arenaUserId: string;
@@ -139,34 +141,34 @@ export function UsersPageClient({ arenaId, arenaName, initialUsers, stations }: 
                     </div>
 
                     <div className="overflow-x-auto">
-                        <Table>
+                        <Table className={arenaDataTable.table}>
                             <TableHeader>
-                                <TableRow className="bg-muted/50">
-                                    <TableHead className="w-[300px]">Nome</TableHead>
-                                    <TableHead>E-mail</TableHead>
-                                    <TableHead>Perfil</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead className="text-right">Ações</TableHead>
+                                <TableRow className={arenaDataTable.theadRow}>
+                                    <TableHead className={cn(arenaDataTable.th, "w-[300px]")}>Nome</TableHead>
+                                    <TableHead className={arenaDataTable.th}>E-mail</TableHead>
+                                    <TableHead className={arenaDataTable.th}>Perfil</TableHead>
+                                    <TableHead className={arenaDataTable.th}>Status</TableHead>
+                                    <TableHead className={arenaDataTable.thRight}>Ações</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {filteredUsers.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                                        <TableCell colSpan={5} className={arenaDataTable.emptyCell}>
                                             Nenhum usuário encontrado.
                                         </TableCell>
                                     </TableRow>
                                 ) : (
                                     filteredUsers.map((user) => (
-                                        <TableRow key={user.id} className="hover:bg-muted/50 transition-colors">
-                                            <TableCell className="font-medium">{user.name}</TableCell>
-                                            <TableCell className="text-muted-foreground">{user.email}</TableCell>
-                                            <TableCell>
+                                        <TableRow key={user.id} className={arenaDataTable.tbodyRow}>
+                                            <TableCell className={arenaDataTable.tdBold}>{user.name}</TableCell>
+                                            <TableCell className={cn(arenaDataTable.td, "text-arena-navy-800/60")}>{user.email}</TableCell>
+                                            <TableCell className={arenaDataTable.td}>
                                                 <Badge variant="outline" className="font-normal text-muted-foreground border-slate-700">
                                                     {user.role}
                                                 </Badge>
                                             </TableCell>
-                                            <TableCell>
+                                            <TableCell className={arenaDataTable.td}>
                                                 <Badge
                                                     variant="secondary"
                                                     className={user.status === 'Ativo' ? 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20' : 'bg-rose-500/10 text-rose-500 hover:bg-rose-500/20'}
@@ -174,7 +176,8 @@ export function UsersPageClient({ arenaId, arenaName, initialUsers, stations }: 
                                                     {user.status}
                                                 </Badge>
                                             </TableCell>
-                                            <TableCell className="text-right">
+                                            <TableCell className={arenaDataTable.tdRight}>
+                                                <div className="flex justify-end">
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
                                                         <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-white">
@@ -192,6 +195,7 @@ export function UsersPageClient({ arenaId, arenaName, initialUsers, stations }: 
                                                         </DropdownMenuItem>
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     ))

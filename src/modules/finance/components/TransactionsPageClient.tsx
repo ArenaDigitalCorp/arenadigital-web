@@ -17,6 +17,8 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
+import { arenaDataTable } from "@/lib/arena-data-table";
 import {
     Dialog,
     DialogContent,
@@ -117,8 +119,8 @@ export function TransactionsPageClient({ arenaId, type }: Props) {
 
             <div className="flex items-center justify-between">
                 <h1 className="text-3xl font-black text-arena-navy-800 tracking-tight">{labels.title}</h1>
-                <Button onClick={() => { setEditingTransaction(null); setIsFormOpen(true); }} className="bg-arena-button hover:bg-arena-button-hover text-white font-bold h-12 px-6 rounded-xl shadow-lg">
-                    {labels.button} <Plus className="ml-2 h-5 w-5" />
+                <Button onClick={() => { setEditingTransaction(null); setIsFormOpen(true); }} className="bg-arena-button hover:bg-arena-button-hover text-white font-semibold shadow-sm">
+                    {labels.button} <Plus className="ml-2 h-4 w-4" />
                 </Button>
             </div>
 
@@ -143,49 +145,49 @@ export function TransactionsPageClient({ arenaId, type }: Props) {
                     </div>
                 </div>
 
-                <Table>
-                    <TableHeader className="bg-gray-50/50">
-                        <TableRow>
-                            <TableHead className="text-arena-navy-800/40 font-bold uppercase text-xs">Descrição</TableHead>
-                            <TableHead className="text-arena-navy-800/40 font-bold uppercase text-xs">Tipo</TableHead>
-                            <TableHead className="text-arena-navy-800/40 font-bold uppercase text-xs">Quantidade</TableHead>
-                            <TableHead className="text-arena-navy-800/40 font-bold uppercase text-xs">Valor unitário</TableHead>
-                            <TableHead className="text-arena-navy-800/40 font-bold uppercase text-xs">Desconto</TableHead>
-                            <TableHead className="text-arena-navy-800/40 font-bold uppercase text-xs text-arena-button">Valor total</TableHead>
-                            <TableHead className="text-arena-navy-800/40 font-bold uppercase text-xs">Data de lançamento</TableHead>
-                            <TableHead className="text-arena-navy-800/40 font-bold uppercase text-xs">Modo pagamento</TableHead>
-                            {type === 'entrada' && <TableHead className="text-arena-navy-800/40 font-bold uppercase text-xs">Atleta</TableHead>}
-                            <TableHead className="text-arena-navy-800/40 font-bold uppercase text-xs">Registrado por</TableHead>
-                            <TableHead className="w-24"></TableHead>
+                <Table className={arenaDataTable.table}>
+                    <TableHeader>
+                        <TableRow className={arenaDataTable.theadRow}>
+                            <TableHead className={arenaDataTable.th}>Descrição</TableHead>
+                            <TableHead className={arenaDataTable.th}>Tipo</TableHead>
+                            <TableHead className={arenaDataTable.th}>Quantidade</TableHead>
+                            <TableHead className={arenaDataTable.th}>Valor unitário</TableHead>
+                            <TableHead className={arenaDataTable.th}>Desconto</TableHead>
+                            <TableHead className={cn(arenaDataTable.th, "text-arena-button")}>Valor total</TableHead>
+                            <TableHead className={arenaDataTable.th}>Data de lançamento</TableHead>
+                            <TableHead className={arenaDataTable.th}>Modo pagamento</TableHead>
+                            {type === 'entrada' && <TableHead className={arenaDataTable.th}>Atleta</TableHead>}
+                            <TableHead className={arenaDataTable.th}>Registrado por</TableHead>
+                            <TableHead className={cn(arenaDataTable.thRight, "w-24")} />
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {transactions.map((t) => (
-                            <TableRow key={t.id} className="hover:bg-gray-50/50">
-                                <TableCell className="font-bold text-arena-navy-800">{t.description}</TableCell>
-                                <TableCell>
+                            <TableRow key={t.id} className={arenaDataTable.tbodyRow}>
+                                <TableCell className={arenaDataTable.tdBold}>{t.description}</TableCell>
+                                <TableCell className={arenaDataTable.td}>
                                     <span className="bg-[#FFC145]/20 text-arena-navy-800/60 text-[10px] font-bold px-2 py-0.5 rounded uppercase">{t.category}</span>
                                 </TableCell>
-                                <TableCell className="text-arena-navy-800/60 font-medium">{String(t.quantity).padStart(2, '0')}</TableCell>
-                                <TableCell className="text-arena-navy-800/60 font-medium">{formatCurrency(t.unit_value)}</TableCell>
-                                <TableCell className="text-arena-navy-800/60 font-medium">{formatCurrency(t.discount)}</TableCell>
-                                <TableCell className="text-arena-button font-black">{formatCurrency(t.total_value)}</TableCell>
-                                <TableCell className="text-arena-navy-800/60 font-medium">{new Date(t.launch_date).toLocaleDateString('pt-BR')}</TableCell>
-                                <TableCell className="text-arena-navy-800/60 font-medium">
+                                <TableCell className={cn(arenaDataTable.td, "text-arena-navy-800/60")}>{String(t.quantity).padStart(2, '0')}</TableCell>
+                                <TableCell className={cn(arenaDataTable.td, "text-arena-navy-800/60")}>{formatCurrency(t.unit_value)}</TableCell>
+                                <TableCell className={cn(arenaDataTable.td, "text-arena-navy-800/60")}>{formatCurrency(t.discount)}</TableCell>
+                                <TableCell className={cn(arenaDataTable.td, "text-arena-button font-black")}>{formatCurrency(t.total_value)}</TableCell>
+                                <TableCell className={cn(arenaDataTable.td, "text-arena-navy-800/60")}>{new Date(t.launch_date).toLocaleDateString('pt-BR')}</TableCell>
+                                <TableCell className={cn(arenaDataTable.td, "text-arena-navy-800/60")}>
                                     {t.modo_pagamento?.nome
                                         ? <span className="bg-purple-50 text-purple-700 text-[10px] font-bold px-2 py-0.5 rounded">{t.modo_pagamento.nome}</span>
                                         : <span className="text-arena-navy-800/30">—</span>}
                                 </TableCell>
                                 {type === 'entrada' && (
-                                    <TableCell className="text-arena-navy-800/60 font-medium">
+                                    <TableCell className={cn(arenaDataTable.td, "text-arena-navy-800/60")}>
                                         {t.atleta?.nome_perfil
                                             ? <span className="bg-blue-50 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded">{t.atleta.nome_perfil}</span>
                                             : <span className="text-arena-navy-800/30">—</span>}
                                     </TableCell>
                                 )}
-                                <TableCell className="text-arena-navy-800/60 font-medium">{t.registered_by?.name}</TableCell>
-                                <TableCell>
-                                    <div className="flex gap-2">
+                                <TableCell className={cn(arenaDataTable.td, "text-arena-navy-800/60")}>{t.registered_by?.name}</TableCell>
+                                <TableCell className={arenaDataTable.tdRight}>
+                                    <div className="flex justify-end gap-2">
                                         <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(t)} className="h-8 w-8 bg-[#FFC145]/10 text-arena-navy-800/60 hover:bg-[#FFC145]/30 hover:text-arena-navy-800">
                                             <Edit className="h-4 w-4" />
                                         </Button>

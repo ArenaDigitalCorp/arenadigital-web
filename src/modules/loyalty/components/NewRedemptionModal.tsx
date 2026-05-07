@@ -211,19 +211,19 @@ export function NewRedemptionModal({ arenaId, isOpen, onClose, onSuccess }: NewR
                     <Button
                         variant="outline"
                         onClick={onClose}
-                        className="flex-1 h-12 border-arena-navy-800/10 text-arena-navy-800 hover:bg-gray-100 font-semibold rounded-xl"
+                        className="flex-1 border-arena-navy-800/10 text-arena-navy-800 hover:bg-gray-100 font-semibold rounded-lg"
                     >
                         Fechar
                     </Button>
                     <Button
                         onClick={handleSave}
                         disabled={isSaving}
-                        className="flex-1 h-12 bg-arena-button hover:bg-arena-button-hover text-white font-bold rounded-xl shadow-lg shadow-arena-button/20 transition-all active:scale-95 gap-2"
+                        className="flex-1 bg-arena-button hover:bg-arena-button-hover text-white font-semibold shadow-sm rounded-lg disabled:opacity-50"
                     >
                         {isSaving ? (
-                            <Loader2 className="h-5 w-5 animate-spin" />
+                            <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
-                            <Check className="h-5 w-5" />
+                            <Check className="mr-2 h-4 w-4" />
                         )}
                         Descontar
                     </Button>

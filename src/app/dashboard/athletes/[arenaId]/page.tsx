@@ -35,10 +35,10 @@ export default function AthletesPage({ params }: { params: Promise<{ arenaId: st
                 </div>
                 <Button
                     onClick={() => setIsModalOpen(true)}
-                    className="bg-arena-button hover:bg-arena-button-hover text-white gap-2 px-6 py-6 h-auto text-base rounded-lg font-semibold shadow-md active:scale-95 transition-all"
+                    className="bg-arena-button hover:bg-arena-button-hover text-white font-semibold shadow-sm"
                 >
-                    Vincular atleta
-                    <Plus className="h-5 w-5" />
+                    <Plus className="mr-2 h-4 w-4" />
+                    Cadastrar atleta
                 </Button>
             </div>
 
