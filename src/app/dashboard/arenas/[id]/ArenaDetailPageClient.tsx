@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { GradientMediaCard } from '@/components/dashboard/GradientMediaCard';
+import { DashboardTabs } from '@/components/dashboard/DashboardTabs';
 import { DayOperationModal } from '@/modules/bookings/components/DayOperationModal';
 import { AvailableTimesModal } from '@/modules/bookings/components/AvailableTimesModal';
 import { deleteCourtAction } from '@/modules/courts/actions/courtActions';
@@ -134,32 +135,14 @@ export function ArenaDetailPageClient({
           </p>
         </div>
 
-        <div className="flex items-center border-b border-arena-navy-800/10 gap-8">
-          <button
-            onClick={() => setActiveTab('espacos')}
-            className={cn(
-              'pb-4 font-bold text-sm transition-all relative',
-              activeTab === 'espacos' ? 'text-arena-navy-800' : 'text-[#007793]'
-            )}
-          >
-            Espaços
-            {activeTab === 'espacos' && (
-              <div className="absolute bottom-0 left-1/2 h-0.5 w-[calc(100%+32px)] -translate-x-1/2 bg-[#20B2AA]" />
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab('cadastro')}
-            className={cn(
-              'pb-4 font-bold text-sm transition-all relative',
-              activeTab === 'cadastro' ? 'text-arena-navy-800' : 'text-[#007793]'
-            )}
-          >
-            Cadastros
-            {activeTab === 'cadastro' && (
-              <div className="absolute bottom-0 left-1/2 h-0.5 w-[calc(100%+32px)] -translate-x-1/2 bg-[#20B2AA]" />
-            )}
-          </button>
-        </div>
+        <DashboardTabs
+          value={activeTab}
+          onChange={setActiveTab}
+          tabs={[
+            { label: 'Espaços', value: 'espacos' },
+            { label: 'Cadastros', value: 'cadastro' },
+          ]}
+        />
 
         {activeTab === 'espacos' && (
           <div className="space-y-6">

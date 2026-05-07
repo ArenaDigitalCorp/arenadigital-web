@@ -19,6 +19,7 @@ import {
   GradientMediaCard,
   GRADIENT_MEDIA_CARD_STATION_PRESET,
 } from '@/components/dashboard/GradientMediaCard';
+import { DashboardTabs } from '@/components/dashboard/DashboardTabs';
 
 interface StationListItem {
   id: string;
@@ -71,12 +72,10 @@ export function StationsPageClient({ arenaId, initialStations }: Props) {
           </Link>
         </div>
 
-        <div className="flex items-center gap-8 border-b border-arena-navy-800/10">
-          <span className="relative pb-4 text-sm font-bold text-arena-navy-800">
-            Estações
-            <div className="absolute bottom-0 left-0 h-0.5 w-full bg-[#20B2AA]" />
-          </span>
-        </div>
+        <DashboardTabs
+          value="stations"
+          tabs={[{ label: 'Estações', value: 'stations' }]}
+        />
 
         {stations.length === 0 ? (
           <Card className="flex flex-col items-center justify-center border-2 border-dashed bg-white/50 py-20">
