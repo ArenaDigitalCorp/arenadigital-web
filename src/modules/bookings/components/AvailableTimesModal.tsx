@@ -215,18 +215,18 @@ ${courts.length > 0 ? `
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
             <DialogContent
                 showCloseButton={false}
-                className="sm:max-w-[96vw] w-[98vw] h-[95vh] overflow-hidden gap-0 p-5 border border-slate-200 shadow-xl rounded-lg bg-white text-arena-navy-800 flex flex-col"
+                className="sm:max-w-[96vw] w-[98vw] max-h-[95vh] overflow-hidden gap-0 p-5 border border-slate-200 shadow-xl rounded-lg bg-white text-arena-navy-800"
             >
                 {/* ── Content ── */}
-                <div className="min-h-0 flex-1 overflow-hidden">
+                <div className="max-h-[calc(95vh-2.5rem)] overflow-hidden">
                     {isLoading ? (
                         <div className="h-96 flex flex-col items-center justify-center gap-4 text-arena-navy-800/50 font-semibold">
                             <Loader2 className="h-8 w-8 animate-spin text-arena-button" />
                             Carregando horários…
                         </div>
                     ) : (
-                        <div className="flex h-full min-h-0 flex-col gap-5">
-                            <section className="flex min-h-0 flex-1 flex-col rounded-lg border border-slate-200 bg-white px-6 py-5 shadow-sm">
+                        <div className="flex max-h-[calc(95vh-2.5rem)] flex-col gap-5 overflow-hidden">
+                            <section className="flex max-h-[calc(95vh-14.75rem)] min-h-[18rem] flex-col rounded-lg border border-slate-200 bg-white px-6 py-5 shadow-sm">
                                 <DialogHeader className="shrink-0 pb-5">
                                     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
                                         <DialogTitle className="font-heading text-2xl font-bold leading-none tracking-normal text-arena-navy-800 lg:justify-self-start">
@@ -286,7 +286,7 @@ ${courts.length > 0 ? `
                                     </div>
                                 </DialogHeader>
 
-                                <div className="min-h-0 flex-1 overflow-auto">
+                                <div className="min-h-0 overflow-auto">
                                     <div className="min-w-[980px]">
                                         <div className="grid grid-cols-[120px_repeat(7,minmax(124px,1fr))] border-b border-t border-slate-300">
                                             <div className="flex h-14 items-center px-3 text-sm font-medium text-[#007793]">

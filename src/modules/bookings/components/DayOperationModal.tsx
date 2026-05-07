@@ -3,11 +3,19 @@
 import { useEffect, useState, useMemo } from "react";
 import { format, parseISO, getHours, getMinutes, getDay, addDays, subDays, addMonths, isToday } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { X, CalendarDays, CalendarIcon, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, CalendarIcon, Loader2, ChevronLeft, ChevronRight, Filter, Check, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import { getBookingsByArenaWithSportsAction } from "@/modules/bookings/actions/bookingActions";
 
@@ -186,6 +194,8 @@ export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts 
     const [isLoading, setIsLoading] = useState(false);
     const [currentDate, setCurrentDate] = useState(new Date());
     const [calendarOpen, setCalendarOpen] = useState(false);
+    const [sportFilterOpen, setSportFilterOpen] = useState(false);
+    const [selectedSports, setSelectedSports] = useState<Set<string>>(() => new Set());
     const [visibleCourtIds, setVisibleCourtIds] = useState<Set<string>>(
         () => new Set(courts.map(c => c.id))
     );
@@ -222,6 +232,7 @@ export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts 
         if (isOpen) {
             setCurrentDate(new Date());
             setVisibleCourtIds(new Set(courts.map(c => c.id)));
+            setSelectedSports(new Set());
         }
     }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -275,6 +286,7 @@ export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts 
         const targetDayOfWeek = getDay(currentDate);
         return futureBookings.find(b => {
             if (b.court_id !== courtId) return false;
+            if (selectedSports.size > 0 && (!b.sports?.name || !selectedSports.has(b.sports.name))) return false;
             const bStart = parseISO(b.start_time);
             return getDay(bStart) === targetDayOfWeek
                 && getHours(bStart) === slot.hour
@@ -287,6 +299,44 @@ export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts 
     const handleNextDay = () => setCurrentDate(prev => addDays(prev, 1));
     const handleToday = () => setCurrentDate(new Date());
 
+    const sportOptions = useMemo(() => {
+        const sports = new Set<string>();
+        courts.forEach(court => {
+            court.sports?.forEach((sport: any) => {
+                if (sport?.name) sports.add(sport.name);
+            });
+        });
+        bookings.forEach(b => {
+            if (b.sports?.name) sports.add(b.sports.name);
+        });
+        return Array.from(sports).sort();
+    }, [courts, bookings]);
+
+    const filteredBookings = useMemo(() => {
+        if (selectedSports.size === 0) return bookings;
+
+        return bookings.filter(booking => {
+            const sportName = booking.sports?.name;
+            return sportName ? selectedSports.has(sportName) : false;
+        });
+    }, [bookings, selectedSports]);
+
+    const toggleSportFilter = (sportName: string) => {
+        setSelectedSports(prev => {
+            const next = new Set(prev);
+            next.has(sportName) ? next.delete(sportName) : next.add(sportName);
+            return next;
+        });
+    };
+
+    const removeSportFilter = (sportName: string) => {
+        setSelectedSports(prev => {
+            const next = new Set(prev);
+            next.delete(sportName);
+            return next;
+        });
+    };
+
     // Build the union of all slots across courts (from day_config) + any booking start times
     const allSlots = useMemo<SlotTime[]>(() => {
         const map = new Map<string, SlotTime>()
@@ -296,20 +346,20 @@ export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts 
             })
         })
         // Include slots from actual bookings so they always appear even outside config
-        bookings.forEach(b => {
+        filteredBookings.forEach(b => {
             if (b.status === 'cancelled') return
             const bStart = parseISO(b.start_time)
             const h = getHours(bStart), m = getMinutes(bStart)
             map.set(`${h}:${m}`, { hour: h, minute: m })
         })
         return Array.from(map.values()).sort((a, b) => (a.hour * 60 + a.minute) - (b.hour * 60 + b.minute))
-    }, [sortedCourts, bookings, currentDate])
+    }, [sortedCourts, filteredBookings, currentDate])
 
     const getBookingForSlot = (courtId: string, slot: SlotTime): Booking | undefined => {
         const slotStart = new Date(currentDate);
         slotStart.setHours(slot.hour, slot.minute, 0, 0);
 
-        return bookings.find(b => {
+        return filteredBookings.find(b => {
             if (b.court_id !== courtId) return false;
             if (b.status === 'cancelled') return false;
 
@@ -340,15 +390,6 @@ export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts 
         return normalizedSlot >= startMins && normalizedSlot < endMins;
     };
 
-    // Get unique sport names for the legend
-    const uniqueSports = useMemo(() => {
-        const sports = new Set<string>();
-        bookings.forEach(b => {
-            if (b.sports?.name) sports.add(b.sports.name);
-        });
-        return Array.from(sports).sort();
-    }, [bookings]);
-
     if (!isOpen) return null;
 
     return (
@@ -360,114 +401,138 @@ export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts 
             />
 
             {/* Modal Container */}
-            <div className="relative w-[90vw] h-[90vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="relative w-[95vw] h-[92vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                 {/* Header */}
-                <header className="bg-gradient-to-r from-arena-navy-800 to-arena-navy-700 px-6 py-4 flex items-center justify-between flex-shrink-0 rounded-t-2xl">
-                    <div className="flex items-center gap-4">
-                        <div className="bg-white/10 p-2 rounded-lg">
-                            <CalendarDays className="w-5 h-5 text-white" />
-                        </div>
-                        <div>
-                            <h2 className="text-white font-black text-lg tracking-tight">
-                                Operação do Dia
-                            </h2>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    onClick={handlePreviousDay}
-                                    className="text-white/50 hover:text-white hover:bg-white/10 rounded p-0.5 transition-colors"
-                                >
-                                    <ChevronLeft className="w-4 h-4" />
-                                </button>
+                <header className="bg-white px-5 py-4 flex flex-col gap-4 flex-shrink-0 rounded-t-2xl md:flex-row md:items-center md:justify-between">
+                    <h2 className="font-heading text-lg font-bold tracking-normal text-arena-navy-800">
+                        Operação do Dia
+                    </h2>
 
-                                {/* Data clicável que abre o calendário */}
-                                <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-                                    <PopoverTrigger asChild>
-                                        <button
-                                            className="flex items-center gap-1.5 text-white/80 hover:text-white text-sm font-medium capitalize px-2 py-1 rounded-md hover:bg-white/10 transition-colors group"
-                                        >
-                                            <CalendarIcon className="w-3.5 h-3.5 text-white/50 group-hover:text-white/80 transition-colors" />
-                                            {format(currentDate, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
-                                        </button>
-                                    </PopoverTrigger>
-                                    <PopoverContent
-                                        align="start"
-                                        sideOffset={8}
-                                        className="w-auto p-0 border-none shadow-2xl rounded-xl overflow-hidden z-[60]"
-                                    >
-                                        <div className="bg-[#1E293B] rounded-xl">
-                                            <Calendar
-                                                mode="single"
-                                                selected={currentDate}
-                                                onSelect={(date) => {
-                                                    if (date) {
-                                                        setCurrentDate(date);
-                                                        setCalendarOpen(false);
-                                                    }
-                                                }}
-                                                locale={ptBR}
-                                                initialFocus
-                                                classNames={{
-                                                    months: "flex flex-col",
-                                                    month: "space-y-3",
-                                                    month_caption: "flex justify-center items-center h-8 mb-2 px-2",
-                                                    caption_label: "text-sm font-bold text-white capitalize",
-                                                    nav: "flex items-center",
-                                                    button_previous: "h-7 w-7 bg-white/10 hover:bg-white/20 text-white rounded-md p-0 flex items-center justify-center absolute left-2 top-3 z-20 transition-colors",
-                                                    button_next: "h-7 w-7 bg-white/10 hover:bg-white/20 text-white rounded-md p-0 flex items-center justify-center absolute right-2 top-3 z-20 transition-colors",
-                                                    month_grid: "w-full border-collapse",
-                                                    weekdays: "flex mb-1",
-                                                    weekday: "text-white/40 rounded-md w-9 font-medium text-[0.7rem] flex items-center justify-center",
-                                                    week: "flex w-full mt-1 justify-between",
-                                                    day: "h-9 w-9 text-center text-sm p-0 relative",
-                                                    day_button: "h-9 w-9 p-0 font-medium w-full h-full flex items-center justify-center rounded-md text-white/80 hover:bg-white/15 hover:text-white transition-colors",
-                                                    selected: "bg-indigo-500 text-white hover:bg-indigo-400 rounded-md",
-                                                    today: "bg-white/10 text-white font-bold rounded-md",
-                                                    outside: "text-white/20 opacity-50",
-                                                    disabled: "text-white/20 opacity-30",
-                                                    hidden: "invisible",
-                                                }}
-                                            />
-                                        </div>
-                                    </PopoverContent>
-                                </Popover>
+                    <div className="flex flex-wrap items-center gap-2 md:justify-center">
+                        <Button
+                            variant="outline"
+                            size="icon-sm"
+                            aria-label="Dia anterior"
+                            onClick={handlePreviousDay}
+                            className="size-9 rounded-md border-slate-200 bg-white text-arena-navy-800 shadow-sm hover:bg-slate-50"
+                        >
+                            <ChevronLeft className="w-4 h-4" />
+                        </Button>
 
-                                <button
-                                    onClick={handleNextDay}
-                                    className="text-white/50 hover:text-white hover:bg-white/10 rounded p-0.5 transition-colors"
-                                >
-                                    <ChevronRight className="w-4 h-4" />
+                        <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                            <PopoverTrigger asChild>
+                                <button className="flex h-9 min-w-[142px] items-center justify-center rounded-md px-3 text-sm font-semibold text-arena-navy-800 hover:bg-slate-50">
+                                    {format(currentDate, "dd/MM/yyyy")}
                                 </button>
-                                {!isToday(currentDate) && (
-                                    <button
-                                        onClick={handleToday}
-                                        className="text-white/60 hover:text-white text-[10px] font-bold uppercase bg-white/10 hover:bg-white/20 rounded px-2 py-0.5 ml-1 transition-colors"
-                                    >
-                                        Hoje
-                                    </button>
-                                )}
-                            </div>
-                        </div>
+                            </PopoverTrigger>
+                            <PopoverContent
+                                align="center"
+                                sideOffset={8}
+                                className="w-auto overflow-hidden rounded-xl border-slate-200 p-0 shadow-2xl z-[60]"
+                            >
+                                <Calendar
+                                    mode="single"
+                                    selected={currentDate}
+                                    onSelect={(date) => {
+                                        if (date) {
+                                            setCurrentDate(date);
+                                            setCalendarOpen(false);
+                                        }
+                                    }}
+                                    locale={ptBR}
+                                    initialFocus
+                                />
+                            </PopoverContent>
+                        </Popover>
+
+                        <Button
+                            variant="outline"
+                            size="icon-sm"
+                            aria-label="Próximo dia"
+                            onClick={handleNextDay}
+                            className="size-9 rounded-md border-slate-200 bg-white text-arena-navy-800 shadow-sm hover:bg-slate-50"
+                        >
+                            <ChevronRight className="w-4 h-4" />
+                        </Button>
+
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleToday}
+                            className={cn(
+                                "h-9 rounded-md border-slate-200 px-4 text-sm font-semibold text-arena-navy-800 shadow-sm hover:bg-slate-50",
+                                isToday(currentDate) && "bg-slate-50 text-arena-navy-800/60"
+                            )}
+                        >
+                            Hoje
+                        </Button>
                     </div>
-                    <div className="flex items-center gap-4">
-                        {/* Legend */}
-                        {uniqueSports.length > 0 && (
-                            <div className="hidden md:flex items-center gap-3 bg-white/10 rounded-lg px-4 py-2">
-                                {uniqueSports.map(sport => {
-                                    const styles = getSportStyles(sport);
-                                    return (
-                                        <div key={sport} className="flex items-center gap-1.5">
-                                            <div className={cn("w-2.5 h-2.5 rounded-full", styles.dot)} />
-                                            <span className="text-white/80 text-xs font-medium">{sport}</span>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
+
+                    <div className="flex min-w-0 flex-wrap items-center gap-2 md:justify-end">
+                        <Filter className="h-5 w-5 text-slate-400" />
+
+                        <Popover open={sportFilterOpen} onOpenChange={setSportFilterOpen}>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    className="h-9 w-[210px] justify-between rounded-md border-slate-200 bg-white px-3 text-sm font-medium text-slate-500 shadow-none hover:bg-slate-50"
+                                >
+                                    Selecionar esportes
+                                    <ChevronDown className="h-4 w-4 text-slate-400" />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent align="end" sideOffset={8} className="w-[260px] rounded-xl border-slate-200 p-0 shadow-xl z-[60]">
+                                <Command>
+                                    <CommandInput placeholder="Buscar esporte..." />
+                                    <CommandList>
+                                        <CommandEmpty>Nenhum esporte encontrado.</CommandEmpty>
+                                        <CommandGroup>
+                                            {sportOptions.map(sport => {
+                                                const checked = selectedSports.has(sport);
+
+                                                return (
+                                                    <CommandItem
+                                                        key={sport}
+                                                        value={sport}
+                                                        onSelect={() => toggleSportFilter(sport)}
+                                                        className="cursor-pointer"
+                                                    >
+                                                        <span className={cn(
+                                                            "flex h-4 w-4 items-center justify-center rounded border",
+                                                            checked
+                                                                ? "border-arena-navy-800 bg-arena-navy-800 text-white"
+                                                                : "border-slate-300 bg-white"
+                                                        )}>
+                                                            {checked && <Check className="h-3 w-3" />}
+                                                        </span>
+                                                        <span className="font-medium text-arena-navy-800">{sport}</span>
+                                                    </CommandItem>
+                                                );
+                                            })}
+                                        </CommandGroup>
+                                    </CommandList>
+                                </Command>
+                            </PopoverContent>
+                        </Popover>
+
+                        {Array.from(selectedSports).map(sport => (
+                            <button
+                                key={sport}
+                                type="button"
+                                onClick={() => removeSportFilter(sport)}
+                                className="inline-flex h-9 items-center gap-2 rounded-md bg-arena-navy-800 px-3 text-xs font-bold text-white transition-colors hover:bg-arena-navy-900"
+                            >
+                                {sport}
+                                <X className="h-3.5 w-3.5" />
+                            </button>
+                        ))}
+
                         <Button
                             variant="ghost"
-                            size="icon"
+                            size="icon-sm"
                             onClick={onClose}
-                            className="text-white/60 hover:text-white hover:bg-white/10 h-9 w-9"
+                            aria-label="Fechar modal"
+                            className="size-9 rounded-md text-arena-navy-800 hover:bg-slate-100"
                         >
                             <X className="w-5 h-5" />
                         </Button>
@@ -478,8 +543,8 @@ export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts 
                 <div className="flex-1 flex overflow-hidden">
 
                     {/* ── Sidebar de espaços ── */}
-                    <div className="w-52 flex-shrink-0 bg-white border-r border-arena-navy-800/10 flex flex-col overflow-hidden">
-                        <div className="px-4 py-3 border-b border-arena-navy-800/8">
+                    <div className="w-52 flex-shrink-0 bg-white border-r border-slate-200 flex flex-col overflow-hidden">
+                        <div className="px-4 py-3 border-b border-slate-200">
                             <p className="text-[10px] font-black uppercase tracking-wider text-arena-navy-800/40 mb-2">
                                 Espaços
                             </p>
@@ -493,7 +558,7 @@ export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts 
                         <div className="flex-1 overflow-y-auto py-2">
                             {sortedCourts.map(court => {
                                 const checked = visibleCourtIds.has(court.id)
-                                const hasBooking = bookings.some(
+                                const hasBooking = filteredBookings.some(
                                     b => b.court_id === court.id && b.status !== 'cancelled'
                                 )
                                 return (
@@ -712,21 +777,6 @@ export function DayOperationModal({ isOpen, onClose, arenaId, arenaName, courts 
                     )}
                     </div>{/* end grid */}
                 </div>{/* end sidebar+grid flex */}
-
-                {/* Mobile legend */}
-                {uniqueSports.length > 0 && (
-                    <div className="md:hidden bg-white border-t border-arena-navy-800/10 px-4 py-3 flex flex-wrap items-center gap-3 flex-shrink-0 rounded-b-2xl">
-                        {uniqueSports.map(sport => {
-                            const styles = getSportStyles(sport);
-                            return (
-                                <div key={sport} className="flex items-center gap-1.5">
-                                    <div className={cn("w-2.5 h-2.5 rounded-full", styles.dot)} />
-                                    <span className="text-arena-navy-800/70 text-xs font-medium">{sport}</span>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
             </div>
         </div>
     );
