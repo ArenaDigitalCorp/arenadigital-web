@@ -1,10 +1,10 @@
 "use client"
 
 import { useState, useCallback, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { format, addDays, subDays, startOfWeek, endOfWeek, addWeeks, subWeeks, isSameDay, parseISO, startOfDay, getHours, getMinutes, getDay, addMonths } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { ArrowLeft, ChevronLeft, ChevronRight, Check } from "lucide-react"
+import { ArrowLeft, ChevronLeft, ChevronRight, Lightbulb } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -15,6 +15,7 @@ import { BookingDetailsModal } from "@/modules/bookings/components/BookingDetail
 import { DayOpportunitiesModal } from "@/modules/bookings/components/DayOpportunitiesModal"
 import { getBookingsByCourtAction } from "@/modules/bookings/actions/bookingActions"
 import type { Json } from '@/types/supabase.types'
+import { arenaDashboardPath } from "@/lib/arena-dashboard-navigation"
 
 interface Court {
     id: string
@@ -147,7 +148,7 @@ function TimeSlot({ slot, bookings: slotBookings, available, court, className, o
     futureBooking?: Booking | null
 }) {
     if (!available) {
-        return <div className={cn("bg-[#E2E8F0] flex items-center justify-center p-2 opacity-40 border-b border-arena-navy-800/5", className)} />
+        return <div className={cn("bg-[#E2E8F0] flex items-center justify-center p-2 opacity-40", className)} />
     }
     if (slotBookings.length > 0) {
         const firstBooking = slotBookings[0]
@@ -159,7 +160,7 @@ function TimeSlot({ slot, bookings: slotBookings, available, court, className, o
         const bStart = parseISO(firstBooking.start_time)
         const isConflictStart = slot.hour === getHours(bStart) && slot.minute === getMinutes(bStart)
         return (
-            <div className={cn("px-1 h-full relative", isEnd && "border-b border-arena-navy-800/5", className)}>
+            <div className={cn("px-1 h-full relative", className)}>
                 {hasConflict && isConflictStart && (
                     <div className="absolute top-0 left-0 right-0 flex justify-center z-10 pointer-events-none">
                         <span className="bg-red-500 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded-b-md tracking-wider shadow">
@@ -187,7 +188,7 @@ function TimeSlot({ slot, bookings: slotBookings, available, court, className, o
     const futureEnd = futureBooking ? parseISO(futureBooking.end_time) : null
     return (
         <div
-            className={cn("p-1 group border-b border-arena-navy-800/5 relative", className)}
+            className={cn("p-1 group relative", className)}
             onClick={onEmptyClick}
         >
             <div className="w-full h-full min-h-[40px] flex items-center justify-center rounded hover:bg-emerald-50 cursor-pointer transition-colors group-hover:border-emerald-200 border border-transparent">
@@ -233,7 +234,6 @@ function TimeSlot({ slot, bookings: slotBookings, available, court, className, o
 }
 
 export function CourtCalendarPageClient({ arenaId, courtId, initialCourt, initialBookings, initialDate }: Props) {
-    const router = useRouter()
     const court = initialCourt
     const [bookings, setBookings] = useState<Booking[]>(initialBookings as Booking[])
     const [futureBookings, setFutureBookings] = useState<Booking[]>([])
@@ -390,94 +390,216 @@ export function CourtCalendarPageClient({ arenaId, courtId, initialCourt, initia
     const slots = viewMode === 'day' ? slotsDay : slotsWeek
 
     return (
-        <div className="flex flex-col h-full bg-arena-soft min-h-screen">
-            <header className="bg-white border-b border-arena-navy-800/10 px-4 md:px-8 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 sticky top-0 z-10">
-                <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="icon" onClick={() => router.back()} className="text-arena-navy-800/60 hover:bg-arena-navy-800/5">
-                        <ArrowLeft className="w-5 h-5" />
-                    </Button>
-                    <div>
-                        <h1 className="text-xl font-black text-arena-navy-800">{court.name}</h1>
-                        <p className="text-sm text-arena-navy-800/60 font-medium">Gerenciamento de agenda</p>
-                    </div>
-                </div>
+        <div className="mx-auto flex h-[calc(100dvh-8.5rem)] min-h-0 w-full max-w-[1600px] flex-col gap-2 overflow-hidden md:h-[calc(100dvh-4.5rem)]">
+            <div className="shrink-0">
+                <Button
+                    variant="ghost"
+                    asChild
+                    className="h-auto w-fit justify-start gap-1.5 rounded-md px-0 py-0 text-sm font-medium text-arena-navy-800/70 hover:bg-transparent hover:text-arena-navy-800"
+                >
+                    <Link href={arenaDashboardPath(arenaId, "espacos")} className="inline-flex items-center gap-1.5">
+                        <ArrowLeft className="size-4 shrink-0 text-arena-navy-800" aria-hidden />
+                        Voltar
+                    </Link>
+                </Button>
+            </div>
 
-                <div className="flex items-center gap-4">
-                    <div className="flex items-center bg-[#F1F5F9] rounded-lg p-1">
-                        <Button variant="ghost" size="sm" onClick={() => handleViewMode('day')} className={cn("text-xs font-bold", viewMode === 'day' ? "bg-white shadow-sm text-arena-navy-800" : "text-arena-navy-800/60")}>Dia</Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleViewMode('week')} className={cn("text-xs font-bold", viewMode === 'week' ? "bg-white shadow-sm text-arena-navy-800" : "text-arena-navy-800/60")}>Semana</Button>
-                    </div>
+            <Card className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-white shadow-sm">
+                <div className="flex shrink-0 flex-col gap-4 border-b border-border px-4 py-4 md:flex-row md:items-start md:justify-between md:gap-6 md:px-5 md:py-4">
+                    <h1 className="font-heading text-2xl font-black tracking-tight text-arena-navy-800 md:text-3xl">
+                        {court.name}
+                    </h1>
 
-                    <div className="flex items-center gap-2">
-                        <Button variant="outline" size="icon" onClick={handlePrevious} className="h-9 w-9"><ChevronLeft className="w-4 h-4" /></Button>
-                        <div className="px-4 font-bold text-arena-navy-800 min-w-[140px] text-center">
-                            {viewMode === 'day'
-                                ? format(currentDate, "dd 'de' MMMM", { locale: ptBR })
-                                : `${format(weekDays[0], "dd/MM")} - ${format(weekDays[6], "dd/MM")}`}
+                    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+                        <div className="inline-flex w-fit items-center gap-0.5 rounded-lg border border-border bg-muted/60 p-1">
+                            <button
+                                type="button"
+                                onClick={() => handleViewMode("day")}
+                                className={cn(
+                                    "h-8 rounded-md px-3 text-xs font-bold transition-colors",
+                                    viewMode === "day"
+                                        ? "border border-border bg-white text-arena-navy-800 shadow-sm"
+                                        : "bg-transparent text-arena-navy-800/60 hover:text-arena-navy-800"
+                                )}
+                            >
+                                Dia
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleViewMode("week")}
+                                className={cn(
+                                    "h-8 rounded-md px-3 text-xs font-bold transition-colors",
+                                    viewMode === "week"
+                                        ? "border border-border bg-white text-arena-navy-800 shadow-sm"
+                                        : "bg-transparent text-arena-navy-800/60 hover:text-arena-navy-800"
+                                )}
+                            >
+                                Semana
+                            </button>
                         </div>
-                        <Button variant="outline" size="icon" onClick={handleNext} className="h-9 w-9"><ChevronRight className="w-4 h-4" /></Button>
-                    </div>
 
-                    <Button variant="outline" onClick={handleToday} className="text-arena-navy-800">Hoje</Button>
-                    <div className="h-6 w-px bg-arena-navy-800/10 mx-2" />
+                        <div className="inline-flex items-center rounded-lg border border-border bg-white">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={handlePrevious}
+                                className="h-9 w-9 shrink-0 rounded-none border-r border-border"
+                                aria-label="Período anterior"
+                            >
+                                <ChevronLeft className="size-4" />
+                            </Button>
+                            <div className="min-w-34 px-3 text-center text-sm font-bold text-arena-navy-800 sm:min-w-40 sm:px-4">
+                                {viewMode === "day"
+                                    ? format(currentDate, "dd 'de' MMMM", { locale: ptBR })
+                                    : `${format(weekDays[0], "dd/MM")} – ${format(weekDays[6], "dd/MM")}`}
+                            </div>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={handleNext}
+                                className="h-9 w-9 shrink-0 rounded-none border-l border-border"
+                                aria-label="Próximo período"
+                            >
+                                <ChevronRight className="size-4" />
+                            </Button>
+                        </div>
 
-                    <div className="flex flex-wrap items-center gap-2 md:gap-3">
-                        <Button onClick={() => setIsDayOpportunitiesModalOpen(true)} className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold gap-2 text-xs md:text-sm h-9 md:h-10">
-                            <Check className="w-4 h-4" />
-                            <span className="hidden sm:inline">Oportunidades</span>
-                            <span className="sm:hidden">Oportuns</span>
+                        <Button
+                            variant="outline"
+                            onClick={handleToday}
+                            className="h-9 border-border font-bold text-arena-navy-800 hover:bg-muted/50"
+                        >
+                            Hoje
                         </Button>
-                        <Button onClick={() => setIsBookingModalOpen(true)} className="bg-arena-button hover:bg-arena-button-hover text-white font-bold text-xs md:text-sm h-9 md:h-10">Reservar</Button>
+
+                        <Button
+                            type="button"
+                            onClick={() => setIsDayOpportunitiesModalOpen(true)}
+                            className="h-10 gap-2 rounded-md border-0 bg-arena-calendar-teal px-4 text-sm font-bold text-white shadow-none hover:bg-arena-calendar-teal-hover"
+                        >
+                            <Lightbulb className="size-4 shrink-0" aria-hidden />
+                            Ver oportunidades do dia
+                        </Button>
+
+                        <Button
+                            type="button"
+                            onClick={() => setIsBookingModalOpen(true)}
+                            className="h-10 rounded-md bg-arena-button px-4 text-sm font-bold text-white shadow-none hover:bg-arena-button-hover"
+                        >
+                            Cadastrar reserva
+                        </Button>
                     </div>
                 </div>
-            </header>
 
-            <div className="flex-1 overflow-x-auto overflow-y-auto">
-                <Card className="border-none shadow-sm bg-white overflow-hidden min-w-[320px] sm:min-w-[800px] flex flex-col gap-0">
-                    <div className="grid grid-cols-[80px_1fr] border-b border-arena-navy-800/5">
-                        <div className="p-4 border-r border-arena-navy-800/5 font-bold text-arena-navy-800/40 text-xs text-center flex items-center justify-center bg-arena-soft">Horário</div>
-                        <div className={cn("grid", viewMode === 'day' ? "grid-cols-1" : "grid-cols-7")}>
-                            {viewMode === 'day' ? (
-                                <div className="p-4 font-bold text-arena-navy-800 text-sm text-center bg-arena-soft capitalize">
-                                    {format(currentDate, "EEEE (dd/MM)", { locale: ptBR })}
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                    <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto overscroll-contain">
+                        <div className="min-w-[320px] sm:min-w-[720px]">
+                            <div className="sticky top-0 z-2 grid grid-cols-[80px_1fr] border-b border-border bg-muted/95 backdrop-blur supports-backdrop-filter:bg-muted/80">
+                                <div className="flex items-center justify-center border-r border-border p-3 text-center text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                                    Horário
                                 </div>
-                            ) : (
-                                weekDays.map((day, i) => (
-                                    <div key={i} className="p-4 font-bold text-arena-navy-800 text-sm text-center border-r border-arena-navy-800/5 last:border-none bg-arena-soft">
-                                        <div className="capitalize">{format(day, "EEEE", { locale: ptBR })}</div>
-                                        <div className="text-arena-navy-800/40 text-xs font-normal">({format(day, "dd/MM")})</div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-                    </div>
-
-                    {slots.map((slot) => {
-                        const slotKey = `${slot.hour}:${slot.minute}`
-                        const hasBooking = hasBookingInSlot(slot)
-                        return (
-                            <div key={slotKey} className={cn("grid grid-cols-[80px_1fr] last:border-none transition-all", hasBooking ? "min-h-[80px]" : "min-h-[40px]")}>
-                                <div className={cn("p-2 border-r border-b border-arena-navy-800/5 font-bold text-arena-navy-800/60 text-[10px] text-center flex items-center justify-center bg-white", !hasBooking && "text-arena-navy-800/30")}>
-                                    {String(slot.hour).padStart(2, '0')}:{String(slot.minute).padStart(2, '0')}
-                                </div>
-                                <div className={cn("grid", viewMode === 'day' ? "grid-cols-1" : "grid-cols-7")}>
-                                    {viewMode === 'day' ? (
-                                        <TimeSlot slot={slot} bookings={getBookingsForSlot(currentDate, slot)} available={true} court={court} onBookingClick={(b) => { setSelectedBooking(b); setIsBookingDetailsModalOpen(true) }} onEmptyClick={() => handleSlotClick(currentDate, slot)} className={cn(!hasBooking && "p-0")} futureBooking={getBookingsForSlot(currentDate, slot).length === 0 ? getFutureBookingForSlot(currentDate, slot) : null} />
+                                <div className={cn("grid", viewMode === "day" ? "grid-cols-1" : "grid-cols-7")}>
+                                    {viewMode === "day" ? (
+                                        <div className="p-3 text-center text-sm font-bold capitalize text-arena-navy-800">
+                                            {format(currentDate, "EEEE (dd/MM)", { locale: ptBR })}
+                                        </div>
                                     ) : (
-                                        weekDays.map((day, i) => {
-                                            const daySlots = generateSlotsForDate(day, court.day_config as any[] | null)
-                                            const isAvailable = daySlots.some(s => s.hour === slot.hour && s.minute === slot.minute)
-                                            return (
-                                                <TimeSlot key={i} slot={slot} bookings={isAvailable ? getBookingsForSlot(day, slot) : []} available={isAvailable} court={court} className={cn("border-r border-arena-navy-800/5 last:border-none", !hasBooking && "p-0")} onBookingClick={(b) => { setSelectedBooking(b); setIsBookingDetailsModalOpen(true) }} onEmptyClick={() => handleSlotClick(day, slot)} futureBooking={isAvailable && getBookingsForSlot(day, slot).length === 0 ? getFutureBookingForSlot(day, slot) : null} />
-                                            )
-                                        })
+                                        weekDays.map((day, i) => (
+                                            <div
+                                                key={i}
+                                                className="border-r border-border p-3 text-center last:border-r-0"
+                                            >
+                                                <div className="text-sm font-bold capitalize text-arena-navy-800">
+                                                    {format(day, "EEEE", { locale: ptBR })}
+                                                </div>
+                                                <div className="mt-0.5 text-xs font-medium text-muted-foreground">
+                                                    ({format(day, "dd/MM")})
+                                                </div>
+                                            </div>
+                                        ))
                                     )}
                                 </div>
                             </div>
-                        )
-                    })}
-                </Card>
-            </div>
+
+                            {slots.map((slot, slotIndex) => {
+                                const slotKey = `${slot.hour}:${slot.minute}`
+                                const hasBooking = hasBookingInSlot(slot)
+                                const stripe = slotIndex % 2 === 0 ? "bg-white" : "bg-muted/25"
+                                return (
+                                    <div
+                                        key={slotKey}
+                                        className={cn(
+                                            "grid grid-cols-[80px_1fr] border-b border-border transition-colors last:border-b-0",
+                                            stripe,
+                                            hasBooking ? "min-h-[80px]" : "min-h-[40px]"
+                                        )}
+                                    >
+                                        <div
+                                            className={cn(
+                                                "flex items-center justify-center border-r border-border p-2 text-center text-[11px] font-semibold tabular-nums text-muted-foreground",
+                                                !hasBooking && "text-muted-foreground/70"
+                                            )}
+                                        >
+                                            {String(slot.hour).padStart(2, "0")}:{String(slot.minute).padStart(2, "0")}
+                                        </div>
+                                        <div className={cn("grid", viewMode === "day" ? "grid-cols-1" : "grid-cols-7")}>
+                                            {viewMode === "day" ? (
+                                                <TimeSlot
+                                                    slot={slot}
+                                                    bookings={getBookingsForSlot(currentDate, slot)}
+                                                    available
+                                                    court={court}
+                                                    onBookingClick={(b) => {
+                                                        setSelectedBooking(b)
+                                                        setIsBookingDetailsModalOpen(true)
+                                                    }}
+                                                    onEmptyClick={() => handleSlotClick(currentDate, slot)}
+                                                    className={cn(!hasBooking && "p-0")}
+                                                    futureBooking={
+                                                        getBookingsForSlot(currentDate, slot).length === 0
+                                                            ? getFutureBookingForSlot(currentDate, slot)
+                                                            : null
+                                                    }
+                                                />
+                                            ) : (
+                                                weekDays.map((day, i) => {
+                                                    const daySlots = generateSlotsForDate(day, court.day_config as any[] | null)
+                                                    const isAvailable = daySlots.some(
+                                                        (s) => s.hour === slot.hour && s.minute === slot.minute
+                                                    )
+                                                    return (
+                                                        <TimeSlot
+                                                            key={i}
+                                                            slot={slot}
+                                                            bookings={isAvailable ? getBookingsForSlot(day, slot) : []}
+                                                            available={isAvailable}
+                                                            court={court}
+                                                            className={cn(
+                                                                "border-r border-border last:border-r-0",
+                                                                !hasBooking && "p-0"
+                                                            )}
+                                                            onBookingClick={(b) => {
+                                                                setSelectedBooking(b)
+                                                                setIsBookingDetailsModalOpen(true)
+                                                            }}
+                                                            onEmptyClick={() => handleSlotClick(day, slot)}
+                                                            futureBooking={
+                                                                isAvailable && getBookingsForSlot(day, slot).length === 0
+                                                                    ? getFutureBookingForSlot(day, slot)
+                                                                    : null
+                                                            }
+                                                        />
+                                                    )
+                                                })
+                                            )}
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    </div>
+                </div>
+            </Card>
 
             <BookingDetailsModal
                 isOpen={isBookingDetailsModalOpen}
@@ -505,9 +627,8 @@ export function CourtCalendarPageClient({ arenaId, courtId, initialCourt, initia
                 arenaId={arenaId}
                 courtId={courtId}
                 currentDate={currentDate}
-                todayBookings={bookings.filter(b => isSameDay(parseISO(b.start_time), currentDate))}
+                todayBookings={bookings.filter((b) => isSameDay(parseISO(b.start_time), currentDate))}
             />
-
         </div>
     )
 }

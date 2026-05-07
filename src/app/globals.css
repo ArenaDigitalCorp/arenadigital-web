@@ -58,6 +58,8 @@
   --color-arena-inactive-pill-fg: var(--arena-inactive-pill-fg);
   --color-arena-slate-muted: var(--arena-slate-muted);
   --color-arena-status-active: var(--arena-status-active);
+  --color-arena-calendar-teal: var(--arena-calendar-teal);
+  --color-arena-calendar-teal-hover: var(--arena-calendar-teal-hover);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -125,6 +127,9 @@
   /* Form: checkbox secundário, badge “Ativo” em horários */
   --arena-slate-muted: #7a7e87;
   --arena-status-active: #177417;
+  /* Calendário da quadra: CTA “Ver oportunidades do dia” (Figma) */
+  --arena-calendar-teal: #338599;
+  --arena-calendar-teal-hover: #2a7185;
 }
 
 .dark {
