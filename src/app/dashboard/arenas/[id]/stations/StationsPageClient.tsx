@@ -97,7 +97,7 @@ export function StationsPageClient({ arenaId, initialStations }: Props) {
           </Card>
         ) : (
           <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:overflow-visible sm:px-0">
-            <div className="flex flex-wrap gap-6 pb-1">
+            <div className="grid grid-cols-[repeat(auto-fill,376px)] justify-center gap-6 pb-1">
               {stations.map((station) => (
                 <GradientMediaCard
                   key={station.id}
