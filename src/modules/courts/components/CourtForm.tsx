@@ -297,7 +297,7 @@ export function CourtForm({ initialData, arenaId, onSuccess }: CourtFormProps) {
                                         <FormLabel>Status</FormLabel>
                                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                                             <FormControl>
-                                                <SelectTrigger>
+                                                <SelectTrigger className="w-full min-w-0">
                                                     <SelectValue placeholder="Selecione o status" />
                                                 </SelectTrigger>
                                             </FormControl>
@@ -321,7 +321,7 @@ export function CourtForm({ initialData, arenaId, onSuccess }: CourtFormProps) {
                                         <FormLabel>Tipo do espaço</FormLabel>
                                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                                             <FormControl>
-                                                <SelectTrigger>
+                                                <SelectTrigger className="w-full min-w-0">
                                                     <SelectValue placeholder="Selecione o tipo" />
                                                 </SelectTrigger>
                                             </FormControl>
@@ -346,7 +346,7 @@ export function CourtForm({ initialData, arenaId, onSuccess }: CourtFormProps) {
                                             value={field.value ? "true" : "false"}
                                         >
                                             <FormControl>
-                                                <SelectTrigger>
+                                                <SelectTrigger className="w-full min-w-0">
                                                     <SelectValue placeholder="Selecione uma opção" />
                                                 </SelectTrigger>
                                             </FormControl>
@@ -382,6 +382,7 @@ export function CourtForm({ initialData, arenaId, onSuccess }: CourtFormProps) {
                                                                 : current.filter(id => id !== sport.id)
                                                             field.onChange(next)
                                                         }}
+                                                        className="border-arena-slate-muted text-arena-slate-muted data-[state=checked]:border-arena-slate-muted data-[state=checked]:bg-arena-slate-muted data-[state=checked]:text-white"
                                                     />
                                                     <label htmlFor={sport.id} className="text-sm font-medium leading-none cursor-pointer">
                                                         {sport.name}
@@ -402,7 +403,7 @@ export function CourtForm({ initialData, arenaId, onSuccess }: CourtFormProps) {
                                         <FormLabel>Tipo de reserva</FormLabel>
                                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                                             <FormControl>
-                                                <SelectTrigger>
+                                                <SelectTrigger className="w-full min-w-0">
                                                     <SelectValue placeholder="Selecione o tipo" />
                                                 </SelectTrigger>
                                             </FormControl>

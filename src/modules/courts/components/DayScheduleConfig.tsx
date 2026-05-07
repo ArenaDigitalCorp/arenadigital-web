@@ -138,7 +138,9 @@ export function DayScheduleConfig({ day, config, onChange, onReplicate }: DaySch
         : null
 
     return (
-        <div className={`border rounded-lg p-4 transition-colors ${config.enabled ? 'bg-white border-orange-200' : 'bg-gray-50 border-gray-100'}`}>
+        <div
+            className={`rounded-lg border border-border p-4 transition-colors ${config.enabled ? "bg-white" : "bg-muted/40"}`}
+        >
 
             {/* ── Header ── */}
             <div className="flex items-center justify-between mb-4">
@@ -166,7 +168,7 @@ export function DayScheduleConfig({ day, config, onChange, onReplicate }: DaySch
                             variant="outline"
                             size="sm"
                             onClick={onReplicate}
-                            className="h-7 text-xs border-orange-200 text-orange-700 hover:bg-orange-50"
+                            className="h-7 text-xs border-border text-muted-foreground hover:bg-muted/50 hover:text-muted-foreground [&_svg]:text-muted-foreground"
                             title="Replicar para todos os dias"
                         >
                             <Copy className="h-3 w-3 mr-1" />
@@ -174,7 +176,7 @@ export function DayScheduleConfig({ day, config, onChange, onReplicate }: DaySch
                         </Button>
                     )}
                     {config.enabled && (
-                        <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
+                        <Badge className="border-transparent bg-arena-status-active px-2.5 font-medium text-white hover:bg-arena-status-active">
                             Ativo
                         </Badge>
                     )}
@@ -182,7 +184,7 @@ export function DayScheduleConfig({ day, config, onChange, onReplicate }: DaySch
             </div>
 
             {config.enabled && (
-                <div className="space-y-5 pl-6 border-l-2 border-orange-100/50">
+                <div className="space-y-5 border-l-2 border-border pl-6">
 
                     {/* ── Horário de funcionamento ── */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

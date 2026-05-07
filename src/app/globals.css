@@ -56,6 +56,8 @@
   --color-arena-charcoal: var(--arena-charcoal);
   --color-arena-inactive-pill-bg: var(--arena-inactive-pill-bg);
   --color-arena-inactive-pill-fg: var(--arena-inactive-pill-fg);
+  --color-arena-slate-muted: var(--arena-slate-muted);
+  --color-arena-status-active: var(--arena-status-active);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -120,6 +122,9 @@
   /* Tag pill “inativo” sobre cards (Figma) */
   --arena-inactive-pill-bg: #f6e7c1;
   --arena-inactive-pill-fg: #003049;
+  /* Form: checkbox secundário, badge “Ativo” em horários */
+  --arena-slate-muted: #7a7e87;
+  --arena-status-active: #177417;
 }
 
 .dark {
