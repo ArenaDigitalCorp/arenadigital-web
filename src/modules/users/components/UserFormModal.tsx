@@ -82,32 +82,32 @@ export function UserFormModal({ isOpen, onClose, user, stations, onSave }: UserF
                 <form onSubmit={handleSubmit} className="space-y-5">
                     <div className="space-y-4">
                         <div className="space-y-1.5">
-                            <Label htmlFor="name" className="text-[#0089A0] text-sm font-medium">Nome</Label>
+                            <Label htmlFor="name" className="text-sm font-medium text-arena-navy-800">Nome</Label>
                             <Input
                                 id="name"
                                 placeholder="Informa o nome do usuário"
                                 value={formData.name}
                                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                className="bg-white border-slate-300 text-slate-800 w-full placeholder:text-slate-400 focus-visible:ring-[#0089A0]"
+                                className="bg-white border-slate-300 text-slate-800 w-full placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-slate-400"
                                 required
                             />
                         </div>
 
                         <div className="space-y-1.5">
-                            <Label htmlFor="email" className="text-[#0089A0] text-sm font-medium">E-mail</Label>
+                            <Label htmlFor="email" className="text-sm font-medium text-arena-navy-800">E-mail</Label>
                             <Input
                                 id="email"
                                 type="email"
                                 placeholder="Informa o e-mail do usuário"
                                 value={formData.email}
                                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                className="bg-white border-slate-300 text-slate-800 w-full placeholder:text-slate-400 focus-visible:ring-[#0089A0]"
+                                className="bg-white border-slate-300 text-slate-800 w-full placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-slate-400"
                                 required
                             />
                         </div>
 
                         <div className="space-y-1.5">
-                            <Label htmlFor="senha" className="text-[#0089A0] text-sm font-medium">Senha</Label>
+                            <Label htmlFor="senha" className="text-sm font-medium text-arena-navy-800">Senha</Label>
                             <div className="relative">
                                 <Input
                                     id="senha"
@@ -115,7 +115,7 @@ export function UserFormModal({ isOpen, onClose, user, stations, onSave }: UserF
                                     placeholder="Insira uma senha para acesso do usuário com 6 dígitos"
                                     value={formData.senha}
                                     onChange={(e) => setFormData({ ...formData, senha: e.target.value })}
-                                    className="bg-white border-slate-300 text-slate-800 w-full pr-10 placeholder:text-slate-400 focus-visible:ring-[#0089A0]"
+                                    className="bg-white border-slate-300 text-slate-800 w-full pr-10 placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-slate-400"
                                     minLength={6}
                                     required={!isEditMode}
                                 />
@@ -130,12 +130,12 @@ export function UserFormModal({ isOpen, onClose, user, stations, onSave }: UserF
                         </div>
 
                         <div className="space-y-1.5">
-                            <Label htmlFor="role" className="text-[#0089A0] text-sm font-medium">Perfil</Label>
+                            <Label htmlFor="role" className="text-sm font-medium text-arena-navy-800">Perfil</Label>
                             <Select
                                 value={formData.role}
                                 onValueChange={(value) => setFormData({ ...formData, role: value, stationId: value === "Caixa" ? formData.stationId : "" })}
                             >
-                                <SelectTrigger className="bg-white border-slate-300 text-slate-800 w-full focus:ring-[#0089A0]">
+                                <SelectTrigger className="bg-white border-slate-300 text-slate-800 w-full focus-visible:ring-1 focus-visible:ring-slate-400">
                                     <SelectValue placeholder="Selecione o perfil" />
                                 </SelectTrigger>
                                 <SelectContent className="bg-white border-slate-200 text-slate-800 rounded-xl shadow-lg">
@@ -148,12 +148,12 @@ export function UserFormModal({ isOpen, onClose, user, stations, onSave }: UserF
 
                         {formData.role === "Caixa" && (
                             <div className="space-y-1.5">
-                                <Label htmlFor="stationId" className="text-[#0089A0] text-sm font-medium">Estação vinculada</Label>
+                                <Label htmlFor="stationId" className="text-sm font-medium text-arena-navy-800">Estação vinculada</Label>
                                 <Select
                                     value={formData.stationId}
                                     onValueChange={(value) => setFormData({ ...formData, stationId: value })}
                                 >
-                                    <SelectTrigger className="bg-white border-slate-300 text-slate-800 w-full focus:ring-[#0089A0]">
+                                    <SelectTrigger className="bg-white border-slate-300 text-slate-800 w-full focus-visible:ring-1 focus-visible:ring-slate-400">
                                         <SelectValue placeholder="Selecione a estação" />
                                     </SelectTrigger>
                                     <SelectContent className="bg-white border-slate-200 text-slate-800 rounded-xl shadow-lg">

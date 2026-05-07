@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { getAthletesByArenaAction } from '@/modules/athletes/actions/athleteActions';
 import { AthletesTable, type Athlete } from './AthletesTable';
 
@@ -45,30 +46,27 @@ export function AthletesList({ arenaId }: AthletesListProps) {
   }
 
   return (
-    <Card className="border-none shadow-sm">
-      <CardContent className="p-0">
-        <div className="px-6 space-y-6">
-          <h2 className="text-xl font-semibold text-arena-navy-800">
-            Atletas vinculados
-          </h2>
-
-          <div className="relative max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+    <TooltipProvider>
+      <Card className="rounded-lg border border-slate-100 bg-white px-6 py-6 shadow-sm">
+        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h3 className="font-heading text-xl font-bold text-[#5F636E]">
+              Atletas vinculados
+            </h3>
+          </div>
+          <div className="relative w-full sm:w-auto">
             <Input
               placeholder="Buscar por atleta"
-              className="pl-10 h-11"
+              className="h-10 w-full rounded-md border-slate-300 pl-3 pr-10 text-sm text-arena-navy-800 shadow-none placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-[#20B2AA] sm:w-[178px]"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
+            <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           </div>
-
-          <AthletesTable
-            athletes={athletes}
-            isLoading={isLoading}
-            arenaId={arenaId}
-          />
         </div>
-      </CardContent>
-    </Card>
+
+        <AthletesTable athletes={athletes} isLoading={isLoading} arenaId={arenaId} />
+      </Card>
+    </TooltipProvider>
   );
 }

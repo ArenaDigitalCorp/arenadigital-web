@@ -43,12 +43,12 @@ async function getValidatedProductStocks(arenaId: string, items: OrderItemInput[
     }
 
     if (uniqueProductIds.length === 0) {
-        return new Map<string, { currentStock: number }>()
+        return new Map<string, { currentStock: number; skipStockLedger: boolean }>()
     }
 
     const { data, error } = await getSupabaseAdmin()
         .from('products')
-        .select('id, arena_id, stock_quantity')
+        .select('id, arena_id, stock_quantity, catalog_kind')
         .in('id', uniqueProductIds)
 
     if (error) throw new Error(`Erro ao validar produtos da comanda: ${error.message}`)
@@ -56,7 +56,7 @@ async function getValidatedProductStocks(arenaId: string, items: OrderItemInput[
         throw new Error('Um ou mais produtos informados não foram encontrados')
     }
 
-    const productStocks = new Map<string, { currentStock: number }>()
+    const productStocks = new Map<string, { currentStock: number; skipStockLedger: boolean }>()
     for (const product of data) {
         if (product.arena_id !== arenaId) {
             throw new Error('Um ou mais produtos não pertencem à arena informada')
@@ -64,11 +64,13 @@ async function getValidatedProductStocks(arenaId: string, items: OrderItemInput[
 
         const currentStock = product.stock_quantity || 0
         const requestedQuantity = requestedQuantities.get(product.id) ?? 0
-        if (currentStock < requestedQuantity) {
+        const skipStockLedger = product.catalog_kind === 'service'
+
+        if (!skipStockLedger && currentStock < requestedQuantity) {
             throw new Error(`Estoque insuficiente para o produto selecionado. Disponível: ${currentStock}, solicitado: ${requestedQuantity}`)
         }
 
-        productStocks.set(product.id, { currentStock })
+        productStocks.set(product.id, { currentStock, skipStockLedger })
     }
 
     return productStocks
@@ -207,6 +209,10 @@ export async function createOrderWithItemsAction(
                 const stockState = productStocks.get(sourceItem.product_id)
                 if (!stockState) throw new Error('Produto não encontrado durante a atualização de estoque')
 
+                if (stockState.skipStockLedger) {
+                    continue
+                }
+
                 const nextStock = stockState.currentStock - sourceItem.quantity
                 const { data: movement, error: movementError } = await supabase
                     .from('product_stock_movements')
@@ -294,6 +300,10 @@ export async function addOrderItemsAction(
             const sourceItem = items[index]
             const stockState = productStocks.get(sourceItem.product_id)
             if (!stockState) throw new Error('Produto não encontrado durante a atualização de estoque')
+
+            if (stockState.skipStockLedger) {
+                continue
+            }
 
             const nextStock = stockState.currentStock - sourceItem.quantity
             const { data: movement, error: movementError } = await supabase

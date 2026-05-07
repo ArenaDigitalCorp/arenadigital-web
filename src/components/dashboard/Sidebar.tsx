@@ -110,6 +110,12 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                 isActive: (p: string) => p.includes("/stations"),
             },
             {
+                icon: Package,
+                label: "Catálogo",
+                href: productsHref,
+                isActive: (p: string) => p.startsWith("/dashboard/settings/products/"),
+            },
+            {
                 icon: ClipboardPen,
                 label: "Mensalistas",
                 href: mensalistasHref,
@@ -132,12 +138,6 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                 label: "Financeiro",
                 href: financeHref,
                 isActive: (p: string) => p.startsWith("/dashboard/finance/"),
-            },
-            {
-                icon: Package,
-                label: "Produtos",
-                href: productsHref,
-                isActive: (p: string) => p.startsWith("/dashboard/settings/products/"),
             },
         ];
 

@@ -88,7 +88,9 @@ function formatStatus(status: string | null | undefined) {
 
 function formatAvailableDays(days: string[] | null | undefined) {
   if (!days || days.length === 0) return '—';
-  return days.map(day => day.charAt(0).toUpperCase() + day.slice(1)).join(', ');
+  return days
+    .map((day) => day.charAt(0).toUpperCase() + day.slice(1))
+    .join(', ');
 }
 
 export function ArenaDetailPageClient({
@@ -221,86 +223,94 @@ export function ArenaDetailPageClient({
             ) : (
               <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:overflow-visible sm:px-0">
                 <div className="grid grid-cols-[repeat(auto-fill,376px)] justify-center gap-6 pb-1">
-                {courts.map((court) => {
-                  const statusInfo = getCourtStatus(court);
-                  return (
-                    <GradientMediaCard
-                      key={court.id}
-                      inactive={court.status === 'inativo'}
-                      imageSrc={court.image_url || '/placeholder-court.jpg'}
-                      imageAlt={court.name}
-                      ariaLabel={`Abrir detalhes do espaço ${court.name}`}
-                      onClick={() => setSelectedSpace(court)}
-                      actions={
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-sm"
-                              className="pointer-events-auto p-0 text-white hover:bg-white/15"
-                              aria-label="Menu do espaço"
-                            >
-                              <MoreVertical className="size-6" strokeWidth={2} />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem asChild>
-                              <Link
-                                href={spaceEditPath(arenaId, court.id, 'espacos')}
-                                className="flex w-full cursor-pointer items-center"
+                  {courts.map((court) => {
+                    const statusInfo = getCourtStatus(court);
+                    return (
+                      <GradientMediaCard
+                        key={court.id}
+                        inactive={court.status === 'inativo'}
+                        imageSrc={court.image_url || '/placeholder-court.jpg'}
+                        imageAlt={court.name}
+                        ariaLabel={`Abrir detalhes do espaço ${court.name}`}
+                        onClick={() => setSelectedSpace(court)}
+                        actions={
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-sm"
+                                className="pointer-events-auto cursor-pointer p-0 text-white"
+                                aria-label="Menu do espaço"
                               >
-                                <Edit className="mr-2 h-4 w-4" /> Editar
-                              </Link>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem asChild>
-                              <Link
-                                href={`/dashboard/arenas/${arenaId}/courts/${court.id}/calendar`}
-                                className="flex w-full cursor-pointer items-center"
+                                <MoreVertical
+                                  className="size-6"
+                                  strokeWidth={2}
+                                />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem asChild>
+                                <Link
+                                  href={spaceEditPath(
+                                    arenaId,
+                                    court.id,
+                                    'espacos'
+                                  )}
+                                  className="flex w-full cursor-pointer items-center"
+                                >
+                                  <Edit className="mr-2 h-4 w-4" /> Editar
+                                </Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem asChild>
+                                <Link
+                                  href={`/dashboard/arenas/${arenaId}/courts/${court.id}/calendar`}
+                                  className="flex w-full cursor-pointer items-center"
+                                >
+                                  <Eye className="mr-2 h-4 w-4" /> Ver
+                                  calendário
+                                </Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-destructive"
+                                onClick={() => setSpaceToDelete(court)}
                               >
-                                <Eye className="mr-2 h-4 w-4" /> Ver calendário
-                              </Link>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="text-destructive"
-                              onClick={() => setSpaceToDelete(court)}
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" /> Excluir
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      }
-                      badge={
-                        court.status === 'inativo' ? (
-                          <Badge variant="warning">Inativo</Badge>
-                        ) : undefined
-                      }
-                    >
-                      <h4 className="text-[14px] font-semibold leading-tight text-white">
-                        {court.name}
-                      </h4>
-                      {statusInfo.status === 'open' ? (
-                        <>
-                          <div className="mt-1 flex flex-wrap items-baseline gap-x-1 gap-y-0 leading-none">
-                            <span className="text-[24px] font-extrabold tracking-tight text-white">
-                              {statusInfo.booked}
-                            </span>
-                            <span className="text-[12px] font-semibold text-white/90">
-                              / {statusInfo.total} reservas
-                            </span>
-                          </div>
-                          <p className="mt-0.5 text-[12px] font-semibold text-white/95">
-                            hoje
+                                <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        }
+                        badge={
+                          court.status === 'inativo' ? (
+                            <Badge variant="warning">Inativo</Badge>
+                          ) : undefined
+                        }
+                      >
+                        <h4 className="text-[14px] font-semibold leading-tight text-white">
+                          {court.name}
+                        </h4>
+                        {statusInfo.status === 'open' ? (
+                          <>
+                            <div className="mt-1 flex flex-wrap items-baseline gap-x-1 gap-y-0 leading-none">
+                              <span className="text-[24px] font-extrabold tracking-tight text-white">
+                                {statusInfo.booked}
+                              </span>
+                              <span className="text-[12px] font-semibold text-white/90">
+                                / {statusInfo.total} reservas
+                              </span>
+                            </div>
+                            <p className="mt-0.5 text-[12px] font-semibold text-white/95">
+                              hoje
+                            </p>
+                          </>
+                        ) : (
+                          <p className="mt-1 line-clamp-2 text-[24px] font-extrabold leading-tight text-white">
+                            {statusInfo.message}
                           </p>
-                        </>
-                      ) : (
-                        <p className="mt-1 line-clamp-2 text-[24px] font-extrabold leading-tight text-white">
-                          {statusInfo.message}
-                        </p>
-                      )}
-                    </GradientMediaCard>
-                  );
-                })}
+                        )}
+                      </GradientMediaCard>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -330,9 +340,7 @@ export function ArenaDetailPageClient({
                     className="h-10 rounded-md bg-arena-button px-4 text-sm font-bold text-white shadow-none hover:bg-arena-button-hover"
                     asChild
                   >
-                    <Link href={spaceNewPath(arenaId)}>
-                      Cadastrar Espaço +
-                    </Link>
+                    <Link href={spaceNewPath(arenaId)}>Cadastrar Espaço +</Link>
                   </Button>
                 </div>
               </div>
@@ -360,11 +368,10 @@ export function ArenaDetailPageClient({
                             .includes(searchQuery.toLowerCase())
                       )
                       .map((court) => (
-                        <tr
-                          key={court.id}
-                          className={arenaDataTable.tbodyRow}
-                        >
-                          <td className={arenaDataTable.tdBold}>{court.name}</td>
+                        <tr key={court.id} className={arenaDataTable.tbodyRow}>
+                          <td className={arenaDataTable.tdBold}>
+                            {court.name}
+                          </td>
                           <td className={arenaDataTable.td}>
                             {court.sports?.map((s: any) => s.name).join(', ') ||
                               court.type}
@@ -395,7 +402,11 @@ export function ArenaDetailPageClient({
                                 className="h-8 w-8 text-arena-navy-800/60 bg-[#F1F5F9] hover:bg-[#E2E8F0]"
                               >
                                 <Link
-                                  href={spaceEditPath(arenaId, court.id, 'cadastro')}
+                                  href={spaceEditPath(
+                                    arenaId,
+                                    court.id,
+                                    'cadastro'
+                                  )}
                                 >
                                   <Edit className="h-4 w-4" />
                                 </Link>
@@ -463,71 +474,73 @@ export function ArenaDetailPageClient({
                 <div className="rounded-lg border border-slate-100 bg-white p-5 shadow-sm">
                   <div className="grid gap-x-12 gap-y-5 md:grid-cols-2">
                     <div className="space-y-1">
-                    <label className="text-sm font-medium text-[#5F636E]">
-                      Status
-                    </label>
-                    <p className="text-base font-medium text-arena-navy-800">
-                      {formatStatus(selectedSpace.status)}
-                    </p>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium text-[#5F636E]">
-                      Tipo do espaço
-                    </label>
-                    <p className="text-base font-medium text-arena-navy-800">
-                      {selectedSpace.type}
-                    </p>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium text-[#5F636E]">
-                      Esporte
-                    </label>
-                    <p className="text-base font-medium text-arena-navy-800">
-                      {selectedSpace.sports?.map((s: any) => s.name).join(', ') || '—'}
-                    </p>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium text-[#5F636E]">
-                      Coberta/Descoberta
-                    </label>
-                    <p className="text-base font-medium text-arena-navy-800">
-                      {selectedSpace.is_covered ? 'Coberta' : 'Descoberta'}
-                    </p>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium text-[#5F636E]">
-                      Valor da reserva
-                    </label>
-                    <p className="text-base font-medium text-arena-navy-800">
-                      {formatCurrency(selectedSpace.price)}
-                    </p>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium text-[#5F636E]">
-                      Tipo de reserva
-                    </label>
-                    <p className="text-base font-medium text-arena-navy-800">
-                      {selectedSpace.booking_type === 'hourly'
-                        ? 'Por hora'
-                        : 'Único'}
-                    </p>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium text-[#5F636E]">
-                      Dias disponíveis
-                    </label>
-                    <p className="text-base font-medium leading-snug text-arena-navy-800">
-                      {formatAvailableDays(selectedSpace.available_days)}
-                    </p>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium text-[#5F636E]">
-                      Observações
-                    </label>
-                    <p className="text-base font-medium leading-snug text-arena-navy-800">
-                      {selectedSpace.observations || '—'}
-                    </p>
-                  </div>
+                      <label className="text-sm font-medium text-[#5F636E]">
+                        Status
+                      </label>
+                      <p className="text-base font-medium text-arena-navy-800">
+                        {formatStatus(selectedSpace.status)}
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-[#5F636E]">
+                        Tipo do espaço
+                      </label>
+                      <p className="text-base font-medium text-arena-navy-800">
+                        {selectedSpace.type}
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-[#5F636E]">
+                        Esporte
+                      </label>
+                      <p className="text-base font-medium text-arena-navy-800">
+                        {selectedSpace.sports
+                          ?.map((s: any) => s.name)
+                          .join(', ') || '—'}
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-[#5F636E]">
+                        Coberta/Descoberta
+                      </label>
+                      <p className="text-base font-medium text-arena-navy-800">
+                        {selectedSpace.is_covered ? 'Coberta' : 'Descoberta'}
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-[#5F636E]">
+                        Valor da reserva
+                      </label>
+                      <p className="text-base font-medium text-arena-navy-800">
+                        {formatCurrency(selectedSpace.price)}
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-[#5F636E]">
+                        Tipo de reserva
+                      </label>
+                      <p className="text-base font-medium text-arena-navy-800">
+                        {selectedSpace.booking_type === 'hourly'
+                          ? 'Por hora'
+                          : 'Único'}
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-[#5F636E]">
+                        Dias disponíveis
+                      </label>
+                      <p className="text-base font-medium leading-snug text-arena-navy-800">
+                        {formatAvailableDays(selectedSpace.available_days)}
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-[#5F636E]">
+                        Observações
+                      </label>
+                      <p className="text-base font-medium leading-snug text-arena-navy-800">
+                        {selectedSpace.observations || '—'}
+                      </p>
+                    </div>
                   </div>
                 </div>
 

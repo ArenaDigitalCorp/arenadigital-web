@@ -1134,6 +1134,7 @@ export type Database = {
       products: {
         Row: {
           arena_id: string
+          catalog_kind: string
           created_at: string
           created_by: string | null
           id: string
@@ -1148,6 +1149,7 @@ export type Database = {
         }
         Insert: {
           arena_id: string
+          catalog_kind?: string
           created_at?: string
           created_by?: string | null
           id?: string
@@ -1162,6 +1164,7 @@ export type Database = {
         }
         Update: {
           arena_id?: string
+          catalog_kind?: string
           created_at?: string
           created_by?: string | null
           id?: string

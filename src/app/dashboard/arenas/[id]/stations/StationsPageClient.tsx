@@ -12,14 +12,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  TooltipProvider,
-} from '@/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import {
   GradientMediaCard,
   GRADIENT_MEDIA_CARD_STATION_PRESET,
 } from '@/components/dashboard/GradientMediaCard';
-import { DashboardTabs } from '@/components/dashboard/DashboardTabs';
 
 interface StationListItem {
   id: string;
@@ -65,18 +62,13 @@ export function StationsPageClient({ arenaId, initialStations }: Props) {
               Gerencie suas estações, caixas, comandas e itens.
             </p>
           </div>
-            <Link href={`/dashboard/arenas/${arenaId}/stations/new`}>
+          <Link href={`/dashboard/arenas/${arenaId}/stations/new`}>
             <Button className="bg-arena-button hover:bg-arena-button-hover text-white font-semibold shadow-sm">
               <Plus className="mr-2 h-4 w-4" />
               Cadastrar Estação
             </Button>
           </Link>
         </div>
-
-        <DashboardTabs
-          value="stations"
-          tabs={[{ label: 'Estações', value: 'stations' }]}
-        />
 
         {stations.length === 0 ? (
           <Card className="flex flex-col items-center justify-center border-2 border-dashed bg-white/50 py-20">
@@ -86,7 +78,10 @@ export function StationsPageClient({ arenaId, initialStations }: Props) {
             <p className="text-lg font-medium text-arena-navy-800/40">
               Nenhuma estação cadastrada aqui.
             </p>
-            <Link href={`/dashboard/arenas/${arenaId}/stations/new`} className="mt-4">
+            <Link
+              href={`/dashboard/arenas/${arenaId}/stations/new`}
+              className="mt-4"
+            >
               <Button
                 variant="outline"
                 className="border-arena-navy-800/10 text-arena-navy-800/60"
@@ -118,7 +113,7 @@ export function StationsPageClient({ arenaId, initialStations }: Props) {
                           type="button"
                           variant="ghost"
                           size="icon-sm"
-                          className="pointer-events-auto p-0 text-white hover:bg-white/15"
+                          className="pointer-events-auto cursor-pointer p-0 text-white"
                           aria-label="Menu da estação"
                         >
                           <MoreVertical className="size-6" strokeWidth={2} />
