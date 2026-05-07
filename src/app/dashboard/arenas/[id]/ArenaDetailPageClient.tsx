@@ -127,7 +127,7 @@ export function ArenaDetailPageClient({
       <div className="space-y-8">
         <div className="flex flex-col gap-1">
           <h1 className="text-3xl font-black text-arena-navy-800 tracking-tight">
-            Espaços
+            Arena
           </h1>
           <p className="text-arena-navy-800/60 font-medium">
             Gerencie quadras, reservas e disponibilidades.
@@ -139,24 +139,24 @@ export function ArenaDetailPageClient({
             onClick={() => setActiveTab('espacos')}
             className={cn(
               'pb-4 font-bold text-sm transition-all relative',
-              activeTab === 'espacos' ? 'text-arena-navy-800' : 'text-arena-navy-800/40'
+              activeTab === 'espacos' ? 'text-arena-navy-800' : 'text-[#007793]'
             )}
           >
-            Visão geral
+            Espaços
             {activeTab === 'espacos' && (
-              <div className="absolute bottom-0 left-0 w-full h-0.5 bg-[#20B2AA]" />
+              <div className="absolute bottom-0 left-1/2 h-0.5 w-[calc(100%+32px)] -translate-x-1/2 bg-[#20B2AA]" />
             )}
           </button>
           <button
             onClick={() => setActiveTab('cadastro')}
             className={cn(
               'pb-4 font-bold text-sm transition-all relative',
-              activeTab === 'cadastro' ? 'text-arena-navy-800' : 'text-arena-navy-800/40'
+              activeTab === 'cadastro' ? 'text-arena-navy-800' : 'text-[#007793]'
             )}
           >
-            Cadastro
+            Cadastros
             {activeTab === 'cadastro' && (
-              <div className="absolute bottom-0 left-0 w-full h-0.5 bg-[#20B2AA]" />
+              <div className="absolute bottom-0 left-1/2 h-0.5 w-[calc(100%+32px)] -translate-x-1/2 bg-[#20B2AA]" />
             )}
           </button>
         </div>
@@ -279,28 +279,25 @@ export function ArenaDetailPageClient({
 
         {activeTab === 'cadastro' && (
           <div className="space-y-8">
-            <Card className="p-8 border-none shadow-lg rounded-xl bg-white">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+            <Card className="rounded-lg border border-slate-100 bg-white px-6 py-6 shadow-sm">
+              <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <h3 className="text-2xl font-bold text-arena-navy-800">
+                  <h3 className="font-heading text-xl font-bold text-[#5F636E]">
                     Espaços Cadastrados
                   </h3>
-                  <p className="text-arena-navy-800/60">
-                    Gerencie quadras, reservas e disponibilidades.
-                  </p>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-arena-navy-800/40" />
                     <Input
                       placeholder="Buscar espaço..."
-                      className="pl-9 w-[240px] border-arena-navy-800/10"
+                      className="h-10 w-full rounded-md border-slate-300 pl-3 pr-10 text-sm text-arena-navy-800 shadow-none placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-[#20B2AA] sm:w-[178px]"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                     />
+                    <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   </div>
                   <Button
-                    className="bg-arena-button hover:bg-arena-button-hover text-white font-bold"
+                    className="h-10 rounded-md bg-arena-button px-4 text-sm font-bold text-white shadow-none hover:bg-arena-button-hover"
                     asChild
                   >
                     <Link href={`/dashboard/arenas/${arenaId}/spaces/new`}>
@@ -313,20 +310,20 @@ export function ArenaDetailPageClient({
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="border-b border-arena-navy-800/5">
-                      <th className="py-4 font-bold text-xs uppercase tracking-wider text-arena-navy-800/40">
+                    <tr className="border-b border-slate-100">
+                      <th className="py-4 pr-6 text-sm font-medium text-[#007793]">
                         Nome
                       </th>
-                      <th className="py-4 font-bold text-xs uppercase tracking-wider text-arena-navy-800/40">
+                      <th className="py-4 pr-6 text-sm font-medium text-[#007793]">
                         Tipo
                       </th>
-                      <th className="py-4 font-bold text-xs uppercase tracking-wider text-arena-navy-800/40">
+                      <th className="py-4 pr-6 text-sm font-medium text-[#007793]">
                         Status
                       </th>
-                      <th className="py-4 font-bold text-xs uppercase tracking-wider text-arena-navy-800/40">
+                      <th className="py-4 pr-6 text-sm font-medium text-[#007793]">
                         Coberta/Descoberta
                       </th>
-                      <th className="py-4 font-bold text-xs uppercase tracking-wider text-arena-navy-800/40 text-right">
+                      <th className="py-4 text-right text-sm font-medium text-[#007793]">
                         Ações
                       </th>
                     </tr>
@@ -345,33 +342,33 @@ export function ArenaDetailPageClient({
                       .map((court) => (
                         <tr
                           key={court.id}
-                          className="border-b border-arena-navy-800/5 hover:bg-arena-soft transition-colors"
+                          className="border-b border-slate-100 transition-colors hover:bg-slate-50/60"
                         >
-                          <td className="py-4 font-bold text-arena-navy-800">
+                          <td className="py-5 pr-6 text-sm font-bold text-arena-navy-800">
                             {court.name}
                           </td>
-                          <td className="py-4 text-arena-navy-800/60 text-sm font-medium">
+                          <td className="py-5 pr-6 text-sm font-medium text-arena-navy-800">
                             {court.sports?.map((s: any) => s.name).join(', ') ||
                               court.type}
                           </td>
-                          <td className="py-4">
+                          <td className="py-5 pr-6">
                             <Badge
                               className={cn(
-                                'font-bold text-[10px] uppercase h-5',
+                                'h-6 rounded-full border-none px-3 text-[11px] font-bold capitalize shadow-none',
                                 court.status === 'ativo'
-                                  ? 'bg-[#FFC145]/20 text-arena-navy-800 hover:bg-[#FFC145]/30 border-none'
+                                  ? 'bg-[linear-gradient(90deg,#FF8E3D_0%,#F9C536_100%)] text-white hover:bg-[linear-gradient(90deg,#FF8E3D_0%,#F9C536_100%)]'
                                   : court.status === 'Em manutenção'
-                                    ? 'bg-orange-100 text-orange-700 hover:bg-orange-100 border-none'
-                                    : 'bg-gray-100 text-gray-500 hover:bg-gray-100 border-none'
+                                    ? 'bg-slate-100 text-arena-navy-800 hover:bg-slate-100'
+                                    : 'bg-slate-50 text-[#CBBF9A] hover:bg-slate-50'
                               )}
                             >
                               {court.status}
                             </Badge>
                           </td>
-                          <td className="py-4 text-arena-navy-800/60 text-sm font-medium">
+                          <td className="py-5 pr-6 text-sm font-medium text-arena-navy-800">
                             {court.is_covered ? 'Coberto' : 'Descoberto'}
                           </td>
-                          <td className="py-4 text-right">
+                          <td className="py-5 text-right">
                             <div className="flex items-center justify-end gap-2">
                               <Button
                                 variant="ghost"
