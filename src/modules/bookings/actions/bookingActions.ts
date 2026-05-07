@@ -3,7 +3,7 @@
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { assertArenaBackofficeAccess, assertBookingAccess, assertCourtAccess, requireAuthenticatedDbUser } from '@/lib/server-auth'
 import { SupabaseBookingRepository } from '@/modules/bookings/repositories/SupabaseBookingRepository'
-import type { Booking, CreateBookingDTO } from '@/modules/bookings/types/booking.types'
+import type { Booking, CreateBookingDTO, UpdateBookingDTO } from '@/modules/bookings/types/booking.types'
 import { revalidatePath } from 'next/cache'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -67,7 +67,8 @@ export interface BookingConflict {
 export async function checkBookingConflictsAction(
     arenaId: string,
     courtId: string,
-    slots: { startTime: string; endTime: string }[]
+    slots: { startTime: string; endTime: string }[],
+    excludeBookingId?: string
 ): Promise<{ success: boolean; conflicts: BookingConflict[]; error?: string }> {
     try {
         await assertCourtAccess(courtId, arenaId)
@@ -75,14 +76,19 @@ export async function checkBookingConflictsAction(
         const conflicts: BookingConflict[] = []
 
         for (const slot of slots) {
-            const { data, error } = await supabase
+            let query = supabase
                 .from('bookings')
                 .select('athlete_name, start_time, end_time')
                 .eq('court_id', courtId)
                 .in('status', ['confirmed', 'reservado'])
                 .lt('start_time', slot.endTime)
                 .gt('end_time', slot.startTime)
-                .limit(1)
+
+            if (excludeBookingId) {
+                query = query.neq('id', excludeBookingId)
+            }
+
+            const { data, error } = await query.limit(1)
 
             if (error) throw new Error(error.message)
 
@@ -167,6 +173,41 @@ export async function updateBookingStatusAction(
         revalidatePath(`/dashboard/arenas/${arenaId}`)
         revalidatePath(`/dashboard/arenas/${arenaId}/courts`)
         return { success: true }
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Erro ao atualizar reserva'
+        return { success: false, error: message }
+    }
+}
+
+export async function updateBookingAction(
+    arenaId: string,
+    bookingId: string,
+    input: Pick<UpdateBookingDTO, 'athlete_name' | 'athlete_id' | 'sport_id' | 'start_time' | 'end_time' | 'price'>
+): Promise<{ success: boolean; data?: Booking; error?: string }> {
+    try {
+        await assertBookingAccess(bookingId, arenaId)
+        const repo = new SupabaseBookingRepository(getSupabaseAdmin())
+        const { data: existing } = await getSupabaseAdmin()
+            .from('bookings')
+            .select('court_id')
+            .eq('id', bookingId)
+            .single()
+        if (!existing) throw new Error('Reserva não encontrada')
+        const courtId = (existing as { court_id: string }).court_id
+        await assertCourtAccess(courtId, arenaId)
+
+        const data = await repo.updateBooking(bookingId, courtId, {
+            athlete_name: input.athlete_name ?? null,
+            athlete_id: input.athlete_id ?? null,
+            sport_id: input.sport_id ?? null,
+            start_time: input.start_time as string,
+            end_time: input.end_time as string,
+            price: input.price ?? null,
+        })
+
+        revalidatePath(`/dashboard/arenas/${arenaId}`)
+        revalidatePath(`/dashboard/arenas/${arenaId}/courts`)
+        return { success: true, data }
     } catch (err) {
         const message = err instanceof Error ? err.message : 'Erro ao atualizar reserva'
         return { success: false, error: message }

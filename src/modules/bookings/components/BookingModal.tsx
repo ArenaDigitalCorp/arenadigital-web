@@ -22,12 +22,13 @@ import {
 } from "@/components/ui/select"
 import { searchAthletesAction } from "@/modules/loyalty/actions/loyaltyActions"
 import { getArenaByIdAction } from "@/modules/arenas/actions/arenaActions"
-import { createBookingAction, createRecurringBookingsAction, checkBookingConflictsAction } from "@/modules/bookings/actions/bookingActions"
+import { createBookingAction, createRecurringBookingsAction, checkBookingConflictsAction, updateBookingAction } from "@/modules/bookings/actions/bookingActions"
 import type { BookingConflict } from "@/modules/bookings/actions/bookingActions"
+import type { Booking } from "@/modules/bookings/types/booking.types"
 import { createPlanoMensalistaAction } from "@/modules/bookings/actions/mensalistaActions"
 import { AthleteRegistrationModal } from "@/modules/athletes/components/AthleteRegistrationModal"
 import { toast } from "sonner"
-import { format, addWeeks, addDays, addMonths, startOfMonth, endOfMonth } from "date-fns"
+import { format, addWeeks, addDays, addMonths, startOfMonth, endOfMonth, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { cn, normalizeString } from "@/lib/utils"
 
@@ -163,9 +164,11 @@ interface BookingModalProps {
     selectedHour: number;
     selectedMinute?: number;
     defaultPrice: number;
+    /** Quando informado, o modal abre em modo edição (reserva avulsa). */
+    existingBooking?: Booking | null;
 }
 
-export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, selectedDate, selectedHour, selectedMinute = 0, defaultPrice }: BookingModalProps) {
+export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, selectedDate, selectedHour, selectedMinute = 0, defaultPrice, existingBooking = null }: BookingModalProps) {
     const [bookingType, setBookingType] = useState<"avulso" | "mensal">("avulso")
 
     // Shared
@@ -197,42 +200,73 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
 
     const searchTimeout = useRef<NodeJS.Timeout | null>(null)
 
-    useEffect(() => {
-        if (isOpen) {
-            const startTotal = selectedHour * 60 + selectedMinute
-            const endTotal = startTotal + 60
-            const endHour = Math.floor(endTotal / 60) % 24
-            const endMin = endTotal % 60
-            const startStr = `${String(selectedHour).padStart(2, '0')}:${String(selectedMinute).padStart(2, '0')}`
-            const endStr = `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`
-            setStartTime(startStr)
-            setEndTime(endStr)
-            setHorarioInicio(startStr)
-            setHorarioFim(endStr)
-            setPrice(defaultPrice.toString())
-            setDiaSemana(String(selectedDate.getDay()))
-            loadArenaSports()
+    async function loadArenaSports(preferredSportId?: string | null) {
+        try {
+            setIsLoadingSports(true)
+            const res = await getArenaByIdAction(arenaId)
+            if (res.data?.sports) {
+                const sports = res.data.sports
+                setArenaSports(sports)
+                if (sports.length > 0) {
+                    const pick =
+                        preferredSportId && sports.some((s) => s.id === preferredSportId)
+                            ? preferredSportId
+                            : sports[0].id
+                    setSelectedSport(pick)
+                }
+            }
+        } finally {
+            setIsLoadingSports(false)
         }
-    }, [isOpen, selectedHour, selectedMinute, defaultPrice])
+    }
+
+    useEffect(() => {
+        if (!isOpen) return
+
+        if (existingBooking) {
+            const start = parseISO(existingBooking.start_time)
+            const end = parseISO(existingBooking.end_time)
+            setStartTime(format(start, "HH:mm"))
+            setEndTime(format(end, "HH:mm"))
+            setPrice(String(existingBooking.price ?? 0))
+            setBookingType("avulso")
+            setIsRecurring(false)
+            setConflicts([])
+            if (existingBooking.atleta) {
+                setSelectedAthlete({
+                    id: existingBooking.atleta.id,
+                    nome_perfil: existingBooking.atleta.nome_perfil,
+                    telefone: existingBooking.atleta.telefone ?? "",
+                })
+                setSearch(existingBooking.atleta.nome_perfil)
+            } else {
+                setSelectedAthlete(null)
+                setSearch(existingBooking.athlete_name ?? "")
+            }
+            void loadArenaSports(existingBooking.sport_id ?? null)
+            return
+        }
+
+        const startTotal = selectedHour * 60 + selectedMinute
+        const endTotal = startTotal + 60
+        const endHour = Math.floor(endTotal / 60) % 24
+        const endMin = endTotal % 60
+        const startStr = `${String(selectedHour).padStart(2, '0')}:${String(selectedMinute).padStart(2, '0')}`
+        const endStr = `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`
+        setStartTime(startStr)
+        setEndTime(endStr)
+        setHorarioInicio(startStr)
+        setHorarioFim(endStr)
+        setPrice(defaultPrice.toString())
+        setDiaSemana(String(selectedDate.getDay()))
+        void loadArenaSports()
+    }, [isOpen, existingBooking, selectedDate, selectedHour, selectedMinute, defaultPrice, arenaId])
 
     // Limpa conflitos quando qualquer campo relevante muda
     useEffect(() => {
         setConflicts([])
     }, [startTime, endTime, horarioInicio, horarioFim, diaSemana, isRecurring, recurrenceWeeks, bookingType])
 
-
-    async function loadArenaSports() {
-        try {
-            setIsLoadingSports(true)
-            const res = await getArenaByIdAction(arenaId)
-            if (res.data?.sports) {
-                setArenaSports(res.data.sports)
-                if (res.data.sports.length > 0) setSelectedSport(res.data.sports[0].id)
-            }
-        } finally {
-            setIsLoadingSports(false)
-        }
-    }
 
     const handleSearch = (value: string) => {
         setSearch(value)
@@ -274,6 +308,26 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
             const endDateTime = new Date(selectedDate)
             const [eH, eM] = endTime.split(':').map(Number)
             endDateTime.setHours(eH, eM, 0, 0)
+
+            if (existingBooking) {
+                const result = await updateBookingAction(arenaId, existingBooking.id, {
+                    athlete_name: selectedAthlete ? selectedAthlete.nome_perfil : search,
+                    athlete_id: selectedAthlete?.id ?? null,
+                    sport_id: selectedSport || null,
+                    start_time: startDateTime.toISOString(),
+                    end_time: endDateTime.toISOString(),
+                    price: Number(price),
+                })
+                if (!result.success) {
+                    toast.error(result.error ?? "Erro ao atualizar reserva")
+                    return
+                }
+                toast.success("Reserva atualizada com sucesso!")
+                onSuccess()
+                onClose()
+                resetForm()
+                return
+            }
 
             if (isRecurring) {
                 const recurrenceId = crypto.randomUUID()
@@ -440,7 +494,12 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                 bookingType === 'avulso' ? await handleSaveAvulso() : await handleSaveMensal()
                 return
             }
-            const result = await checkBookingConflictsAction(arenaId, courtId, slots)
+            const result = await checkBookingConflictsAction(
+                arenaId,
+                courtId,
+                slots,
+                existingBooking?.id
+            )
             if (!result.success) {
                 toast.error(result.error ?? 'Erro ao verificar conflitos')
                 return
@@ -505,7 +564,7 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
             <DialogContent className="sm:max-w-[480px] p-0 overflow-hidden border-none shadow-2xl rounded-3xl">
                 <DialogHeader className="p-8 pb-4">
                     <DialogTitle className="text-2xl font-black text-arena-navy-800 tracking-tight">
-                        {bookingType === "avulso" ? "Cadastrar nova reserva" : "Novo Mensalista"}
+                        {existingBooking ? "Editar reserva" : bookingType === "avulso" ? "Cadastrar nova reserva" : "Novo Mensalista"}
                     </DialogTitle>
                 </DialogHeader>
 
@@ -513,6 +572,7 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                     <div className="space-y-6 pb-8">
 
                         {/* Tipo de reserva */}
+                        {!existingBooking && (
                         <div className="flex items-center gap-1 p-1 bg-[#F1F5F9] rounded-xl">
                             <button
                                 type="button"
@@ -541,6 +601,7 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                                 Mensal
                             </button>
                         </div>
+                        )}
 
                         {/* ── AVULSO ── */}
                         {bookingType === "avulso" && (
@@ -605,6 +666,7 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                                 </div>
 
                                 {/* Recorrência */}
+                                {!existingBooking && (
                                 <div className="pt-4 border-t border-dashed border-arena-navy-800/10 flex flex-col gap-4">
                                     <div className="flex items-center justify-between">
                                         <div className="space-y-0.5">
@@ -639,6 +701,7 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                                         </div>
                                     )}
                                 </div>
+                                )}
                             </>
                         )}
 
@@ -786,7 +849,11 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                         ) : (
                             <Save className="h-5 w-5" />
                         )}
-                        {isCheckingConflicts ? 'Verificando...' : bookingType === "avulso" ? "Salvar" : "Criar Plano"}
+                        {isCheckingConflicts ? 'Verificando...' : existingBooking
+                            ? 'Salvar alterações'
+                            : bookingType === "avulso"
+                              ? "Salvar"
+                              : "Criar Plano"}
                     </Button>
                 </DialogFooter>
             </DialogContent>

@@ -14,6 +14,7 @@ import { BookingModal } from "@/modules/bookings/components/BookingModal"
 import { BookingDetailsModal } from "@/modules/bookings/components/BookingDetailsModal"
 import { DayOpportunitiesModal } from "@/modules/bookings/components/DayOpportunitiesModal"
 import { getBookingsByCourtAction } from "@/modules/bookings/actions/bookingActions"
+import type { Booking } from "@/modules/bookings/types/booking.types"
 import type { Json } from '@/types/supabase.types'
 import { arenaDashboardPath } from "@/lib/arena-dashboard-navigation"
 
@@ -24,19 +25,6 @@ interface Court {
     booking_type: string | null
     price: number | null
     sports: { id: string; name: string }[]
-}
-
-interface Booking {
-    id: string
-    athlete_name: string | null
-    start_time: string
-    end_time: string
-    status: string | null
-    booking_type?: string | null
-    plano_mensalista_id?: string | null
-    price?: number | null
-    sports?: { id: string; name: string }
-    atleta?: { id: string; nome_perfil: string; telefone: string } | null
 }
 
 interface Props {
@@ -240,6 +228,7 @@ export function CourtCalendarPageClient({ arenaId, courtId, initialCourt, initia
     const [currentDate, setCurrentDate] = useState(new Date(initialDate))
     const [viewMode, setViewMode] = useState<'day' | 'week'>('day')
     const [isBookingModalOpen, setIsBookingModalOpen] = useState(false)
+    const [bookingToEdit, setBookingToEdit] = useState<Booking | null>(null)
     const [selectedSlotDate, setSelectedSlotDate] = useState<Date>(new Date(initialDate))
     const [selectedSlotHour, setSelectedSlotHour] = useState(0)
     const [selectedSlotMinute, setSelectedSlotMinute] = useState(0)
@@ -367,6 +356,7 @@ export function CourtCalendarPageClient({ arenaId, courtId, initialCourt, initia
         setSelectedSlotHour(slot.hour)
         setSelectedSlotMinute(slot.minute)
         setCustomPrice(getSlotPrice(date, slot))
+        setBookingToEdit(null)
         setIsBookingModalOpen(true)
     }
 
@@ -483,7 +473,10 @@ export function CourtCalendarPageClient({ arenaId, courtId, initialCourt, initia
 
                         <Button
                             type="button"
-                            onClick={() => setIsBookingModalOpen(true)}
+                            onClick={() => {
+                                setBookingToEdit(null)
+                                setIsBookingModalOpen(true)
+                            }}
                             className="h-10 rounded-md bg-arena-button px-4 text-sm font-bold text-white shadow-none hover:bg-arena-button-hover"
                         >
                             Cadastrar reserva
@@ -607,11 +600,31 @@ export function CourtCalendarPageClient({ arenaId, courtId, initialCourt, initia
                 onSuccess={() => loadBookings(currentDate, viewMode)}
                 booking={selectedBooking}
                 court={court}
+                onEdit={
+                    selectedBooking &&
+                    selectedBooking.booking_type !== "mensalista" &&
+                    !selectedBooking.plano_mensalista_id &&
+                    selectedBooking.status !== "cancelled"
+                        ? () => {
+                              if (!selectedBooking) return
+                              const s = parseISO(selectedBooking.start_time)
+                              setSelectedSlotDate(s)
+                              setSelectedSlotHour(s.getHours())
+                              setSelectedSlotMinute(s.getMinutes())
+                              setBookingToEdit(selectedBooking)
+                              setIsBookingDetailsModalOpen(false)
+                              setIsBookingModalOpen(true)
+                          }
+                        : undefined
+                }
             />
 
             <BookingModal
                 isOpen={isBookingModalOpen}
-                onClose={() => setIsBookingModalOpen(false)}
+                onClose={() => {
+                    setIsBookingModalOpen(false)
+                    setBookingToEdit(null)
+                }}
                 onSuccess={() => loadBookings(currentDate, viewMode)}
                 arenaId={arenaId}
                 courtId={courtId}
@@ -619,6 +632,7 @@ export function CourtCalendarPageClient({ arenaId, courtId, initialCourt, initia
                 selectedHour={selectedSlotHour}
                 selectedMinute={selectedSlotMinute}
                 defaultPrice={customPrice || court.price || 0}
+                existingBooking={bookingToEdit}
             />
 
             <DayOpportunitiesModal

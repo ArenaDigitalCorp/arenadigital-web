@@ -21,7 +21,7 @@ interface Booking {
         nome_perfil: string
         telefone: string
     } | null
-    sports?: { id: string; name: string }
+    sports?: { id: string; name: string } | null
 }
 
 interface Lead {
