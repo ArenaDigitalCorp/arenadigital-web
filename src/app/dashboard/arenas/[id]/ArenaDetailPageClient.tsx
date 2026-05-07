@@ -38,6 +38,7 @@ import {
 import { cn } from '@/lib/utils';
 import { GradientMediaCard } from '@/components/dashboard/GradientMediaCard';
 import { DashboardTabs } from '@/components/dashboard/DashboardTabs';
+import { ConfirmActionDialog } from '@/components/dashboard/ConfirmActionDialog';
 import { DayOperationModal } from '@/modules/bookings/components/DayOperationModal';
 import { AvailableTimesModal } from '@/modules/bookings/components/AvailableTimesModal';
 import { deleteCourtAction } from '@/modules/courts/actions/courtActions';
@@ -63,6 +64,24 @@ function getCurrentDayName() {
   return days[new Date().getDay()];
 }
 
+function formatCurrency(value: number | null | undefined) {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(Number(value ?? 0));
+}
+
+function formatStatus(status: string | null | undefined) {
+  if (!status) return '—';
+  if (status === 'ativo') return 'Ativa';
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function formatAvailableDays(days: string[] | null | undefined) {
+  if (!days || days.length === 0) return '—';
+  return days.map(day => day.charAt(0).toUpperCase() + day.slice(1)).join(', ');
+}
+
 export function ArenaDetailPageClient({
   arenaId,
   arenaName,
@@ -72,19 +91,26 @@ export function ArenaDetailPageClient({
   const [courts, setCourts] = useState<any[]>(initialCourts);
   const [bookings] = useState<Booking[]>(initialBookings);
   const [selectedSpace, setSelectedSpace] = useState<any>(null);
+  const [spaceToDelete, setSpaceToDelete] = useState<any>(null);
+  const [isDeletingSpace, setIsDeletingSpace] = useState(false);
   const [activeTab, setActiveTab] = useState<'espacos' | 'cadastro'>('espacos');
   const [searchQuery, setSearchQuery] = useState('');
   const [isDayOperationOpen, setIsDayOperationOpen] = useState(false);
   const [isAvailableTimesOpen, setIsAvailableTimesOpen] = useState(false);
 
-  const handleDeleteCourt = async (courtId: string) => {
-    if (!confirm('Deseja realmente excluir esta quadra?')) return;
-    const res = await deleteCourtAction(arenaId, courtId);
+  const handleDeleteCourt = async () => {
+    if (!spaceToDelete) return;
+
+    setIsDeletingSpace(true);
+    const res = await deleteCourtAction(arenaId, spaceToDelete.id);
+    setIsDeletingSpace(false);
+
     if (res.success) {
-      setCourts((prev) => prev.filter((c) => c.id !== courtId));
-      toast.success('Quadra excluída!');
+      setCourts((prev) => prev.filter((c) => c.id !== spaceToDelete.id));
+      toast.success('Espaço excluído!');
+      setSpaceToDelete(null);
     } else {
-      toast.error(res.error ?? 'Erro ao excluir quadra.');
+      toast.error(res.error ?? 'Erro ao excluir espaço.');
     }
   };
 
@@ -216,7 +242,7 @@ export function ArenaDetailPageClient({
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               className="text-destructive"
-                              onClick={() => handleDeleteCourt(court.id)}
+                              onClick={() => setSpaceToDelete(court)}
                             >
                               <Trash2 className="mr-2 h-4 w-4" /> Excluir
                             </DropdownMenuItem>
@@ -368,7 +394,7 @@ export function ArenaDetailPageClient({
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => handleDeleteCourt(court.id)}
+                                onClick={() => setSpaceToDelete(court)}
                                 className="h-8 w-8 text-arena-button/60 bg-arena-button/10 hover:bg-arena-button/20 hover:text-arena-button"
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -410,94 +436,102 @@ export function ArenaDetailPageClient({
             if (!open) setSelectedSpace(null);
           }}
         >
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle className="text-2xl font-black text-arena-navy-800">
+          <DialogContent
+            showCloseButton
+            style={{
+              width: 'min(760px, calc(100vw - 32px))',
+              maxWidth: '760px',
+            }}
+            className="max-h-[92vh] overflow-y-auto rounded-lg border border-slate-200 bg-white p-6 shadow-lg sm:p-7"
+          >
+            <DialogHeader className="text-left">
+              <DialogTitle className="font-heading text-xl font-bold leading-tight tracking-normal text-[#0D3B45] sm:text-2xl">
                 {selectedSpace?.name}
               </DialogTitle>
             </DialogHeader>
             {selectedSpace && (
-              <div className="grid gap-6 py-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase text-arena-navy-800/40 tracking-wider">
+              <div className="pt-4">
+                <div className="rounded-lg border border-slate-100 bg-white p-5 shadow-sm">
+                  <div className="grid gap-x-12 gap-y-5 md:grid-cols-2">
+                    <div className="space-y-1">
+                    <label className="text-sm font-medium text-[#5F636E]">
                       Status
                     </label>
-                    <p className="font-bold text-arena-navy-800">
-                      {selectedSpace.status}
+                    <p className="text-base font-medium text-arena-navy-800">
+                      {formatStatus(selectedSpace.status)}
                     </p>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase text-arena-navy-800/40 tracking-wider">
+                    <label className="text-sm font-medium text-[#5F636E]">
                       Tipo do espaço
                     </label>
-                    <p className="font-bold text-arena-navy-800">
+                    <p className="text-base font-medium text-arena-navy-800">
                       {selectedSpace.type}
                     </p>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase text-arena-navy-800/40 tracking-wider">
+                    <label className="text-sm font-medium text-[#5F636E]">
                       Esporte
                     </label>
-                    <p className="font-bold text-arena-navy-800">
-                      {selectedSpace.sports?.map((s: any) => s.name).join(', ')}
+                    <p className="text-base font-medium text-arena-navy-800">
+                      {selectedSpace.sports?.map((s: any) => s.name).join(', ') || '—'}
                     </p>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase text-arena-navy-800/40 tracking-wider">
+                    <label className="text-sm font-medium text-[#5F636E]">
                       Coberta/Descoberta
                     </label>
-                    <p className="font-bold text-arena-navy-800">
+                    <p className="text-base font-medium text-arena-navy-800">
                       {selectedSpace.is_covered ? 'Coberta' : 'Descoberta'}
                     </p>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase text-arena-navy-800/40 tracking-wider">
+                    <label className="text-sm font-medium text-[#5F636E]">
                       Valor da reserva
                     </label>
-                    <p className="font-bold text-arena-navy-800">
-                      R$ {selectedSpace.price.toFixed(2)}
+                    <p className="text-base font-medium text-arena-navy-800">
+                      {formatCurrency(selectedSpace.price)}
                     </p>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase text-arena-navy-800/40 tracking-wider">
+                    <label className="text-sm font-medium text-[#5F636E]">
                       Tipo de reserva
                     </label>
-                    <p className="font-bold text-arena-navy-800">
+                    <p className="text-base font-medium text-arena-navy-800">
                       {selectedSpace.booking_type === 'hourly'
                         ? 'Por hora'
                         : 'Único'}
                     </p>
                   </div>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase text-arena-navy-800/40 tracking-wider">
-                    Dias disponíveis
-                  </label>
-                  <p className="text-sm font-medium text-arena-navy-800/80">
-                    {selectedSpace.available_days?.join(', ')}
-                  </p>
-                </div>
-                {selectedSpace.observations && (
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase text-arena-navy-800/40 tracking-wider">
-                      Observações
+                    <label className="text-sm font-medium text-[#5F636E]">
+                      Dias disponíveis
                     </label>
-                    <p className="text-sm font-medium text-arena-navy-800/80">
-                      {selectedSpace.observations}
+                    <p className="text-base font-medium leading-snug text-arena-navy-800">
+                      {formatAvailableDays(selectedSpace.available_days)}
                     </p>
                   </div>
-                )}
-                <div className="flex gap-4 pt-4">
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-[#5F636E]">
+                      Observações
+                    </label>
+                    <p className="text-base font-medium leading-snug text-arena-navy-800">
+                      {selectedSpace.observations || '—'}
+                    </p>
+                  </div>
+                  </div>
+                </div>
+
+                <div className="mt-5 flex flex-col gap-3 sm:flex-row">
                   <Button
                     variant="outline"
-                    className="flex-1"
+                    className="flex-1 border-[#0D3B45] text-[#0D3B45]"
                     onClick={() => setSelectedSpace(null)}
                   >
                     Fechar
                   </Button>
                   <Button
-                    className="flex-1 bg-arena-button hover:bg-arena-button-hover"
+                    className="flex-1 bg-arena-button text-white hover:bg-arena-button-hover"
                     asChild
                   >
                     <Link
@@ -511,6 +545,20 @@ export function ArenaDetailPageClient({
             )}
           </DialogContent>
         </Dialog>
+
+        <ConfirmActionDialog
+          open={!!spaceToDelete}
+          onOpenChange={(open) => {
+            if (!open && !isDeletingSpace) setSpaceToDelete(null);
+          }}
+          title="Excluir espaço"
+          description="Tem certeza que deseja excluir este espaço? A exclusão é permanente e todos os seus dados serão removidos. Essa ação não pode ser desfeita."
+          confirmLabel="Excluir"
+          loadingLabel="Excluindo..."
+          loading={isDeletingSpace}
+          onConfirm={handleDeleteCourt}
+          confirmVariant="danger"
+        />
 
         <DayOperationModal
           isOpen={isDayOperationOpen}

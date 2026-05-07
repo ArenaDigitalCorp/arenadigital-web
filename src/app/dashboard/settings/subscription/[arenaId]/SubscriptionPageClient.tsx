@@ -11,10 +11,10 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { ConfirmActionDialog } from '@/components/dashboard/ConfirmActionDialog';
 import {
   Table,
   TableBody,
@@ -724,38 +724,16 @@ export function SubscriptionPageClient({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={cancelModalOpen} onOpenChange={setCancelModalOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-[#0D3B45]">
-              Cancelamento de assinatura
-            </DialogTitle>
-            <DialogDescription className="mt-2 text-sm text-foreground">
-              Tem certeza que deseja cancelar a renovacao automatica? Seus dados
-              permanecem salvos e o acesso continua ativo ate o fim do periodo
-              contratado.
-            </DialogDescription>
-          </DialogHeader>
-
-          <DialogFooter className="mt-2 flex-row gap-3 sm:justify-start">
-            <Button
-              variant="outline"
-              className="flex-1 border-[#0D3B45] text-[#0D3B45]"
-              onClick={() => setCancelModalOpen(false)}
-              disabled={actionLoading}
-            >
-              Fechar
-            </Button>
-            <Button
-              className="flex-1 bg-arena-button text-white hover:bg-arena-button-hover"
-              onClick={handleCancel}
-              disabled={actionLoading}
-            >
-              {actionLoading ? 'Cancelando...' : 'Cancelar renovacao'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmActionDialog
+        open={cancelModalOpen}
+        onOpenChange={setCancelModalOpen}
+        title="Cancelamento de assinatura"
+        description="Tem certeza que deseja cancelar a renovacao automatica? Seus dados permanecem salvos e o acesso continua ativo ate o fim do periodo contratado."
+        confirmLabel="Cancelar renovacao"
+        loadingLabel="Cancelando..."
+        loading={actionLoading}
+        onConfirm={handleCancel}
+      />
     </div>
   );
 }
