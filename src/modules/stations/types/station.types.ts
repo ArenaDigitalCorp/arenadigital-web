@@ -28,6 +28,8 @@ export interface StationOrder {
     id: string;
     arena_id: string;
     station_id: string;
+    /** Preenchido quando a query inclui `station:stations(...)`. */
+    station?: { station_type_id: string | null } | null;
     atleta_id?: string;
     customer_id?: string;
     order_number: number;

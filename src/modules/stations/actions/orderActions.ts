@@ -124,6 +124,7 @@ const ORDER_WITH_RELATIONS = `
     *,
     atleta:atleta(nome_perfil),
     station_customer:station_customers(name),
+    station:stations(station_type_id),
     station_order_items(*, product:products(name)),
     station_payments(*)
 ` as const

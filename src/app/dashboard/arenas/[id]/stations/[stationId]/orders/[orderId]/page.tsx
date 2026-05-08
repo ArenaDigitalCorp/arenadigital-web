@@ -274,6 +274,8 @@ export default function OrderDetailsPage() {
                 isOpen={isLaunchModalOpen}
                 onClose={() => setIsLaunchModalOpen(false)}
                 arenaId={arenaId}
+                stationId={stationId}
+                stationTypeId={order.station?.station_type_id ?? undefined}
                 order={order}
                 onSuccess={loadOrderData}
             />

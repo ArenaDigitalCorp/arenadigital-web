@@ -115,6 +115,7 @@ export function StationDetailPageClient({ arenaId, stationId, initialStation, in
                 isOpen={isLaunchItemModalOpen}
                 onClose={() => { setIsLaunchItemModalOpen(false); setSelectedOrderForLaunch(null) }}
                 arenaId={arenaId}
+                stationId={stationId}
                 stationTypeId={initialStation?.station_type_id}
                 order={selectedOrderForLaunch}
                 onSuccess={refreshOrders}

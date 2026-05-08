@@ -137,10 +137,14 @@ export function OpenComandaModal({
         }, 500)
     }
 
-    const filteredProducts = allProducts.filter(p =>
-        (!stationTypeId || p.station_type_id === stationTypeId) &&
-        normalizeString(p.name).includes(normalizeString(productSearch))
-    )
+    const filteredProducts = allProducts.filter(p => {
+        const matchesSearch = normalizeString(p.name).includes(normalizeString(productSearch))
+        if (!matchesSearch) return false
+        if (p.station_id) {
+            return p.station_id === stationId
+        }
+        return !stationTypeId || p.station_type_id === stationTypeId
+    })
 
     const groupedProducts = filteredProducts.reduce((acc, product) => {
         const type = product.item_type || 'Geral'

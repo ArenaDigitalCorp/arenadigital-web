@@ -7,6 +7,7 @@ export type UpdateProductDTO = Database['public']['Tables']['products']['Update'
 
 export type Product = Row & {
   station_type?: { id: string; name: string } | null;
+  station?: { id: string; name: string } | null;
 };
 
 /** Itens `catalog_kind = service` não usam estoque (ex.: aluguel de raquete). */

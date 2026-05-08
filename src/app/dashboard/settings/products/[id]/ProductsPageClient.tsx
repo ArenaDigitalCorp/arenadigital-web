@@ -292,7 +292,7 @@ export function ProductsPageClient({ arenaId, arenaName, initialProducts }: Prop
                                                     <td className={arenaDataTable.td}>{product.item_type}</td>
                                                     <td className={arenaDataTable.td}>
                                                         <Badge variant="outline">
-                                                            {product.station_type?.name || "N/A"}
+                                                            {product.station?.name ?? product.station_type?.name ?? "N/A"}
                                                         </Badge>
                                                     </td>
                                                     <td className={arenaDataTable.td}>
@@ -415,7 +415,8 @@ export function ProductsPageClient({ arenaId, arenaName, initialProducts }: Prop
                                 <thead>
                                     <tr className={arenaDataTable.theadRow}>
                                         <th className={arenaDataTable.th}>Nome</th>
-                                        <th className={arenaDataTable.th}>Tipo de estação</th>
+                                        <th className={arenaDataTable.th}>Tipo</th>
+                                        <th className={arenaDataTable.th}>Estação</th>
                                         <th className={arenaDataTable.th}>Valor</th>
                                         <th className={arenaDataTable.th}>Criado em</th>
                                         <th className={arenaDataTable.thRight}>Ações</th>
@@ -424,7 +425,7 @@ export function ProductsPageClient({ arenaId, arenaName, initialProducts }: Prop
                                 <tbody>
                                     {filteredServices.length === 0 ? (
                                         <tr>
-                                            <td colSpan={5} className={arenaDataTable.emptyCell}>
+                                            <td colSpan={6} className={arenaDataTable.emptyCell}>
                                                 Nenhum serviço cadastrado. Use &quot;Cadastrar serviço&quot; para incluir
                                                 cobranças como aluguel de raquete.
                                             </td>
@@ -433,9 +434,10 @@ export function ProductsPageClient({ arenaId, arenaName, initialProducts }: Prop
                                         filteredServices.map((product) => (
                                             <tr key={product.id} className={arenaDataTable.tbodyRow}>
                                                 <td className={arenaDataTable.tdBold}>{product.name}</td>
+                                                <td className={arenaDataTable.td}>{product.item_type}</td>
                                                 <td className={arenaDataTable.td}>
                                                     <Badge variant="outline">
-                                                        {product.station_type?.name || "N/A"}
+                                                        {product.station?.name ?? product.station_type?.name ?? "N/A"}
                                                     </Badge>
                                                 </td>
                                                 <td className={arenaDataTable.td}>
@@ -546,17 +548,27 @@ export function ProductsPageClient({ arenaId, arenaName, initialProducts }: Prop
                                             <div className="space-y-1">
                                                 <p className={detailLabelClass}>Estação</p>
                                                 <p className="text-base font-semibold text-arena-navy-800">
-                                                    {detailProduct.station_type?.name ?? "—"}
+                                                    {detailProduct.station?.name ?? detailProduct.station_type?.name ?? "—"}
                                                 </p>
                                             </div>
                                         </>
                                     ) : (
-                                        <div className="space-y-1 sm:col-span-2">
-                                            <p className={detailLabelClass}>Estação</p>
-                                            <p className="text-base font-semibold text-arena-navy-800">
-                                                {detailProduct.station_type?.name ?? "—"}
-                                            </p>
-                                        </div>
+                                        <>
+                                            <div className="space-y-1">
+                                                <p className={detailLabelClass}>Tipo</p>
+                                                <p className="text-base font-semibold text-arena-navy-800">
+                                                    {detailProduct.item_type}
+                                                </p>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <p className={detailLabelClass}>Estação</p>
+                                                <p className="text-base font-semibold text-arena-navy-800">
+                                                    {detailProduct.station?.name ??
+                                                        detailProduct.station_type?.name ??
+                                                        "—"}
+                                                </p>
+                                            </div>
+                                        </>
                                     )}
                                 </div>
                                 <hr className="border-slate-200" />

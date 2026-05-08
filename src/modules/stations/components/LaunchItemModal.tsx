@@ -45,6 +45,8 @@ interface LaunchItemModalProps {
     isOpen: boolean
     onClose: () => void
     arenaId: string
+    /** Estação atual do PDV; itens com `product.station_id` só aparecem quando bate aqui. */
+    stationId?: string
     stationTypeId?: string
     order: StationOrder | null
     onSuccess: () => void
@@ -54,6 +56,7 @@ export function LaunchItemModal({
     isOpen,
     onClose,
     arenaId,
+    stationId,
     stationTypeId,
     order,
     onSuccess
@@ -89,10 +92,14 @@ export function LaunchItemModal({
         },
     })
 
-    const filteredProducts = allProducts.filter(p =>
-        (!stationTypeId || p.station_type_id === stationTypeId) &&
-        normalizeString(p.name).includes(normalizeString(productSearch))
-    )
+    const filteredProducts = allProducts.filter(p => {
+        const matchesSearch = normalizeString(p.name).includes(normalizeString(productSearch))
+        if (!matchesSearch) return false
+        if (p.station_id) {
+            return Boolean(stationId && p.station_id === stationId)
+        }
+        return !stationTypeId || p.station_type_id === stationTypeId
+    })
 
     const groupedProducts = filteredProducts.reduce((acc, product) => {
         const type = product.item_type || 'Geral'

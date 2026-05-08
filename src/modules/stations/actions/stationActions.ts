@@ -150,6 +150,25 @@ export async function getStationTypesAction(arenaId: string) {
     }
 }
 
+/** Estações reais da arena (catálogo / produtos), com tipo para persistir em `products`. */
+export async function getArenaStationsForCatalogAction(arenaId: string) {
+    try {
+        await assertArenaBackofficeAccess(arenaId)
+        const { data, error } = await getSupabaseAdmin()
+            .from('stations')
+            .select(`id, name, station_type_id, station_type:station_types(id, name)`)
+            .eq('arena_id', arenaId)
+            .not('station_type_id', 'is', null)
+            .order('name', { ascending: true })
+
+        if (error) throw new Error(error.message)
+        return { success: true, data: data ?? [] }
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Erro ao buscar estações da arena'
+        return { success: false, error: message, data: [] }
+    }
+}
+
 export async function createStationAction(arenaId: string, input: { name: string; status: string; station_type_id: string }) {
     try {
         await assertArenaBackofficeAccess(arenaId)

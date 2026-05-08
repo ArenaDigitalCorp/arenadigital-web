@@ -1183,6 +1183,7 @@ export type Database = {
           item_type: string
           name: string
           price: number
+          station_id: string | null
           station_type_id: string
           status: string | null
           stock_quantity: number
@@ -1198,6 +1199,7 @@ export type Database = {
           item_type: string
           name: string
           price: number
+          station_id?: string | null
           station_type_id: string
           status?: string | null
           stock_quantity?: number
@@ -1213,6 +1215,7 @@ export type Database = {
           item_type?: string
           name?: string
           price?: number
+          station_id?: string | null
           station_type_id?: string
           status?: string | null
           stock_quantity?: number
@@ -1232,6 +1235,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_station_id_fkey"
+            columns: ["station_id"]
+            isOneToOne: false
+            referencedRelation: "stations"
             referencedColumns: ["id"]
           },
           {
