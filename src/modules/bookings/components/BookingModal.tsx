@@ -1,7 +1,19 @@
 "use client"
 
 import { useState, useEffect, useRef, useMemo } from "react"
-import { Search, Save, X, Loader2, Check, Calendar as CalendarIcon, Clock, Users, UserPlus, AlertTriangle } from "lucide-react"
+import {
+    Search,
+    X,
+    Loader2,
+    Check,
+    Calendar as CalendarIcon,
+    Clock,
+    Users,
+    UserPlus,
+    AlertTriangle,
+    Minus,
+    Plus,
+} from "lucide-react"
 import {
     Dialog,
     DialogContent,
@@ -190,6 +202,7 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
     const [catalogServiceProducts, setCatalogServiceProducts] = useState<Product[]>([])
     const [isRecurring, setIsRecurring] = useState(false)
     const [recurrenceWeeks, setRecurrenceWeeks] = useState(2)
+    const [includeServices, setIncludeServices] = useState(false)
 
     // Mensal
     const [diaSemana, setDiaSemana] = useState<string>(String(selectedDate.getDay()))
@@ -251,6 +264,7 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                 name: s.products?.name ?? "Serviço",
             }))
             setServiceLines(mapped)
+            setIncludeServices(mapped.length > 0)
             const svcSum = mapped.reduce((a, l) => a + l.quantity * l.unitPrice, 0)
             setCourtPrice(String(Math.max(0, (existingBooking.price ?? 0) - svcSum)))
             return
@@ -268,6 +282,7 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
         setHorarioFim(endStr)
         setCourtPrice(defaultPrice.toString())
         setServiceLines([])
+        setIncludeServices(false)
         setDiaSemana(String(selectedDate.getDay()))
         void loadArenaSports()
     }, [isOpen, existingBooking, selectedDate, selectedHour, selectedMinute, defaultPrice, arenaId])
@@ -364,9 +379,10 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
             }
 
             if (isRecurring) {
+                const weeks = Math.max(1, Math.floor(recurrenceWeeks) || 1)
                 const recurrenceId = crypto.randomUUID()
                 const bookingsToCreate = []
-                for (let i = 0; i < recurrenceWeeks; i++) {
+                for (let i = 0; i < weeks; i++) {
                     bookingsToCreate.push({
                         arena_id: arenaId,
                         court_id: courtId,
@@ -487,6 +503,7 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
         setConflicts([])
         setCourtPrice(defaultPrice.toString())
         setServiceLines([])
+        setIncludeServices(false)
     }
 
     // ── Helpers para gerar slots a verificar ────────────────────────────────
@@ -500,8 +517,9 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
 
         if (!isRecurring) return [{ startTime: startDateTime.toISOString(), endTime: endDateTime.toISOString() }]
 
+        const weeks = Math.max(1, Math.floor(recurrenceWeeks) || 1)
         const slots = []
-        for (let i = 0; i < recurrenceWeeks; i++) {
+        for (let i = 0; i < weeks; i++) {
             slots.push({
                 startTime: addWeeks(startDateTime, i).toISOString(),
                 endTime: addWeeks(endDateTime, i).toISOString(),
@@ -622,6 +640,8 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
     const totalDisplay = (Number(courtPrice) || 0) + servicesSumDisplay
     const fmtBrl = (n: number) =>
         new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n)
+    const recurrenceWeeksDisplay = Math.max(1, Math.floor(recurrenceWeeks) || 1)
+    const recurrenceMesesAprox = Math.max(1, Math.ceil(recurrenceWeeksDisplay / 4))
 
     return (
         <>
@@ -629,17 +649,17 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
             <DialogContent
                 className={cn(
                     "!flex max-h-[90vh] min-h-0 w-full max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden rounded-3xl border-none p-0 shadow-2xl",
-                    "sm:min-w-[588px] sm:w-[588px] sm:max-w-[588px]"
+                    "sm:max-w-[min(995px,calc(100vw-2rem))] sm:w-full"
                 )}
             >
-                <DialogHeader className="shrink-0 space-y-0 p-8 pb-4 text-left">
+                <DialogHeader className="shrink-0 space-y-0 px-6 pb-4 pt-6 text-left sm:px-10 sm:pb-5 sm:pt-8">
                     <DialogTitle className="text-2xl font-black text-arena-navy-800 tracking-tight">
                         {existingBooking ? "Editar reserva" : bookingType === "avulso" ? "Cadastrar nova reserva" : "Novo Mensalista"}
                     </DialogTitle>
                 </DialogHeader>
 
-                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-8">
-                    <div className="space-y-6 pb-8">
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 sm:px-10">
+                    <div className="space-y-6 pb-6 sm:space-y-8 sm:pb-8">
 
                         {/* Tipo de reserva */}
                         {!existingBooking && (
@@ -676,133 +696,262 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                         {/* ── AVULSO ── */}
                         {bookingType === "avulso" && (
                             <>
-                                <AthleteSearchField {...athleteSearchProps} />
-
-                                {/* Data */}
-                                <div className="space-y-2">
-                                    <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">Data</Label>
-                                    <div className="relative">
-                                        <CalendarIcon className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-arena-navy-800/20" />
-                                        <Input
-                                            value={format(selectedDate, "dd/MM/yyyy", { locale: ptBR })}
-                                            readOnly
-                                            className="pl-12 h-14 border-arena-navy-800/10 bg-gray-50 focus:ring-0 rounded-xl font-bold text-arena-navy-800"
-                                        />
+                                <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-5">
+                                    <div className="min-w-0 lg:col-span-6">
+                                        <AthleteSearchField {...athleteSearchProps} />
+                                    </div>
+                                    <div className="space-y-2 lg:col-span-3">
+                                        <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">
+                                            Data
+                                        </Label>
+                                        <div className="relative">
+                                            <CalendarIcon className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-arena-navy-800/20" />
+                                            <Input
+                                                value={format(selectedDate, "dd/MM/yyyy", { locale: ptBR })}
+                                                readOnly
+                                                placeholder="dd/mm/aaaa"
+                                                className="h-14 rounded-xl border-arena-navy-800/10 bg-gray-50 pl-12 font-bold text-arena-navy-800 focus:ring-0"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2 lg:col-span-3">
+                                        <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">
+                                            Esporte
+                                        </Label>
+                                        <Select value={selectedSport} onValueChange={setSelectedSport}>
+                                            <SelectTrigger className="h-14 rounded-xl border-arena-navy-800/10 font-bold text-arena-navy-800 focus:border-arena-button focus:ring-arena-button">
+                                                <SelectValue placeholder="Selecione o tipo de esporte" />
+                                            </SelectTrigger>
+                                            <SelectContent className="rounded-2xl border-arena-navy-800/10 p-2">
+                                                {arenaSports.map((sport) => (
+                                                    <SelectItem
+                                                        key={sport.id}
+                                                        value={sport.id}
+                                                        className="rounded-xl py-3 font-bold text-arena-navy-800"
+                                                    >
+                                                        {sport.name}
+                                                    </SelectItem>
+                                                ))}
+                                                {arenaSports.length === 0 && !isLoadingSports && (
+                                                    <div className="p-4 text-center text-xs text-muted-foreground">
+                                                        Nenhum esporte vinculado à arena
+                                                    </div>
+                                                )}
+                                            </SelectContent>
+                                        </Select>
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">Horário início</Label>
+                                <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-5">
+                                    <div className="space-y-2 lg:col-span-3">
+                                        <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">
+                                            Horário início
+                                        </Label>
                                         <div className="relative">
-                                            <Clock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-arena-navy-800/20" />
-                                            <Input value={startTime} onChange={(e) => setStartTime(e.target.value)} placeholder="00:00" className="pl-12 h-14 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-xl font-bold text-arena-navy-800" />
+                                            <Clock className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-arena-navy-800/20" />
+                                            <Input
+                                                value={startTime}
+                                                onChange={(e) => setStartTime(e.target.value)}
+                                                placeholder="08h00"
+                                                className="h-14 rounded-xl border-arena-navy-800/10 pl-12 font-bold text-arena-navy-800 focus:border-arena-button focus:ring-arena-button"
+                                            />
                                         </div>
                                     </div>
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">Horário fim</Label>
+                                    <div className="space-y-2 lg:col-span-3">
+                                        <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">
+                                            Horário fim
+                                        </Label>
                                         <div className="relative">
-                                            <Clock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-arena-navy-800/20" />
-                                            <Input value={endTime} onChange={(e) => setEndTime(e.target.value)} placeholder="00:00" className="pl-12 h-14 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-xl font-bold text-arena-navy-800" />
+                                            <Clock className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-arena-navy-800/20" />
+                                            <Input
+                                                value={endTime}
+                                                onChange={(e) => setEndTime(e.target.value)}
+                                                placeholder="09h00"
+                                                className="h-14 rounded-xl border-arena-navy-800/10 pl-12 font-bold text-arena-navy-800 focus:border-arena-button focus:ring-arena-button"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2 lg:col-span-6">
+                                        <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">
+                                            Valor pago
+                                        </Label>
+                                        <div className="relative">
+                                            <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-arena-navy-800/40">
+                                                R$
+                                            </span>
+                                            <Input
+                                                value={courtPrice}
+                                                onChange={(e) => setCourtPrice(e.target.value)}
+                                                placeholder="00,00"
+                                                className="h-14 rounded-xl border-arena-navy-800/10 pl-12 font-bold text-arena-navy-800 focus:border-arena-button focus:ring-arena-button"
+                                            />
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* Esporte */}
-                                <div className="space-y-2">
-                                    <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">Esporte</Label>
-                                    <Select value={selectedSport} onValueChange={setSelectedSport}>
-                                        <SelectTrigger className="h-14 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-xl font-bold text-arena-navy-800">
-                                            <SelectValue placeholder="Selecione o tipo de esporte" />
-                                        </SelectTrigger>
-                                        <SelectContent className="rounded-2xl border-arena-navy-800/10 p-2">
-                                            {arenaSports.map((sport) => (
-                                                <SelectItem key={sport.id} value={sport.id} className="rounded-xl py-3 font-bold text-arena-navy-800">{sport.name}</SelectItem>
-                                            ))}
-                                            {arenaSports.length === 0 && !isLoadingSports && (
-                                                <div className="p-4 text-center text-xs text-muted-foreground">Nenhum esporte vinculado à arena</div>
+                                <div
+                                    className={cn(
+                                        "grid gap-8 border-t border-slate-200 pt-6",
+                                        existingBooking ? "grid-cols-1" : "md:grid-cols-2 md:gap-0"
+                                    )}
+                                >
+                                    {!existingBooking && (
+                                        <div className="flex min-w-0 flex-col md:border-r md:border-slate-200 md:pr-8">
+                                            <div className="flex items-start gap-3 border-b border-slate-200 pb-4">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsRecurring(!isRecurring)}
+                                                    className={cn(
+                                                        "relative mt-0.5 h-6 w-12 shrink-0 rounded-full transition-colors",
+                                                        isRecurring ? "bg-arena-button" : "bg-gray-200"
+                                                    )}
+                                                    aria-pressed={isRecurring}
+                                                >
+                                                    <div
+                                                        className={cn(
+                                                            "absolute top-1 h-4 w-4 rounded-full bg-white transition-transform",
+                                                            isRecurring ? "left-7" : "left-1"
+                                                        )}
+                                                    />
+                                                </button>
+                                                <div className="min-w-0 flex-1 space-y-0.5">
+                                                    <Label className="text-sm font-bold text-arena-navy-800">
+                                                        Reserva recorrente
+                                                    </Label>
+                                                    <p className="text-[10px] font-medium leading-snug text-arena-navy-800/40">
+                                                        Repetir este horário toda semana
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            {isRecurring && (
+                                                <div className="animate-in fade-in slide-in-from-top-2 mt-4 duration-300">
+                                                    <div className="rounded-xl border border-slate-200/90 bg-slate-100 p-4">
+                                                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                                            <div className="min-w-0 space-y-1.5">
+                                                                <p className="text-sm font-semibold text-arena-navy-800">
+                                                                    Selecione a duração (semanas)
+                                                                </p>
+                                                                <p className="text-xs leading-relaxed text-arena-navy-800/50">
+                                                                    Serão criadas {recurrenceWeeksDisplay}{" "}
+                                                                    {recurrenceWeeksDisplay === 1
+                                                                        ? "reserva"
+                                                                        : "reservas"}{" "}
+                                                                    nas próximas{" "}
+                                                                    {recurrenceMesesAprox === 1
+                                                                        ? "1 mês"
+                                                                        : `${recurrenceMesesAprox} meses`}{" "}
+                                                                    (aprox.)
+                                                                </p>
+                                                            </div>
+                                                            <div className="flex h-10 shrink-0 items-stretch overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() =>
+                                                                        setRecurrenceWeeks((w) =>
+                                                                            Math.max(1, (Math.floor(w) || 1) - 1)
+                                                                        )
+                                                                    }
+                                                                    className="flex w-10 items-center justify-center text-arena-navy-800 transition-colors hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-35"
+                                                                    disabled={recurrenceWeeksDisplay <= 1}
+                                                                    aria-label="Menos uma semana"
+                                                                >
+                                                                    <Minus className="h-4 w-4" strokeWidth={2.5} />
+                                                                </button>
+                                                                <span className="flex min-w-[2.5rem] items-center justify-center border-x border-slate-200 text-sm font-black tabular-nums text-arena-navy-800">
+                                                                    {recurrenceWeeksDisplay}
+                                                                </span>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() =>
+                                                                        setRecurrenceWeeks((w) =>
+                                                                            Math.min(52, (Math.floor(w) || 1) + 1)
+                                                                        )
+                                                                    }
+                                                                    className="flex w-10 items-center justify-center text-arena-navy-800 transition-colors hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-35"
+                                                                    disabled={recurrenceWeeksDisplay >= 52}
+                                                                    aria-label="Mais uma semana"
+                                                                >
+                                                                    <Plus className="h-4 w-4" strokeWidth={2.5} />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             )}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
+                                        </div>
+                                    )}
 
-                                {/* Valor da locação + serviços */}
-                                <div className="space-y-2">
-                                    <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">
-                                        Valor da locação
-                                    </Label>
-                                    <div className="relative">
-                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-arena-navy-800/40 font-bold">
-                                            R$
-                                        </span>
-                                        <Input
-                                            value={courtPrice}
-                                            onChange={(e) => setCourtPrice(e.target.value)}
-                                            className="pl-12 h-14 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-xl font-bold text-arena-navy-800"
-                                        />
+                                    <div
+                                        className={cn(
+                                            "flex min-w-0 flex-col",
+                                            !existingBooking && "md:pl-8"
+                                        )}
+                                    >
+                                        <div className="flex items-start gap-3 border-b border-slate-200 pb-4">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setIncludeServices((prev) => {
+                                                        if (prev) setServiceLines([])
+                                                        return !prev
+                                                    })
+                                                }}
+                                                className={cn(
+                                                    "relative mt-0.5 h-6 w-12 shrink-0 rounded-full transition-colors",
+                                                    includeServices ? "bg-arena-button" : "bg-gray-200"
+                                                )}
+                                                aria-pressed={includeServices}
+                                            >
+                                                <div
+                                                    className={cn(
+                                                        "absolute top-1 h-4 w-4 rounded-full bg-white transition-transform",
+                                                        includeServices ? "left-7" : "left-1"
+                                                    )}
+                                                />
+                                            </button>
+                                            <div className="min-w-0 flex-1 space-y-0.5">
+                                                <Label className="text-sm font-bold text-arena-navy-800">
+                                                    Adicionar serviço
+                                                </Label>
+                                                <p className="text-[10px] font-medium leading-snug text-arena-navy-800/40">
+                                                    Inclua serviços nessa reserva e já calcule o valor de forma única
+                                                </p>
+                                            </div>
+                                        </div>
+                                        {includeServices && (
+                                            <div className="animate-in fade-in slide-in-from-top-2 mt-4 duration-300">
+                                                <BookingServicesSection
+                                                    compact
+                                                    catalogServices={catalogServiceProducts.map((p) => ({
+                                                        id: p.id,
+                                                        name: p.name,
+                                                        price: p.price,
+                                                        stockQuantity: p.stock_quantity,
+                                                    }))}
+                                                    lines={serviceLines}
+                                                    onLinesChange={setServiceLines}
+                                                />
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
-                                <BookingServicesSection
-                                    catalogServices={catalogServiceProducts.map((p) => ({
-                                        id: p.id,
-                                        name: p.name,
-                                        price: p.price,
-                                    }))}
-                                    lines={serviceLines}
-                                    onLinesChange={setServiceLines}
-                                />
-
-                                <div className="rounded-2xl border border-arena-button/15 bg-[#FFF5EF] px-4 py-3">
-                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-arena-button/70">
-                                        Total da reserva
-                                    </p>
-                                    <p className="text-xl font-black text-arena-button">{fmtBrl(totalDisplay)}</p>
+                                <div className="mt-6 border-t border-slate-200 pt-6">
+                                    <div className="flex flex-wrap items-baseline justify-between gap-3">
+                                        <span className="text-sm font-medium text-arena-navy-800/70">
+                                            Total da reserva
+                                        </span>
+                                        <span className="text-2xl font-black tracking-tight text-arena-button">
+                                            {fmtBrl(totalDisplay)}
+                                        </span>
+                                    </div>
                                     {serviceLines.length > 0 && (
-                                        <p className="mt-1 text-[11px] font-medium text-arena-navy-800/50">
+                                        <p className="mt-2 text-[11px] font-medium text-arena-navy-800/45">
                                             Locação {fmtBrl(Number(courtPrice) || 0)} + serviços{" "}
                                             {fmtBrl(servicesSumDisplay)}
                                         </p>
                                     )}
                                 </div>
-
-                                {/* Recorrência */}
-                                {!existingBooking && (
-                                <div className="pt-4 border-t border-dashed border-arena-navy-800/10 flex flex-col gap-4">
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label className="text-sm font-bold text-arena-navy-800">Reserva Recorrente</Label>
-                                            <p className="text-[10px] text-arena-navy-800/40 font-medium">Repetir este horário toda semana</p>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsRecurring(!isRecurring)}
-                                            className={cn("w-12 h-6 rounded-full transition-colors relative", isRecurring ? "bg-arena-button" : "bg-gray-200")}
-                                        >
-                                            <div className={cn("absolute top-1 w-4 h-4 bg-white rounded-full transition-transform", isRecurring ? "left-7" : "left-1")} />
-                                        </button>
-                                    </div>
-                                    {isRecurring && (
-                                        <div className="bg-[#FFF5EF] p-4 rounded-2xl border border-arena-button/10 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
-                                            <div className="space-y-1.5">
-                                                <Label className="text-xs font-black uppercase text-arena-button/60 tracking-wider">Duração (semanas)</Label>
-                                                <div className="flex items-center gap-4">
-                                                    <Input
-                                                        type="number"
-                                                        value={recurrenceWeeks}
-                                                        onChange={(e) => setRecurrenceWeeks(parseInt(e.target.value) || 1)}
-                                                        className="h-12 border-arena-button/10 rounded-xl font-bold text-arena-navy-800 bg-white"
-                                                    />
-                                                    <div className="text-[10px] font-bold text-arena-button/60 leading-tight">
-                                                        Serão criadas {recurrenceWeeks} reservas<br />
-                                                        nas próximas {Math.ceil(recurrenceWeeks / 4)} meses
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                                )}
                             </>
                         )}
 
@@ -925,12 +1074,12 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                     </div>
                 </div>
 
-                <div className="flex w-full shrink-0 flex-row items-stretch gap-3 border-t border-slate-100 px-6 py-4">
+                <div className="flex shrink-0 flex-col gap-3 border-t border-slate-100 px-6 py-4 sm:flex-row sm:justify-center sm:gap-4 sm:px-10 sm:py-5">
                     <Button
                         type="button"
                         variant="outline"
                         onClick={onClose}
-                        className="min-w-0 flex-1 basis-0 border-arena-navy-800/20 font-semibold text-arena-navy-800 hover:bg-slate-50"
+                        className="h-11 w-full rounded-xl border-arena-navy-800/25 font-semibold text-arena-navy-800 hover:bg-slate-50 sm:w-auto sm:min-w-[200px]"
                     >
                         Fechar
                     </Button>
@@ -938,20 +1087,20 @@ export function BookingModal({ isOpen, onClose, onSuccess, arenaId, courtId, sel
                         type="button"
                         onClick={handlePreSave}
                         disabled={isSaving || isCheckingConflicts}
-                        className="min-w-0 flex-1 basis-0 bg-arena-button font-semibold text-white shadow-sm hover:bg-arena-button-hover disabled:opacity-50"
+                        className="h-11 w-full rounded-xl bg-arena-button font-semibold text-white shadow-sm hover:bg-arena-button-hover disabled:opacity-50 sm:w-auto sm:min-w-[200px]"
                     >
-                        {(isSaving || isCheckingConflicts) ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
+                        {isSaving || isCheckingConflicts ? (
+                            <span className="inline-flex items-center justify-center gap-2">
+                                <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                                {isCheckingConflicts ? "Verificando…" : "Salvando…"}
+                            </span>
+                        ) : existingBooking ? (
+                            "Salvar alterações"
                         ) : bookingType === "avulso" ? (
-                            <Check className="h-4 w-4" />
+                            "Salvar"
                         ) : (
-                            <Save className="h-4 w-4" />
+                            "Criar Plano"
                         )}
-                        {isCheckingConflicts ? 'Verificando...' : existingBooking
-                            ? 'Salvar alterações'
-                            : bookingType === "avulso"
-                              ? "Salvar"
-                              : "Criar Plano"}
                     </Button>
                 </div>
             </DialogContent>

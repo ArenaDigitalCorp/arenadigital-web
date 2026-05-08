@@ -54,6 +54,7 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, onEdit, bookin
     const [courtPortion, setCourtPortion] = useState("")
     const [serviceLines, setServiceLines] = useState<BookingServiceLineLocal[]>([])
     const [catalogServiceProducts, setCatalogServiceProducts] = useState<Product[]>([])
+    const [includeServices, setIncludeServices] = useState(false)
 
     const arenaId = booking?.arena_id as string | undefined
 
@@ -67,6 +68,7 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, onEdit, bookin
             name: s.products?.name ?? "Serviço",
         }))
         setServiceLines(mapped)
+        setIncludeServices(mapped.length > 0)
         const svcSum = mapped.reduce((a, l) => a + l.quantity * l.unitPrice, 0)
         setCourtPortion(String(Math.max(0, (booking.price ?? 0) - svcSum)))
     }, [isOpen, booking?.id, booking?.price, booking?.booking_services])
@@ -215,7 +217,7 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, onEdit, bookin
                         <div className="space-y-4">
                             <div className="space-y-2">
                                 <Label className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                                    Valor da locação
+                                    Valor pago
                                 </Label>
                                 <div className="relative">
                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-arena-navy-800/40">
@@ -228,21 +230,68 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, onEdit, bookin
                                     />
                                 </div>
                             </div>
-                            <BookingServicesSection
-                                catalogServices={catalogServiceProducts.map((p) => ({
-                                    id: p.id,
-                                    name: p.name,
-                                    price: p.price,
-                                }))}
-                                lines={serviceLines}
-                                onLinesChange={setServiceLines}
-                                disabled={isSavingServices}
-                            />
-                            <div className="rounded-xl border border-arena-button/15 bg-[#FFF5EF] px-3 py-2.5">
-                                <p className="text-[10px] font-semibold uppercase tracking-wide text-arena-button/70">
-                                    Total da reserva
-                                </p>
-                                <p className="text-lg font-black text-arena-button">{fmtBrl(totalDisplay)}</p>
+                            <div className="flex flex-col gap-4 border-t border-slate-200 pt-4">
+                                <div className="flex items-start gap-3 border-b border-slate-200 pb-4">
+                                    <button
+                                        type="button"
+                                        disabled={isSavingServices}
+                                        onClick={() => {
+                                            setIncludeServices((prev) => {
+                                                if (prev) setServiceLines([])
+                                                return !prev
+                                            })
+                                        }}
+                                        className={cn(
+                                            "relative mt-0.5 h-6 w-12 shrink-0 rounded-full transition-colors",
+                                            includeServices ? "bg-arena-button" : "bg-gray-200",
+                                            isSavingServices && "pointer-events-none opacity-60"
+                                        )}
+                                        aria-pressed={includeServices}
+                                    >
+                                        <div
+                                            className={cn(
+                                                "absolute top-1 h-4 w-4 rounded-full bg-white transition-transform",
+                                                includeServices ? "left-7" : "left-1"
+                                            )}
+                                        />
+                                    </button>
+                                    <div className="min-w-0 flex-1 space-y-0.5">
+                                        <Label className="text-sm font-bold text-arena-navy-800">Adicionar serviço</Label>
+                                        <p className="text-[10px] font-medium leading-snug text-arena-navy-800/40">
+                                            Inclua serviços nessa reserva e já calcule o valor de forma única
+                                        </p>
+                                    </div>
+                                </div>
+                                {includeServices && (
+                                    <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                                        <BookingServicesSection
+                                            compact
+                                            catalogServices={catalogServiceProducts.map((p) => ({
+                                                id: p.id,
+                                                name: p.name,
+                                                price: p.price,
+                                                stockQuantity: p.stock_quantity,
+                                            }))}
+                                            lines={serviceLines}
+                                            onLinesChange={setServiceLines}
+                                            disabled={isSavingServices}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="border-t border-slate-200 pt-4">
+                                <div className="flex flex-wrap items-baseline justify-between gap-3">
+                                    <span className="text-sm font-medium text-arena-navy-800/70">Total da reserva</span>
+                                    <span className="text-xl font-black tracking-tight text-arena-button">
+                                        {fmtBrl(totalDisplay)}
+                                    </span>
+                                </div>
+                                {serviceLines.length > 0 && (
+                                    <p className="mt-2 text-[10px] font-medium text-arena-navy-800/45">
+                                        Locação {fmtBrl(Number(courtPortion) || 0)} + serviços {fmtBrl(servicesSum)}
+                                    </p>
+                                )}
                             </div>
                             <Button
                                 type="button"
@@ -282,12 +331,12 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, onEdit, bookin
                     )}
                 </div>
 
-                <div className="flex w-full flex-row items-stretch gap-3 border-t border-slate-100 px-6 py-4">
+                <div className="flex w-full flex-wrap items-center justify-center gap-3 border-t border-slate-100 px-6 py-4 sm:gap-4 sm:px-8 sm:py-5">
                     <Button
                         type="button"
                         variant="outline"
                         onClick={onClose}
-                        className="min-w-0 flex-1 basis-0 border-arena-navy-800/20 font-semibold text-arena-navy-800 hover:bg-slate-50"
+                        className="h-11 w-full rounded-xl border-arena-navy-800/25 font-semibold text-arena-navy-800 hover:bg-slate-50 sm:w-auto sm:min-w-[160px]"
                     >
                         Voltar
                     </Button>
@@ -295,13 +344,13 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, onEdit, bookin
                         <Button
                             type="button"
                             onClick={onEdit}
-                            className="min-w-0 flex-1 basis-0 bg-arena-button font-semibold text-white shadow-sm hover:bg-arena-button-hover"
+                            className="h-11 w-full rounded-xl bg-arena-button font-semibold text-white shadow-sm hover:bg-arena-button-hover sm:w-auto sm:min-w-[160px]"
                         >
                             Editar
                         </Button>
                     )}
                     {mensalistaReservadoBlock ? (
-                        <div className="flex min-w-0 flex-1 basis-0 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-medium text-amber-800">
+                        <div className="flex w-full min-w-0 items-center justify-center rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-center text-xs font-medium text-amber-800 sm:w-auto sm:max-w-md">
                             Gerencie via &quot;Mensalistas&quot; no calendário
                         </div>
                     ) : (
@@ -311,7 +360,7 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, onEdit, bookin
                             size="icon"
                             onClick={handleCancel}
                             disabled={isCancelling || booking.status === "cancelled"}
-                            className="h-10 w-10 shrink-0 self-center border-red-200 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700"
+                            className="h-11 w-11 shrink-0 rounded-xl border-red-200 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700"
                             title="Cancelar reserva"
                         >
                             <Trash2 className="h-4 w-4" />
