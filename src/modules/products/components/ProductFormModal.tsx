@@ -154,14 +154,46 @@ const EMPTY_PRODUCT_FORM: ProductFormValues = {
     status: "Inativo",
 }
 
+const EMPTY_SERVICE_FORM: ServiceFormValues = {
+    name: "",
+    item_type: "Aluguel",
+    price: "",
+    status: "Ativo",
+}
+
+/** Supabase embed costuma vir como objeto; em alguns casos pode vir como array. */
+function resolveStationTypeId(p: Product): string {
+    const direct = p.station_type_id
+    if (typeof direct === "string" && direct.length > 0) return direct
+
+    const st = p.station_type as unknown
+    if (st && typeof st === "object" && !Array.isArray(st)) {
+        const id = (st as { id?: unknown }).id
+        if (typeof id === "string" && id.length > 0) return id
+    }
+    if (Array.isArray(st) && st.length > 0) {
+        const first = st[0] as { id?: unknown }
+        if (first && typeof first.id === "string" && first.id.length > 0) return first.id
+    }
+    return ""
+}
+
 function productToFormValues(p: Product): ProductFormValues {
-    const typeId = (p.station_type_id ?? p.station_type?.id ?? "") as string
     return {
         name: p.name || "",
         item_type: coerceProductItemType(p.item_type),
-        station_type_id: typeId,
+        station_type_id: resolveStationTypeId(p),
         price: p.price != null ? String(p.price) : "",
         status: coerceProductCatalogStatus(p),
+    }
+}
+
+function productToServiceFormValues(p: Product): ServiceFormValues {
+    return {
+        name: p.name || "",
+        item_type: coerceServiceItemType(p.item_type),
+        price: p.price != null ? String(p.price) : "",
+        status: normalizeCatalogStatus(p.status),
     }
 }
 
@@ -184,35 +216,25 @@ function ProductFormInner({
 
     const productForm = useForm<ProductFormValues>({
         resolver: zodResolver(productFormSchema),
-        defaultValues: {
-            name: "",
-            item_type: "Alimentação",
-            station_type_id: "",
-            price: "",
-            status: "Inativo",
-        },
+        defaultValues:
+            kind === "product" && product ? productToFormValues(product) : EMPTY_PRODUCT_FORM,
     })
 
     const serviceForm = useForm<ServiceFormValues>({
         resolver: zodResolver(serviceFormSchema),
-        defaultValues: {
-            name: "",
-            item_type: "Aluguel",
-            price: "",
-            status: "Ativo",
-        },
+        defaultValues:
+            kind === "service" && product ? productToServiceFormValues(product) : EMPTY_SERVICE_FORM,
     })
 
     useEffect(() => {
         if (kind !== "service") return
-        serviceForm.reset({
-            name: product?.name || "",
-            item_type: coerceServiceItemType(product?.item_type),
-            price: product?.price?.toString() || "",
-            status: normalizeCatalogStatus(product?.status),
-        })
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when product/kind identity changes only
-    }, [kind, product])
+        if (!product) {
+            serviceForm.reset(EMPTY_SERVICE_FORM)
+            return
+        }
+        serviceForm.reset(productToServiceFormValues(product))
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- alinhar ao produto/kind
+    }, [kind, product, product?.id])
 
     useEffect(() => {
         if (kind !== "product") return
@@ -223,8 +245,8 @@ function ProductFormInner({
         }
 
         productForm.reset(productToFormValues(product))
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- stationTypes vem da página; incluir para o Select ter opções ao editar
-    }, [kind, product, product?.id, stationTypes])
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- alinhar ao produto/kind; defaultValues já cobrem o primeiro paint
+    }, [kind, product, product?.id])
     async function submitProduct(data: ProductFormValues) {
         const selectedType = stationTypes.find((t) => t.id === data.station_type_id)
         if (!selectedType) {
