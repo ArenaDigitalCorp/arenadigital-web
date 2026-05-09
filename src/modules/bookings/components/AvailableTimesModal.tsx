@@ -217,6 +217,8 @@ ${courts.length > 0 ? `
                 showCloseButton={false}
                 className="sm:max-w-[96vw] w-[98vw] max-h-[95vh] overflow-hidden gap-0 p-5 border border-slate-200 shadow-xl rounded-lg bg-white text-arena-navy-800"
             >
+                {/* DialogTitle sempre presente para acessibilidade (Radix UI exige) */}
+                <DialogTitle className="sr-only">Grade de horários disponíveis</DialogTitle>
                 {/* ── Content ── */}
                 <div className="max-h-[calc(95vh-2.5rem)] overflow-hidden">
                     {isLoading ? (
@@ -229,9 +231,9 @@ ${courts.length > 0 ? `
                             <section className="flex max-h-[calc(95vh-14.75rem)] min-h-[18rem] flex-col rounded-lg border border-slate-200 bg-white px-6 py-5 shadow-sm">
                                 <DialogHeader className="shrink-0 pb-5">
                                     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
-                                        <DialogTitle className="font-heading text-2xl font-bold leading-none tracking-normal text-arena-navy-800 lg:justify-self-start">
+                                        <h2 className="font-heading text-2xl font-bold leading-none tracking-normal text-arena-navy-800 lg:justify-self-start">
                                             Grade de horários disponíveis
-                                        </DialogTitle>
+                                        </h2>
 
                                         <div className="flex justify-start lg:justify-center">
                                             <Image

@@ -22,10 +22,9 @@ import {
 } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { toast } from "sonner"
-import { createCourtAction, updateCourtAction } from "@/modules/courts/actions/courtActions"
+import { createCourtAction, updateCourtAction, getSportsForCourtAction } from "@/modules/courts/actions/courtActions"
 import { useRouter } from "next/navigation"
 import { Textarea } from "@/components/ui/textarea"
-import { getSportsAction } from "@/modules/athletes/actions/athleteActions"
 import { useEffect, useState, useRef } from "react"
 import { UploadCloud, X, Image as ImageIcon } from "lucide-react"
 import Image from "next/image"
@@ -56,7 +55,9 @@ const DEFAULT_DAY_CONFIG: DayConfig = {
 
 export function CourtForm({ initialData, arenaId, onSuccess, returnTab = "espacos" }: CourtFormProps) {
     const router = useRouter()
-    const [sports, setSports] = useState<any[]>([])
+    const [sports, setSports] = useState<{ id: string; name: string }[]>([])
+    const [sportsLoading, setSportsLoading] = useState(true)
+    const [sportsError, setSportsError] = useState<string | null>(null)
     const [imageFile, setImageFile] = useState<File | null>(null)
     const [imagePreview, setImagePreview] = useState<string | null>(initialData?.image_url || null)
     const fileInputRef = useRef<HTMLInputElement>(null)
@@ -76,11 +77,20 @@ export function CourtForm({ initialData, arenaId, onSuccess, returnTab = "espaco
 
     useEffect(() => {
         async function loadSports() {
+            setSportsLoading(true)
+            setSportsError(null)
             try {
-                const res = await getSportsAction()
-                setSports(res.data ?? [])
+                const res = await getSportsForCourtAction()
+                if (!res.success) {
+                    setSportsError(res.error ?? 'Erro ao carregar esportes')
+                } else {
+                    setSports(res.data)
+                }
             } catch (error) {
-                console.error("Failed to load sports:", error)
+                console.error('[CourtForm] Failed to load sports:', error)
+                setSportsError('Erro ao carregar esportes')
+            } finally {
+                setSportsLoading(false)
             }
         }
         loadSports()
@@ -372,26 +382,36 @@ export function CourtForm({ initialData, arenaId, onSuccess, returnTab = "espaco
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>Esportes</FormLabel>
-                                        <div className="grid grid-cols-2 gap-2 border rounded-md p-3 max-h-[120px] overflow-y-auto">
-                                            {sports.map((sport) => (
-                                                <div key={sport.id} className="flex items-center space-x-2">
-                                                    <Checkbox
-                                                        id={sport.id}
-                                                        checked={field.value?.includes(sport.id)}
-                                                        onCheckedChange={(checked) => {
-                                                            const current = field.value || []
-                                                            const next = checked
-                                                                ? [...current, sport.id]
-                                                                : current.filter(id => id !== sport.id)
-                                                            field.onChange(next)
-                                                        }}
-                                                        className="border-arena-slate-muted text-arena-slate-muted data-[state=checked]:border-arena-slate-muted data-[state=checked]:bg-arena-slate-muted data-[state=checked]:text-white"
-                                                    />
-                                                    <label htmlFor={sport.id} className="text-sm font-medium leading-none cursor-pointer">
-                                                        {sport.name}
-                                                    </label>
+                                        <div className="border rounded-md p-3 min-h-[80px] max-h-[160px] overflow-y-auto">
+                                            {sportsLoading ? (
+                                                <p className="text-sm text-arena-navy-800/40 text-center py-2">Carregando esportes...</p>
+                                            ) : sportsError ? (
+                                                <p className="text-sm text-red-500 text-center py-2">{sportsError}</p>
+                                            ) : sports.length === 0 ? (
+                                                <p className="text-sm text-arena-navy-800/40 text-center py-2">Nenhum esporte cadastrado.</p>
+                                            ) : (
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    {sports.map((sport) => (
+                                                        <div key={sport.id} className="flex items-center space-x-2">
+                                                            <Checkbox
+                                                                id={`sport-${sport.id}`}
+                                                                checked={field.value?.includes(sport.id)}
+                                                                onCheckedChange={(checked) => {
+                                                                    const current = field.value || []
+                                                                    const next = checked
+                                                                        ? [...current, sport.id]
+                                                                        : current.filter((id: string) => id !== sport.id)
+                                                                    field.onChange(next)
+                                                                }}
+                                                                className="border-arena-slate-muted data-[state=checked]:border-arena-button data-[state=checked]:bg-arena-button data-[state=checked]:text-white"
+                                                            />
+                                                            <label htmlFor={`sport-${sport.id}`} className="text-sm font-medium leading-none cursor-pointer select-none">
+                                                                {sport.name}
+                                                            </label>
+                                                        </div>
+                                                    ))}
                                                 </div>
-                                            ))}
+                                            )}
                                         </div>
                                         <FormMessage />
                                     </FormItem>

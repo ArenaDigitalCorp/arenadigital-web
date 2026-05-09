@@ -4,6 +4,23 @@ import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { assertArenaBackofficeAccess, assertCourtAccess } from '@/lib/server-auth'
 import { revalidatePath } from 'next/cache'
 
+export async function getSportsForCourtAction(): Promise<{ success: boolean; data: { id: string; name: string }[]; error?: string }> {
+    try {
+        const supabase = getSupabaseAdmin()
+        const { data, error } = await supabase
+            .from('sports')
+            .select('id, name')
+            .order('name')
+
+        if (error) throw new Error(error.message)
+        return { success: true, data: data ?? [] }
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Erro ao buscar esportes'
+        console.error('[getSportsForCourtAction]', message)
+        return { success: false, error: message, data: [] }
+    }
+}
+
 export async function getCourtsByArenaAction(arenaId: string) {
     try {
         await assertArenaBackofficeAccess(arenaId)
