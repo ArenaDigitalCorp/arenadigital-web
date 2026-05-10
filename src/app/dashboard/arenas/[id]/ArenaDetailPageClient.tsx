@@ -222,17 +222,22 @@ export function ArenaDetailPageClient({
               </Card>
             ) : (
               <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:overflow-visible sm:px-0">
-                <div className="grid grid-cols-[repeat(auto-fill,376px)] justify-center gap-6 pb-1">
+                <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(min(100%,280px),1fr))] gap-6 pb-1">
                   {courts.map((court) => {
                     const statusInfo = getCourtStatus(court);
                     return (
                       <GradientMediaCard
                         key={court.id}
+                        fluid
                         inactive={court.status === 'inativo'}
                         imageSrc={court.image_url || '/placeholder-court.jpg'}
                         imageAlt={court.name}
-                        ariaLabel={`Abrir detalhes do espaço ${court.name}`}
-                        onClick={() => setSelectedSpace(court)}
+                        ariaLabel={`Abrir calendário do espaço ${court.name}`}
+                        onClick={() =>
+                          router.push(
+                            `/dashboard/arenas/${arenaId}/courts/${court.id}/calendar`
+                          )
+                        }
                         actions={
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -250,6 +255,13 @@ export function ArenaDetailPageClient({
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                className="flex cursor-pointer items-center"
+                                onClick={() => setSelectedSpace(court)}
+                              >
+                                <Eye className="mr-2 h-4 w-4" />
+                                Ver detalhes
+                              </DropdownMenuItem>
                               <DropdownMenuItem asChild>
                                 <Link
                                   href={spaceEditPath(
@@ -260,15 +272,6 @@ export function ArenaDetailPageClient({
                                   className="flex w-full cursor-pointer items-center"
                                 >
                                   <Edit className="mr-2 h-4 w-4" /> Editar
-                                </Link>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem asChild>
-                                <Link
-                                  href={`/dashboard/arenas/${arenaId}/courts/${court.id}/calendar`}
-                                  className="flex w-full cursor-pointer items-center"
-                                >
-                                  <Eye className="mr-2 h-4 w-4" /> Ver
-                                  calendário
                                 </Link>
                               </DropdownMenuItem>
                               <DropdownMenuItem

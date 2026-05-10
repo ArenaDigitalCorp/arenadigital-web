@@ -34,6 +34,10 @@ export type GradientMediaCardProps = {
   imageHeight?: number;
   /** Largura interna da imagem (centralizada; excedente é cortado pelo overflow) */
   imageInnerWidth?: number;
+  /**
+   * Largura 100% do pai — use em grid com `minmax(..., 1fr)` para preencher a linha.
+   */
+  fluid?: boolean;
   className?: string;
   /** Classes extras na área da imagem (ex.: group-hover) */
   imageClassName?: string;
@@ -65,6 +69,7 @@ export function GradientMediaCard({
   height = GRADIENT_MEDIA_CARD_DEFAULTS.height,
   imageHeight = GRADIENT_MEDIA_CARD_DEFAULTS.imageHeight,
   imageInnerWidth = GRADIENT_MEDIA_CARD_DEFAULTS.imageInnerWidth,
+  fluid = false,
   className,
   imageClassName,
   inactive = false,
@@ -72,16 +77,17 @@ export function GradientMediaCard({
   ariaLabel,
   contentLayout = 'top',
 }: GradientMediaCardProps) {
-  const rootStyle = {
-    width,
-    height,
-  } satisfies CSSProperties;
+  const rootStyle = (
+    fluid
+      ? { height, width: '100%' }
+      : { width, height }
+  ) satisfies CSSProperties;
 
   const imageStripStyle = {
     height: imageHeight,
   } satisfies CSSProperties;
 
-  const imageFullBleed = imageInnerWidth >= width;
+  const imageFullBleed = fluid || imageInnerWidth >= width;
 
   const imageInnerStyle = {
     width: imageInnerWidth,
@@ -107,7 +113,8 @@ export function GradientMediaCard({
   return (
     <div
       className={cn(
-        'group relative shrink-0 overflow-hidden rounded-[8px] bg-[linear-gradient(135deg,#F97415_0%,#F9A91F_45%,#FCE38A_100%)] font-sans text-white shadow-lg',
+        'group relative overflow-hidden rounded-[8px] bg-[linear-gradient(135deg,#F97415_0%,#F9A91F_45%,#FCE38A_100%)] font-sans text-white shadow-lg',
+        fluid ? 'min-w-0 w-full' : 'shrink-0',
         onClick &&
           'cursor-pointer transition-[filter] hover:brightness-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent',
         className
@@ -140,7 +147,11 @@ export function GradientMediaCard({
             src={imageSrc}
             alt={imageAlt}
             fill
-            sizes={`${imageInnerWidth}px`}
+            sizes={
+              fluid
+                ? '(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw'
+                : `${imageInnerWidth}px`
+            }
             className="object-cover transition-transform duration-500 group-hover:scale-105"
           />
         </div>

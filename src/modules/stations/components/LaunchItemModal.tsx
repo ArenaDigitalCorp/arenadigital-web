@@ -25,10 +25,10 @@ import { toast } from "sonner"
 import type { StationOrder } from "@/modules/stations/types/station.types"
 import { addOrderItemsAction } from "@/modules/stations/actions/orderActions"
 import { getProductsByArenaAction } from "@/modules/products/actions/stockActions"
-import { isCatalogService, normalizeCatalogStatus, type Product } from "@/modules/products/types/product.types"
+import { isCatalogService, matchesProductOrServiceSearch, normalizeCatalogStatus, type Product } from "@/modules/products/types/product.types"
 import { Search, Check, X, Loader2, Plus, Minus, Trash2 } from "lucide-react"
 import { Label } from "@/components/ui/label"
-import { cn, normalizeString } from "@/lib/utils"
+import { cn } from "@/lib/utils"
 
 const launchItemSchema = z.object({
     quantity: z.string().min(1, "Informe a quantidade"),
@@ -93,8 +93,7 @@ export function LaunchItemModal({
     })
 
     const filteredProducts = allProducts.filter(p => {
-        const matchesSearch = normalizeString(p.name).includes(normalizeString(productSearch))
-        if (!matchesSearch) return false
+        if (!matchesProductOrServiceSearch(p, productSearch)) return false
         if (!isCatalogService(p) && normalizeCatalogStatus(p.status) === "Inativo") {
             return false
         }
@@ -207,7 +206,7 @@ export function LaunchItemModal({
                                 <div className="relative mt-2">
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-arena-navy-800/20" />
                                     <Input
-                                        placeholder="Filtrar por nome do item..."
+                                        placeholder="Buscar produto ou serviço (nome, tipo, produto, serviço)..."
                                         value={productSearch}
                                         onChange={(e) => setProductSearch(e.target.value)}
                                         className="pl-10 h-11 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-xl"

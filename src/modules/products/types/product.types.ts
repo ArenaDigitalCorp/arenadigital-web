@@ -1,4 +1,5 @@
 import type { Database } from '@/types/supabase.types';
+import { normalizeString } from '@/lib/utils';
 
 type Row = Database['public']['Tables']['products']['Row'];
 
@@ -24,6 +25,21 @@ export function normalizeCatalogStatus(raw: string | null | undefined): CatalogA
 /** Itens `catalog_kind = service` não usam estoque (ex.: aluguel de raquete). */
 export function isCatalogService(p: Pick<Product, 'catalog_kind'>): boolean {
   return p.catalog_kind === 'service';
+}
+
+/** Busca em catálogo/comanda: nome, tipo de item, palavras-chave produto/serviço (normalizado). */
+export function matchesProductOrServiceSearch(
+  p: Pick<Product, 'name' | 'item_type' | 'catalog_kind'>,
+  raw: string,
+): boolean {
+  const q = normalizeString(raw.trim());
+  if (!q) return true;
+  if (normalizeString(p.name).includes(q)) return true;
+  if (normalizeString(p.item_type ?? '').includes(q)) return true;
+  const service = isCatalogService(p);
+  if (q === 'servico' || q === 'service') return service;
+  if (q === 'produto' || q === 'product') return !service;
+  return false;
 }
 
 export interface StockMovement {

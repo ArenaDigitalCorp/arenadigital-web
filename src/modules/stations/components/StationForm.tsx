@@ -54,10 +54,18 @@ export function StationForm({ initialData, arenaId, onSuccess }: StationFormProp
         resolver: zodResolver(stationFormSchema),
         defaultValues: {
             name: initialData?.name || "",
-            status: (initialData?.status as any) || "ativo",
+            status: (initialData?.status as StationFormValues["status"]) || "ativo",
             station_type_id: initialData?.station_type_id || "",
         },
     })
+
+    useEffect(() => {
+        form.reset({
+            name: initialData?.name || "",
+            status: (initialData?.status as StationFormValues["status"]) || "ativo",
+            station_type_id: initialData?.station_type_id || "",
+        })
+    }, [initialData?.id, initialData?.name, initialData?.status, initialData?.station_type_id, form])
 
     useEffect(() => {
         async function loadTypes() {
@@ -76,8 +84,6 @@ export function StationForm({ initialData, arenaId, onSuccess }: StationFormProp
 
     async function onSubmit(data: StationFormValues) {
         try {
-            const finalInput = { ...data, arena_id: arenaId }
-
             if (initialData) {
                 const res = await updateStationAction(arenaId, initialData.id, data)
                 if (!res.success) throw new Error(res.error)
@@ -87,12 +93,18 @@ export function StationForm({ initialData, arenaId, onSuccess }: StationFormProp
                 if (!res.success) throw new Error(res.error)
                 toast.success("Estação criada com sucesso!")
             }
-            if (onSuccess) onSuccess()
             router.refresh()
-            router.push(`/dashboard/arenas/${arenaId}/stations`)
+            onSuccess?.()
+            if (!onSuccess) {
+                router.push(`/dashboard/arenas/${arenaId}/stations`)
+            }
         } catch (error) {
             console.error("Error saving station:", error)
-            toast.error("Ocorreu um erro ao salvar a estação.")
+            const msg =
+                error instanceof Error && error.message
+                    ? error.message
+                    : "Ocorreu um erro ao salvar a estação."
+            toast.error(msg)
         }
     }
 
@@ -127,7 +139,7 @@ export function StationForm({ initialData, arenaId, onSuccess }: StationFormProp
                     render={({ field }) => (
                         <FormItem>
                             <FormLabel>Tipo de Estação</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <Select onValueChange={field.onChange} value={field.value || undefined}>
                                 <FormControl>
                                     <SelectTrigger>
                                         <SelectValue placeholder="Selecione o tipo" />
@@ -152,7 +164,7 @@ export function StationForm({ initialData, arenaId, onSuccess }: StationFormProp
                     render={({ field }) => (
                         <FormItem>
                             <FormLabel>Status</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <Select onValueChange={field.onChange} value={field.value}>
                                 <FormControl>
                                     <SelectTrigger>
                                         <SelectValue placeholder="Selecione o status" />
