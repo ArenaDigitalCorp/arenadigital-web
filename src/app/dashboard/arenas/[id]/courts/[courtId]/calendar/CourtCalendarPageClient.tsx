@@ -241,12 +241,10 @@ export function CourtCalendarPageClient({ arenaId, courtId, initialCourt, initia
         let startStr: string, endStr: string
         if (mode === 'day') {
             startStr = startOfDay(date).toISOString()
-            const end = new Date(date)
-            end.setHours(23, 59, 59, 999)
-            endStr = end.toISOString()
+            endStr = addDays(startOfDay(date), 1).toISOString()
         } else {
             startStr = startOfWeek(date, { weekStartsOn: 1 }).toISOString()
-            endStr = endOfWeek(date, { weekStartsOn: 1 }).toISOString()
+            endStr = addDays(endOfWeek(date, { weekStartsOn: 1 }), 1).toISOString()
         }
         const res = await getBookingsByCourtAction(arenaId, courtId, startStr, endStr)
         if (res.success) setBookings(res.data as Booking[])

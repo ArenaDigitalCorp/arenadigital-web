@@ -3,7 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { SupabaseBookingRepository } from '@/modules/bookings/repositories/SupabaseBookingRepository'
 import { CourtCalendarPageClient } from './CourtCalendarPageClient'
 import { redirect } from 'next/navigation'
-import { startOfDay, endOfDay } from 'date-fns'
+import { startOfDay, addDays } from 'date-fns'
 
 export default async function CourtCalendarPage({ params }: { params: Promise<{ id: string; courtId: string }> }) {
     const { id: arenaId, courtId } = await params
@@ -18,7 +18,7 @@ export default async function CourtCalendarPage({ params }: { params: Promise<{ 
     const supabase = getSupabaseAdmin()
     const now = new Date()
     const todayStart = startOfDay(now).toISOString()
-    const todayEnd = endOfDay(now).toISOString()
+    const todayEnd = startOfDay(addDays(now, 1)).toISOString()
 
     const [courtRes, bookings] = await Promise.all([
         supabase
