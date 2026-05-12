@@ -502,6 +502,23 @@ export class AsaasGateway implements PaymentGateway {
   }
 
   /**
+   * Campo `description` da assinatura no Asaas (PUT /v3/subscriptions/{id}, máx. 500).
+   * O checkout só envia `subscription: { cycle, nextDueDate }` — a descrição define-se aqui.
+   */
+  async setSubscriptionDescription(
+    subscriptionId: string,
+    description: string
+  ): Promise<void> {
+    const trimmed = description.trim().slice(0, 500);
+    if (!trimmed) return;
+    await this.http.request<AsaasSubscription>(
+      'PUT',
+      `/v3/subscriptions/${encodeURIComponent(subscriptionId)}`,
+      { body: { description: trimmed } }
+    );
+  }
+
+  /**
    * Monta snapshot persistível (doc Asaas: GET assinatura + cobranças; `creditCard`
    * na cobrança com últimos 4, bandeira, token — não guardamos token no snapshot).
    */

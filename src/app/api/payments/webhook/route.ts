@@ -9,7 +9,12 @@ import {
   MissingWebhookSignatureError
 } from '@/modules/payments/errors'
 import { getPaymentGateway } from '@/modules/payments/gateway'
-import { fetchPlanByGatewayPriceId } from '@/modules/payments/repositories/subscription-plans.repository'
+import { AsaasGateway } from '@/modules/payments/gateway/asaas.gateway'
+import { planKeySchema } from '@/modules/payments/plans'
+import {
+  fetchPlanByGatewayPriceId,
+  fetchPlanByKey,
+} from '@/modules/payments/repositories/subscription-plans.repository'
 import { syncArenaBillingSnapshotFromGateway } from '@/modules/payments/usecases/sync-arena-billing-snapshot.usecase'
 import type { Database } from '@/types/supabase.types'
 import { NextRequest, NextResponse } from 'next/server'
@@ -416,6 +421,26 @@ async function handleCheckoutPaid(
   }
 
   await syncArenaBillingSnapshotFromGateway(record.arena_id)
+
+  if (resolvedSubscriptionId && gateway instanceof AsaasGateway) {
+    const parsedKey = planKeySchema.safeParse(record.plan_key)
+    const plan =
+      parsedKey.success ? await fetchPlanByKey(parsedKey.data) : null
+    const description = plan?.label
+      ? `Arena Digital — ${plan.label}`
+      : `Arena Digital — ${record.plan_key}`
+    try {
+      await gateway.setSubscriptionDescription(
+        resolvedSubscriptionId,
+        description
+      )
+    } catch (err) {
+      console.warn(
+        '[payments-webhook] CHECKOUT_PAID — falha ao definir description da assinatura no Asaas',
+        { subscription_id: resolvedSubscriptionId, err }
+      )
+    }
+  }
 
   console.info('[payments-webhook] Checkout paid — subscription ativada', {
     checkout_id: checkoutId,
