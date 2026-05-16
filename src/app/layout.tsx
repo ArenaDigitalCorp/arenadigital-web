@@ -4,6 +4,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { ptBR } from "@clerk/localizations";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import Script from "next/script";
 import "./globals.css";
 
 const exo = Exo({
@@ -39,6 +40,18 @@ export default function RootLayout({
         <body
           className={`${exo.variable} ${manrope.variable} ${manrope.className} ${geistMono.variable} antialiased`}
         >
+          <Script
+            src="https://www.googletagmanager.com/gtag/js?id=G-0H2NWTG99B"
+            strategy="afterInteractive"
+          />
+          <Script id="google-analytics" strategy="afterInteractive">
+            {`
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);}
+              gtag('js', new Date());
+              gtag('config', 'G-0H2NWTG99B');
+            `}
+          </Script>
           <TooltipProvider>
             {children}
           </TooltipProvider>
