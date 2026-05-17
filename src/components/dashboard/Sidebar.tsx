@@ -21,7 +21,6 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { useUser } from "@/hooks/useUser";
 import { UserMenu } from "@/components/auth/UserMenu";
 import { Logo } from "@/components/shared/Logo";
 import { useSidebar } from "@/contexts/SidebarContext";
@@ -33,7 +32,6 @@ const navActiveText = "text-arena-accent";
 
 export function Sidebar({ className, onNavItemClick }: { className?: string, onNavItemClick?: () => void }) {
     const pathname = usePathname();
-    const { user } = useUser();
     const { isCollapsed, toggleSidebar } = useSidebar();
     const { selectedArena, selectedArenaDetails } = useArena();
 
@@ -431,20 +429,15 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
             <div className="mt-auto shrink-0 border-t border-white/10">
                 <div
                     className={cn(
-                        "flex py-4",
-                        isCollapsed ? "justify-center px-2" : "items-center gap-3 px-6",
+                        "py-4",
+                        isCollapsed ? "px-2" : "px-4",
                     )}
                 >
-                    <UserMenu />
-                    {!isCollapsed && (
-                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-white/85">
-                            {(() => {
-                                const meta = user?.user_metadata ?? {}
-                                const firstName = typeof meta.firstName === 'string' ? meta.firstName.trim() : ''
-                                return firstName || user?.email || 'Minha conta'
-                            })()}
-                        </span>
-                    )}
+                    <UserMenu
+                        showName={!isCollapsed}
+                        accountHref={settingsUsersHref}
+                        className={isCollapsed ? "justify-center px-0" : undefined}
+                    />
                 </div>
                 {!isCollapsed && (
                     <div className="px-6 pb-4 text-[10px] text-white/30 whitespace-nowrap">
