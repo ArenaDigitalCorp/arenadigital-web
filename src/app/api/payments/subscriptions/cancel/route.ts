@@ -4,7 +4,7 @@ import {
   reactivateSubscription
 } from '@/modules/payments/usecases/cancel-subscription.usecase'
 import { verifyArenaAccess } from '@/modules/payments/utils/verify-arena-access'
-import { auth } from '@clerk/nextjs/server'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import z from 'zod'
 
@@ -14,8 +14,10 @@ const RequestSchema = z.object({
 })
 
 export async function POST(request: NextRequest) {
-  const { userId } = await auth()
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const supabase = await createSupabaseServerClient()
+  const { data: authData } = await supabase.auth.getUser()
+  const user = authData.user
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
   const parsed = RequestSchema.safeParse(body)
@@ -27,14 +29,14 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const hasAccess = await verifyArenaAccess(userId, parsed.data.arenaId)
+  const hasAccess = await verifyArenaAccess(user.id, parsed.data.arenaId)
   if (!hasAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   try {
     if (parsed.data.action === 'cancel') {
-      await cancelSubscription(parsed.data.arenaId, userId)
+      await cancelSubscription(parsed.data.arenaId, user.id)
     } else {
-      await reactivateSubscription(parsed.data.arenaId, userId)
+      await reactivateSubscription(parsed.data.arenaId, user.id)
     }
 
     return NextResponse.json({ success: true })

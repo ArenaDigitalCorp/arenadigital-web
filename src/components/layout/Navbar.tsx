@@ -4,11 +4,13 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import { Menu, X } from "lucide-react";
+import { useUser } from "@/hooks/useUser";
+import { UserMenu } from "@/components/auth/UserMenu";
 
 export function Navbar() {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const { user, loading } = useUser();
 
     const toggleMobileMenu = () => {
         setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -45,21 +47,23 @@ export function Navbar() {
 
                 <div className="flex items-center gap-4">
                     <div className="hidden md:flex items-center gap-4">
-                        <SignedOut>
+                        {!loading && !user && (
                             <Link href="/sign-in">
                                 <Button variant="ghost" className="h-10 rounded-xl border-0 bg-[linear-gradient(90deg,#F97415_0%,#F9A91F_100%)] px-5 text-sm font-semibold text-white shadow-lg shadow-[#F97415]/20 transition-all hover:bg-[linear-gradient(90deg,#F97415_0%,#F9A91F_100%)] hover:text-white hover:brightness-105">
                                     Começar Agora
                                 </Button>
                             </Link>
-                        </SignedOut>
-                        <SignedIn>
-                            <Link href="/dashboard">
-                                <Button size="sm" variant="outline" className="bg-transparent text-white border-white/20 hover:bg-white/10">
-                                    Ir para Dashboard
-                                </Button>
-                            </Link>
-                            <UserButton afterSignOutUrl="/" />
-                        </SignedIn>
+                        )}
+                        {!loading && user && (
+                            <>
+                                <Link href="/dashboard">
+                                    <Button size="sm" variant="outline" className="bg-transparent text-white border-white/20 hover:bg-white/10">
+                                        Ir para Dashboard
+                                    </Button>
+                                </Link>
+                                <UserMenu />
+                            </>
+                        )}
                     </div>
 
                     <Button variant="ghost" size="icon" className="md:hidden text-white" onClick={toggleMobileMenu}>
@@ -68,7 +72,6 @@ export function Navbar() {
                 </div>
             </div>
 
-            {/* Mobile Menu Dropdown */}
             {isMobileMenuOpen && (
                 <div className="absolute left-0 top-20 flex w-full animate-in flex-col items-center gap-4 border-t border-white/10 bg-[rgba(11,24,50,0.95)] py-4 shadow-xl backdrop-blur-md fade-in slide-in-from-top-2 md:hidden">
                     <Link href="/#forarenas" onClick={toggleMobileMenu} className="text-sm font-semibold text-white/70 transition-colors hover:text-white">
@@ -85,23 +88,23 @@ export function Navbar() {
                     </Link>
 
                     <div className="w-full px-4 pt-4 border-t border-white/10 flex flex-col gap-4">
-                        <SignedOut>
+                        {!loading && !user && (
                             <Link href="/sign-in" onClick={toggleMobileMenu} className="w-full">
                                 <Button variant="ghost" className="h-12 w-full rounded-xl border-0 bg-[linear-gradient(90deg,#F97415_0%,#F9A91F_100%)] font-extrabold text-white shadow-lg shadow-[#F97415]/20 transition-all hover:bg-[linear-gradient(90deg,#F97415_0%,#F9A91F_100%)] hover:text-white hover:brightness-105">
                                     Começar Agora
                                 </Button>
                             </Link>
-                        </SignedOut>
-                        <SignedIn>
+                        )}
+                        {!loading && user && (
                             <div className="flex items-center justify-between px-2">
                                 <Link href="/dashboard" onClick={toggleMobileMenu}>
                                     <Button variant="outline" className="h-11 bg-transparent text-white border-white/20 hover:bg-white/10">
                                         Ir para Dashboard
                                     </Button>
                                 </Link>
-                                <UserButton afterSignOutUrl="/" />
+                                <UserMenu />
                             </div>
-                        </SignedIn>
+                        )}
                     </div>
                 </div>
             )}

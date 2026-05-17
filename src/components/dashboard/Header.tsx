@@ -1,6 +1,8 @@
-import { UserButton } from '@clerk/nextjs';
+"use client";
+
 import { Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { UserMenu } from '@/components/auth/UserMenu';
 
 export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
   return (
@@ -16,7 +18,7 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
       </Button>
       <div className="flex-1" />
       <div className="flex items-center gap-4">
-        <UserButton afterSignOutUrl="/" />
+        <UserMenu />
       </div>
     </header>
   );

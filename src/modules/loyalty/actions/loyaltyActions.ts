@@ -1,24 +1,14 @@
 "use server"
 
-import { auth } from "@clerk/nextjs/server"
 import { getSupabaseAdmin } from "@/lib/supabase-server"
-import { assertArenaBackofficeAccess } from "@/lib/server-auth"
+import { assertArenaBackofficeAccess, requireAuthenticatedDbUser } from "@/lib/server-auth"
 import { SupabaseLoyaltyRepository } from "@/modules/loyalty/repositories/SupabaseLoyaltyRepository"
 import { revalidatePath } from "next/cache"
 
-async function getDbUserId(clerkId: string) {
-    const { data } = await getSupabaseAdmin().from('users').select('id').eq('clerk_user_id', clerkId).single()
-    return data?.id ?? null
-}
-
 export async function updateCurrencyName(arenaId: string, name: string) {
     try {
-        const { userId: clerkId } = await auth()
-        if (!clerkId) return { success: false, error: "Não autorizado" }
+        await requireAuthenticatedDbUser()
         await assertArenaBackofficeAccess(arenaId)
-
-        const dbUserId = await getDbUserId(clerkId)
-        if (!dbUserId) return { success: false, error: "Usuário não encontrado" }
 
         const { error } = await getSupabaseAdmin()
             .from('arenas').update({ nome_moeda_virtual: name }).eq('id', arenaId)
@@ -26,63 +16,55 @@ export async function updateCurrencyName(arenaId: string, name: string) {
 
         revalidatePath("/dashboard/loyalty")
         return { success: true }
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error updating currency name:", error)
-        return { success: false, error: error.message || "Erro ao atualizar nome da moeda" }
+        const message = error instanceof Error ? error.message : "Erro ao atualizar nome da moeda"
+        return { success: false, error: message }
     }
 }
 
 export async function getLatestCreditsAction(arenaId: string) {
     try {
-        const { userId: clerkId } = await auth()
-        if (!clerkId) return { success: false, error: "Não autorizado" }
+        await requireAuthenticatedDbUser()
         await assertArenaBackofficeAccess(arenaId)
-
-        const dbUserId = await getDbUserId(clerkId)
-        if (!dbUserId) return { success: false, error: "Usuário não encontrado" }
 
         const repo = new SupabaseLoyaltyRepository(getSupabaseAdmin())
         const credits = await repo.findRecent(arenaId, 'crédito')
         return { success: true, data: credits }
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error in getLatestCreditsAction:", error)
-        return { success: false, error: error.message || "Erro ao buscar envios" }
+        const message = error instanceof Error ? error.message : "Erro ao buscar envios"
+        return { success: false, error: message }
     }
 }
 
 export async function getLatestRedemptionsAction(arenaId: string) {
     try {
-        const { userId: clerkId } = await auth()
-        if (!clerkId) return { success: false, error: "Não autorizado" }
+        await requireAuthenticatedDbUser()
         await assertArenaBackofficeAccess(arenaId)
-
-        const dbUserId = await getDbUserId(clerkId)
-        if (!dbUserId) return { success: false, error: "Usuário não encontrado" }
 
         const repo = new SupabaseLoyaltyRepository(getSupabaseAdmin())
         const redemptions = await repo.findRecentRedemptions(arenaId)
         return { success: true, data: redemptions }
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error in getLatestRedemptionsAction:", error)
-        return { success: false, error: error.message || "Erro ao buscar resgates" }
+        const message = error instanceof Error ? error.message : "Erro ao buscar resgates"
+        return { success: false, error: message }
     }
 }
 
 export async function searchAthletesAction(arenaId: string, query?: string) {
     try {
-        const { userId: clerkId } = await auth()
-        if (!clerkId) return { success: false, error: "Não autorizado" }
+        await requireAuthenticatedDbUser()
         await assertArenaBackofficeAccess(arenaId)
-
-        const dbUserId = await getDbUserId(clerkId)
-        if (!dbUserId) return { success: false, error: "Usuário não encontrado" }
 
         const repo = new SupabaseLoyaltyRepository(getSupabaseAdmin())
         const athletes = await repo.searchAthletes(arenaId, query)
         return { success: true, data: athletes }
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error in searchAthletesAction:", error)
-        return { success: false, error: error.message || "Erro ao buscar atletas" }
+        const message = error instanceof Error ? error.message : "Erro ao buscar atletas"
+        return { success: false, error: message }
     }
 }
 
@@ -94,12 +76,8 @@ export async function createCreditTransactionAction(data: {
     descricao?: string;
 }) {
     try {
-        const { userId: clerkId } = await auth()
-        if (!clerkId) return { success: false, error: "Não autorizado" }
+        const { dbUserId } = await requireAuthenticatedDbUser()
         await assertArenaBackofficeAccess(data.arenaId)
-
-        const dbUserId = await getDbUserId(clerkId)
-        if (!dbUserId) return { success: false, error: "Usuário não encontrado" }
 
         let data_vencimento: string | null = null;
         const now = new Date();
@@ -131,9 +109,10 @@ export async function createCreditTransactionAction(data: {
 
         revalidatePath("/dashboard/loyalty")
         return { success: true }
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error in createCreditTransactionAction:", error)
-        return { success: false, error: error.message || "Erro ao criar transação" }
+        const message = error instanceof Error ? error.message : "Erro ao criar transação"
+        return { success: false, error: message }
     }
 }
 
@@ -144,12 +123,8 @@ export async function createRedemptionTransactionAction(data: {
     descricao?: string;
 }) {
     try {
-        const { userId: clerkId } = await auth()
-        if (!clerkId) return { success: false, error: "Não autorizado" }
+        const { dbUserId } = await requireAuthenticatedDbUser()
         await assertArenaBackofficeAccess(data.arenaId)
-
-        const dbUserId = await getDbUserId(clerkId)
-        if (!dbUserId) return { success: false, error: "Usuário não encontrado" }
 
         const repo = new SupabaseLoyaltyRepository(getSupabaseAdmin())
         await repo.create({
@@ -164,38 +139,32 @@ export async function createRedemptionTransactionAction(data: {
 
         revalidatePath("/dashboard/loyalty")
         return { success: true }
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error in createRedemptionTransactionAction:", error)
-        return { success: false, error: error.message || "Erro ao criar resgate" }
+        const message = error instanceof Error ? error.message : "Erro ao criar resgate"
+        return { success: false, error: message }
     }
 }
 
 export async function getTopAthletesAction(arenaId: string) {
     try {
-        const { userId: clerkId } = await auth()
-        if (!clerkId) return { success: false, error: "Não autorizado" }
+        await requireAuthenticatedDbUser()
         await assertArenaBackofficeAccess(arenaId)
-
-        const dbUserId = await getDbUserId(clerkId)
-        if (!dbUserId) return { success: false, error: "Usuário não encontrado" }
 
         const repo = new SupabaseLoyaltyRepository(getSupabaseAdmin())
         const topAthletes = await repo.getTopAthletes(arenaId)
         return { success: true, data: topAthletes }
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error in getTopAthletesAction:", error)
-        return { success: false, error: error.message || "Erro ao buscar top atletas" }
+        const message = error instanceof Error ? error.message : "Erro ao buscar top atletas"
+        return { success: false, error: message }
     }
 }
 
 export async function getLoyaltyDashboardDataAction(arenaId: string) {
     try {
-        const { userId: clerkId } = await auth()
-        if (!clerkId) return { success: false, error: "Não autorizado" }
+        await requireAuthenticatedDbUser()
         await assertArenaBackofficeAccess(arenaId)
-
-        const dbUserId = await getDbUserId(clerkId)
-        if (!dbUserId) return { success: false, error: "Usuário não encontrado" }
 
         const repo = new SupabaseLoyaltyRepository(getSupabaseAdmin())
         const [credits, redemptions, topAthletes] = await Promise.all([
@@ -205,44 +174,39 @@ export async function getLoyaltyDashboardDataAction(arenaId: string) {
         ])
 
         return { success: true, data: { credits, redemptions, topAthletes } }
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error in getLoyaltyDashboardDataAction:", error)
-        return { success: false, error: error.message || "Erro ao carregar programa de fidelidade" }
+        const message = error instanceof Error ? error.message : "Erro ao carregar programa de fidelidade"
+        return { success: false, error: message }
     }
 }
 
 export async function getAthletesWithBalanceAction(arenaId: string, page = 1, pageSize = 10, query?: string) {
     try {
-        const { userId: clerkId } = await auth()
-        if (!clerkId) return { success: false, error: "Não autorizado" }
+        await requireAuthenticatedDbUser()
         await assertArenaBackofficeAccess(arenaId)
-
-        const dbUserId = await getDbUserId(clerkId)
-        if (!dbUserId) return { success: false, error: "Usuário não encontrado" }
 
         const repo = new SupabaseLoyaltyRepository(getSupabaseAdmin())
         const result = await repo.getAthletesWithBalance(arenaId, page, pageSize, query)
         return { success: true, ...result }
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error in getAthletesWithBalanceAction:", error)
-        return { success: false, error: error.message || "Erro ao buscar atletas" }
+        const message = error instanceof Error ? error.message : "Erro ao buscar atletas"
+        return { success: false, error: message }
     }
 }
 
 export async function getStatementAction(arenaId: string, page = 1, pageSize = 10, filters?: { athleteName?: string, startDate?: string, endDate?: string }) {
     try {
-        const { userId: clerkId } = await auth()
-        if (!clerkId) return { success: false, error: "Não autorizado" }
+        await requireAuthenticatedDbUser()
         await assertArenaBackofficeAccess(arenaId)
-
-        const dbUserId = await getDbUserId(clerkId)
-        if (!dbUserId) return { success: false, error: "Usuário não encontrado" }
 
         const repo = new SupabaseLoyaltyRepository(getSupabaseAdmin())
         const result = await repo.getStatement(arenaId, page, pageSize, filters)
         return { success: true, ...result }
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error in getStatementAction:", error)
-        return { success: false, error: error.message || "Erro ao buscar extrato" }
+        const message = error instanceof Error ? error.message : "Erro ao buscar extrato"
+        return { success: false, error: message }
     }
 }

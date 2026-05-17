@@ -1,4 +1,3 @@
-import { SignUp } from "@clerk/nextjs";
 import { Logo } from "@/components/shared/Logo";
 import Link from "next/link";
 import { CustomSignUp } from "@/components/auth/CustomSignUp";

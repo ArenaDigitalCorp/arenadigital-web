@@ -27,7 +27,7 @@ type SelectedUser = {
     role: string;
     stationId: string | null;
     status: string;
-    clerkUserId: string;
+    clerkUserId: string | null;
 };
 
 type StationOption = {

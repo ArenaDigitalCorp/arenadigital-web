@@ -21,7 +21,8 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { UserButton, useUser } from "@clerk/nextjs";
+import { useUser } from "@/hooks/useUser";
+import { UserMenu } from "@/components/auth/UserMenu";
 import { Logo } from "@/components/shared/Logo";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { useArena } from "@/contexts/ArenaContext";
@@ -434,19 +435,14 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                         isCollapsed ? "justify-center px-2" : "items-center gap-3 px-6",
                     )}
                 >
-                    <UserButton
-                        afterSignOutUrl="/"
-                        appearance={{
-                            elements: {
-                                avatarBox: "h-9 w-9 ring-2 ring-white/15",
-                            },
-                        }}
-                    />
+                    <UserMenu />
                     {!isCollapsed && (
                         <span className="min-w-0 flex-1 truncate text-sm font-medium text-white/85">
-                            {user?.firstName?.trim()
-                                ? user.firstName
-                                : user?.primaryEmailAddress?.emailAddress ?? "Minha conta"}
+                            {(() => {
+                                const meta = user?.user_metadata ?? {}
+                                const firstName = typeof meta.firstName === 'string' ? meta.firstName.trim() : ''
+                                return firstName || user?.email || 'Minha conta'
+                            })()}
                         </span>
                     )}
                 </div>

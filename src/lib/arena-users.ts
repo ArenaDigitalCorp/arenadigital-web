@@ -23,7 +23,7 @@ type ArenaUserRow = {
     id: string
     name: string | null
     email: string
-    clerk_user_id: string
+    clerk_user_id: string | null
   } | null
 }
 

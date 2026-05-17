@@ -1,13 +1,15 @@
 "use server"
 
-import { createClerkClient } from '@clerk/nextjs/server'
 import { SupabaseAthleteRepository } from '@/modules/athletes/repositories/SupabaseAthleteRepository'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { assertArenaBackofficeAccess } from '@/lib/server-auth'
-import { auth } from '@clerk/nextjs/server'
+import { assertArenaBackofficeAccess, requireAuthenticatedDbUser } from '@/lib/server-auth'
 import { linkAthleteSchema } from '@/modules/athletes/schemas/athlete.schema'
 
-const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
+type MunicipioSearchRow = {
+    codigo_ibge: number;
+    nome: string;
+    estados: { uf: string } | { uf: string }[] | null;
+}
 
 export async function linkAthlete(formData: {
     name: string;
@@ -30,49 +32,42 @@ export async function linkAthlete(formData: {
     }
 
     try {
-        const { userId: managerClerkId } = await auth();
-
-        if (!managerClerkId) {
-            return { success: false, error: "Não autorizado" };
-        }
-
+        await requireAuthenticatedDbUser()
         await assertArenaBackofficeAccess(formData.arenaId)
 
         const supabase = getSupabaseAdmin()
 
-        // 1. Get Manager's DB User
-        const { data: managerDbUser } = await supabase
-            .from('users').select('*').eq('clerk_user_id', managerClerkId).single()
-        if (!managerDbUser) {
-            return { success: false, error: "Usuário gestor não encontrado no banco." };
-        }
-
-        // 1.1 Check if email already exists
+        // 1. Check if email already exists
         const { data: existingUser } = await supabase
             .from('users').select('id').eq('email', formData.email).maybeSingle()
         if (existingUser) {
             return { success: false, error: "Este e-mail já está cadastrado no sistema." };
         }
 
-        // 2. Create User in Clerk
-        const client = await clerk;
-        const clerkUser = await client.users.createUser({
-            emailAddress: [formData.email],
-            firstName: formData.name.split(' ')[0],
-            lastName: formData.name.split(' ').slice(1).join(' ') || undefined,
-            skipPasswordRequirement: true,
-            unsafeMetadata: {
+        // 2. Create User in Supabase Auth (no password — athlete entra via app mobile)
+        const firstName = formData.name.split(' ')[0]
+        const lastName = formData.name.split(' ').slice(1).join(' ') || undefined
+        const { data: created, error: createErr } = await supabase.auth.admin.createUser({
+            email: formData.email,
+            email_confirm: true,
+            user_metadata: {
+                firstName,
+                lastName,
+                name: formData.name,
                 role: 'atleta',
-                origem_cadastro: 'arena'
-            }
-        });
+                origem_cadastro: 'arena',
+            },
+        })
+        if (createErr || !created.user) {
+            return { success: false, error: createErr?.message || 'Erro ao criar usuário do atleta.' }
+        }
 
-        // 3. Sync to Supabase users table
+        // 3. Ensure public.users row exists (trigger inserts with role='gestor' por padrão; corrigimos para atleta)
         const { data: athleteDbUser, error: upsertError } = await supabase
             .from('users')
             .upsert(
-                { clerk_user_id: clerkUser.id, email: formData.email, name: formData.name, role: 'atleta' },
-                { onConflict: 'clerk_user_id' }
+                { id: created.user.id, email: formData.email, name: formData.name, role: 'atleta' } as never,
+                { onConflict: 'id' }
             )
             .select()
             .single()
@@ -111,24 +106,10 @@ export async function linkAthlete(formData: {
         });
 
         return { success: true };
-    } catch (error: any) {
-        console.error("DEBUG - Full Error in linkAthlete:", JSON.stringify(error, null, 2));
-
-        if (error.errors && error.errors[0]) {
-            const clerkError = error.errors[0];
-            if (clerkError.code === 'form_identifier_exists') {
-                return { success: false, error: "Este e-mail já está cadastrado no sistema." };
-            }
-            return {
-                success: false,
-                error: clerkError.longMessage || clerkError.message || "Erro de validação no Clerk."
-            };
-        }
-
-        return {
-            success: false,
-            error: error.message || "Ocorreu um erro inesperado ao vincular o atleta."
-        };
+    } catch (error: unknown) {
+        console.error("DEBUG - Full Error in linkAthlete:", error);
+        const message = error instanceof Error ? error.message : "Ocorreu um erro inesperado ao vincular o atleta."
+        return { success: false, error: message };
     }
 }
 
@@ -192,11 +173,14 @@ export async function searchMunicipiosAction(query: string): Promise<{
 
         if (error) throw error
 
-        const result = (data ?? []).map((m: any) => ({
+        const result = ((data ?? []) as MunicipioSearchRow[]).map((m) => {
+            const estado = Array.isArray(m.estados) ? m.estados[0] : m.estados
+            return {
             codigo_ibge: m.codigo_ibge,
             nome: m.nome,
-            uf: m.estados?.uf ?? '',
-        }))
+                uf: estado?.uf ?? '',
+            }
+        })
 
         return { success: true, data: result }
     } catch (err) {

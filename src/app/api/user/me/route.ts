@@ -1,44 +1,29 @@
-import { auth, currentUser } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { syncUserAction } from '@/modules/users/actions/userActions'
 
 export async function GET() {
-  const { userId } = await auth()
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const supabase = await createSupabaseServerClient()
+  const { data: authData } = await supabase.auth.getUser()
+  const user = authData.user
 
-  const supabase = getSupabaseAdmin()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data: existingUser } = await supabase
+  const admin = getSupabaseAdmin()
+  const { data: existingUser, error } = await admin
     .from('users')
     .select('*')
-    .eq('clerk_user_id', userId)
+    .eq('id', user.id)
     .maybeSingle()
 
-  if (existingUser) {
-    return NextResponse.json(existingUser)
+  if (error) {
+    console.error('[api/user/me] Failed to load user', error)
+    return NextResponse.json({ error: 'Failed to load user' }, { status: 500 })
   }
 
-  const clerkUser = await currentUser()
-  if (!clerkUser) return NextResponse.json({ error: 'User not found' }, { status: 404 })
-
-  const email = clerkUser.emailAddresses?.[0]?.emailAddress ?? ''
-  const name = [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ')
-  const metadata = clerkUser.unsafeMetadata as Record<string, unknown>
-
-  try {
-    const user = await syncUserAction(
-      userId,
-      email,
-      name,
-      metadata?.arenaName as string | undefined,
-      metadata?.cpf as string | undefined,
-      metadata?.phone as string | undefined,
-      metadata?.addressData,
-    )
-    return NextResponse.json(user)
-  } catch (error) {
-    console.error('[api/user/me] Failed to sync user', error)
-    return NextResponse.json({ error: 'Failed to sync user' }, { status: 500 })
+  if (!existingUser) {
+    return NextResponse.json({ error: 'User not provisioned' }, { status: 404 })
   }
+
+  return NextResponse.json(existingUser)
 }

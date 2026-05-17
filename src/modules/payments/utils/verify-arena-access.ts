@@ -5,13 +5,13 @@ import {
 } from '@/lib/server-auth'
 
 export async function verifyArenaAccess(
-  clerkUserId: string,
+  authUserId: string,
   arenaId: string
 ): Promise<boolean> {
   try {
     const currentUser = await requireAuthenticatedDbUser()
 
-    if (currentUser.clerkUserId !== clerkUserId) {
+    if (currentUser.authUserId !== authUserId) {
       return false
     }
 

@@ -1,11 +1,14 @@
 "use server"
 
-import { auth } from '@clerk/nextjs/server'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { assertArenaBackofficeAccess, assertRotativoAccess } from '@/lib/server-auth'
+import { assertArenaBackofficeAccess, assertRotativoAccess, requireAuthenticatedDbUser } from '@/lib/server-auth'
 import { SupabaseRotativoRepository } from '@/modules/rotativos/repositories/SupabaseRotativoRepository'
 import { revalidatePath } from 'next/cache'
 import { createRotativoInputSchema } from '@/modules/rotativos/schemas/rotativo.schema'
+
+function getErrorMessage(error: unknown, fallback: string) {
+    return error instanceof Error ? error.message : fallback
+}
 
 async function ensureAthleteBelongsToArena(arenaId: string, athleteId: string) {
     const { data, error } = await getSupabaseAdmin()
@@ -26,8 +29,7 @@ export async function createRotativoAction(formData: unknown) {
     }
 
     try {
-        const { userId: clerkId } = await auth()
-        if (!clerkId) return { success: false, error: "Não autorizado" }
+        await requireAuthenticatedDbUser()
 
         const { arenaId, ...rest } = parsed.data
         await assertArenaBackofficeAccess(arenaId)
@@ -39,24 +41,23 @@ export async function createRotativoAction(formData: unknown) {
 
         revalidatePath('/dashboard/rotativo')
         return { success: true }
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error in createRotativoAction:", error)
-        return { success: false, error: error.message || "Erro ao criar rotativo" }
+        return { success: false, error: getErrorMessage(error, "Erro ao criar rotativo") }
     }
 }
 
 export async function getRotativosAction(arenaId: string, date: string) {
     try {
-        const { userId: clerkId } = await auth()
-        if (!clerkId) return { success: false, error: "Não autorizado" }
+        await requireAuthenticatedDbUser()
         await assertArenaBackofficeAccess(arenaId)
 
         const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
         const data = await repo.findByDate(arenaId, date)
         return { success: true, data }
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error in getRotativosAction:", error)
-        return { success: false, error: error.message || "Erro ao buscar rotativos" }
+        return { success: false, error: getErrorMessage(error, "Erro ao buscar rotativos") }
     }
 }
 
@@ -69,24 +70,23 @@ export async function registerAthleteAction(rotativoId: string, athleteId: strin
         await repo.registerAthlete(rotativoId, athleteId, value)
         revalidatePath(`/dashboard/rotativo/${arenaId}`)
         return { success: true }
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error in registerAthleteAction:", error)
-        return { success: false, error: error.message || "Erro ao registrar atleta" }
+        return { success: false, error: getErrorMessage(error, "Erro ao registrar atleta") }
     }
 }
 
 export async function getRotativosByMonthAction(arenaId: string, startDate: string, endDate: string) {
     try {
-        const { userId: clerkId } = await auth()
-        if (!clerkId) return { success: false, error: "Não autorizado" }
+        await requireAuthenticatedDbUser()
         await assertArenaBackofficeAccess(arenaId)
 
         const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
         const data = await repo.findByMonth(arenaId, startDate, endDate)
         return { success: true, data }
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error in getRotativosByMonthAction:", error)
-        return { success: false, error: error.message || "Erro ao buscar rotativos do mês" }
+        return { success: false, error: getErrorMessage(error, "Erro ao buscar rotativos do mes") }
     }
 }
 
@@ -96,8 +96,8 @@ export async function getParticipantsAction(rotativoId: string) {
         const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
         const data = await repo.getInscritos(rotativoId)
         return { success: true, data }
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error in getParticipantsAction:", error)
-        return { success: false, error: error.message || "Erro ao buscar participantes" }
+        return { success: false, error: getErrorMessage(error, "Erro ao buscar participantes") }
     }
 }

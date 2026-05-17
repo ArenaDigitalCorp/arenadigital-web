@@ -1,19 +1,18 @@
 "use client"
 
 import * as React from "react"
-import { useSignUp } from "@clerk/nextjs"
-import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 import { Loader2, Check, ChevronsUpDown } from "lucide-react"
-import { supabase } from "@/shared/database/supabaseClient"
+import { supabase as supabasePublic } from "@/shared/database/supabaseClient"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { cn } from "@/lib/utils"
+import { startSignUpAction } from "@/modules/auth/actions/authActions"
 
-// Masks
 const maskCpf = (value: string) => {
     return value
         .replace(/\D/g, "")
@@ -38,18 +37,16 @@ const maskCep = (value: string) => {
         .replace(/(-\d{3})\d+?$/, "$1");
 };
 
-export function CustomSignUp() {
-    const { isLoaded, signUp, setActive } = useSignUp()
-    const router = useRouter()
+type EstadoRow = { codigo_uf: number; nome: string; uf: string }
+type MunicipioRow = { codigo_ibge: number; nome: string; codigo_uf: number }
 
-    // Personal Data
+export function CustomSignUp() {
     const [firstName, setFirstName] = React.useState("")
     const [lastName, setLastName] = React.useState("")
     const [cpf, setCpf] = React.useState("")
     const [phone, setPhone] = React.useState("")
     const [arenaName, setArenaName] = React.useState("")
 
-    // Address Data
     const [cep, setCep] = React.useState("")
     const [state, setState] = React.useState("")
     const [city, setCity] = React.useState("")
@@ -59,21 +56,17 @@ export function CustomSignUp() {
     const [addressNumber, setAddressNumber] = React.useState("")
     const [complement, setComplement] = React.useState("")
 
-    // States and Cities for Selects
-    const [estados, setEstados] = React.useState<any[]>([])
-    const [municipios, setMunicipios] = React.useState<any[]>([])
+    const [estados, setEstados] = React.useState<EstadoRow[]>([])
+    const [municipios, setMunicipios] = React.useState<MunicipioRow[]>([])
     const [selectedEstadoId, setSelectedEstadoId] = React.useState<number | null>(null)
     const [isEstadoOpen, setIsEstadoOpen] = React.useState(false)
     const [isMunicipioOpen, setIsMunicipioOpen] = React.useState(false)
 
-    // Load states on mount
     React.useEffect(() => {
         async function loadEstados() {
             try {
-                const { data, error } = await supabase.from('estados').select('*').order('nome')
-                console.log("Supabase estados response in CustomSignUp:", { data, error })
-                if (data) setEstados(data)
-                if (error) console.error("Supabase error for estados:", error)
+                const { data } = await supabasePublic.from('estados').select('*').order('nome')
+                if (data) setEstados(data as EstadoRow[])
             } catch (error) {
                 console.error("Failed to load states:", error)
             }
@@ -81,7 +74,6 @@ export function CustomSignUp() {
         loadEstados()
     }, [])
 
-    // Load cities when state changes
     React.useEffect(() => {
         async function loadMunicipios() {
             if (!selectedEstadoId) {
@@ -89,8 +81,8 @@ export function CustomSignUp() {
                 return
             }
             try {
-                const { data } = await supabase.from('municipios').select('*').eq('codigo_uf', selectedEstadoId).order('nome')
-                if (data) setMunicipios(data)
+                const { data } = await supabasePublic.from('municipios').select('*').eq('codigo_uf', selectedEstadoId).order('nome')
+                if (data) setMunicipios(data as MunicipioRow[])
             } catch (error) {
                 console.error("Failed to load cities:", error)
             }
@@ -98,13 +90,11 @@ export function CustomSignUp() {
         loadMunicipios()
     }, [selectedEstadoId])
 
-    // Access Data
     const [emailAddress, setEmailAddress] = React.useState("")
     const [password, setPassword] = React.useState("")
     const [confirmPassword, setConfirmPassword] = React.useState("")
 
     const [pendingVerification, setPendingVerification] = React.useState(false)
-    const [code, setCode] = React.useState("")
     const [loading, setLoading] = React.useState(false)
 
     const handleCepBlur = async () => {
@@ -119,22 +109,21 @@ export function CustomSignUp() {
                 setStreet(data.logradouro || "")
                 setNeighborhood(data.bairro || "")
 
-                // Find state
                 const estadoEncontrado = estados.find(e => e.uf === data.uf)
                 if (estadoEncontrado) {
                     setSelectedEstadoId(estadoEncontrado.codigo_uf)
                     setState(estadoEncontrado.uf)
 
-                    // Fetch cities for this state to find the specific city ID
-                    const { data: muns } = await supabase
+                    const { data: muns } = await supabasePublic
                         .from('municipios')
                         .select('*')
                         .eq('codigo_uf', estadoEncontrado.codigo_uf)
                         .order('nome')
 
                     if (muns) {
-                        setMunicipios(muns)
-                        const cidadeEncontrada = muns.find(m => m.codigo_ibge.toString() === data.ibge)
+                        const typedMuns = muns as MunicipioRow[]
+                        setMunicipios(typedMuns)
+                        const cidadeEncontrada = typedMuns.find(m => m.codigo_ibge.toString() === data.ibge)
                         if (cidadeEncontrada) {
                             setMunicipioId(cidadeEncontrada.codigo_ibge)
                             setCity(cidadeEncontrada.nome)
@@ -152,7 +141,6 @@ export function CustomSignUp() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (!isLoaded) return
 
         if (password !== confirmPassword) {
             toast.error("As senhas não coincidem.")
@@ -166,98 +154,78 @@ export function CustomSignUp() {
 
         setLoading(true)
 
-        try {
-            await signUp.create({
-                emailAddress,
-                password,
-                firstName,
-                lastName,
-                unsafeMetadata: {
-                    arenaName,
-                    cpf,
-                    phone,
-                    addressData: {
-                        cep,
-                        state,
-                        city,
-                        id_municipio: municipioId,
-                        neighborhood,
-                        street,
-                        number: addressNumber,
-                        complement
-                    }
-                }
-            })
+        const res = await startSignUpAction({
+            email: emailAddress,
+            password,
+            emailRedirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
+            firstName,
+            lastName,
+            cpf,
+            phone,
+            arenaName,
+            addressData: {
+                cep,
+                state,
+                city,
+                id_municipio: municipioId,
+                neighborhood,
+                street,
+                number: addressNumber,
+                complement,
+            },
+        })
 
-            await signUp.prepareEmailAddressVerification({ strategy: "email_code" })
+        setLoading(false)
 
-            setPendingVerification(true)
-            toast.success("Código de verificação enviado para seu e-mail!")
-        } catch (err: any) {
-            console.error(JSON.stringify(err, null, 2))
-            toast.error(err.errors?.[0]?.message || "Erro ao criar conta.")
-        } finally {
-            setLoading(false)
+        if (!res.success) {
+            toast.error(res.error || "Erro ao criar conta.")
+            return
         }
-    }
 
-    const handleVerify = async (e: React.FormEvent) => {
-        e.preventDefault()
-        if (!isLoaded) return
-
-        setLoading(true)
-
-        try {
-            const completeSignUp = await signUp.attemptEmailAddressVerification({
-                code,
-            })
-
-            if (completeSignUp.status !== "complete") {
-                console.log(JSON.stringify(completeSignUp, null, 2))
-                toast.error("Erro ao verificar código.")
-            }
-
-            if (completeSignUp.status === "complete") {
-                await setActive({ session: completeSignUp.createdSessionId })
-                router.push("/dashboard")
-            }
-        } catch (err: any) {
-            console.error(JSON.stringify(err, null, 2))
-            toast.error(err.errors?.[0]?.message || "Código inválido.")
-        } finally {
-            setLoading(false)
-        }
+        setPendingVerification(true)
+        toast.success("Link de confirmação enviado para seu e-mail!")
     }
 
     if (pendingVerification) {
         return (
-            <form onSubmit={handleVerify} className="w-full space-y-4">
-                <div className="space-y-2">
-                    <Label htmlFor="code" className="text-white/70">Código de Verificação</Label>
-                    <Input
-                        id="code"
-                        value={code}
-                        placeholder="Digite o código enviado ao seu e-mail"
-                        onChange={(e) => setCode(e.target.value)}
-                        className="bg-white border-none h-12 rounded-lg"
-                        required
-                    />
+            <div className="w-full space-y-5 text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-arena-button text-white">
+                    <Check className="h-6 w-6" />
                 </div>
+                <div className="space-y-2">
+                    <h2 className="text-xl font-semibold text-white">Confirme seu e-mail</h2>
+                    <p className="text-sm leading-relaxed text-white/75">
+                        Enviamos um link de confirmação para <span className="font-semibold text-white">{emailAddress}</span>.
+                        Abra o e-mail e clique no link para ativar sua conta e entrar no dashboard.
+                    </p>
+                </div>
+                <p className="text-xs leading-relaxed text-white/60">
+                    Em desenvolvimento local, o link precisa voltar para <span className="font-semibold text-white">localhost:3000</span>.
+                    Se ele apontar para outro dominio, ajuste as Redirect URLs no painel do Supabase.
+                </p>
+                <Link href="/sign-in" className="block">
+                    <Button
+                        type="button"
+                        className="w-full bg-arena-button hover:bg-arena-button-hover h-12 rounded-lg text-lg font-bold shadow-lg"
+                    >
+                        Ir para login
+                    </Button>
+                </Link>
                 <Button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full bg-arena-button hover:bg-arena-button-hover h-12 rounded-lg text-lg font-bold shadow-lg"
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setPendingVerification(false)}
+                    className="w-full text-white/75 hover:bg-white/10 hover:text-white"
                 >
-                    {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Verificar E-mail"}
+                    Corrigir e-mail
                 </Button>
-            </form>
+            </div>
         )
     }
 
     return (
         <form onSubmit={handleSubmit} className="w-full space-y-6">
 
-            {/* Sessão: Dados Pessoais */}
             <div className="space-y-4">
                 <h2 className="text-xl font-semibold text-white border-b border-white/20 pb-2">Dados Pessoais (Responsável)</h2>
                 <div className="grid grid-cols-2 gap-4">
@@ -286,7 +254,6 @@ export function CustomSignUp() {
                 </div>
             </div>
 
-            {/* Sessão: Endereço da Arena */}
             <div className="space-y-4 pt-2">
                 <h2 className="text-xl font-semibold text-white border-b border-white/20 pb-2">Endereço da Arena</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -417,7 +384,6 @@ export function CustomSignUp() {
                 </div>
             </div>
 
-            {/* Sessão: Dados de Acesso */}
             <div className="space-y-4 pt-2">
                 <h2 className="text-xl font-semibold text-white border-b border-white/20 pb-2">Dados de Acesso</h2>
                 <div className="space-y-2">

@@ -14,6 +14,7 @@ import {
   Search,
   CalendarDays,
   Clock,
+  LayoutGrid,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -230,8 +231,15 @@ export function ArenaDetailPageClient({
                         key={court.id}
                         fluid
                         inactive={court.status === 'inativo'}
-                        imageSrc={court.image_url || '/placeholder-court.jpg'}
+                        imageSrc={court.image_url?.trim() || undefined}
                         imageAlt={court.name}
+                        imageFallback={
+                          <LayoutGrid
+                            className="size-11"
+                            strokeWidth={1.25}
+                            aria-hidden
+                          />
+                        }
                         ariaLabel={`Abrir calendário do espaço ${court.name}`}
                         onClick={() =>
                           router.push(

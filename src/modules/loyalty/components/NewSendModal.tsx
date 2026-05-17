@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
-import { useUser } from "@clerk/nextjs"
 import { Search, Save, X, Loader2, Check } from "lucide-react"
 import { StandardModal } from "@/components/ui/standard-modal"
 import { Button } from "@/components/ui/button"

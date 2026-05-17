@@ -1,4 +1,4 @@
-import { auth } from '@clerk/nextjs/server'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { fetchArenaMembershipByArenaAndUser } from '@/lib/arena-users'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import type { Database } from '@/types/supabase.types'
@@ -14,8 +14,8 @@ export class AuthorizationError extends Error {
 }
 
 export type AuthenticatedDbUser = {
-  clerkUserId: string
   dbUserId: string
+  authUserId: string
 }
 
 export type ArenaMembershipRole = 'Gestor' | 'Atendente' | 'Caixa'
@@ -54,17 +54,19 @@ function normalizeArenaMembershipRole(role: string | null | undefined): ArenaMem
 }
 
 export async function requireAuthenticatedDbUser(): Promise<AuthenticatedDbUser> {
-  const { userId } = await auth()
+  const supabaseSession = await createSupabaseServerClient()
+  const { data: authData, error: authError } = await supabaseSession.auth.getUser()
 
-  if (!userId) {
+  if (authError || !authData.user) {
     throw new AuthorizationError('Unauthorized', 401)
   }
 
+  const authUserId = authData.user.id
   const supabase = getSupabaseAdmin()
   const { data, error } = await supabase
     .from('users')
     .select('id')
-    .eq('clerk_user_id', userId)
+    .eq('id', authUserId)
     .maybeSingle()
 
   if (error) {
@@ -76,7 +78,7 @@ export async function requireAuthenticatedDbUser(): Promise<AuthenticatedDbUser>
   }
 
   return {
-    clerkUserId: userId,
+    authUserId,
     dbUserId: data.id,
   }
 }

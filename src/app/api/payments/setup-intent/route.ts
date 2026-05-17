@@ -2,7 +2,7 @@ import { PaymentApiError } from '@/modules/payments/errors';
 import { planKeySchema } from '@/modules/payments/plans';
 import { createSetupIntent } from '@/modules/payments/usecases/create-setup-intent.usecase';
 import { verifyArenaAccess } from '@/modules/payments/utils/verify-arena-access';
-import { auth, currentUser } from '@clerk/nextjs/server';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
 import z from 'zod';
 
@@ -12,8 +12,10 @@ const RequestSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
-  const { userId } = await auth();
-  if (!userId)
+  const supabase = await createSupabaseServerClient();
+  const { data: authData } = await supabase.auth.getUser();
+  const user = authData.user;
+  if (!user)
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await request.json();
@@ -26,21 +28,23 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const hasAccess = await verifyArenaAccess(userId, parsed.data.arenaId);
+  const hasAccess = await verifyArenaAccess(user.id, parsed.data.arenaId);
   if (!hasAccess)
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   try {
-    const user = await currentUser();
-    const email = user?.emailAddresses?.[0]?.emailAddress ?? '';
-    const name = user?.fullName ?? null;
+    const email = user.email ?? '';
+    const meta = user.user_metadata ?? {};
+    const fullName =
+      [meta.firstName, meta.lastName].filter(Boolean).join(' ') ||
+      (typeof meta.name === 'string' ? meta.name : null);
 
     const result = await createSetupIntent(
       parsed.data.arenaId,
       parsed.data.planKey,
       email,
-      name,
-      userId
+      fullName,
+      user.id
     );
     return NextResponse.json(result);
   } catch (error) {

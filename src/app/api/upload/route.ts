@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { uploadToR2, arenaBannerKey, spaceImageKey, sanitizeFilename } from "@/lib/r2Client";
-import { auth } from "@clerk/nextjs/server";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { assertArenaAccess, assertCourtAccess } from "@/lib/server-auth";
 
 export async function POST(request: NextRequest) {
     try {
-        const { userId } = await auth();
-        if (!userId) {
+        const supabase = await createSupabaseServerClient();
+        const { data: authData } = await supabase.auth.getUser();
+        if (!authData.user) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 

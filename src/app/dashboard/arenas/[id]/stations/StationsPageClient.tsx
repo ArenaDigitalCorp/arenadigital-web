@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { Plus, Eye, MoreVertical, Edit, Filter } from 'lucide-react';
+import { Plus, Eye, MoreVertical, Edit, Filter, Store } from 'lucide-react';
 import Link from 'next/link';
 import {
   DropdownMenu,
@@ -61,15 +61,10 @@ interface Props {
   initialStations: StationListItem[];
 }
 
-function stationImage(station: StationListItem) {
-  return (
-    station.image_url ||
-    (station.station_type?.name === 'Bar'
-      ? '/bg_img_bar.png'
-      : station.station_type?.name === 'Loja'
-        ? '/bg_img_lojaesporte.png'
-        : '/placeholder-station.jpg')
-  );
+/** URL da foto da estação, se existir (evita placeholders quebrados em /public). */
+function stationImageUrl(station: StationListItem) {
+  const u = station.image_url?.trim();
+  return u || undefined;
 }
 
 /** Normaliza status vindo do banco (ex.: legados sem valor). */
@@ -321,8 +316,15 @@ export function StationsPageClient({ arenaId, initialStations }: Props) {
                   {...GRADIENT_MEDIA_CARD_STATION_PRESET}
                   fluid
                   contentLayout="bottom"
-                  imageSrc={stationImage(station)}
+                  imageSrc={stationImageUrl(station)}
                   imageAlt={station.name}
+                  imageFallback={
+                    <Store
+                      className="size-11"
+                      strokeWidth={1.25}
+                      aria-hidden
+                    />
+                  }
                   inactive={!isStationActive(station.status)}
                   ariaLabel={`Abrir estação ${station.name}`}
                   onClick={() =>

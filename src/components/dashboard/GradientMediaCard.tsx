@@ -1,5 +1,9 @@
+'use client';
+
 import Image from 'next/image';
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
+import { useEffect, useState } from 'react';
+import { Images } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /** Valores padrão do layout “Espaços” — use em outras telas com spread parcial. */
@@ -18,8 +22,11 @@ export const GRADIENT_MEDIA_CARD_STATION_PRESET = {
 } as const;
 
 export type GradientMediaCardProps = {
-  imageSrc: string;
+  /** URL da imagem; se vazia ou inválida, exibe área ilustrada no lugar. */
+  imageSrc?: string | null;
   imageAlt: string;
+  /** Ícone ou ilustração no lugar da foto (padrão: ícone de imagem). */
+  imageFallback?: ReactNode;
   /** Conteúdo textual / métricas na faixa do gradiente, alinhado ao topo à esquerda */
   children: ReactNode;
   /** Ações no canto inferior direito (ex.: menu com MoreVertical) */
@@ -54,6 +61,87 @@ export type GradientMediaCardProps = {
   contentLayout?: 'top' | 'bottom';
 };
 
+function MediaStrip({
+  src,
+  alt,
+  imageHeight,
+  imageFullBleed,
+  imageInnerWidth,
+  sizes,
+  imageClassName,
+  imageFallback,
+}: {
+  src?: string | null;
+  alt: string;
+  imageHeight: number;
+  imageFullBleed: boolean;
+  imageInnerWidth: number;
+  sizes: string;
+  imageClassName?: string;
+  imageFallback?: ReactNode;
+}) {
+  const trimmed = src?.trim() ?? '';
+  const [failed, setFailed] = useState(!trimmed);
+
+  useEffect(() => {
+    setFailed(!src?.trim());
+  }, [src]);
+
+  const showPlaceholder = failed || !trimmed;
+
+  const containerClass = cn(
+    imageFullBleed
+      ? 'absolute inset-x-0 top-0'
+      : 'absolute left-1/2 top-0 -translate-x-1/2',
+    imageClassName
+  );
+
+  const containerStyle = (
+    imageFullBleed
+      ? { height: imageHeight }
+      : { width: imageInnerWidth, height: imageHeight }
+  ) satisfies CSSProperties;
+
+  return (
+    <div className={containerClass} style={containerStyle}>
+      {showPlaceholder ? (
+        <div
+          className="absolute inset-0 flex items-center justify-center overflow-hidden"
+          aria-hidden
+        >
+          <div
+            className="absolute inset-0 bg-[radial-gradient(ellipse_85%_65%_at_50%_0%,rgba(255,255,255,0.22)_0%,transparent_65%)]"
+            aria-hidden
+          />
+          <div
+            className="absolute inset-0 opacity-[0.07]"
+            aria-hidden
+            style={{
+              backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+            }}
+          />
+          <div className="relative flex items-center justify-center text-white/40">
+            {imageFallback ?? (
+              <Images className="size-11" strokeWidth={1.25} aria-hidden />
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="relative h-full w-full">
+          <Image
+            src={trimmed}
+            alt={alt}
+            fill
+            sizes={sizes}
+            onError={() => setFailed(true)}
+            className="object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * Card com gradiente laranja/amarelo, imagem no topo e conteúdo na faixa inferior.
  * `contentLayout="top"`: texto abaixo da imagem (espaços).
@@ -62,6 +150,7 @@ export type GradientMediaCardProps = {
 export function GradientMediaCard({
   imageSrc,
   imageAlt,
+  imageFallback,
   children,
   actions,
   badge,
@@ -88,11 +177,6 @@ export function GradientMediaCard({
   } satisfies CSSProperties;
 
   const imageFullBleed = fluid || imageInnerWidth >= width;
-
-  const imageInnerStyle = {
-    width: imageInnerWidth,
-    height: imageHeight,
-  } satisfies CSSProperties;
 
   const fadeStyle = {
     top: imageHeight,
@@ -130,31 +214,20 @@ export function GradientMediaCard({
         className="relative overflow-hidden rounded-t-[8px]"
         style={imageStripStyle}
       >
-        <div
-          className={cn(
-            imageFullBleed
-              ? 'absolute inset-x-0 top-0'
-              : 'absolute left-1/2 top-0 -translate-x-1/2',
-            imageClassName
-          )}
-          style={
-            imageFullBleed
-              ? { height: imageHeight }
-              : imageInnerStyle
+        <MediaStrip
+          src={imageSrc}
+          alt={imageAlt}
+          imageFallback={imageFallback}
+          imageHeight={imageHeight}
+          imageFullBleed={imageFullBleed}
+          imageInnerWidth={imageInnerWidth}
+          sizes={
+            fluid
+              ? '(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw'
+              : `${imageInnerWidth}px`
           }
-        >
-          <Image
-            src={imageSrc}
-            alt={imageAlt}
-            fill
-            sizes={
-              fluid
-                ? '(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw'
-                : `${imageInnerWidth}px`
-            }
-            className="object-cover transition-transform duration-500 group-hover:scale-105"
-          />
-        </div>
+          imageClassName={imageClassName}
+        />
       </div>
 
       <div

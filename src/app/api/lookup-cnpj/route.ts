@@ -1,5 +1,5 @@
 import { isValidCnpj, onlyDigits } from '@/lib/brasil-document'
-import { auth } from '@clerk/nextjs/server'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
 const BRASIL_API_CNPJ = 'https://brasilapi.com.br/api/cnpj/v1'
@@ -18,8 +18,9 @@ export type CnpjLookupPayload = {
 }
 
 export async function GET(request: NextRequest) {
-  const { userId } = await auth()
-  if (!userId) {
+  const supabase = await createSupabaseServerClient()
+  const { data: authData } = await supabase.auth.getUser()
+  if (!authData.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
