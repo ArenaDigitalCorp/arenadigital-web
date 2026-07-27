@@ -28,6 +28,7 @@ import { useSidebar } from "@/contexts/SidebarContext";
 import { useArena } from "@/contexts/ArenaContext";
 import { useDbUser } from "@/contexts/UserContext";
 import { ArenaSelector } from "./ArenaSelector";
+import { NotificationsBell } from "@/modules/notifications/components/NotificationsBell";
 
 /** Item ativo do menu — ligado a `--arena-accent` em globals.css */
 const navActiveText = "text-arena-accent";
@@ -179,25 +180,30 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                 <div className="space-y-4 py-6">
                 <div className={cn("px-4 py-2 transition-all duration-300", isCollapsed ? "px-2" : "px-6")}>
                     <div className={cn(
-                        "flex items-center transition-all duration-300",
-                        isCollapsed ? "mb-6 justify-center" : "mb-10 justify-between"
+                        "flex transition-all duration-300",
+                        isCollapsed
+                            ? "mb-6 flex-col items-center gap-2"
+                            : "mb-10 items-center justify-between"
                     )}>
                         {!isCollapsed && <Logo className="scale-75 origin-left" />}
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={toggleSidebar}
-                            className={cn(
-                                "cursor-pointer text-white/50 hover:text-white hover:bg-white/10 md:flex hidden",
-                                isCollapsed && "h-10 w-10 shrink-0 rounded-md",
-                            )}
-                        >
-                            {isCollapsed ? (
-                                <Menu className="h-6 w-6" />
-                            ) : (
-                                <ChevronLeft className="h-6 w-6" />
-                            )}
-                        </Button>
+                        <div className={cn("flex items-center", isCollapsed ? "flex-col gap-2" : "gap-1")}>
+                            <NotificationsBell isCollapsed={isCollapsed} />
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={toggleSidebar}
+                                className={cn(
+                                    "cursor-pointer text-white/50 hover:text-white hover:bg-white/10 md:flex hidden",
+                                    isCollapsed && "h-10 w-10 shrink-0 rounded-md",
+                                )}
+                            >
+                                {isCollapsed ? (
+                                    <Menu className="h-6 w-6" />
+                                ) : (
+                                    <ChevronLeft className="h-6 w-6" />
+                                )}
+                            </Button>
+                        </div>
                     </div>
 
                     <ArenaSelector isCollapsed={isCollapsed} />

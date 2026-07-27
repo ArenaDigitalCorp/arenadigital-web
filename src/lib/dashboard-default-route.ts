@@ -14,6 +14,7 @@ type DashboardSection =
   | 'subscription'
   | 'whatsapp'
   | 'reports'
+  | 'notifications'
 
 type AccessibleArenaTarget = {
   arenaId: string
@@ -121,6 +122,8 @@ export async function resolveDashboardDefaultRoute(section: DashboardSection): P
       return `/dashboard/settings/users/${primaryArena.arenaId}`
     case 'reports':
       return `/dashboard/reports/${primaryArena.arenaId}/status-pagamentos`
+    case 'notifications':
+      return `/dashboard/notifications/${primaryArena.arenaId}`
     default:
       return '/dashboard'
   }

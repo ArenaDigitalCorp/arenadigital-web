@@ -3,6 +3,7 @@
 import { SidebarProvider, useSidebar } from '@/contexts/SidebarContext';
 import { ArenaProvider } from '@/contexts/ArenaContext';
 import { UserProvider } from '@/contexts/UserContext';
+import { NotificationsProvider } from '@/modules/notifications/context/NotificationsContext';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { DashboardSubscriptionGate } from '@/components/dashboard/DashboardSubscriptionGate';
 import { WelcomeTutorialDialog } from '@/components/dashboard/WelcomeTutorialDialog';
@@ -78,7 +79,9 @@ export function DashboardLayoutWrapper({
     <UserProvider>
       <SidebarProvider>
         <ArenaProvider>
-          <DashboardLayoutContent>{children}</DashboardLayoutContent>
+          <NotificationsProvider>
+            <DashboardLayoutContent>{children}</DashboardLayoutContent>
+          </NotificationsProvider>
         </ArenaProvider>
       </SidebarProvider>
     </UserProvider>

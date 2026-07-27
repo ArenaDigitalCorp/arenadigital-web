@@ -45,6 +45,7 @@ import { GradientMediaCard } from '@/components/dashboard/GradientMediaCard';
 import { DashboardTabs } from '@/components/dashboard/DashboardTabs';
 import { ConfirmActionDialog } from '@/components/dashboard/ConfirmActionDialog';
 import { DayOperationModal } from '@/modules/bookings/components/DayOperationModal';
+import { DayOperationBoard } from '@/modules/bookings/components/DayOperationBoard';
 import { AvailableTimesModal } from '@/modules/bookings/components/AvailableTimesModal';
 import {
   deleteCourtAction,
@@ -179,7 +180,7 @@ export function ArenaDetailPageClient({
 
   const handleTabChange = (tab: ArenaDashboardTab) => {
     setActiveTab(tab);
-    router.replace(tab === 'cadastro' ? `${pathname}?tab=cadastro` : pathname);
+    router.replace(tab === 'espacos' ? pathname : `${pathname}?tab=${tab}`);
   };
 
   const getCourtStatus = (court: any) => {
@@ -234,6 +235,7 @@ export function ArenaDetailPageClient({
           onChange={handleTabChange}
           tabs={[
             { label: 'Espaços', value: 'espacos' },
+            { label: 'Operação', value: 'operacao' },
             { label: 'Cadastros', value: 'cadastro' },
           ]}
         />
@@ -543,6 +545,24 @@ export function ArenaDetailPageClient({
               </div>
             </Card>
           </div>
+        )}
+
+        {activeTab === 'operacao' && (
+          courts.length === 0 ? (
+            <Card className="bg-white/50 border-dashed border-2 py-20 flex flex-col items-center justify-center">
+              <PlusCircle className="h-12 w-12 text-arena-navy-800/20 mb-4" />
+              <p className="text-arena-navy-800/40 font-medium text-lg">
+                Cadastre um espaço para visualizar a operação.
+              </p>
+            </Card>
+          ) : (
+            <DayOperationBoard
+              arenaId={arenaId}
+              courts={courts}
+              variant="page"
+              interactive
+            />
+          )
         )}
 
         <Dialog

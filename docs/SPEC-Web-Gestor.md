@@ -410,3 +410,122 @@ Todas recebem arena_id FIXO do canal (o LLM nunca fornece arena):
 - Assinatura X-Hub-Signature-256 (App Secret) e verify_token no handshake.
 - Token de acesso cifrado em app; exposto apenas no caminho de envio.
 - Gate de assinatura + enabled; auditoria em audit_logs (entity_type 'arena_ai_agent').
+
+15. Espaços — Aba "Operação" (grade multi-espaços agendável)
+
+15.1 Navegação
+- `ArenaDashboardTab = 'espacos' | 'cadastro' | 'operacao'` (src/lib/arena-dashboard-navigation.ts).
+- URL: `/dashboard/arenas/[id]` (espacos, padrão), `?tab=cadastro`, `?tab=operacao`.
+- `arenaDashboardPath(arenaId, tab)` e `spaceEditPath(arenaId, spaceId, returnTab)` já
+  serializam qualquer uma das três abas; `parseArenaDashboardTab`/`parseReturnTabParam`
+  fazem o parse com fallback em 'espacos'.
+
+15.2 Componentes
+- `src/modules/bookings/components/DayOperationBoard.tsx` — visão completa (cabeçalho com
+  filtros, sidebar de espaços e grade). Props:
+    arenaId: string
+    courts: OperationCourt[]                  -- { id, name, day_config, price, booking_type, sports[] }
+    variant?: 'modal' | 'page'                -- altura/borda do container
+    interactive?: boolean                     -- habilita agendar/abrir reservas na grade
+    onClose?: () => void                      -- renderiza o botão X no cabeçalho
+- `src/modules/bookings/components/DayOperationModal.tsx` — passou a ser um wrapper do board
+  (overlay + backdrop), `variant="modal"`, sem interatividade. Mantém a assinatura anterior
+  (`arenaName` continua aceito, agora opcional).
+- `ArenaDetailPageClient` renderiza `<DayOperationBoard variant="page" interactive />` na aba
+  Operação; sem espaços cadastrados exibe estado vazio.
+
+15.3 Utilitários compartilhados (src/modules/bookings/utils/court-slots.ts)
+Extraídos da duplicação entre calendário do espaço e operação do dia:
+- parseHHMM(t), slotLabel(slot), slotToMinutes(slot), dayConfigNameFor(date)
+- findDayConfig(date, dayConfigs) / generateSlotsForDayConfig(cfg) / generateSlotsForDate(date, dayConfigs)
+- isSlotWithinDayConfig(date, dayConfigs, slot) -- sem day_config = aberto 24h
+- getSlotPrice(date, dayConfigs, slot, fallbackPrice) -- customPrices > preço do dia > court.price;
+  trata virada de madrugada usando a config do dia anterior
+- blocksAvailability(booking) -- confirmed/reservado ocupam; pending_payment só até payment_expires_at
+
+15.4 Dados e interações
+- Reservas do dia: `getBookingsByArenaWithSportsAction(arenaId, inicioDia, fimDia)`.
+- Reservas futuras (D+1 até D+60): mesma action, usadas no indicador de "próximo evento".
+- Slot livre + `interactive` → `BookingModal` (abas avulsa/mensalista) com courtId da coluna,
+  selectedDate/Hour/Minute do slot e defaultPrice de `getSlotPrice`.
+- Reserva existente + `interactive` → `BookingDetailsModal` com o court da coluna; `onEdit`
+  só é passado para reservas avulsas não canceladas e sem Pix pendente (mesma regra do
+  `CourtCalendarPageClient`).
+- `onSuccess` de ambos os modais recarrega reservas do dia e futuras.
+
+16. Notificações da Arena (tempo real)
+
+16.1 Modelo de dados (migração supabase/migrations/20260727_arena_notifications.sql)
+
+arena_notifications
+- id uuid pk
+- arena_id uuid not null fk arenas on delete cascade
+- type text not null check ('booking_created' | 'rotativo_inscricao' | 'open_game_created')
+- title text not null
+- body text
+- payload jsonb not null default '{}'
+- entity_type text / entity_id uuid   -- reserva, inscrição ou open_game de origem
+- atleta_id uuid fk atleta on delete set null
+- read_at timestamptz / created_at timestamptz default now()
+
+Índices: (arena_id, created_at desc); parcial (arena_id) where read_at is null;
+único parcial (type, entity_id) para não duplicar o mesmo evento.
+
+RLS (habilitado):
+- select/update: public.is_arena_backoffice_member(arena_id) — owner da arena ou
+  vínculo ativo em arena_users, resolvido por users.auth_user_id = auth.uid().
+- Sem policy de insert: apenas as triggers (security definer) e a service role gravam.
+
+16.2 Origem do evento (como distinguir app x backoffice)
+
+public.current_app_atleta() (security definer) resolve o atleta da sessão:
+atleta -> users -> users.auth_user_id = auth.uid().
+
+- App: as escritas passam pelo PostgREST com o JWT do atleta, então auth.uid() existe
+  e a função devolve o atleta -> a notificação é criada.
+- Web gestor: todas as escritas usam a service role (getSupabaseAdmin), auth.uid() é
+  null -> a trigger retorna sem notificar. É isso que evita a arena notificar a si mesma.
+
+16.3 Triggers (after insert, security definer)
+
+- trg_notify_arena_booking_created   on bookings            -> notify_arena_booking_created()
+- trg_notify_arena_rotativo_inscricao on rotativo_inscricoes -> notify_arena_rotativo_inscricao()
+  (arena_id vem de rotativos.id_arena, pois a inscrição não tem a coluna)
+- trg_notify_arena_open_game_created on open_games          -> notify_arena_open_game_created()
+
+Cada função monta title/body em pt-BR (horários convertidos para America/Sao_Paulo) e
+grava o contexto em payload (ids, nomes de quadra/esporte, horário, valores).
+
+16.4 Realtime
+
+A tabela é adicionada à publication supabase_realtime. O cliente assina
+`postgres_changes` (INSERT e UPDATE) com filter `arena_id=eq.<arenaId>` usando o
+browser client autenticado — a RLS acima é quem autoriza o canal.
+
+16.5 Frontend (src/modules/notifications)
+
+- types/notification.types.ts — ArenaNotification, rótulos por tipo e
+  notificationTargetPath() (para onde o clique leva: calendário do espaço,
+  /dashboard/rotativo/{arenaId} ou a aba Operação).
+- actions/notificationActions.ts (server actions, todas com assertArenaBackofficeAccess):
+  - getArenaNotificationsAction(arenaId, { limit?, onlyUnread?, types? }) -> lista + unreadCount
+  - markNotificationReadAction(arenaId, notificationId)
+  - markAllNotificationsReadAction(arenaId)
+- hooks/useArenaNotificationsFeed.ts — carga inicial + assinatura realtime +
+  polling de 60s como fallback (caso o Realtime não esteja habilitado) + atualização
+  otimista do lido. Aceita initialNotifications (SSR) e onNewNotification.
+- context/NotificationsContext.tsx — NotificationsProvider (montado em
+  DashboardLayoutWrapper, dentro de ArenaProvider) mantém o feed da arena selecionada
+  e dispara o toast (sonner) a cada evento novo.
+- components/NotificationsBell.tsx — sino + badge de não lidas + popover com os 8
+  últimos avisos e link "Ver todas". Renderizado no topo da Sidebar (suporta o estado
+  recolhido).
+- components/NotificationItem.tsx / NotificationIcon.tsx — linha e ícone por tipo,
+  compartilhados entre popover e página.
+- components/NotificationsPageClient.tsx — página com filtros (Todas / Não lidas /
+  por tipo) e "marcar todas como lidas".
+
+16.6 Rotas
+
+- /dashboard/notifications            -> redirect via resolveDashboardDefaultRoute('notifications')
+- /dashboard/notifications/[arenaId]  -> assertArenaBackofficeAccess + SSR das 100 últimas

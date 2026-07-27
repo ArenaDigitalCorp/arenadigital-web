@@ -129,6 +129,16 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
 - Possibilidade marcar agendamento avulso e recorrente
 - Atribuir uma reserva a uma pessoa responsável e a um grupo (opcional)  
 
+#### 5.5.1 Aba "Operação" (visão consolidada de todos os espaços)
+- **Status:** Implementado (27/07/2026).
+- Aba da tela de Espaços (`Espaços | Operação | Cadastros`), com a mesma visão antes disponível apenas no modal "Ver operação do dia".
+- Grade de um dia com todos os espaços da arena lado a lado (colunas) x horários (linhas), respeitando a configuração de funcionamento de cada espaço.
+- Filtros disponíveis: navegação por data (dia anterior/próximo, calendário, "Hoje"), seleção de esportes e seleção de quais espaços aparecem na grade.
+- Indicador de "próximo evento" nos horários livres que possuem reserva futura recorrente no mesmo dia da semana/horário.
+- **Agendamento direto na grade:** clicar em um horário livre abre o modal de reserva (avulsa ou mensalista, mesmas telas do calendário de um único espaço), já com espaço, data, horário e preço do slot preenchidos.
+- **Gestão da reserva:** clicar em uma reserva existente abre o modal de detalhes (confirmar pagamento, cancelar, editar), com as mesmas regras do calendário do espaço.
+- O modal "Ver operação do dia" continua existindo (somente leitura) e reutiliza o mesmo componente.
+
 ---
 
 ### 5.6 Gestão de Usuários
@@ -270,6 +280,23 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
 - Isolamento total entre arenas: os dados respondidos são sempre e apenas da arena vinculada ao número.
 - O agente **não efetua reservas nem cobranças** — apenas informa e orienta a procurar a arena.
 - Nunca inventa dados: horários, preços e disponibilidade vêm sempre do banco.
+
+---
+
+### 5.11 Central de Notificações da Arena (tempo real)
+- **Status:** Implementado (27/07/2026).
+- **Objetivo:** avisar o backoffice da arena, em tempo real, sobre ações que os atletas realizam no **aplicativo** e que impactam a operação.
+- **Eventos notificados:**
+  - **Reserva pelo app** — o atleta reserva um espaço da arena.
+  - **Confirmação em rotativo** — o atleta se inscreve/confirma presença em um rotativo da arena.
+  - **Game Match criado** — o atleta abre um jogo tendo a arena como local.
+- **Origem:** apenas ações vindas do app. Reservas e inscrições registradas pelo próprio backoffice **não** geram notificação.
+- **Onde aparece:**
+  - **Sino** no topo da barra lateral, com contador de não lidas, visível em qualquer tela do sistema.
+  - **Toast** imediato quando o evento chega enquanto o gestor está no sistema, com atalho "Ver".
+  - **Página "Notificações"** (`/dashboard/notifications/{arenaId}`) com o histórico completo e filtros por tipo/não lidas.
+- **Ações:** marcar uma notificação como lida, marcar todas como lidas e clicar no aviso para ir direto ao contexto (calendário do espaço, rotativo ou operação do dia).
+- **Escopo:** as notificações são sempre da arena selecionada e só são visíveis para quem tem acesso ao backoffice daquela arena.
 
 ---
 
