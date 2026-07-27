@@ -20,6 +20,7 @@ A aplicação web e o aplicativo usam **Supabase Auth** como provedor de autenti
 - Faz refresh dos cookies de sessão em todo request.
 - Se a rota começa com `/dashboard` e não há sessão → redirect para `/sign-in?redirect_to=<path>`.
 - Se a rota é `/sign-in` ou `/sign-up` e há sessão → redirect para `/dashboard`.
+- Os redirects acima são pulados em requisições de Server Action (`POST` com header `next-action`): o cliente RSC não aceita um redirect HTML como resposta de action ("An unexpected response was received from the server"). O refresh de cookies continua acontecendo, e o controle de acesso dessas chamadas fica nas próprias actions (`ensureWebBackofficeAccessAction`, helpers de `server-auth.ts`).
 
 ## Fluxo de cadastro do gestor
 
