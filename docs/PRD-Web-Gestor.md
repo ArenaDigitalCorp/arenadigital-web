@@ -134,6 +134,10 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
 - Aba da tela de Espaços (`Espaços | Operação | Cadastros`), com a mesma visão antes disponível apenas no modal "Ver operação do dia".
 - Grade de um dia com todos os espaços da arena lado a lado (colunas) x horários (linhas), respeitando a configuração de funcionamento de cada espaço.
 - Filtros disponíveis: navegação por data (dia anterior/próximo, calendário, "Hoje"), seleção de esportes e seleção de quais espaços aparecem na grade.
+- **Espaço de trabalho para arenas com muitos espaços:**
+  - Botão **"Tela cheia"** leva a grade inteira para uma sobreposição de 95% x 92% da tela, mantendo data, filtros e seleção; sai com o botão "Reduzir", com `Esc` ou clicando fora.
+  - Botão para **ocultar a lista lateral de espaços**, liberando a largura toda para a grade (um contador mostra quantos espaços estão visíveis).
+  - Colunas se esticam quando há poucos espaços e mantêm largura mínima com rolagem horizontal quando há muitos; a coluna de horário e o cabeçalho dos espaços ficam fixos durante a rolagem.
 - Indicador de "próximo evento" nos horários livres que possuem reserva futura recorrente no mesmo dia da semana/horário.
 - **Agendamento direto na grade:** clicar em um horário livre abre o modal de reserva (avulsa ou mensalista, mesmas telas do calendário de um único espaço), já com espaço, data, horário e preço do slot preenchidos.
 - **Gestão da reserva:** clicar em uma reserva existente abre o modal de detalhes (confirmar pagamento, cancelar, editar), com as mesmas regras do calendário do espaço.

@@ -3,7 +3,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { format, parseISO, getHours, getMinutes, getDay, addDays, subDays, addMonths, isToday } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { X, Loader2, ChevronLeft, ChevronRight, Filter, Check, ChevronDown } from "lucide-react";
+import {
+    X,
+    Loader2,
+    ChevronLeft,
+    ChevronRight,
+    Filter,
+    Check,
+    ChevronDown,
+    Maximize2,
+    Minimize2,
+    PanelLeftClose,
+    PanelLeftOpen,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -191,6 +203,10 @@ export function DayOperationBoard({
         () => new Set(courts.map(c => c.id))
     );
 
+    // ── Espaço de trabalho: tela cheia e sidebar recolhível ──
+    const [isExpanded, setIsExpanded] = useState(false);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
     // ── Reserva (avulsa/mensalista) e detalhes ──
     const [bookingCourt, setBookingCourt] = useState<OperationCourt | null>(null);
     const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
@@ -230,6 +246,28 @@ export function DayOperationBoard({
             allVisible ? new Set() : new Set(sortedCourts.map(c => c.id))
         );
     };
+
+    // Esc sai da tela cheia (sem interferir nos modais de reserva, que tratam o próprio Esc)
+    useEffect(() => {
+        if (!isExpanded) return;
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key !== 'Escape') return;
+            if (isBookingModalOpen || isDetailsModalOpen) return;
+            setIsExpanded(false);
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [isExpanded, isBookingModalOpen, isDetailsModalOpen]);
+
+    // Trava o scroll do corpo enquanto a grade ocupa a tela inteira
+    useEffect(() => {
+        if (!isExpanded) return;
+        const previous = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.body.style.overflow = previous;
+        };
+    }, [isExpanded]);
 
     const loadBookings = useCallback(async () => {
         setIsLoading(true);
@@ -401,21 +439,54 @@ export function DayOperationBoard({
         selectedBooking.status !== "pending_payment";
 
     const isModal = variant === "modal";
+    const canExpand = !isModal;
+    const hiddenCourtsCount = sortedCourts.length - visibleCourtIds.size;
 
-    return (
+    const board = (
         <div
             className={cn(
                 "flex flex-col overflow-hidden bg-white",
-                isModal
-                    ? "h-full rounded-2xl"
-                    : "h-[calc(100dvh-16rem)] min-h-[420px] rounded-xl border border-slate-200 shadow-sm"
+                isExpanded
+                    ? "fixed left-1/2 top-1/2 z-50 h-[92vh] w-[95vw] -translate-x-1/2 -translate-y-1/2 rounded-2xl shadow-2xl"
+                    : isModal
+                        ? "h-full rounded-2xl"
+                        : "h-[calc(100dvh-16rem)] min-h-[420px] rounded-xl border border-slate-200 shadow-sm"
             )}
         >
             {/* Header */}
             <header className="bg-white px-5 py-4 flex flex-col gap-4 flex-shrink-0 rounded-t-2xl md:flex-row md:items-center md:justify-between">
-                <h2 className="font-heading text-lg font-bold tracking-normal text-arena-navy-800">
-                    Operação do Dia
-                </h2>
+                <div className="flex min-w-0 items-center gap-2">
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button
+                                variant="outline"
+                                size="icon-sm"
+                                onClick={() => setIsSidebarOpen(open => !open)}
+                                aria-label={isSidebarOpen ? "Ocultar lista de espaços" : "Mostrar lista de espaços"}
+                                className="size-9 shrink-0 rounded-md border-slate-200 bg-white text-arena-navy-800 shadow-sm hover:bg-slate-50"
+                            >
+                                {isSidebarOpen ? (
+                                    <PanelLeftClose className="h-4 w-4" />
+                                ) : (
+                                    <PanelLeftOpen className="h-4 w-4" />
+                                )}
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">
+                            {isSidebarOpen ? "Ocultar espaços e ganhar largura" : "Mostrar lista de espaços"}
+                        </TooltipContent>
+                    </Tooltip>
+
+                    <h2 className="truncate font-heading text-lg font-bold tracking-normal text-arena-navy-800">
+                        Operação do Dia
+                    </h2>
+
+                    {hiddenCourtsCount > 0 && (
+                        <span className="hidden shrink-0 rounded-full bg-arena-navy-800/5 px-2 py-0.5 text-[10px] font-bold text-arena-navy-800/50 lg:inline">
+                            {visibleCourtIds.size}/{sortedCourts.length} espaços
+                        </span>
+                    )}
+                </div>
 
                 <div className="flex flex-wrap items-center gap-2 md:justify-center">
                     <Button
@@ -536,6 +607,35 @@ export function DayOperationBoard({
                         </button>
                     ))}
 
+                    {canExpand && (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    onClick={() => setIsExpanded(expanded => !expanded)}
+                                    aria-label={isExpanded ? "Sair da tela cheia" : "Expandir para tela cheia"}
+                                    className={cn(
+                                        "h-9 gap-2 rounded-md px-3 text-sm font-bold shadow-none",
+                                        isExpanded
+                                            ? "bg-arena-navy-800/10 text-arena-navy-800 hover:bg-arena-navy-800/20"
+                                            : "bg-arena-navy-800 text-white hover:bg-[#001D2C]"
+                                    )}
+                                >
+                                    {isExpanded ? (
+                                        <Minimize2 className="h-4 w-4" />
+                                    ) : (
+                                        <Maximize2 className="h-4 w-4" />
+                                    )}
+                                    <span className="hidden lg:inline">
+                                        {isExpanded ? "Reduzir" : "Tela cheia"}
+                                    </span>
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom">
+                                {isExpanded ? "Sair da tela cheia (Esc)" : "Ver a grade inteira em tela cheia"}
+                            </TooltipContent>
+                        </Tooltip>
+                    )}
+
                     {onClose && (
                         <Button
                             variant="ghost"
@@ -553,8 +653,13 @@ export function DayOperationBoard({
             {/* Content – sidebar + grid */}
             <div className="flex-1 flex overflow-hidden">
 
-                {/* ── Sidebar de espaços ── */}
-                <div className="w-52 flex-shrink-0 bg-white border-r border-slate-200 flex flex-col overflow-hidden">
+                {/* ── Sidebar de espaços (recolhível para liberar largura da grade) ── */}
+                <div
+                    className={cn(
+                        "flex-shrink-0 bg-white border-r border-slate-200 flex flex-col overflow-hidden transition-all duration-200",
+                        isSidebarOpen ? "w-52" : "w-0 border-r-0"
+                    )}
+                >
                     <div className="px-4 py-3 border-b border-slate-200">
                         <p className="text-[10px] font-black uppercase tracking-wider text-arena-navy-800/40 mb-2">
                             Espaços
@@ -625,7 +730,9 @@ export function DayOperationBoard({
                         </div>
                     ) : (
                         <div className="inline-block min-w-full">
-                            <table className="border-collapse">
+                            {/* w-full faz as colunas esticarem quando há poucos espaços;
+                                o min-width por coluna mantém a rolagem horizontal quando há muitos. */}
+                            <table className="w-full border-collapse">
                                 <thead className="sticky top-0 z-10">
                                     <tr>
                                         <th className="bg-arena-navy-800 text-white text-[10px] font-bold uppercase tracking-wider px-3 py-3 min-w-[70px] w-[70px] text-center border-r border-white/10 sticky left-0 z-20">
@@ -634,9 +741,10 @@ export function DayOperationBoard({
                                         {visibleCourts.map(court => (
                                             <th
                                                 key={court.id}
-                                                className="bg-arena-navy-800 text-white text-xs font-bold px-4 py-3 text-center border-r border-white/10 last:border-r-0 min-w-[180px]"
+                                                title={court.name}
+                                                className="bg-arena-navy-800 text-white text-xs font-bold px-4 py-3 text-center border-r border-white/10 last:border-r-0 min-w-[150px]"
                                             >
-                                                {court.name}
+                                                <span className="line-clamp-1">{court.name}</span>
                                             </th>
                                         ))}
                                     </tr>
@@ -864,5 +972,26 @@ export function DayOperationBoard({
                 </>
             )}
         </div>
+    );
+
+    return (
+        <TooltipProvider delayDuration={300}>
+            {/* Em tela cheia o quadro sai do fluxo; o wrapper preserva a altura da aba
+                para a página não "pular" ao expandir/reduzir. */}
+            <div
+                className={cn(
+                    isExpanded && !isModal && "h-[calc(100dvh-16rem)] min-h-[420px]"
+                )}
+            >
+                {isExpanded && (
+                    <div
+                        className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+                        onClick={() => setIsExpanded(false)}
+                        aria-hidden
+                    />
+                )}
+                {board}
+            </div>
+        </TooltipProvider>
     );
 }

@@ -428,6 +428,16 @@ Todas recebem arena_id FIXO do canal (o LLM nunca fornece arena):
     variant?: 'modal' | 'page'                -- altura/borda do container
     interactive?: boolean                     -- habilita agendar/abrir reservas na grade
     onClose?: () => void                      -- renderiza o botão X no cabeçalho
+  Estado interno de workspace (só em variant='page'):
+    isExpanded    -- o mesmo elemento troca as classes do container para
+                     `fixed ... h-[92vh] w-[95vw]` + backdrop z-40, então data, filtros e
+                     seleção de espaços são preservados ao expandir/reduzir. Um wrapper
+                     mantém a altura original para a página não saltar. Fecha com Esc
+                     (ignorado enquanto um modal de reserva está aberto) e trava o scroll
+                     do body. Os modais de reserva (portal no body, z-50) seguem por cima.
+    isSidebarOpen -- recolhe a lista lateral de espaços (w-52 -> w-0) para dar largura à grade.
+  A tabela usa `w-full` + `min-w-[150px]` por coluna: estica com poucos espaços e rola
+  horizontalmente com muitos.
 - `src/modules/bookings/components/DayOperationModal.tsx` — passou a ser um wrapper do board
   (overlay + backdrop), `variant="modal"`, sem interatividade. Mantém a assinatura anterior
   (`arenaName` continua aceito, agora opcional).
