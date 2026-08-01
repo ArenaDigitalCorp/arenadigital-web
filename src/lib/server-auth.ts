@@ -22,8 +22,10 @@ export type AuthenticatedDbUser = {
 export type PlatformAdminProfile = AuthenticatedDbUser & {
   email: string
   name: string | null
-  role: 'admin'
+  accessLevel: 'platform_admin' | 'super_admin'
 }
+
+export type PlatformAccessLevel = 'employee' | 'platform_admin' | 'super_admin'
 
 export type ArenaMembershipRole = 'Gestor' | 'Atendente' | 'Caixa'
 
@@ -55,9 +57,34 @@ type UntypedArenaQuery = {
   }
 }
 
+type PlatformAccessRpcClient = {
+  rpc: (
+    name: 'get_platform_access_level',
+    args: { p_user_id: string },
+  ) => Promise<{ data: string | null; error: { message: string } | null }>
+}
+
 function normalizeArenaMembershipRole(role: string | null | undefined): ArenaMembershipRole | null {
   if (role === 'Gestor' || role === 'Atendente' || role === 'Caixa') {
     return role
+  }
+
+  return null
+}
+
+async function getPlatformAccessLevel(dbUserId: string): Promise<PlatformAccessLevel | null> {
+  const supabase = getSupabaseAdmin()
+  const { data, error } = await (supabase as unknown as PlatformAccessRpcClient).rpc(
+    'get_platform_access_level',
+    { p_user_id: dbUserId },
+  )
+
+  if (error) {
+    throw new Error(`Failed to verify platform access: ${error.message}`)
+  }
+
+  if (data === 'employee' || data === 'platform_admin' || data === 'super_admin') {
+    return data
   }
 
   return null
@@ -87,18 +114,9 @@ export async function requireAuthenticatedDbUser(): Promise<AuthenticatedDbUser>
 
 export async function hasWebBackofficeAccess(dbUserId: string): Promise<boolean> {
   const supabase = getSupabaseAdmin()
+  const platformAccessLevel = await getPlatformAccessLevel(dbUserId)
 
-  const { data: dbUser, error: userError } = await supabase
-    .from('users')
-    .select('role')
-    .eq('id', dbUserId)
-    .maybeSingle()
-
-  if (userError) {
-    throw new Error(`Failed to verify web access user: ${userError.message}`)
-  }
-
-  if (dbUser?.role === 'admin') return true
+  if (platformAccessLevel === 'platform_admin' || platformAccessLevel === 'super_admin') return true
 
   const { data: ownedArena, error: ownedArenaError } = await supabase
     .from('arenas')
@@ -135,6 +153,37 @@ export async function requireWebBackofficeAccess(): Promise<AuthenticatedDbUser>
 
   if (!canAccessWeb) {
     throw new AuthorizationError(WEB_BACKOFFICE_ACCESS_DENIED_MESSAGE, 403)
+  }
+
+  return currentUser
+}
+
+/**
+ * Arena creation is a tenant-ownership operation. It is intentionally limited
+ * to platform admins and users who already own an arena; first-arena creation
+ * is performed by the protected signup provisioning flow.
+ */
+export async function assertArenaCreationAccess(): Promise<AuthenticatedDbUser> {
+  const currentUser = await requireAuthenticatedDbUser()
+  const supabase = getSupabaseAdmin()
+
+  const [platformAccessLevel, { data: ownedArena, error: arenaError }] = await Promise.all([
+    getPlatformAccessLevel(currentUser.dbUserId),
+    supabase
+      .from('arenas')
+      .select('id')
+      .eq('owner_id', currentUser.dbUserId)
+      .limit(1)
+      .maybeSingle(),
+  ])
+
+  if (arenaError) {
+    throw new Error(`Failed to verify arena ownership: ${arenaError.message}`)
+  }
+
+  const isPlatformAdmin = platformAccessLevel === 'platform_admin' || platformAccessLevel === 'super_admin'
+  if (!isPlatformAdmin && !ownedArena) {
+    throw new AuthorizationError('Forbidden', 403)
   }
 
   return currentUser
@@ -199,9 +248,14 @@ export async function assertPlatformAdminAccess(): Promise<PlatformAdminProfile>
   const currentUser = await requireAuthenticatedDbUser()
   const supabase = getSupabaseAdmin()
 
+  const accessLevel = await getPlatformAccessLevel(currentUser.dbUserId)
+  if (accessLevel !== 'platform_admin' && accessLevel !== 'super_admin') {
+    throw new AuthorizationError('Forbidden', 403)
+  }
+
   const { data, error } = await supabase
     .from('users')
-    .select('email, name, role')
+    .select('email, name')
     .eq('id', currentUser.dbUserId)
     .maybeSingle()
 
@@ -209,7 +263,7 @@ export async function assertPlatformAdminAccess(): Promise<PlatformAdminProfile>
     throw new Error(`Failed to verify platform admin access: ${error.message}`)
   }
 
-  if (data?.role !== 'admin') {
+  if (!data) {
     throw new AuthorizationError('Forbidden', 403)
   }
 
@@ -217,7 +271,7 @@ export async function assertPlatformAdminAccess(): Promise<PlatformAdminProfile>
     ...currentUser,
     email: data.email,
     name: data.name,
-    role: 'admin',
+    accessLevel,
   }
 }
 

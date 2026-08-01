@@ -10,7 +10,6 @@ import {
   getOrderByIdAction,
   updateOrderAction,
 } from '@/modules/stations/actions/orderActions';
-import { restoreStockForOrderAction } from '@/modules/products/actions/stockActions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { LaunchItemModal } from '@/modules/stations/components/LaunchItemModal';
 import { RegisterPaymentModal } from '@/modules/stations/components/RegisterPaymentModal';
@@ -58,8 +57,8 @@ export default function OrderDetailsPage() {
 
     setIsCancelling(true);
     try {
-      await updateOrderAction(arenaId, order.id, { status: 'cancelled' });
-      await restoreStockForOrderAction(order.id, arenaId);
+      const result = await updateOrderAction(arenaId, order.id, { status: 'cancelled' });
+      if (!result.success) throw new Error(result.error);
       toast.success('Comanda cancelada com sucesso!');
       loadOrderData();
     } catch (error) {

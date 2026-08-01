@@ -1,10 +1,8 @@
 "use server"
 
-import { randomUUID } from 'crypto'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { requireAuthenticatedDbUser, assertArenaBackofficeAccess, assertProductAccess } from '@/lib/server-auth'
+import { requireAuthenticatedDbUser, assertArenaAdminAccess, assertProductAccess } from '@/lib/server-auth'
 import {
-    computeAdjustedPrice,
     type PriceAdjustmentType,
     type PriceHistoryEntry,
     type PriceRoundingMode,
@@ -30,6 +28,7 @@ export async function getPriceHistoryByProductAction(productId: string) {
 }
 
 export interface BulkAdjustInput {
+    batch_id: string
     category_id: string
     adjustment_type: PriceAdjustmentType
     amount: number
@@ -40,7 +39,7 @@ export interface BulkAdjustInput {
 
 export async function bulkAdjustPricesAction(arenaId: string, input: BulkAdjustInput) {
     try {
-        await assertArenaBackofficeAccess(arenaId)
+        await assertArenaAdminAccess(arenaId)
         const { dbUserId } = await requireAuthenticatedDbUser()
 
         if (!Number.isFinite(input.amount) || input.amount === 0) {
@@ -50,75 +49,32 @@ export async function bulkAdjustPricesAction(arenaId: string, input: BulkAdjustI
             throw new Error('Reajuste percentual deve ser maior que -100%')
         }
 
-        const supabase = getSupabaseAdmin()
-        let query = supabase
-            .from('products')
-            .select('id, name, price, status')
-            .eq('arena_id', arenaId)
-            .eq('category_id', input.category_id)
-        if (!input.include_inactive) {
-            query = query.eq('status', 'Ativo')
+        const batchId = input.batch_id
+        const rpc = getSupabaseAdmin() as unknown as {
+            rpc: (
+                name: 'bulk_adjust_product_prices',
+                args: Record<string, unknown>
+            ) => Promise<{
+                data: { batchId: string; adjustedCount: number } | null
+                error: { message: string } | null
+            }>
         }
+        const { data, error } = await rpc.rpc('bulk_adjust_product_prices', {
+            p_arena_id: arenaId,
+            p_category_id: input.category_id,
+            p_adjustment_type: input.adjustment_type,
+            p_amount: input.amount,
+            p_rounding: input.rounding,
+            p_include_inactive: input.include_inactive,
+            p_reason: input.reason?.trim() || null,
+            p_changed_by: dbUserId,
+            p_batch_id: batchId,
+        })
 
-        const { data: products, error: productsError } = await query
-        if (productsError) throw new Error(productsError.message)
-        if (!products || products.length === 0) {
-            throw new Error('Nenhum item encontrado para esta categoria com os filtros escolhidos')
-        }
-
-        const batchId = randomUUID()
-        const now = new Date().toISOString()
-        const changes = products
-            .map((p) => ({
-                ...p,
-                newPrice: computeAdjustedPrice(p.price, input.adjustment_type, input.amount, input.rounding),
-            }))
-            .filter((p) => p.newPrice !== p.price)
-
-        if (changes.length === 0) {
-            throw new Error('O reajuste não altera nenhum preço com o arredondamento escolhido')
-        }
-
-        const applied: Array<{ id: string; oldPrice: number }> = []
-        try {
-            for (const change of changes) {
-                const { error: updateError } = await supabase
-                    .from('products')
-                    .update({ price: change.newPrice, updated_at: now, updated_by: dbUserId })
-                    .eq('id', change.id)
-                    .eq('arena_id', arenaId)
-                if (updateError) throw new Error(updateError.message)
-                applied.push({ id: change.id, oldPrice: change.price })
-            }
-
-            const { error: historyError } = await supabase.from('product_price_history').insert(
-                changes.map((change) => ({
-                    product_id: change.id,
-                    arena_id: arenaId,
-                    old_price: change.price,
-                    new_price: change.newPrice,
-                    change_type: 'bulk',
-                    adjustment_percent: input.adjustment_type === 'percent' ? input.amount : null,
-                    batch_id: batchId,
-                    reason: input.reason?.trim() || null,
-                    changed_by: dbUserId,
-                }))
-            )
-            if (historyError) throw new Error(historyError.message)
-        } catch (err) {
-            for (const restore of [...applied].reverse()) {
-                await supabase
-                    .from('products')
-                    .update({ price: restore.oldPrice, updated_at: now })
-                    .eq('id', restore.id)
-                    .eq('arena_id', arenaId)
-            }
-            await supabase.from('product_price_history').delete().eq('batch_id', batchId)
-            throw err
-        }
+        if (error) throw new Error(error.message)
 
         revalidatePath(`/dashboard/settings/products/${arenaId}`)
-        return { success: true, data: { batchId, adjustedCount: changes.length } }
+        return { success: true, data: data ?? { batchId, adjustedCount: 0 } }
     } catch (err) {
         const message = err instanceof Error ? err.message : 'Erro ao aplicar reajuste de preços'
         return { success: false, error: message, data: null }

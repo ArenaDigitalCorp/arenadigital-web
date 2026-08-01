@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import {
     Dialog,
     DialogContent,
@@ -79,6 +79,7 @@ export function BulkPriceAdjustModal({
     const [includeInactive, setIncludeInactive] = useState(false)
     const [reason, setReason] = useState("")
     const [isApplying, setIsApplying] = useState(false)
+    const batchOperation = useRef<{ id: string; payload: string } | null>(null)
 
     const kindCategories = useMemo(
         () => categories.filter((c) => c.kind === kind && c.active),
@@ -111,6 +112,7 @@ export function BulkPriceAdjustModal({
     const resetAndClose = (open: boolean) => {
         onOpenChange(open)
         if (!open) {
+            batchOperation.current = null
             setStep("config")
             setCategoryId("")
             setAdjustmentType("percent")
@@ -144,7 +146,20 @@ export function BulkPriceAdjustModal({
     const applyAdjustment = async () => {
         setIsApplying(true)
         try {
+            const payload = JSON.stringify({
+                arenaId,
+                categoryId,
+                adjustmentType,
+                amount,
+                rounding,
+                includeInactive,
+                reason: reason.trim() || null,
+            })
+            if (batchOperation.current?.payload !== payload) {
+                batchOperation.current = { id: crypto.randomUUID(), payload }
+            }
             const res = await bulkAdjustPricesAction(arenaId, {
+                batch_id: batchOperation.current.id,
                 category_id: categoryId,
                 adjustment_type: adjustmentType,
                 amount,

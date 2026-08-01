@@ -3,6 +3,7 @@ import { planKeySchema } from '@/modules/payments/plans';
 import { createSetupIntent } from '@/modules/payments/usecases/create-setup-intent.usecase';
 import { verifyArenaAccess } from '@/modules/payments/utils/verify-arena-access';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { observeHttpRequest } from '@/lib/observability/server';
 import { NextRequest, NextResponse } from 'next/server';
 import z from 'zod';
 
@@ -12,25 +13,29 @@ const RequestSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  const observation = observeHttpRequest(request, {
+    component: 'payments',
+    operation: 'setup_intent',
+  });
   const supabase = await createSupabaseServerClient();
   const { data: authData } = await supabase.auth.getUser();
   const user = authData.user;
   if (!user)
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return observation.respond(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
 
   const body = await request.json();
   const parsed = RequestSchema.safeParse(body);
 
   if (!parsed.success) {
-    return NextResponse.json(
+    return observation.respond(NextResponse.json(
       { error: 'Invalid request', detail: parsed.error.flatten() },
       { status: 400 }
-    );
+    ));
   }
 
   const hasAccess = await verifyArenaAccess(user.id, parsed.data.arenaId);
   if (!hasAccess)
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    return observation.respond(NextResponse.json({ error: 'Forbidden' }, { status: 403 }));
 
   try {
     const email = user.email ?? '';
@@ -46,13 +51,13 @@ export async function POST(request: NextRequest) {
       fullName,
       user.id
     );
-    return NextResponse.json(result);
+    return observation.respond(NextResponse.json(result));
   } catch (error) {
-    if (error instanceof PaymentApiError) return error.toNextResponse();
-    console.error('[payments] setup-intent error', error);
-    return NextResponse.json(
+    if (error instanceof PaymentApiError) return observation.respond(error.toNextResponse());
+    observation.log('error', 'payments.setup_intent.failed', { error });
+    return observation.respond(NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
-    );
+    ));
   }
 }

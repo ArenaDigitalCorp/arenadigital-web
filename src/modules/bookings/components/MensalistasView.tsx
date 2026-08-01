@@ -78,7 +78,8 @@ export function MensalistasView({
       const res = await confirmarMesMensalistaAction(
         arenaId,
         confirmDialog.id,
-        valor
+        valor,
+        confirmDialog.proximo_mes_reservado as string
       );
       if (!res.success) throw new Error(res.error);
       toast.success('Pagamento confirmado! Próximo mês gerado.');

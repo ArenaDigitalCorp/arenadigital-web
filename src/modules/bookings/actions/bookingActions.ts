@@ -8,52 +8,6 @@ import { revalidatePath } from 'next/cache'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
-async function createAvulsoTransaction(
-    supabase: ReturnType<typeof getSupabaseAdmin>,
-    {
-        arenaId,
-        athleteId,
-        athleteName,
-        price,
-        quantity,
-        startTime,
-        registeredBy,
-        modoPagamentoId,
-    }: {
-        arenaId: string
-        athleteId?: string
-        athleteName: string
-        price: number
-        quantity: number
-        startTime: string
-        registeredBy: string
-        modoPagamentoId?: string | null
-    }
-) {
-    const date = format(new Date(startTime), 'dd/MM/yyyy', { locale: ptBR })
-    const description = quantity > 1
-        ? `Reserva Avulsa - ${athleteName} - ${quantity} sessões`
-        : `Reserva Avulsa - ${athleteName} - ${date}`
-    const today = new Date().toISOString().split('T')[0]
-
-    const { error } = await supabase.from('transactions').insert({
-        arena_id: arenaId,
-        atleta_id: athleteId || null,
-        type: 'entrada',
-        category: 'Reserva Avulsa',
-        description,
-        unit_value: price,
-        quantity,
-        total_value: price * quantity,
-        discount: 0,
-        launch_date: today,
-        registration_date: today,
-        registered_by: registeredBy,
-        modo_pagamento_id: modoPagamentoId ?? null,
-    })
-    if (error) throw new Error(`Erro ao registrar transação: ${error.message}`)
-}
-
 function revalidateBookingFinancePaths(arenaId: string) {
     revalidatePath(`/dashboard/arenas/${arenaId}`)
     revalidatePath(`/dashboard/arenas/${arenaId}/courts`)
@@ -68,37 +22,6 @@ function isBlockingBookingStatus(row: { status: string | null; payment_expires_a
     return new Date(row.payment_expires_at).getTime() > Date.now()
 }
 
-async function maybeConfirmSplitBooking(
-    supabase: ReturnType<typeof getSupabaseAdmin>,
-    bookingId: string
-) {
-    const { data: booking } = await supabase
-        .from('bookings')
-        .select('cobranca_por_participante, status')
-        .eq('id', bookingId)
-        .single()
-
-    if (!booking?.cobranca_por_participante || booking.status !== 'reservado') return
-
-    const { data: parts, error } = await supabase
-        .from('booking_participants')
-        .select('id, pago_em')
-        .eq('booking_id', bookingId)
-        .in('funcao', ['responsavel', 'convidado'])
-
-    if (error) throw new Error(error.message)
-    if (!parts?.length) return
-
-    const allPaid = parts.every((p) => Boolean(p.pago_em))
-    if (!allPaid) return
-
-    const { error: updateError } = await supabase
-        .from('bookings')
-        .update({ status: 'confirmed' })
-        .eq('id', bookingId)
-
-    if (updateError) throw new Error(updateError.message)
-}
 
 export async function confirmarPagamentoAvulsoAction(
     arenaId: string,
@@ -111,45 +34,15 @@ export async function confirmarPagamentoAvulsoAction(
         const { dbUserId } = await requireAuthenticatedDbUser()
         const supabase = getSupabaseAdmin()
 
-        const { data: booking, error: fetchError } = await supabase
-            .from('bookings')
-            .select('id, arena_id, athlete_id, athlete_name, start_time, price, status, plano_mensalista_id, cobranca_por_participante')
-            .eq('id', bookingId)
-            .eq('arena_id', arenaId)
-            .single()
+        const { error } = await supabase.rpc('confirm_backoffice_booking_payment', {
+            p_arena_id: arenaId,
+            p_booking_id: bookingId,
+            p_registered_by: dbUserId,
+            p_amount: valorOverride !== undefined && valorOverride > 0 ? valorOverride : null,
+            p_modo_pagamento_id: modoPagamentoId ?? null,
+        })
 
-        if (fetchError || !booking) throw new Error('Reserva não encontrada')
-        if (booking.plano_mensalista_id) throw new Error('Esta reserva é de mensalista')
-        if (booking.cobranca_por_participante) {
-            throw new Error('Esta reserva possui cobrança por participante. Confirme o pagamento de cada pessoa.')
-        }
-        if (booking.status !== 'reservado') throw new Error('Esta reserva não está aguardando pagamento')
-
-        const valorEfetivo =
-            valorOverride !== undefined && valorOverride > 0
-                ? valorOverride
-                : Number(booking.price ?? 0)
-
-        const { error: updateError } = await supabase
-            .from('bookings')
-            .update({ status: 'confirmed', price: valorEfetivo })
-            .eq('id', bookingId)
-            .eq('arena_id', arenaId)
-
-        if (updateError) throw new Error(updateError.message)
-
-        if (valorEfetivo > 0) {
-            await createAvulsoTransaction(supabase, {
-                arenaId,
-                athleteId: booking.athlete_id ?? undefined,
-                athleteName: booking.athlete_name ?? 'Atleta',
-                price: valorEfetivo,
-                quantity: 1,
-                startTime: booking.start_time,
-                registeredBy: dbUserId,
-                modoPagamentoId,
-            })
-        }
+        if (error) throw new Error(error.message)
 
         revalidateBookingFinancePaths(arenaId)
         return { success: true }
@@ -171,86 +64,16 @@ export async function confirmarPagamentoParticipanteAvulsoAction(
         const { dbUserId } = await requireAuthenticatedDbUser()
         const supabase = getSupabaseAdmin()
 
-        const { data: participant, error: participantError } = await supabase
-            .from('booking_participants')
-            .select(`
-                id,
-                atleta_id,
-                valor,
-                pago_em,
-                funcao,
-                atleta:atleta_id(id, nome_perfil),
-                booking:booking_id(
-                    id,
-                    arena_id,
-                    start_time,
-                    price,
-                    status,
-                    plano_mensalista_id,
-                    cobranca_por_participante
-                )
-            `)
-            .eq('id', participantId)
-            .eq('booking_id', bookingId)
-            .single()
+        const { error } = await supabase.rpc('confirm_backoffice_participant_payment', {
+            p_arena_id: arenaId,
+            p_booking_id: bookingId,
+            p_participant_id: participantId,
+            p_registered_by: dbUserId,
+            p_amount: valorOverride !== undefined && valorOverride > 0 ? valorOverride : null,
+            p_modo_pagamento_id: modoPagamentoId ?? null,
+        })
 
-        if (participantError || !participant) {
-            throw new Error('Participante não encontrado')
-        }
-
-        const booking = Array.isArray(participant.booking)
-            ? participant.booking[0]
-            : participant.booking
-
-        if (!booking || booking.arena_id !== arenaId) {
-            throw new Error('Reserva não encontrada')
-        }
-        if (booking.plano_mensalista_id) throw new Error('Esta reserva é de mensalista')
-        if (!booking.cobranca_por_participante) {
-            throw new Error('Esta reserva não possui cobrança separada por participante')
-        }
-        if (booking.status !== 'reservado') {
-            throw new Error('Esta reserva não está aguardando pagamento')
-        }
-        if (participant.pago_em) {
-            throw new Error('Este participante já teve o pagamento confirmado')
-        }
-        if (participant.funcao !== 'responsavel' && participant.funcao !== 'convidado') {
-            throw new Error('Participante inválido para cobrança avulsa')
-        }
-
-        const atleta = Array.isArray(participant.atleta)
-            ? participant.atleta[0]
-            : participant.atleta
-
-        const valorEfetivo =
-            valorOverride !== undefined && valorOverride > 0
-                ? valorOverride
-                : Number(participant.valor ?? booking.price ?? 0)
-
-        const paidAt = new Date().toISOString()
-        const { error: updateParticipantError } = await supabase
-            .from('booking_participants')
-            .update({ pago_em: paidAt, valor: valorEfetivo })
-            .eq('id', participantId)
-            .eq('booking_id', bookingId)
-
-        if (updateParticipantError) throw new Error(updateParticipantError.message)
-
-        if (valorEfetivo > 0) {
-            await createAvulsoTransaction(supabase, {
-                arenaId,
-                athleteId: participant.atleta_id,
-                athleteName: atleta?.nome_perfil ?? 'Atleta',
-                price: valorEfetivo,
-                quantity: 1,
-                startTime: booking.start_time,
-                registeredBy: dbUserId,
-                modoPagamentoId,
-            })
-        }
-
-        await maybeConfirmSplitBooking(supabase, bookingId)
+        if (error) throw new Error(error.message)
         revalidateBookingFinancePaths(arenaId)
         return { success: true }
     } catch (err) {
@@ -265,6 +88,84 @@ export interface BookingConflict {
     endTime: string       // "HH:MM" formatado
     athleteName: string   // nome do atleta que já tem esse horário
     proposedDate: string  // data/hora que o usuário tentou reservar (formatada)
+}
+
+export type BackofficeBookingBundleInput = {
+    operationId: string
+    updateBookingId?: string | null
+    courtId: string
+    athleteName: string
+    athleteId?: string | null
+    sportId?: string | null
+    rentalPrice: number
+    splitBilling: boolean
+    recurrenceId?: string | null
+    slots: { start_time: string; end_time: string }[]
+    services: { product_id: string; quantity: number }[]
+    additionalAthleteIds: string[]
+}
+
+export async function saveBackofficeBookingBundleAction(
+    arenaId: string,
+    input: BackofficeBookingBundleInput
+): Promise<{ success: boolean; data?: Booking[]; idempotent?: boolean; error?: string }> {
+    try {
+        await assertArenaBackofficeAccess(arenaId)
+        await assertCourtAccess(input.courtId, arenaId)
+        if (input.updateBookingId) {
+            await assertBookingAccess(input.updateBookingId, arenaId)
+        }
+        const { dbUserId } = await requireAuthenticatedDbUser()
+
+        if (!Number.isFinite(input.rentalPrice) || input.rentalPrice < 0) {
+            throw new Error('Valor da locação inválido')
+        }
+        if (input.slots.length < 1 || input.slots.length > 52) {
+            throw new Error('Conjunto de horários inválido')
+        }
+
+        const safeSlots = input.slots.map(({ start_time, end_time }) => ({ start_time, end_time }))
+        const safeServices = input.services.map(({ product_id, quantity }) => ({ product_id, quantity }))
+        const safeAdditionalAthletes = Array.from(new Set(input.additionalAthleteIds))
+        const rpc = getSupabaseAdmin() as unknown as {
+            rpc: (
+                name: 'save_backoffice_booking_bundle_atomic',
+                args: Record<string, unknown>
+            ) => Promise<{
+                data: { bookings?: Booking[]; idempotent?: boolean } | null
+                error: { message: string } | null
+            }>
+        }
+        const { data, error } = await rpc.rpc('save_backoffice_booking_bundle_atomic', {
+            p_operation_id: input.operationId,
+            p_arena_id: arenaId,
+            p_update_booking_id: input.updateBookingId ?? null,
+            p_court_id: input.courtId,
+            p_athlete_name: input.athleteName.trim(),
+            p_athlete_id: input.athleteId ?? null,
+            p_sport_id: input.sportId ?? null,
+            p_rental_price: input.rentalPrice,
+            p_cobranca_por_participante: input.splitBilling,
+            p_recurrence_id: input.recurrenceId ?? null,
+            p_slots: safeSlots,
+            p_services: safeServices,
+            p_responsible_athlete_id: input.athleteId ?? null,
+            p_additional_athlete_ids: safeAdditionalAthletes,
+            p_participant_value: input.splitBilling ? input.rentalPrice : null,
+            p_registered_by: dbUserId,
+        })
+
+        if (error) throw new Error(error.message)
+        revalidateBookingFinancePaths(arenaId)
+        return {
+            success: true,
+            data: data?.bookings ?? [],
+            idempotent: data?.idempotent ?? false,
+        }
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Erro ao salvar reserva'
+        return { success: false, error: message }
+    }
 }
 
 type BookingConflictRow = {
@@ -382,6 +283,7 @@ export async function updateBookingStatusAction(
     status: 'confirmed' | 'cancelled'
 ): Promise<{ success: boolean; error?: string }> {
     try {
+        await assertArenaBackofficeAccess(arenaId)
         await assertBookingAccess(bookingId, arenaId)
         const supabase = getSupabaseAdmin()
 
@@ -424,9 +326,9 @@ export async function updateBookingAction(
     input: Pick<UpdateBookingDTO, 'athlete_name' | 'athlete_id' | 'sport_id' | 'start_time' | 'end_time' | 'price' | 'cobranca_por_participante'>
 ): Promise<{ success: boolean; data?: Booking; error?: string }> {
     try {
+        await assertArenaBackofficeAccess(arenaId)
         await assertBookingAccess(bookingId, arenaId)
         const supabase = getSupabaseAdmin()
-        const repo = new SupabaseBookingRepository(supabase)
         const { data: existing } = await supabase
             .from('bookings')
             .select('court_id, cobranca_por_participante, status')
@@ -457,15 +359,20 @@ export async function updateBookingAction(
             }
         }
 
-        const data = await repo.updateBooking(bookingId, courtId, {
-            athlete_name: input.athlete_name ?? null,
-            athlete_id: input.athlete_id ?? null,
-            sport_id: input.sport_id ?? null,
-            start_time: input.start_time as string,
-            end_time: input.end_time as string,
-            price: input.price ?? null,
-            cobranca_por_participante: input.cobranca_por_participante ?? false,
+        const { data: rpcData, error } = await supabase.rpc('update_backoffice_booking', {
+            p_arena_id: arenaId,
+            p_booking_id: bookingId,
+            p_athlete_name: input.athlete_name ?? '',
+            p_athlete_id: input.athlete_id ?? null,
+            p_sport_id: input.sport_id ?? null,
+            p_start_time: input.start_time as string,
+            p_end_time: input.end_time as string,
+            p_price: input.price ?? null,
+            p_cobranca_por_participante: input.cobranca_por_participante ?? false,
         })
+
+        if (error) throw new Error(error.message)
+        const data = (Array.isArray(rpcData) ? rpcData[0] : rpcData) as Booking
 
         revalidateBookingFinancePaths(arenaId)
         return { success: true, data }
@@ -487,20 +394,26 @@ export async function createBookingAction(
         }
         await assertCourtAccess(input.court_id, arenaId)
         const supabase = getSupabaseAdmin()
-        const repo = new SupabaseBookingRepository(supabase)
-        const data = await repo.create(input)
+        const { data: rpcData, error } = await supabase.rpc('create_backoffice_booking', {
+            p_arena_id: arenaId,
+            p_court_id: input.court_id,
+            p_athlete_name: input.athlete_name ?? '',
+            p_start_time: input.start_time,
+            p_end_time: input.end_time,
+            p_status: input.status ?? 'confirmed',
+            p_athlete_id: input.athlete_id ?? null,
+            p_sport_id: input.sport_id ?? null,
+            p_price: input.price ?? 0,
+            p_recurrence_id: input.recurrence_id ?? null,
+            p_booking_type: input.booking_type ?? 'avulso',
+            p_plano_mensalista_id: input.plano_mensalista_id ?? null,
+            p_cobranca_por_participante: input.cobranca_por_participante ?? false,
+            p_registered_by: dbUserId,
+            p_modo_pagamento_id: null,
+        })
 
-        if (input.status === 'confirmed' && (input.price ?? 0) > 0) {
-            await createAvulsoTransaction(supabase, {
-                arenaId,
-                athleteId: input.athlete_id ?? undefined,
-                athleteName: input.athlete_name ?? 'Atleta',
-                price: input.price as number,
-                quantity: 1,
-                startTime: input.start_time as string,
-                registeredBy: dbUserId,
-            })
-        }
+        if (error) throw new Error(error.message)
+        const data = (Array.isArray(rpcData) ? rpcData[0] : rpcData) as Booking
 
         revalidatePath(`/dashboard/arenas/${arenaId}`)
         revalidatePath(`/dashboard/arenas/${arenaId}/courts`)
@@ -527,22 +440,14 @@ export async function createRecurringBookingsAction(
             await assertCourtAccess(input.court_id, arenaId)
         }
         const supabase = getSupabaseAdmin()
-        const repo = new SupabaseBookingRepository(supabase)
-        const data = await repo.createMany(inputs)
+        const { data: rpcData, error } = await supabase.rpc('create_backoffice_bookings', {
+            p_bookings: inputs,
+            p_registered_by: dbUserId,
+            p_modo_pagamento_id: null,
+        })
 
-        const confirmed = inputs.filter(i => i.status === 'confirmed' && (i.price ?? 0) > 0)
-        if (confirmed.length > 0) {
-            const first = confirmed[0]
-            await createAvulsoTransaction(supabase, {
-                arenaId,
-                athleteId: first.athlete_id ?? undefined,
-                athleteName: first.athlete_name ?? 'Atleta',
-                price: first.price as number,
-                quantity: confirmed.length,
-                startTime: first.start_time as string,
-                registeredBy: dbUserId,
-            })
-        }
+        if (error) throw new Error(error.message)
+        const data = (rpcData ?? []) as Booking[]
 
         revalidatePath(`/dashboard/arenas/${arenaId}`)
         revalidatePath(`/dashboard/arenas/${arenaId}/courts`)

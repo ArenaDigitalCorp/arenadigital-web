@@ -33,13 +33,10 @@ import {
 import { searchAthletesAction } from '@/modules/loyalty/actions/loyaltyActions';
 import { getCourtByIdAction } from '@/modules/courts/actions/courtActions';
 import {
-  createBookingAction,
-  createRecurringBookingsAction,
   checkBookingConflictsAction,
-  updateBookingAction,
+  saveBackofficeBookingBundleAction,
 } from '@/modules/bookings/actions/bookingActions';
 import type { BookingConflict } from '@/modules/bookings/actions/bookingActions';
-import { replaceBookingServicesAction } from '@/modules/bookings/actions/bookingServiceActions';
 import type { Booking } from '@/modules/bookings/types/booking.types';
 import { getProductsByArenaAction } from '@/modules/products/actions/stockActions';
 import {
@@ -52,7 +49,6 @@ import {
   type BookingServiceLineLocal,
 } from '@/modules/bookings/components/BookingServicesSection';
 import { createPlanoMensalistaAction } from '@/modules/bookings/actions/mensalistaActions';
-import { syncBookingParticipantsAction } from '@/modules/bookings/actions/bookingParticipantActions';
 import {
   BookingParticipantsField,
   type BookingAthleteOption,
@@ -279,6 +275,15 @@ export function BookingModal({
   const [valorMensal, setValorMensal] = useState('');
 
   const searchTimeout = useRef<NodeJS.Timeout | null>(null);
+  const bookingOperationId = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen && bookingOperationId.current === null) {
+      bookingOperationId.current = crypto.randomUUID();
+    } else if (!isOpen) {
+      bookingOperationId.current = null;
+    }
+  }, [isOpen]);
 
   async function loadCourtSports(preferredSportId?: string | null) {
     try {
@@ -454,37 +459,6 @@ export function BookingModal({
     }, 500);
   };
 
-  const persistParticipants = async (
-    bookingIds: string[],
-    options?: { always?: boolean }
-  ) => {
-    const additionalIds = additionalParticipants.map((p) => p.id);
-    const responsibleId = selectedAthlete?.id ?? null;
-    if (
-      !options?.always &&
-      !responsibleId &&
-      additionalIds.length === 0
-    ) {
-      return;
-    }
-
-    const valorPorParticipante =
-      splitBillingPerParticipant && Number(courtPrice) > 0
-        ? Number(courtPrice)
-        : null;
-
-    for (const bookingId of bookingIds) {
-      const res = await syncBookingParticipantsAction(arenaId, bookingId, {
-        responsibleAthleteId: responsibleId,
-        additionalAthleteIds: additionalIds,
-        valorPorParticipante,
-      });
-      if (!res.success) {
-        throw new Error(res.error ?? 'Erro ao salvar participantes da reserva');
-      }
-    }
-  };
-
   // Avulso: fim menor/igual ao início só é válido quando a reserva cruza a
   // meia-noite dentro do horário de funcionamento do espaço no dia
   // (ex.: 22:00 → 01:00 com funcionamento até 02:00).
@@ -558,8 +532,6 @@ export function BookingModal({
         return;
       }
     }
-    const totalPrice = court + sumBookingServiceLines(serviceLines);
-    const bookingPrice = splitBillingPerParticipant ? court : totalPrice;
     const servicePayload = serviceLines.map((l) => ({
       product_id: l.productId,
       quantity: l.quantity,
@@ -576,136 +548,43 @@ export function BookingModal({
       if (endDateTime <= startDateTime)
         endDateTime.setDate(endDateTime.getDate() + 1);
 
-      if (existingBooking) {
-        const result = await updateBookingAction(arenaId, existingBooking.id, {
-          athlete_name: selectedAthlete ? selectedAthlete.nome_perfil : search,
-          athlete_id: selectedAthlete?.id ?? null,
-          sport_id: selectedSport || null,
-          start_time: startDateTime.toISOString(),
-          end_time: endDateTime.toISOString(),
-          price: bookingPrice,
-          cobranca_por_participante: splitBillingPerParticipant,
-        });
-        if (!result.success) {
-          toast.error(result.error ?? 'Erro ao atualizar reserva');
-          return;
-        }
-        const sRes = await replaceBookingServicesAction(
-          arenaId,
-          existingBooking.id,
-          servicePayload
+      bookingOperationId.current ??= crypto.randomUUID();
+      const weeks = isRecurring
+        ? Math.max(1, Math.floor(recurrenceWeeks) || 1)
+        : 1;
+      const slots = Array.from({ length: weeks }, (_, index) => ({
+        start_time: addWeeks(startDateTime, index).toISOString(),
+        end_time: addWeeks(endDateTime, index).toISOString(),
+      }));
+      const result = await saveBackofficeBookingBundleAction(arenaId, {
+        operationId: bookingOperationId.current,
+        updateBookingId: existingBooking?.id ?? null,
+        courtId,
+        athleteName: selectedAthlete ? selectedAthlete.nome_perfil : search,
+        athleteId: selectedAthlete?.id ?? null,
+        sportId: selectedSport || null,
+        rentalPrice: court,
+        splitBilling: splitBillingPerParticipant,
+        recurrenceId: isRecurring ? bookingOperationId.current : null,
+        slots,
+        services: servicePayload,
+        additionalAthleteIds: additionalParticipants.map((p) => p.id),
+      });
+      if (!result.success) {
+        toast.error(
+          result.error ??
+            (existingBooking ? 'Erro ao atualizar reserva' : 'Erro ao criar reserva')
         );
-        if (!sRes.success) {
-          toast.error(sRes.error ?? 'Erro ao salvar serviços da reserva');
-          return;
-        }
-        try {
-          await persistParticipants([existingBooking.id], { always: true });
-        } catch (err) {
-          toast.error(
-            err instanceof Error ? err.message : 'Erro ao salvar participantes'
-          );
-          return;
-        }
+        return;
+      }
+
+      bookingOperationId.current = null;
+      if (existingBooking) {
         toast.success('Reserva atualizada com sucesso!');
         onSuccess();
         onClose();
         resetForm();
         return;
-      }
-
-      if (isRecurring) {
-        const weeks = Math.max(1, Math.floor(recurrenceWeeks) || 1);
-        const recurrenceId = crypto.randomUUID();
-        const bookingsToCreate = [];
-        for (let i = 0; i < weeks; i++) {
-          bookingsToCreate.push({
-            arena_id: arenaId,
-            court_id: courtId,
-            athlete_name: selectedAthlete
-              ? selectedAthlete.nome_perfil
-              : search,
-            athlete_id: selectedAthlete?.id || undefined,
-            sport_id: selectedSport || undefined,
-            start_time: addWeeks(startDateTime, i).toISOString(),
-            end_time: addWeeks(endDateTime, i).toISOString(),
-            status: 'reservado' as const,
-            price: bookingPrice,
-            cobranca_por_participante: splitBillingPerParticipant,
-            recurrence_id: recurrenceId,
-          });
-        }
-        const recRes = await createRecurringBookingsAction(
-          arenaId,
-          bookingsToCreate
-        );
-        if (!recRes.success) {
-          toast.error(recRes.error ?? 'Erro ao criar reservas recorrentes');
-          return;
-        }
-        if (servicePayload.length > 0 && recRes.data?.length) {
-          for (const b of recRes.data) {
-            const sRes = await replaceBookingServicesAction(
-              arenaId,
-              b.id,
-              servicePayload
-            );
-            if (!sRes.success) {
-              toast.error(
-                sRes.error ?? 'Erro ao salvar serviços em uma das reservas'
-              );
-              return;
-            }
-          }
-        }
-        if (recRes.data?.length) {
-          try {
-            await persistParticipants(recRes.data.map((b) => b.id));
-          } catch (err) {
-            toast.error(
-              err instanceof Error ? err.message : 'Erro ao salvar participantes'
-            );
-            return;
-          }
-        }
-      } else {
-        const created = await createBookingAction(arenaId, {
-          arena_id: arenaId,
-          court_id: courtId,
-          athlete_name: selectedAthlete ? selectedAthlete.nome_perfil : search,
-          athlete_id: selectedAthlete?.id || undefined,
-          sport_id: selectedSport || undefined,
-          start_time: startDateTime.toISOString(),
-          end_time: endDateTime.toISOString(),
-          status: 'reservado',
-          price: bookingPrice,
-          cobranca_por_participante: splitBillingPerParticipant,
-        });
-        if (!created.success) {
-          toast.error(created.error ?? 'Erro ao criar reserva');
-          return;
-        }
-        if (servicePayload.length > 0 && created.data?.id) {
-          const sRes = await replaceBookingServicesAction(
-            arenaId,
-            created.data.id,
-            servicePayload
-          );
-          if (!sRes.success) {
-            toast.error(sRes.error ?? 'Erro ao salvar serviços da reserva');
-            return;
-          }
-        }
-        if (created.data?.id) {
-          try {
-            await persistParticipants([created.data.id]);
-          } catch (err) {
-            toast.error(
-              err instanceof Error ? err.message : 'Erro ao salvar participantes'
-            );
-            return;
-          }
-        }
       }
 
       toast.success(

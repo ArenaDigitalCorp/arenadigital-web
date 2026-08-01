@@ -2,7 +2,12 @@
 
 import { revalidatePath } from 'next/cache'
 import { getLocationPointFromAddress } from '@/lib/geocoding'
-import { assertArenaBackofficeAccess, requireAuthenticatedDbUser } from '@/lib/server-auth'
+import {
+    assertArenaAdminAccess,
+    assertArenaBackofficeAccess,
+    assertArenaCreationAccess,
+    assertArenaOwnerAccess,
+} from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { SupabaseArenaRepository } from '@/modules/arenas/repositories/SupabaseArenaRepository'
 import type { CreateArenaDTO, UpdateArenaDTO } from '@/modules/arenas/types/arena.types'
@@ -57,7 +62,7 @@ async function resolveArenaLocation(
 
 export async function deleteArenaAction(arenaId: string): Promise<{ success: boolean; error?: string }> {
     try {
-        await assertArenaBackofficeAccess(arenaId)
+        await assertArenaOwnerAccess(arenaId)
         const supabase = getSupabaseAdmin()
         const { error } = await supabase.from('arenas').delete().eq('id', arenaId)
         if (error) throw new Error(error.message)
@@ -83,7 +88,7 @@ export async function getArenaByIdAction(arenaId: string) {
 
 export async function createArenaAction(input: CreateArenaDTO) {
     try {
-        const { dbUserId } = await requireAuthenticatedDbUser()
+        const { dbUserId } = await assertArenaCreationAccess()
         const location = input.location ?? (await resolveArenaLocation(input)) ?? undefined
         const arena = await new SupabaseArenaRepository(getSupabaseAdmin()).create({
             ...input,
@@ -146,10 +151,12 @@ export async function getMunicipioByIbgeAction(codigoIbge: number) {
 
 export async function updateArenaAction(arenaId: string, input: UpdateArenaDTO) {
     try {
-        await assertArenaBackofficeAccess(arenaId)
-        const location = input.location ?? (await resolveArenaLocation(input)) ?? undefined
+        await assertArenaAdminAccess(arenaId)
+        const safeInput = { ...input }
+        delete safeInput.owner_id
+        const location = safeInput.location ?? (await resolveArenaLocation(safeInput)) ?? undefined
         const arena = await new SupabaseArenaRepository(getSupabaseAdmin()).update(arenaId, {
-            ...input,
+            ...safeInput,
             ...(location ? { location: location as UpdateArenaDTO['location'] } : {}),
         })
         revalidatePath(`/dashboard/arenas/${arenaId}/edit`)
@@ -190,8 +197,8 @@ type SupabaseErrorLike = { message: string }
 type ArenaPaymentAccountRow = {
     asaas_wallet_id: string | null
     asaas_account_id: string | null
-    account_holder_name: string | null
-    account_holder_document: string | null
+    holder_name: string | null
+    holder_document: string | null
     pix_key: string | null
     platform_fee_basis_points: number | null
     status: string | null
@@ -203,8 +210,8 @@ type ArenaPaymentAccountPayload = {
     provider: 'asaas'
     asaas_wallet_id: string | null
     asaas_account_id: string | null
-    account_holder_name: string | null
-    account_holder_document: string | null
+    holder_name: string | null
+    holder_document: string | null
     pix_key: string | null
     platform_fee_basis_points: number
     status: 'active' | 'disabled'
@@ -241,8 +248,8 @@ function mapPixSplitSettings(row: ArenaPaymentAccountRow | null): ArenaPixSplitS
         enabled: row.status === 'active' && Boolean(row.asaas_wallet_id),
         asaasWalletId: row.asaas_wallet_id ?? '',
         asaasAccountId: row.asaas_account_id ?? '',
-        holderName: row.account_holder_name ?? '',
-        holderDocument: row.account_holder_document ?? '',
+        holderName: row.holder_name ?? '',
+        holderDocument: row.holder_document ?? '',
         pixKey: row.pix_key ?? '',
         status,
         platformFeeBasisPoints: Number(row.platform_fee_basis_points ?? 200),
@@ -254,10 +261,10 @@ export async function getArenaPixSplitSettingsAction(
     arenaId: string
 ): Promise<{ success: boolean; data: ArenaPixSplitSettings; error?: string }> {
     try {
-        await assertArenaBackofficeAccess(arenaId)
+        await assertArenaOwnerAccess(arenaId)
         const { data, error } = await arenaPaymentAccountsTable()
             .select(
-                'asaas_wallet_id, asaas_account_id, account_holder_name, account_holder_document, pix_key, platform_fee_basis_points, status, updated_at'
+                'asaas_wallet_id, asaas_account_id, holder_name, holder_document, pix_key, platform_fee_basis_points, status, updated_at'
             )
             .eq('arena_id', arenaId)
             .eq('provider', 'asaas')
@@ -276,7 +283,7 @@ export async function updateArenaPixSplitSettingsAction(
     input: UpdateArenaPixSplitSettingsInput
 ): Promise<{ success: boolean; data: ArenaPixSplitSettings; error?: string }> {
     try {
-        await assertArenaBackofficeAccess(arenaId)
+        await assertArenaOwnerAccess(arenaId)
 
         const enabled = Boolean(input.enabled)
         const asaasWalletId = cleanNullableText(input.asaasWalletId)
@@ -289,8 +296,8 @@ export async function updateArenaPixSplitSettingsAction(
             provider: 'asaas',
             asaas_wallet_id: enabled ? asaasWalletId : null,
             asaas_account_id: cleanNullableText(input.asaasAccountId),
-            account_holder_name: cleanNullableText(input.holderName),
-            account_holder_document: onlyDigitsLocal(input.holderDocument),
+            holder_name: cleanNullableText(input.holderName),
+            holder_document: onlyDigitsLocal(input.holderDocument),
             pix_key: cleanNullableText(input.pixKey),
             platform_fee_basis_points: 200,
             status: enabled ? 'active' : 'disabled',
@@ -300,7 +307,7 @@ export async function updateArenaPixSplitSettingsAction(
         const { data, error } = await arenaPaymentAccountsTable()
             .upsert(payload, { onConflict: 'arena_id,provider' })
             .select(
-                'asaas_wallet_id, asaas_account_id, account_holder_name, account_holder_document, pix_key, platform_fee_basis_points, status, updated_at'
+                'asaas_wallet_id, asaas_account_id, holder_name, holder_document, pix_key, platform_fee_basis_points, status, updated_at'
             )
             .single()
 

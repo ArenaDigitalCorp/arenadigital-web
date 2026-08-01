@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from '@/lib/supabase-server'
+import { observeHttpRequest } from '@/lib/observability/server'
 import { logAuditEvent } from '@/modules/audit/audit-log.service'
 import type {
   DomainSubscription,
@@ -190,10 +191,7 @@ async function finishWebhookProcessing(input: {
     .eq('id', input.id)
 
   if (error) {
-    console.error('[payments-webhook] Failed to mark webhook event as processed', {
-      webhookEventId: input.id,
-      error,
-    })
+    throw error
   }
 }
 
@@ -205,31 +203,34 @@ async function failWebhookProcessing(input: {
   const message =
     input.error instanceof Error ? input.error.message : String(input.error)
   const now = new Date().toISOString()
-  const { error } = await getSupabaseAdmin()
-    .from('payment_webhook_events')
-    .update({
-      status: 'failed',
-      gateway_subscription_id: eventGatewaySubscriptionId(input.event),
-      gateway_checkout_id: eventGatewayCheckoutId(input.event),
-      error_message: message.slice(0, 2000),
-      updated_at: now,
-    })
-    .eq('id', input.id)
+  try {
+    const { error } = await getSupabaseAdmin()
+      .from('payment_webhook_events')
+      .update({
+        status: 'failed',
+        gateway_subscription_id: eventGatewaySubscriptionId(input.event),
+        gateway_checkout_id: eventGatewayCheckoutId(input.event),
+        error_message: message.slice(0, 2000),
+        updated_at: now,
+      })
+      .eq('id', input.id)
 
-  if (error) {
-    console.error('[payments-webhook] Failed to mark webhook event as failed', {
-      webhookEventId: input.id,
-      error,
-    })
+    return error
+  } catch (error) {
+    return error
   }
 }
 
 export async function POST(request: NextRequest) {
+  const observation = observeHttpRequest(request, {
+    component: 'payments',
+    operation: 'webhook'
+  })
   const gateway = getPaymentGateway()
   const signature = request.headers.get(gateway.webhookSignatureHeader)
 
   if (!signature) {
-    return new MissingWebhookSignatureError().toNextResponse()
+    return observation.respond(new MissingWebhookSignatureError().toNextResponse())
   }
 
   const rawBody = await request.text()
@@ -238,8 +239,8 @@ export async function POST(request: NextRequest) {
   try {
     event = await gateway.verifyAndParseWebhook(rawBody, signature)
   } catch (error) {
-    console.error('[payments-webhook] Failed to verify webhook', error)
-    return new InvalidWebhookSignatureError().toNextResponse()
+    observation.log('warn', 'payments.webhook.signature_rejected', { error })
+    return observation.respond(new InvalidWebhookSignatureError().toNextResponse())
   }
 
   let webhookEvent: { id: string; shouldProcess: boolean }
@@ -250,12 +251,12 @@ export async function POST(request: NextRequest) {
       rawBody,
     })
   } catch (error) {
-    console.error('[payments-webhook] Failed to register webhook event', error)
-    return NextResponse.json({ error: 'Webhook registration failed' }, { status: 500 })
+    observation.log('error', 'payments.webhook.registration_failed', { error })
+    return observation.respond(NextResponse.json({ error: 'Webhook registration failed' }, { status: 500 }))
   }
 
   if (!webhookEvent.shouldProcess) {
-    return NextResponse.json({ received: true, duplicate: true })
+    return observation.respond(NextResponse.json({ received: true, duplicate: true }))
   }
 
   try {
@@ -345,12 +346,17 @@ export async function POST(request: NextRequest) {
       event,
     })
   } catch (error) {
-    await failWebhookProcessing({ id: webhookEvent.id, event, error })
-    console.error('[payments-webhook] Error processing event', { kind: event.kind, error })
-    return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 })
+    const persistenceError = await failWebhookProcessing({ id: webhookEvent.id, event, error })
+    if (persistenceError) {
+      observation.log('error', 'payments.webhook.failure_persistence_failed', {
+        error: persistenceError,
+      })
+    }
+    observation.log('error', 'payments.webhook.processing_failed', { event_kind: event.kind, error })
+    return observation.respond(NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 }))
   }
 
-  return NextResponse.json({ received: true })
+  return observation.respond(NextResponse.json({ received: true }))
 }
 
 async function resolveArenaIdBySubscriptionId(subscriptionId: string) {

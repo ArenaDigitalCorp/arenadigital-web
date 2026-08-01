@@ -1,7 +1,8 @@
 "use server"
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { assertArenaBackofficeAccess } from '@/lib/server-auth'
+import { assertArenaAdminAccess } from '@/lib/server-auth'
+import { fetchAllSupabaseRows } from '@/lib/supabase-pagination'
 import { subDays } from 'date-fns'
 
 export interface AthleteOverviewItem {
@@ -59,11 +60,11 @@ export async function getClientesOverviewAction(arenaId: string): Promise<{
     error?: string
 }> {
     try {
-        await assertArenaBackofficeAccess(arenaId)
+        await assertArenaAdminAccess(arenaId)
         const supabase = getSupabaseAdmin()
 
         // Fetch all athletes linked to this arena
-        const { data: athletesRaw, error: athletesError } = await supabase
+        const athletesQuery = supabase
             .from('atleta')
             .select(`
                 id,
@@ -76,6 +77,10 @@ export async function getClientesOverviewAction(arenaId: string): Promise<{
             `)
             .eq('arenas_atleta.id_arena', arenaId)
             .order('nome_perfil', { ascending: true })
+            .order('id', { ascending: true })
+
+        const { data: athletesRaw, error: athletesError } =
+            await fetchAllSupabaseRows(athletesQuery)
 
         if (athletesError) throw new Error(athletesError.message)
 
@@ -96,13 +101,16 @@ export async function getClientesOverviewAction(arenaId: string): Promise<{
         }
 
         // Fetch all bookings for these athletes in this arena
-        const { data: bookingsRaw, error: bookingsError } = await supabase
+        const bookingsQuery = supabase
             .from('bookings')
             .select('athlete_id, start_time, status')
             .eq('arena_id', arenaId)
-            .in('athlete_id', athleteIds)
             .neq('status', 'cancelled')
             .order('start_time', { ascending: false })
+            .order('id', { ascending: false })
+
+        const { data: bookingsRaw, error: bookingsError } =
+            await fetchAllSupabaseRows(bookingsQuery)
 
         if (bookingsError) throw new Error(bookingsError.message)
 

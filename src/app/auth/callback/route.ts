@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import type { EmailOtpType } from "@supabase/supabase-js"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
+import { observeHttpRequest } from "@/lib/observability/server"
 import { ensureWebBackofficeAccessAction, provisionAfterSignUpAction } from "@/modules/auth/actions/authActions"
 
 function normalizeRedirectPath(value: string | null) {
@@ -12,6 +13,10 @@ function normalizeRedirectPath(value: string | null) {
 }
 
 export async function GET(request: Request) {
+    const observation = observeHttpRequest(request, {
+        component: "auth",
+        operation: "callback",
+    })
     const url = new URL(request.url)
     const code = url.searchParams.get("code")
     const tokenHash = url.searchParams.get("token_hash")
@@ -20,7 +25,8 @@ export async function GET(request: Request) {
     const errorDescription = url.searchParams.get("error_description")
 
     if (errorDescription) {
-        return NextResponse.redirect(new URL(`/sign-in?error=${encodeURIComponent(errorDescription)}`, url.origin))
+        observation.log("warn", "auth.callback.provider_rejected")
+        return observation.respond(NextResponse.redirect(new URL(`/sign-in?error=${encodeURIComponent(errorDescription)}`, url.origin)))
     }
 
     const supabase = await createSupabaseServerClient()
@@ -31,20 +37,22 @@ export async function GET(request: Request) {
             : { error: new Error("Missing auth callback token") }
 
     if (error) {
-        return NextResponse.redirect(new URL(`/sign-in?error=${encodeURIComponent(error.message)}`, url.origin))
+        observation.log("warn", "auth.callback.verification_failed", { error })
+        return observation.respond(NextResponse.redirect(new URL(`/sign-in?error=${encodeURIComponent(error.message)}`, url.origin)))
     }
 
     // Garante que gestores autenticados via OAuth/magic link tenham provisionamento
     // (se o metadata tiver arenaName, provisionAfterSignUpAction cria arena+arena_user).
     const provision = await provisionAfterSignUpAction()
     if (!provision.success) {
-        console.error("[auth/callback] provisionAfterSignUpAction failed:", provision.error)
+        observation.log("error", "auth.callback.provision_failed")
     }
 
     const webAccess = await ensureWebBackofficeAccessAction()
     if (!webAccess.success) {
-        return NextResponse.redirect(new URL(`/sign-in?error=${encodeURIComponent(webAccess.error)}`, url.origin))
+        observation.log("warn", "auth.callback.access_denied")
+        return observation.respond(NextResponse.redirect(new URL(`/sign-in?error=${encodeURIComponent(webAccess.error)}`, url.origin)))
     }
 
-    return NextResponse.redirect(new URL(next, url.origin))
+    return observation.respond(NextResponse.redirect(new URL(next, url.origin)))
 }

@@ -10,6 +10,7 @@ type DbUser = {
   created_at: string
   onboarding_completed_at: string | null
   onboarding_version: number
+  platform_access_level: 'employee' | 'platform_admin' | 'super_admin' | null
 }
 
 type State =

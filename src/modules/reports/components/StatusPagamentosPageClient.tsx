@@ -26,6 +26,7 @@ import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { arenaDataTable } from '@/lib/arena-data-table'
 import { getPaymentStatusReportAction } from '@/modules/reports/actions/reportActions'
+import { buildPaymentStatusSheetData } from '@/modules/reports/payment-status-export'
 import type {
   PaymentStatusRow,
   PaymentStatusSummary,
@@ -162,21 +163,11 @@ export function StatusPagamentosPageClient({
   }
 
   async function handleExportExcel() {
-    const { utils, writeFile } = await import('xlsx')
-    const exportData = rows.map((r) => ({
-      'Data': formatDateTime(r.data),
-      'Atleta': r.atleta ?? '—',
-      'Serviço': r.servico,
-      'Espaço': r.espaco ?? '—',
-      'Esporte': r.esporte ?? '—',
-      'Valor': r.valor != null ? r.valor : '',
-      'Status': r.status,
-    }))
-    const ws = utils.json_to_sheet(exportData)
-    const wb = utils.book_new()
-    utils.book_append_sheet(wb, ws, 'Status Pagamentos')
+    const { default: writeExcelFile } = await import('write-excel-file/browser')
+    const sheetData = buildPaymentStatusSheetData(rows, formatDateTime)
     const { startDate, endDate } = getMonthRange(selectedMonth)
-    writeFile(wb, `status-pagamentos-${startDate}-${endDate}.xlsx`)
+    await writeExcelFile(sheetData, { sheet: 'Status Pagamentos' })
+      .toFile(`status-pagamentos-${startDate}-${endDate}.xlsx`)
   }
 
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))

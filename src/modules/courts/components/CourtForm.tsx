@@ -218,7 +218,10 @@ export function CourtForm({ initialData, arenaId, onSuccess, returnTab = "espaco
                         const uploadRes = await fetch('/api/upload', { method: 'POST', body: fd })
                         if (uploadRes.ok) {
                             const { url } = await uploadRes.json()
-                            await updateCourtAction(arenaId, newCourt.id, { image_url: url }, undefined)
+                            const updateRes = await updateCourtAction(arenaId, newCourt.id, { image_url: url }, undefined)
+                            if (!updateRes.success) throw new Error(updateRes.error)
+                        } else {
+                            throw new Error('Failed to upload image')
                         }
                     } catch (error) {
                         console.error("Failed to upload image:", error)

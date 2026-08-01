@@ -302,6 +302,8 @@ export function buildTutorialFinance(arenaId: string): {
     quantity: 1,
     registered_by: null,
     registration_date: NOW,
+    source_id: null,
+    source_type: null,
     total_value: value,
     type,
     unit_value: value,

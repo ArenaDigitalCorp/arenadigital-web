@@ -67,7 +67,7 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
     const [isLoadingAvulsos, setIsLoadingAvulsos] = useState(false);
     const [confirmingId, setConfirmingId] = useState<string | null>(null);
     const [confirmDialog, setConfirmDialog] = useState<
-        | { tipo: "mensalista"; id: string; nome: string; mes: string; valor: number }
+        | { tipo: "mensalista"; id: string; nome: string; mes: string; valor: number; expectedBookingStart: string }
         | { tipo: "avulso"; id: string; bookingId: string; participantId?: string; nome: string; mes: string; valor: number }
         | null
     >(null);
@@ -168,7 +168,12 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
         try {
             const res =
                 confirmDialog.tipo === "mensalista"
-                    ? await confirmarMesMensalistaAction(arenaId, confirmDialog.id, valor)
+                    ? await confirmarMesMensalistaAction(
+                        arenaId,
+                        confirmDialog.id,
+                        valor,
+                        confirmDialog.expectedBookingStart
+                    )
                     : confirmDialog.participantId
                         ? await confirmarPagamentoParticipanteAvulsoAction(
                             arenaId,
@@ -499,6 +504,7 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                                                 nome: nome,
                                                 mes: mesDevido,
                                                 valor: plano.valor_mensal,
+                                                expectedBookingStart: plano.proximo_mes_reservado,
                                             })}
                                             disabled={isConfirming}
                                             className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold gap-1.5 rounded-xl h-9 px-4"

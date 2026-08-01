@@ -10,7 +10,21 @@ import type {
   RotativoCreditoMovimento,
   RotativoCreditoSaldo,
   CourtOption,
+  AtomicRotativoEnrollmentResult,
+  AtomicRotativoCreditPurchaseResult,
 } from '../types/rotativo.types';
+
+type RotativoRpcClient = {
+  rpc: (
+    name:
+      | 'enroll_backoffice_rotativo_athlete'
+      | 'purchase_backoffice_rotativo_credits'
+      | 'quote_backoffice_rotativo_credits'
+      | 'replace_backoffice_rotativo_packages'
+      | 'expire_backoffice_rotativo_credits',
+    args: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: { message: string } | null }>;
+};
 
 const ROTATIVO_SELECT = `
   *,
@@ -23,7 +37,8 @@ function mapRotativo(row: Record<string, unknown>): Rotativo {
     ?.map((rc) => rc.court)
     .filter((c): c is { id: string; name: string } => Boolean(c)) ?? [];
 
-  const { rotativo_courts: _, ...rest } = row;
+  const rest = { ...row };
+  delete rest.rotativo_courts;
   return { ...rest, courts } as unknown as Rotativo;
 }
 
@@ -42,8 +57,41 @@ async function attachInscricoesCount(client: SupabaseClient, rows: Rotativo[]): 
 export class SupabaseRotativoRepository implements IRotativoRepository {
   constructor(private readonly client: SupabaseClient) {}
 
-  private async syncCourts(rotativoId: string, courtIds: string[]) {
-    await this.client.from('rotativo_courts').delete().eq('rotativo_id', rotativoId);
+  private get rpc(): RotativoRpcClient {
+    return this.client as unknown as RotativoRpcClient;
+  }
+
+  private async assertCourtsBelongToArena(arenaId: string, courtIds: string[]): Promise<string[]> {
+    const uniqueCourtIds = [...new Set(courtIds)];
+    if (uniqueCourtIds.length > 0) {
+      const { data: scopedCourts, error: courtsError } = await this.client
+        .from('courts')
+        .select('id')
+        .eq('arena_id', arenaId)
+        .in('id', uniqueCourtIds);
+      if (courtsError) throw new Error(`SupabaseRotativoRepository.syncCourts: ${courtsError.message}`);
+      if ((scopedCourts ?? []).length !== uniqueCourtIds.length) {
+        throw new Error('Uma ou mais quadras não pertencem à arena informada');
+      }
+    }
+    return uniqueCourtIds;
+  }
+
+  private async syncCourts(arenaId: string, rotativoId: string, courtIds: string[]) {
+    const { data: scopedRotativo, error: rotativoError } = await this.client
+      .from('rotativos')
+      .select('id')
+      .eq('id', rotativoId)
+      .eq('id_arena', arenaId)
+      .maybeSingle();
+    if (rotativoError) throw new Error(`SupabaseRotativoRepository.syncCourts: ${rotativoError.message}`);
+    if (!scopedRotativo) throw new Error('Rotativo não pertence à arena informada');
+
+    const { error: deleteError } = await this.client
+      .from('rotativo_courts')
+      .delete()
+      .eq('rotativo_id', rotativoId);
+    if (deleteError) throw new Error(`SupabaseRotativoRepository.syncCourts: ${deleteError.message}`);
     if (courtIds.length === 0) return;
     const { error } = await this.client
       .from('rotativo_courts')
@@ -52,6 +100,7 @@ export class SupabaseRotativoRepository implements IRotativoRepository {
   }
 
   async create(data: CreateRotativoDTO, courtIds: string[]): Promise<Rotativo> {
+    const scopedCourtIds = await this.assertCourtsBelongToArena(data.id_arena, courtIds);
     const { data: row, error } = await this.client
       .from('rotativos')
       .insert({ ...data, status: data.status ?? 'ativo' })
@@ -59,30 +108,46 @@ export class SupabaseRotativoRepository implements IRotativoRepository {
       .single();
 
     if (error) throw new Error(`SupabaseRotativoRepository.create: ${error.message}`);
-    await this.syncCourts(row.id, courtIds);
-    const refreshed = await this.findById(row.id);
+    await this.syncCourts(data.id_arena, row.id, scopedCourtIds);
+    const refreshed = await this.findById(data.id_arena, row.id);
     return refreshed ?? mapRotativo(row);
   }
 
-  async update(rotativoId: string, data: Partial<CreateRotativoDTO>, courtIds: string[]): Promise<Rotativo> {
-    const { error } = await this.client.from('rotativos').update(data).eq('id', rotativoId);
+  async update(arenaId: string, rotativoId: string, data: Partial<CreateRotativoDTO>, courtIds: string[]): Promise<Rotativo> {
+    const scopedCourtIds = await this.assertCourtsBelongToArena(arenaId, courtIds);
+    const { data: updated, error } = await this.client
+      .from('rotativos')
+      .update(data)
+      .eq('id', rotativoId)
+      .eq('id_arena', arenaId)
+      .select('id')
+      .maybeSingle();
     if (error) throw new Error(`SupabaseRotativoRepository.update: ${error.message}`);
-    await this.syncCourts(rotativoId, courtIds);
-    const refreshed = await this.findById(rotativoId);
+    if (!updated) throw new Error('Rotativo não pertence à arena informada');
+    await this.syncCourts(arenaId, rotativoId, scopedCourtIds);
+    const refreshed = await this.findById(arenaId, rotativoId);
     if (!refreshed) throw new Error('Rotativo não encontrado após atualização');
     return refreshed;
   }
 
-  async setStatus(rotativoId: string, status: 'ativo' | 'desativado'): Promise<void> {
-    const { error } = await this.client.from('rotativos').update({ status }).eq('id', rotativoId);
+  async setStatus(arenaId: string, rotativoId: string, status: 'ativo' | 'desativado'): Promise<void> {
+    const { data: updated, error } = await this.client
+      .from('rotativos')
+      .update({ status })
+      .eq('id', rotativoId)
+      .eq('id_arena', arenaId)
+      .select('id')
+      .maybeSingle();
     if (error) throw new Error(`SupabaseRotativoRepository.setStatus: ${error.message}`);
+    if (!updated) throw new Error('Rotativo não pertence à arena informada');
   }
 
-  async findById(rotativoId: string): Promise<Rotativo | null> {
+  async findById(arenaId: string, rotativoId: string): Promise<Rotativo | null> {
     const { data, error } = await this.client
       .from('rotativos')
       .select(ROTATIVO_SELECT)
       .eq('id', rotativoId)
+      .eq('id_arena', arenaId)
       .maybeSingle();
 
     if (error) throw new Error(`SupabaseRotativoRepository.findById: ${error.message}`);
@@ -190,68 +255,39 @@ export class SupabaseRotativoRepository implements IRotativoRepository {
     return byDate;
   }
 
-  async getInscritos(rotativoId: string): Promise<RotativoInscricao[]> {
+  async getInscritos(arenaId: string, rotativoId: string): Promise<RotativoInscricao[]> {
     const { data, error } = await this.client
       .from('rotativo_inscricoes')
-      .select('*, atleta:id_atleta(nome_perfil), modo_pagamento:modo_pagamento_id(nome)')
+      .select('*, rotativo:rotativos!inner(id_arena), atleta:id_atleta(nome_perfil), modo_pagamento:modo_pagamento_id(nome)')
       .eq('id_rotativo', rotativoId)
+      .eq('rotativo.id_arena', arenaId)
       .order('data_inscricao', { ascending: true });
 
     if (error) throw new Error(`SupabaseRotativoRepository.getInscritos: ${error.message}`);
     return (data ?? []) as unknown as RotativoInscricao[];
   }
 
-  async registerAthlete(
-    rotativoId: string,
-    athleteId: string,
-    valuePaid: number,
-    options?: {
-      tipo_pagamento: 'credito' | 'avulso';
-      modo_pagamento_id?: string | null;
-      observacao?: string | null;
-    }
-  ): Promise<RotativoInscricao> {
-    const { data: rotativo, error: rotativoError } = await this.client
-      .from('rotativos')
-      .select('limitado, limite_participantes, status, valor, id_arena')
-      .eq('id', rotativoId)
-      .single();
+  async enrollAthleteAtomic(input: {
+    arenaId: string;
+    rotativoId: string;
+    athleteId: string;
+    paymentType: 'credito' | 'avulso';
+    paymentMethodId: string | null;
+    observation: string | null;
+    registeredBy: string;
+  }): Promise<AtomicRotativoEnrollmentResult> {
+    const { data, error } = await this.rpc.rpc('enroll_backoffice_rotativo_athlete', {
+      p_arena_id: input.arenaId,
+      p_rotativo_id: input.rotativoId,
+      p_athlete_id: input.athleteId,
+      p_payment_type: input.paymentType,
+      p_payment_method_id: input.paymentMethodId,
+      p_observation: input.observation,
+      p_registered_by: input.registeredBy,
+    });
 
-    if (rotativoError) throw new Error(`SupabaseRotativoRepository.registerAthlete (fetch): ${rotativoError.message}`);
-    if (rotativo.status === 'desativado') throw new Error('Este rotativo está desativado.');
-
-    if (rotativo.limitado) {
-      const { count, error: countError } = await this.client
-        .from('rotativo_inscricoes')
-        .select('*', { count: 'exact', head: true })
-        .eq('id_rotativo', rotativoId);
-
-      if (countError) throw new Error(`SupabaseRotativoRepository.registerAthlete (count): ${countError.message}`);
-      if (count !== null && count >= (rotativo.limite_participantes ?? 0)) {
-        throw new Error('Limite de participantes atingido.');
-      }
-    }
-
-    const { data, error } = await this.client
-      .from('rotativo_inscricoes')
-      .insert({
-        id_rotativo: rotativoId,
-        id_atleta: athleteId,
-        valor_pago: valuePaid,
-        status_pagamento: 'pago',
-        tipo_pagamento: options?.tipo_pagamento ?? 'avulso',
-        modo_pagamento_id: options?.modo_pagamento_id ?? null,
-        observacao: options?.observacao ?? null,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      if (error.code === '23505') throw new Error('Atleta já inscrito nesta sessão.');
-      throw new Error(`SupabaseRotativoRepository.registerAthlete: ${error.message}`);
-    }
-
-    return data as unknown as RotativoInscricao;
+    if (error) throw new Error(`SupabaseRotativoRepository.enrollAthleteAtomic: ${error.message}`);
+    return data as AtomicRotativoEnrollmentResult;
   }
 
   async getCourts(arenaId: string): Promise<CourtOption[]> {
@@ -276,111 +312,46 @@ export class SupabaseRotativoRepository implements IRotativoRepository {
     return (data ?? []) as RotativoPacote[];
   }
 
+  async quoteCreditPurchaseValue(arenaId: string, quantity: number): Promise<number> {
+    const { data, error } = await this.rpc.rpc('quote_backoffice_rotativo_credits', {
+      p_arena_id: arenaId,
+      p_quantity: quantity,
+    });
+    if (error) throw new Error(`SupabaseRotativoRepository.quoteCreditPurchaseValue: ${error.message}`);
+    return Number(data);
+  }
+
   async savePacotes(arenaId: string, pacotes: { quantidade: number; valor_reais: number }[]): Promise<RotativoPacote[]> {
-    await this.client.from('rotativo_pacotes').delete().eq('arena_id', arenaId);
-
-    if (pacotes.length === 0) return [];
-
-    const { data, error } = await this.client
-      .from('rotativo_pacotes')
-      .insert(
-        pacotes.map((p, index) => ({
-          arena_id: arenaId,
-          quantidade: p.quantidade,
-          valor_reais: p.valor_reais,
-          ordem: index,
-        }))
-      )
-      .select('*');
+    const { data, error } = await this.rpc.rpc('replace_backoffice_rotativo_packages', {
+      p_arena_id: arenaId,
+      p_packages: pacotes,
+    });
 
     if (error) throw new Error(`SupabaseRotativoRepository.savePacotes: ${error.message}`);
     return (data ?? []) as RotativoPacote[];
   }
 
-  async launchCredit(
-    arenaId: string,
-    athleteId: string,
-    quantidade: number,
-    validityDays: number,
-    createdBy: string | null,
-    payment?: { valor_pago: number; modo_pagamento_id: string }
-  ): Promise<{ loteId: string; movimentoId: string }> {
-    const dataVencimento = new Date();
-    dataVencimento.setDate(dataVencimento.getDate() + validityDays);
-    const dataVencimentoStr = dataVencimento.toISOString().split('T')[0];
-
-    const { data: lote, error: loteError } = await this.client
-      .from('rotativo_credito_lotes')
-      .insert({
-        arena_id: arenaId,
-        atleta_id: athleteId,
-        quantidade_inicial: quantidade,
-        quantidade_restante: quantidade,
-        data_vencimento: dataVencimentoStr,
-        created_by: createdBy,
-      })
-      .select('id')
-      .single();
-
-    if (loteError) throw new Error(`SupabaseRotativoRepository.launchCredit: ${loteError.message}`);
-
-    const { data: movimento, error: movError } = await this.client
-      .from('rotativo_credito_movimentos')
-      .insert({
-        arena_id: arenaId,
-        atleta_id: athleteId,
-        tipo: 'compra',
-        quantidade,
-        lote_id: lote.id,
-        created_by: createdBy,
-        valor_pago: payment?.valor_pago ?? null,
-        modo_pagamento_id: payment?.modo_pagamento_id ?? null,
-      })
-      .select('id')
-      .single();
-
-    if (movError) throw new Error(`SupabaseRotativoRepository.launchCredit (mov): ${movError.message}`);
-
-    return { loteId: lote.id, movimentoId: movimento.id };
-  }
-
-  async consumeCredit(
-    arenaId: string,
-    athleteId: string,
-    inscricaoId: string,
-    createdBy: string | null
-  ): Promise<void> {
-    const { data: lotes, error: lotesError } = await this.client
-      .from('rotativo_credito_lotes')
-      .select('id, quantidade_restante')
-      .eq('arena_id', arenaId)
-      .eq('atleta_id', athleteId)
-      .gt('quantidade_restante', 0)
-      .gte('data_vencimento', new Date().toISOString().split('T')[0])
-      .order('created_at', { ascending: true });
-
-    if (lotesError) throw new Error(`SupabaseRotativoRepository.consumeCredit: ${lotesError.message}`);
-    if (!lotes?.length) throw new Error('Atleta não possui créditos disponíveis.');
-
-    const lote = lotes[0];
-    const { error: updateError } = await this.client
-      .from('rotativo_credito_lotes')
-      .update({ quantidade_restante: lote.quantidade_restante - 1 })
-      .eq('id', lote.id);
-
-    if (updateError) throw new Error(`SupabaseRotativoRepository.consumeCredit (update): ${updateError.message}`);
-
-    const { error: movError } = await this.client.from('rotativo_credito_movimentos').insert({
-      arena_id: arenaId,
-      atleta_id: athleteId,
-      tipo: 'uso',
-      quantidade: -1,
-      lote_id: lote.id,
-      inscricao_id: inscricaoId,
-      created_by: createdBy,
+  async purchaseCreditsAtomic(input: {
+    operationId: string;
+    arenaId: string;
+    athleteId: string;
+    quantity: number;
+    validityDays: number;
+    paymentMethodId: string;
+    registeredBy: string;
+  }): Promise<AtomicRotativoCreditPurchaseResult> {
+    const { data, error } = await this.rpc.rpc('purchase_backoffice_rotativo_credits', {
+      p_operation_id: input.operationId,
+      p_arena_id: input.arenaId,
+      p_athlete_id: input.athleteId,
+      p_quantity: input.quantity,
+      p_validity_days: input.validityDays,
+      p_payment_method_id: input.paymentMethodId,
+      p_registered_by: input.registeredBy,
     });
 
-    if (movError) throw new Error(`SupabaseRotativoRepository.consumeCredit (mov): ${movError.message}`);
+    if (error) throw new Error(`SupabaseRotativoRepository.purchaseCreditsAtomic: ${error.message}`);
+    return data as AtomicRotativoCreditPurchaseResult;
   }
 
   async getCreditMovements(
@@ -503,45 +474,10 @@ export class SupabaseRotativoRepository implements IRotativoRepository {
   }
 
   async processExpiredCredits(arenaId: string): Promise<number> {
-    const today = new Date().toISOString().split('T')[0];
-
-    const { data: expiredLotes, error } = await this.client
-      .from('rotativo_credito_lotes')
-      .select('id, atleta_id, quantidade_restante')
-      .eq('arena_id', arenaId)
-      .lt('data_vencimento', today)
-      .gt('quantidade_restante', 0);
-
+    const { data, error } = await this.rpc.rpc('expire_backoffice_rotativo_credits', {
+      p_arena_id: arenaId,
+    });
     if (error) throw new Error(`SupabaseRotativoRepository.processExpiredCredits: ${error.message}`);
-    if (!expiredLotes?.length) return 0;
-
-    let processed = 0;
-    for (const lote of expiredLotes) {
-      const qty = lote.quantidade_restante;
-      const { error: updateError } = await this.client
-        .from('rotativo_credito_lotes')
-        .update({ quantidade_restante: 0 })
-        .eq('id', lote.id);
-
-      if (updateError) {
-        throw new Error(`SupabaseRotativoRepository.processExpiredCredits (update): ${updateError.message}`);
-      }
-
-      const { error: movError } = await this.client.from('rotativo_credito_movimentos').insert({
-        arena_id: arenaId,
-        atleta_id: lote.atleta_id,
-        tipo: 'vencimento',
-        quantidade: -qty,
-        lote_id: lote.id,
-      });
-
-      if (movError) {
-        throw new Error(`SupabaseRotativoRepository.processExpiredCredits (mov): ${movError.message}`);
-      }
-
-      processed++;
-    }
-
-    return processed;
+    return Number(data ?? 0);
   }
 }

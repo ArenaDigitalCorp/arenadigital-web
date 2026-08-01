@@ -74,13 +74,14 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, onEdit, bookin
 
         setIsCancelling(true)
         try {
-            await updateBookingStatusAction(booking.arena_id, booking.id, "cancelled")
+            const result = await updateBookingStatusAction(booking.arena_id, booking.id, "cancelled")
+            if (!result.success) throw new Error(result.error)
             toast.success("Reserva cancelada com sucesso!")
             onSuccess()
             onClose()
         } catch (error) {
             console.error("Error cancelling booking:", error)
-            toast.error("Erro ao cancelar reserva.")
+            toast.error(error instanceof Error ? error.message : "Erro ao cancelar reserva.")
         } finally {
             setIsCancelling(false)
         }

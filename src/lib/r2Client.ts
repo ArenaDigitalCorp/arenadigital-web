@@ -23,6 +23,7 @@ export async function uploadToR2(
             Key: key,
             Body: buffer,
             ContentType: contentType || "application/octet-stream",
+            IfNoneMatch: "*",
         })
     )
 
@@ -35,15 +36,4 @@ export function arenaBannerKey(arenaId: string, filename: string): string {
 
 export function spaceImageKey(arenaId: string, spaceId: string, filename: string): string {
     return `arenas/${arenaId}/spaces/${spaceId}/${filename}`
-}
-
-export function sanitizeFilename(originalName: string): string {
-    const ext = originalName.split(".").pop() ?? "bin"
-    const base = originalName
-        .replace(/\.[^/.]+$/, "")
-        .replace(/\s+/g, "_")
-        .replace(/[^a-zA-Z0-9_-]/g, "")
-        .toLowerCase()
-    const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`
-    return `${base}-${suffix}.${ext}`
 }

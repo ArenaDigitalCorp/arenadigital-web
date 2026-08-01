@@ -175,8 +175,7 @@ export function MobileContentPageClient({
   const savePromotion = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     startTransition(async () => {
-      const result = await upsertArenaPromotionAction({
-        arena_id: arenaId,
+      const result = await upsertArenaPromotionAction(arenaId, {
         title: promotionDraft.title.trim(),
         description: promotionDraft.description.trim() || null,
         image_url: promotionDraft.image_url.trim() || null,
@@ -202,8 +201,7 @@ export function MobileContentPageClient({
   const saveHighlight = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     startTransition(async () => {
-      const result = await upsertArenaHighlightAction({
-        arena_id: arenaId,
+      const result = await upsertArenaHighlightAction(arenaId, {
         title: highlightDraft.title.trim(),
         description: highlightDraft.description.trim() || null,
         image_url: highlightDraft.image_url.trim() || null,
@@ -227,8 +225,7 @@ export function MobileContentPageClient({
     event.preventDefault()
     startTransition(async () => {
       const neededPlayers = Math.max(1, Number(openGameDraft.needed_players || 1))
-      const result = await upsertOpenGameAction({
-        arena_id: arenaId,
+      const result = await upsertOpenGameAction(arenaId, {
         sport_id: openGameDraft.sport_id,
         owner_atleta_id: openGameDraft.owner_atleta_id,
         date: openGameDraft.date,

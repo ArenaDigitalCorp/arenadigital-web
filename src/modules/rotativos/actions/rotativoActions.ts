@@ -3,7 +3,6 @@
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { assertArenaBackofficeAccess, assertRotativoAccess, requireAuthenticatedDbUser } from '@/lib/server-auth'
 import { SupabaseRotativoRepository } from '@/modules/rotativos/repositories/SupabaseRotativoRepository'
-import { SupabaseFinanceRepository } from '@/modules/finance/repositories/SupabaseFinanceRepository'
 import { revalidatePath } from 'next/cache'
 import {
   createRotativoInputSchema,
@@ -13,7 +12,7 @@ import {
   launchCreditSchema,
 } from '@/modules/rotativos/schemas/rotativo.schema'
 import { CREDITO_PAYMENT_METHOD, type RotativoListFilters } from '@/modules/rotativos/types/rotativo.types'
-import { canReactivateRotativo, calculateCreditPurchaseValue } from '@/modules/rotativos/utils/rotativo.utils'
+import { canReactivateRotativo } from '@/modules/rotativos/utils/rotativo.utils'
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback
@@ -67,11 +66,11 @@ export async function updateRotativoAction(formData: unknown) {
   try {
     await requireAuthenticatedDbUser()
     const { arenaId, rotativoId, court_ids, ...rest } = parsed.data
-    await assertRotativoAccess(rotativoId)
     await assertArenaBackofficeAccess(arenaId)
+    await assertRotativoAccess(rotativoId, arenaId)
 
     const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
-    await repo.update(rotativoId, rest, court_ids)
+    await repo.update(arenaId, rotativoId, rest, court_ids)
 
     revalidateRotativo(arenaId)
     return { success: true }
@@ -84,20 +83,20 @@ export async function updateRotativoAction(formData: unknown) {
 export async function setRotativoStatusAction(arenaId: string, rotativoId: string, status: 'ativo' | 'desativado') {
   try {
     await requireAuthenticatedDbUser()
-    await assertRotativoAccess(rotativoId)
     await assertArenaBackofficeAccess(arenaId)
+    await assertRotativoAccess(rotativoId, arenaId)
 
     const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
 
     if (status === 'ativo') {
-      const rotativo = await repo.findById(rotativoId)
+      const rotativo = await repo.findById(arenaId, rotativoId)
       if (!rotativo) throw new Error('Rotativo não encontrado')
       if (!canReactivateRotativo(rotativo.data)) {
         throw new Error('Não é possível reativar rotativos após a data da sessão.')
       }
     }
 
-    await repo.setStatus(rotativoId, status)
+    await repo.setStatus(arenaId, rotativoId, status)
 
     revalidateRotativo(arenaId)
     return { success: true }
@@ -107,11 +106,12 @@ export async function setRotativoStatusAction(arenaId: string, rotativoId: strin
   }
 }
 
-export async function getRotativoByIdAction(rotativoId: string) {
+export async function getRotativoByIdAction(arenaId: string, rotativoId: string) {
   try {
-    const arenaId = await assertRotativoAccess(rotativoId)
+    await assertArenaBackofficeAccess(arenaId)
+    await assertRotativoAccess(rotativoId, arenaId)
     const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
-    const data = await repo.findById(rotativoId)
+    const data = await repo.findById(arenaId, rotativoId)
     return { success: true, data, arenaId }
   } catch (error: unknown) {
     console.error('Error in getRotativoByIdAction:', error)
@@ -161,11 +161,12 @@ export async function getRotativosByMonthAction(arenaId: string, startDate: stri
   }
 }
 
-export async function getParticipantsAction(rotativoId: string) {
+export async function getParticipantsAction(arenaId: string, rotativoId: string) {
   try {
-    await assertRotativoAccess(rotativoId)
+    await assertArenaBackofficeAccess(arenaId)
+    await assertRotativoAccess(rotativoId, arenaId)
     const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
-    const data = await repo.getInscritos(rotativoId)
+    const data = await repo.getInscritos(arenaId, rotativoId)
     return { success: true, data }
   } catch (error: unknown) {
     console.error('Error in getParticipantsAction:', error)
@@ -182,64 +183,21 @@ export async function enrollAthleteAction(formData: unknown) {
   try {
     const { dbUserId } = await requireAuthenticatedDbUser()
     const { rotativoId, arenaId, athleteId, paymentMethod, observacao } = parsed.data
-    await assertRotativoAccess(rotativoId)
+    await assertArenaBackofficeAccess(arenaId)
+    await assertRotativoAccess(rotativoId, arenaId)
     await ensureAthleteBelongsToArena(arenaId, athleteId)
 
-    const supabase = getSupabaseAdmin()
-    const repo = new SupabaseRotativoRepository(supabase)
-
-    const rotativo = await repo.findById(rotativoId)
-    if (!rotativo) throw new Error('Rotativo não encontrado')
-
+    const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
     const isCredit = paymentMethod === CREDITO_PAYMENT_METHOD
-
-    if (isCredit) {
-      const balance = await repo.getAthleteCreditBalance(arenaId, athleteId)
-      if (balance < 1) throw new Error('Atleta não possui créditos disponíveis.')
-    }
-
-    const inscricao = await repo.registerAthlete(rotativoId, athleteId, rotativo.valor, {
-      tipo_pagamento: isCredit ? 'credito' : 'avulso',
-      modo_pagamento_id: isCredit ? null : paymentMethod,
-      observacao: observacao ?? null,
+    await repo.enrollAthleteAtomic({
+      arenaId,
+      rotativoId,
+      athleteId,
+      paymentType: isCredit ? 'credito' : 'avulso',
+      paymentMethodId: isCredit ? null : paymentMethod,
+      observation: observacao ?? null,
+      registeredBy: dbUserId,
     })
-
-    let createdTransactionId: string | null = null
-
-    try {
-      if (isCredit) {
-        await repo.consumeCredit(arenaId, athleteId, inscricao.id, dbUserId)
-      } else {
-        const now = new Date().toISOString()
-        const sportName = rotativo.esporte?.name ?? 'Rotativo'
-        let description = `Rotativo - ${sportName} - ${rotativo.data}`
-        if (observacao) description += ` - ${observacao}`
-
-        const financeRepo = new SupabaseFinanceRepository(supabase)
-        const transaction = await financeRepo.create({
-          arena_id: arenaId,
-          type: 'entrada',
-          category: 'Rotativo',
-          description,
-          quantity: 1,
-          unit_value: rotativo.valor,
-          discount: 0,
-          total_value: rotativo.valor,
-          registration_date: now,
-          launch_date: now,
-          registered_by: dbUserId,
-          atleta_id: athleteId,
-          modo_pagamento_id: paymentMethod,
-        })
-        createdTransactionId = transaction.id
-      }
-    } catch (innerError) {
-      await supabase.from('rotativo_inscricoes').delete().eq('id', inscricao.id)
-      if (createdTransactionId) {
-        await supabase.from('transactions').delete().eq('id', createdTransactionId)
-      }
-      throw innerError
-    }
 
     revalidatePath(`/dashboard/finance/${arenaId}`)
     revalidateRotativo(arenaId)
@@ -250,15 +208,16 @@ export async function enrollAthleteAction(formData: unknown) {
   }
 }
 
-export async function registerAthleteAction(rotativoId: string, athleteId: string, value: number) {
+export async function registerAthleteAction(arenaId: string, rotativoId: string, athleteId: string, _value: number) {
   try {
-    const arenaId = await assertRotativoAccess(rotativoId)
+    await assertArenaBackofficeAccess(arenaId)
+    await assertRotativoAccess(rotativoId, arenaId)
     await ensureAthleteBelongsToArena(arenaId, athleteId)
-
-    const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
-    await repo.registerAthlete(rotativoId, athleteId, value, { tipo_pagamento: 'avulso' })
-    revalidateRotativo(arenaId)
-    return { success: true }
+    void _value
+    return {
+      success: false,
+      error: 'Fluxo legado desabilitado: use a inscrição com forma de pagamento para gerar a trilha financeira.',
+    }
   } catch (error: unknown) {
     console.error('Error in registerAthleteAction:', error)
     return { success: false, error: getErrorMessage(error, 'Erro ao registrar atleta') }
@@ -316,54 +275,24 @@ export async function launchRotativoCreditAction(formData: unknown) {
 
   try {
     const { dbUserId } = await requireAuthenticatedDbUser()
-    const { arenaId, athleteId, quantidade, validityDays, modo_pagamento_id } = parsed.data
+    const { operationId, arenaId, athleteId, quantidade, validityDays, modo_pagamento_id } = parsed.data
     await assertArenaBackofficeAccess(arenaId)
     await ensureAthleteBelongsToArena(arenaId, athleteId)
 
-    const supabase = getSupabaseAdmin()
-    const repo = new SupabaseRotativoRepository(supabase)
-    const pacotes = await repo.getPacotes(arenaId)
-    const valorPago = calculateCreditPurchaseValue(quantidade, pacotes)
-
-    const { loteId, movimentoId } = await repo.launchCredit(
+    const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
+    const purchase = await repo.purchaseCreditsAtomic({
+      operationId,
       arenaId,
       athleteId,
-      quantidade,
+      quantity: quantidade,
       validityDays,
-      dbUserId,
-      { valor_pago: valorPago, modo_pagamento_id }
-    )
-
-    let createdTransactionId: string | null = null
-
-    try {
-      const now = new Date().toISOString()
-      const financeRepo = new SupabaseFinanceRepository(supabase)
-      const transaction = await financeRepo.create({
-        arena_id: arenaId,
-        type: 'entrada',
-        category: 'Rotativo',
-        description: `Crédito de rotativo - ${quantidade} crédito${quantidade !== 1 ? 's' : ''}`,
-        quantity: 1,
-        unit_value: valorPago,
-        discount: 0,
-        total_value: valorPago,
-        registration_date: now,
-        launch_date: now,
-        registered_by: dbUserId,
-        atleta_id: athleteId,
-        modo_pagamento_id,
-      })
-      createdTransactionId = transaction.id
-    } catch (financeError) {
-      await supabase.from('rotativo_credito_movimentos').delete().eq('id', movimentoId)
-      await supabase.from('rotativo_credito_lotes').delete().eq('id', loteId)
-      throw financeError
-    }
+      paymentMethodId: modo_pagamento_id,
+      registeredBy: dbUserId,
+    })
 
     revalidatePath(`/dashboard/finance/${arenaId}`)
     revalidateRotativo(arenaId)
-    return { success: true, valorPago }
+    return { success: true, valorPago: purchase.valor_pago }
   } catch (error: unknown) {
     return { success: false, error: getErrorMessage(error, 'Erro ao lançar crédito') }
   }
@@ -373,8 +302,7 @@ export async function previewCreditPurchaseValueAction(arenaId: string, quantida
   try {
     await assertArenaBackofficeAccess(arenaId)
     const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
-    const pacotes = await repo.getPacotes(arenaId)
-    const valor = calculateCreditPurchaseValue(quantidade, pacotes)
+    const valor = await repo.quoteCreditPurchaseValue(arenaId, quantidade)
     return { success: true, valor }
   } catch (error: unknown) {
     return { success: false, error: getErrorMessage(error, 'Erro ao calcular valor'), valor: null }

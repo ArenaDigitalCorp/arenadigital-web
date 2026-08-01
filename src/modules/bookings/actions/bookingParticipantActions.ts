@@ -1,7 +1,7 @@
 "use server"
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { assertBookingAccess } from '@/lib/server-auth'
+import { assertArenaBackofficeAccess, assertBookingAccess } from '@/lib/server-auth'
 
 export type BookingParticipantRow = {
     id: string
@@ -16,6 +16,7 @@ export async function getBookingParticipantsAction(
     bookingId: string
 ): Promise<{ success: boolean; data?: BookingParticipantRow[]; error?: string }> {
     try {
+        await assertArenaBackofficeAccess(arenaId)
         await assertBookingAccess(bookingId, arenaId)
         const supabase = getSupabaseAdmin()
         const { data, error } = await supabase
@@ -157,6 +158,7 @@ export async function syncBookingParticipantsAction(
     input: SyncBookingParticipantsInput
 ): Promise<{ success: boolean; error?: string }> {
     try {
+        await assertArenaBackofficeAccess(arenaId)
         await assertBookingAccess(bookingId, arenaId)
         const supabase = getSupabaseAdmin()
         await syncBookingParticipantsForBooking(supabase, bookingId, input)

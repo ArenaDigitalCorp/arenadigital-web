@@ -255,12 +255,13 @@ export function ProductsPageClient({
         const p = productPendingDelete
         setIsDeletingCatalog(true)
         try {
-            await deleteProductAction(arenaId, p.id)
+            const result = await deleteProductAction(arenaId, p.id)
+            if (!result.success) throw new Error(result.error)
             setProducts((prev) => prev.filter((x) => x.id !== p.id))
             toast.success(isCatalogService(p) ? "Serviço excluído com sucesso" : "Produto excluído com sucesso")
             setProductPendingDelete(null)
-        } catch {
-            toast.error("Erro ao excluir")
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Erro ao excluir")
         } finally {
             setIsDeletingCatalog(false)
         }
