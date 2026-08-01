@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Search, Save, X, Loader2, Check } from "lucide-react"
 import { StandardModal } from "@/components/ui/standard-modal"
 import { Button } from "@/components/ui/button"
@@ -39,9 +39,14 @@ export function NewSendModal({ arenaId, isOpen, onClose, onSuccess }: NewSendMod
     const [validity, setValidity] = useState("indeterminate")
     const [description, setDescription] = useState("")
     const [isSaving, setIsSaving] = useState(false)
+    const operationId = useRef<string | null>(null)
 
     // Manual debounce implementation
     const searchTimeout = useRef<NodeJS.Timeout | null>(null)
+
+    useEffect(() => {
+        if (!isOpen) operationId.current = null
+    }, [isOpen])
 
     const handleSearch = (value: string) => {
         setSearch(value)
@@ -86,7 +91,9 @@ export function NewSendModal({ arenaId, isOpen, onClose, onSuccess }: NewSendMod
 
         try {
             setIsSaving(true)
+            operationId.current ??= crypto.randomUUID()
             const result = await createCreditTransactionAction({
+                operationId: operationId.current,
                 arenaId,
                 id_atleta: selectedAthlete.id,
                 valor: Number(quantity),
@@ -102,7 +109,7 @@ export function NewSendModal({ arenaId, isOpen, onClose, onSuccess }: NewSendMod
             } else {
                 toast.error(result.error || "Erro ao realizar envio")
             }
-        } catch (error) {
+        } catch {
             toast.error("Erro inesperado")
         } finally {
             setIsSaving(false)
@@ -116,6 +123,7 @@ export function NewSendModal({ arenaId, isOpen, onClose, onSuccess }: NewSendMod
         setQuantity("")
         setValidity("indeterminate")
         setDescription("")
+        operationId.current = null
     }
 
     return (

@@ -43,10 +43,11 @@ export const rotativoPacoteSchema = z.object({
 
 export const savePacotesSchema = z.object({
   arenaId: z.string().uuid(),
-  pacotes: z.array(rotativoPacoteSchema),
+  pacotes: z.array(rotativoPacoteSchema).min(1, 'Informe ao menos um pacote'),
 })
 
 export const launchCreditSchema = z.object({
+  operationId: z.string().uuid('Operação de crédito inválida'),
   arenaId: z.string().uuid(),
   athleteId: z.string().uuid(),
   quantidade: z.number().int().positive('Informe a quantidade'),

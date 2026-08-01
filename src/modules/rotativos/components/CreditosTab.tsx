@@ -108,6 +108,7 @@ export function CreditosTab({
   const [selectedAthlete, setSelectedAthlete] = useState<{ id: string; nome_perfil: string } | null>(null)
   const [isSearchingAthletes, setIsSearchingAthletes] = useState(false)
   const athleteSearchTimeout = useRef<NodeJS.Timeout | null>(null)
+  const creditOperationId = useRef<string | null>(null)
   const [paymentMethods, setPaymentMethods] = useState<ModoPagamentoOption[]>([])
   const [previewValor, setPreviewValor] = useState<number | null>(null)
   const [isSavingPacotes, setIsSavingPacotes] = useState(false)
@@ -200,6 +201,7 @@ export function CreditosTab({
   }
 
   async function openCreditModal() {
+    creditOperationId.current = crypto.randomUUID()
     setCreditOpen(true)
     form.reset({ athleteId: "", quantidade: "1", validityDays: "", modo_pagamento_id: "" })
     setAthleteSearch("")
@@ -210,6 +212,11 @@ export function CreditosTab({
     if (methodsRes.success) {
       setPaymentMethods(methodsRes.data ?? [])
     }
+  }
+
+  function closeCreditModal() {
+    creditOperationId.current = null
+    setCreditOpen(false)
   }
 
   function handleAthleteSearch(value: string) {
@@ -251,7 +258,9 @@ export function CreditosTab({
   }
 
   async function onSubmitCredit(values: CreditFormValues) {
+    creditOperationId.current ??= crypto.randomUUID()
     const result = await launchRotativoCreditAction({
+      operationId: creditOperationId.current,
       arenaId,
       athleteId: values.athleteId,
       quantidade: Number.parseInt(values.quantidade, 10),
@@ -261,7 +270,7 @@ export function CreditosTab({
 
     if (result.success) {
       toast.success("Crédito lançado!")
-      setCreditOpen(false)
+      closeCreditModal()
       reloadMovements()
     } else {
       toast.error(result.error)
@@ -472,7 +481,13 @@ export function CreditosTab({
         </CardContent>
       </Card>
 
-      <Dialog open={creditOpen} onOpenChange={setCreditOpen}>
+      <Dialog
+        open={creditOpen}
+        onOpenChange={(open) => {
+          if (open) setCreditOpen(true)
+          else closeCreditModal()
+        }}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Novo crédito</DialogTitle>
@@ -621,7 +636,7 @@ export function CreditosTab({
               )}
 
               <div className="flex gap-3 pt-2">
-                <Button type="button" variant="outline" className="flex-1" onClick={() => setCreditOpen(false)}>
+                <Button type="button" variant="outline" className="flex-1" onClick={closeCreditModal}>
                   Fechar
                 </Button>
                 <Button type="submit" className="flex-1">

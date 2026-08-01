@@ -77,7 +77,12 @@ export function MensalistasPageClient({ arenaId, initialPlanos }: Props) {
         const { plano } = confirmDialog
         setLoadingId(`confirm-${plano.id}`)
         try {
-            const res = await confirmarMesMensalistaAction(arenaId, plano.id, valor)
+            const res = await confirmarMesMensalistaAction(
+                arenaId,
+                plano.id,
+                valor,
+                plano.proximo_mes_reservado as string
+            )
             if (res.success) {
                 toast.success("Pagamento confirmado e próximo mês gerado!")
                 setConfirmDialog(null)

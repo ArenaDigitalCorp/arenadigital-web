@@ -1,7 +1,7 @@
 "use server"
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { assertArenaBackofficeAccess, assertCourtAccess } from '@/lib/server-auth'
+import { assertArenaAdminAccess, assertCourtAccess } from '@/lib/server-auth'
 import { assertCanCreateSpaceForArena } from '@/modules/payments/usecases/assert-space-entitlement.usecase'
 import type { Database } from '@/types/supabase.types'
 import {
@@ -35,7 +35,7 @@ export async function getSportsForCourtAction(): Promise<{ success: boolean; dat
 
 export async function getCourtsByArenaAction(arenaId: string) {
     try {
-        await assertArenaBackofficeAccess(arenaId)
+        await assertArenaAdminAccess(arenaId)
         const supabase = getSupabaseAdmin()
         const { data, error } = await supabase
             .from('courts')
@@ -57,6 +57,7 @@ export async function getCourtsByArenaAction(arenaId: string) {
 
 export async function deleteCourtAction(arenaId: string, courtId: string) {
     try {
+        await assertArenaAdminAccess(arenaId)
         await assertCourtAccess(courtId, arenaId)
         const { error } = await getSupabaseAdmin()
             .from('courts')
@@ -93,7 +94,7 @@ export async function getCourtByIdAction(arenaId: string, courtId: string) {
 
 export async function createCourtAction(arenaId: string, input: CourtCreateInput, sportIds?: string[]) {
     try {
-        await assertArenaBackofficeAccess(arenaId)
+        await assertArenaAdminAccess(arenaId)
         await assertCanCreateSpaceForArena(arenaId)
         const supabase = getSupabaseAdmin()
 
@@ -119,6 +120,7 @@ export async function createCourtAction(arenaId: string, input: CourtCreateInput
 
 export async function duplicateCourtAction(arenaId: string, courtId: string, newName: string) {
     try {
+        await assertArenaAdminAccess(arenaId)
         await assertCourtAccess(courtId, arenaId)
         await assertCanCreateSpaceForArena(arenaId)
         const supabase = getSupabaseAdmin()
@@ -178,6 +180,7 @@ export async function duplicateCourtAction(arenaId: string, courtId: string, new
 
 export async function updateCourtAction(arenaId: string, courtId: string, input: CourtUpdate, sportIds?: string[]) {
     try {
+        await assertArenaAdminAccess(arenaId)
         await assertCourtAccess(courtId, arenaId)
         const supabase = getSupabaseAdmin()
 

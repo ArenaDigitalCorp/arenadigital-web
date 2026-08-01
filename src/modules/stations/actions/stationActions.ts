@@ -1,7 +1,8 @@
 "use server"
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { assertArenaAccess, assertArenaBackofficeAccess, assertStationAccess } from '@/lib/server-auth'
+import { assertArenaAccess, assertArenaAdminAccess, assertArenaBackofficeAccess, assertStationAccess } from '@/lib/server-auth'
+import { fetchAllSupabaseRows } from '@/lib/supabase-pagination'
 import type { StationOrdersFilters } from '@/modules/stations/types/station.types'
 
 export async function getStationsWithMetricsAction(arenaId: string) {
@@ -34,17 +35,19 @@ export async function getStationsWithMetricsAction(arenaId: string) {
         const todayISO = today.toISOString()
 
         const [openRes, closedRes] = await Promise.all([
-            supabase
+            fetchAllSupabaseRows(supabase
                 .from('station_orders')
                 .select('station_id, created_at')
                 .in('station_id', stationIds)
-                .eq('status', 'open'),
-            supabase
+                .eq('status', 'open')
+                .order('id', { ascending: true })),
+            fetchAllSupabaseRows(supabase
                 .from('station_orders')
                 .select('station_id')
                 .in('station_id', stationIds)
                 .eq('status', 'closed')
-                .gte('closed_at', todayISO),
+                .gte('closed_at', todayISO)
+                .order('id', { ascending: true })),
         ])
 
         const metrics: Record<string, { pending: number; closedToday: number; openedToday: number }> = {}
@@ -215,7 +218,7 @@ export async function getArenaStationsForCatalogAction(arenaId: string) {
 
 export async function createStationAction(arenaId: string, input: { name: string; status: string; station_type_id: string }) {
     try {
-        await assertArenaBackofficeAccess(arenaId)
+        await assertArenaAdminAccess(arenaId)
         const { data, error } = await getSupabaseAdmin()
             .from('stations')
             .insert([{ ...input, arena_id: arenaId }])
@@ -232,7 +235,7 @@ export async function createStationAction(arenaId: string, input: { name: string
 
 export async function updateStationAction(arenaId: string, stationId: string, input: Partial<{ name: string; status: string; station_type_id: string }>) {
     try {
-        await assertArenaBackofficeAccess(arenaId)
+        await assertArenaAdminAccess(arenaId)
         await assertStationAccess(stationId, arenaId)
         const { data, error } = await getSupabaseAdmin()
             .from('stations')

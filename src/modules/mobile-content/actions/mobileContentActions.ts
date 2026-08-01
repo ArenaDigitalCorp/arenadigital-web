@@ -3,19 +3,27 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { revalidatePath } from 'next/cache'
-import { assertArenaBackofficeAccess, assertPlatformAdminAccess } from '@/lib/server-auth'
+import {
+  assertArenaAdminAccess,
+  assertArenaBackofficeAccess,
+  assertBookingAccess,
+  assertCourtAccess,
+  assertPlatformAdminAccess,
+} from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
+import {
+  appHomeContentActionSchema,
+  arenaHighlightActionSchema,
+  arenaPromotionActionSchema,
+  openGameActionSchema,
+} from '../schemas/mobile-content-action.schema'
 import type {
   AppHomeContent,
-  AppHomeContentInput,
-  ArenaHighlightInput,
-  ArenaPromotionInput,
   MobileContentOption,
   MobileHighlight,
   MobileOpenGame,
   MobilePromotion,
   MobileContentResult,
-  OpenGameInput,
 } from '../types/mobile-content.types'
 
 const MOBILE_CONTENT_REVALIDATE_PATHS = [
@@ -31,6 +39,18 @@ function revalidateMobileContent(arenaId?: string) {
 
 function normalizeError(err: unknown, fallback: string) {
   return err instanceof Error ? err.message : fallback
+}
+
+async function assertAthleteBelongsToArena(arenaId: string, athleteId: string) {
+  const { data, error } = await getSupabaseAdmin()
+    .from('arenas_atleta')
+    .select('id_atleta')
+    .eq('id_arena', arenaId)
+    .eq('id_atleta', athleteId)
+    .maybeSingle()
+
+  if (error) throw new Error(`Erro ao validar atleta do jogo aberto: ${error.message}`)
+  if (!data) throw new Error('Atleta não pertence à arena informada')
 }
 
 export async function listAppHomeContentAction(): Promise<MobileContentResult<AppHomeContent[]>> {
@@ -50,30 +70,30 @@ export async function listAppHomeContentAction(): Promise<MobileContentResult<Ap
   }
 }
 
-export async function upsertAppHomeContentAction(input: AppHomeContentInput): Promise<MobileContentResult<AppHomeContent | null>> {
+export async function upsertAppHomeContentAction(input: unknown): Promise<MobileContentResult<AppHomeContent | null>> {
   try {
     const admin = await assertPlatformAdminAccess()
+    const parsed = appHomeContentActionSchema.parse(input)
     const supabase = getSupabaseAdmin() as any
     const payload = {
-      kind: input.kind,
-      title: input.title,
-      description: input.description ?? null,
-      image_url: input.image_url ?? null,
-      cta_label: input.cta_label ?? null,
-      cta_url: input.cta_url ?? null,
-      cta_kind: input.cta_kind ?? 'none',
-      city_id: input.city_id ?? null,
-      sport_id: input.sport_id ?? null,
-      priority: input.priority ?? 0,
-      starts_at: input.starts_at ?? new Date().toISOString(),
-      ends_at: input.ends_at ?? null,
-      active: input.active ?? true,
-      created_by: admin.dbUserId,
+      kind: parsed.kind,
+      title: parsed.title,
+      description: parsed.description ?? null,
+      image_url: parsed.image_url ?? null,
+      cta_label: parsed.cta_label ?? null,
+      cta_url: parsed.cta_url ?? null,
+      cta_kind: parsed.cta_kind ?? 'none',
+      city_id: parsed.city_id ?? null,
+      sport_id: parsed.sport_id ?? null,
+      priority: parsed.priority ?? 0,
+      starts_at: parsed.starts_at ?? new Date().toISOString(),
+      ends_at: parsed.ends_at ?? null,
+      active: parsed.active ?? true,
     }
 
-    const query = input.id
-      ? supabase.from('app_home_content').update(payload).eq('id', input.id)
-      : supabase.from('app_home_content').insert(payload)
+    const query = parsed.id
+      ? supabase.from('app_home_content').update(payload).eq('id', parsed.id)
+      : supabase.from('app_home_content').insert({ ...payload, created_by: admin.dbUserId })
 
     const { data, error } = await query.select('*').single()
     if (error) throw new Error(error.message)
@@ -139,24 +159,40 @@ export async function listArenaPromotionsAction(arenaId: string): Promise<Mobile
   }
 }
 
-export async function upsertArenaPromotionAction(input: ArenaPromotionInput): Promise<MobileContentResult<MobilePromotion | null>> {
+export async function upsertArenaPromotionAction(
+  arenaId: string,
+  input: unknown
+): Promise<MobileContentResult<MobilePromotion | null>> {
   try {
-    await assertArenaBackofficeAccess(input.arena_id)
+    await assertArenaAdminAccess(arenaId)
+    const parsed = arenaPromotionActionSchema.parse(input)
+    if (parsed.court_id) await assertCourtAccess(parsed.court_id, arenaId)
     const supabase = getSupabaseAdmin() as any
     const payload = {
-      ...input,
-      starts_at: input.starts_at ?? new Date().toISOString(),
-      active: input.active ?? true,
-      priority: input.priority ?? 0,
+      arena_id: arenaId,
+      court_id: parsed.court_id ?? null,
+      sport_id: parsed.sport_id ?? null,
+      title: parsed.title,
+      description: parsed.description ?? null,
+      image_url: parsed.image_url ?? null,
+      price: parsed.price ?? null,
+      original_price: parsed.original_price ?? null,
+      starts_at: parsed.starts_at ?? new Date().toISOString(),
+      ends_at: parsed.ends_at ?? null,
+      weekday: parsed.weekday ?? null,
+      start_time: parsed.start_time ?? null,
+      end_time: parsed.end_time ?? null,
+      active: parsed.active ?? true,
+      priority: parsed.priority ?? 0,
     }
 
-    const query = input.id
-      ? supabase.from('arena_promotions').update(payload).eq('id', input.id).eq('arena_id', input.arena_id)
+    const query = parsed.id
+      ? supabase.from('arena_promotions').update(payload).eq('id', parsed.id).eq('arena_id', arenaId)
       : supabase.from('arena_promotions').insert(payload)
 
     const { data, error } = await query.select('*').single()
     if (error) throw new Error(error.message)
-    revalidateMobileContent(input.arena_id)
+    revalidateMobileContent(arenaId)
     return { success: true, data: data as MobilePromotion }
   } catch (err) {
     return { success: false, data: null, error: normalizeError(err, 'Erro ao salvar promoção') }
@@ -169,7 +205,7 @@ export async function setArenaPromotionActiveAction(
   active: boolean
 ): Promise<MobileContentResult<null>> {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaAdminAccess(arenaId)
     const supabase = getSupabaseAdmin() as any
     const { error } = await supabase
       .from('arena_promotions')
@@ -203,24 +239,34 @@ export async function listArenaHighlightsAction(arenaId: string): Promise<Mobile
   }
 }
 
-export async function upsertArenaHighlightAction(input: ArenaHighlightInput): Promise<MobileContentResult<MobileHighlight | null>> {
+export async function upsertArenaHighlightAction(
+  arenaId: string,
+  input: unknown
+): Promise<MobileContentResult<MobileHighlight | null>> {
   try {
-    await assertArenaBackofficeAccess(input.arena_id)
+    await assertArenaAdminAccess(arenaId)
+    const parsed = arenaHighlightActionSchema.parse(input)
     const supabase = getSupabaseAdmin() as any
     const payload = {
-      ...input,
-      starts_at: input.starts_at ?? new Date().toISOString(),
-      active: input.active ?? true,
-      priority: input.priority ?? 0,
+      arena_id: arenaId,
+      title: parsed.title,
+      description: parsed.description ?? null,
+      image_url: parsed.image_url ?? null,
+      starts_at: parsed.starts_at ?? new Date().toISOString(),
+      ends_at: parsed.ends_at ?? null,
+      city_id: parsed.city_id ?? null,
+      sport_id: parsed.sport_id ?? null,
+      active: parsed.active ?? true,
+      priority: parsed.priority ?? 0,
     }
 
-    const query = input.id
-      ? supabase.from('arena_highlights').update(payload).eq('id', input.id).eq('arena_id', input.arena_id)
+    const query = parsed.id
+      ? supabase.from('arena_highlights').update(payload).eq('id', parsed.id).eq('arena_id', arenaId)
       : supabase.from('arena_highlights').insert(payload)
 
     const { data, error } = await query.select('*').single()
     if (error) throw new Error(error.message)
-    revalidateMobileContent(input.arena_id)
+    revalidateMobileContent(arenaId)
     return { success: true, data: data as MobileHighlight }
   } catch (err) {
     return { success: false, data: null, error: normalizeError(err, 'Erro ao salvar destaque') }
@@ -233,7 +279,7 @@ export async function setArenaHighlightActiveAction(
   active: boolean
 ): Promise<MobileContentResult<null>> {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaAdminAccess(arenaId)
     const supabase = getSupabaseAdmin() as any
     const { error } = await supabase
       .from('arena_highlights')
@@ -267,25 +313,40 @@ export async function listArenaOpenGamesAction(arenaId: string): Promise<MobileC
   }
 }
 
-export async function upsertOpenGameAction(input: OpenGameInput): Promise<MobileContentResult<MobileOpenGame | null>> {
+export async function upsertOpenGameAction(
+  arenaId: string,
+  input: unknown
+): Promise<MobileContentResult<MobileOpenGame | null>> {
   try {
-    await assertArenaBackofficeAccess(input.arena_id)
+    await assertArenaBackofficeAccess(arenaId)
+    const parsed = openGameActionSchema.parse(input)
+    if (parsed.booking_id) await assertBookingAccess(parsed.booking_id, arenaId)
+    await assertAthleteBelongsToArena(arenaId, parsed.owner_atleta_id)
     const supabase = getSupabaseAdmin() as any
     const payload = {
-      ...input,
-      needed_players: input.needed_players ?? 1,
-      current_players: input.current_players ?? 0,
-      status: input.status ?? 'open',
-      visibility: input.visibility ?? 'public',
+      arena_id: arenaId,
+      booking_id: parsed.booking_id ?? null,
+      sport_id: parsed.sport_id,
+      owner_atleta_id: parsed.owner_atleta_id,
+      date: parsed.date,
+      start_time: parsed.start_time,
+      end_time: parsed.end_time,
+      needed_players: parsed.needed_players ?? 1,
+      current_players: parsed.current_players ?? 0,
+      level_min_id: parsed.level_min_id ?? null,
+      level_max_id: parsed.level_max_id ?? null,
+      status: parsed.status ?? 'open',
+      visibility: parsed.visibility ?? 'public',
+      notes: parsed.notes ?? null,
     }
 
-    const query = input.id
-      ? supabase.from('open_games').update(payload).eq('id', input.id).eq('arena_id', input.arena_id)
+    const query = parsed.id
+      ? supabase.from('open_games').update(payload).eq('id', parsed.id).eq('arena_id', arenaId)
       : supabase.from('open_games').insert(payload)
 
     const { data, error } = await query.select('*').single()
     if (error) throw new Error(error.message)
-    revalidateMobileContent(input.arena_id)
+    revalidateMobileContent(arenaId)
     return { success: true, data: data as MobileOpenGame }
   } catch (err) {
     return { success: false, data: null, error: normalizeError(err, 'Erro ao salvar jogo aberto') }

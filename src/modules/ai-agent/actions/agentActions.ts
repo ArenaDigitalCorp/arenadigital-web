@@ -1,7 +1,7 @@
 "use server"
 
 import { revalidatePath } from 'next/cache'
-import { assertArenaBackofficeAccess, requireAuthenticatedDbUser } from '@/lib/server-auth'
+import { assertArenaAdminAccess, requireAuthenticatedDbUser } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { logAuditEvent } from '@/modules/audit/audit-log.service'
 import { MetaWhatsAppClient } from '../providers/whatsapp/MetaWhatsAppClient'
@@ -42,7 +42,7 @@ export async function getAgentSettingsAction(
   arenaId: string
 ): Promise<{ success: boolean; data: AgentSettings; error?: string }> {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaAdminAccess(arenaId)
     const supabase = getSupabaseAdmin()
     const agentRepo = new SupabaseAgentRepository(supabase)
     const channelRepo = new SupabaseWhatsAppChannelRepository(supabase)
@@ -68,7 +68,7 @@ export async function updateAgentConfigAction(
 ): Promise<{ success: boolean; data?: AgentConfig; error?: string }> {
   try {
     const { dbUserId } = await requireAuthenticatedDbUser()
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaAdminAccess(arenaId)
 
     const parsed = agentConfigSchema.safeParse(input)
     if (!parsed.success) {
@@ -102,7 +102,7 @@ export async function toggleAgentAction(
 ): Promise<{ success: boolean; data?: AgentConfig; error?: string }> {
   try {
     const { dbUserId } = await requireAuthenticatedDbUser()
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaAdminAccess(arenaId)
 
     const supabase = getSupabaseAdmin()
     const channelRepo = new SupabaseWhatsAppChannelRepository(supabase)
@@ -143,7 +143,7 @@ export async function connectChannelAction(
     }
 
     const { dbUserId } = await requireAuthenticatedDbUser()
-    await assertArenaBackofficeAccess(parsed.data.arenaId)
+    await assertArenaAdminAccess(parsed.data.arenaId)
 
     const channel = await new SupabaseWhatsAppChannelRepository(getSupabaseAdmin()).connect({
       arenaId: parsed.data.arenaId,
@@ -198,7 +198,7 @@ export async function disconnectChannelAction(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const { dbUserId } = await requireAuthenticatedDbUser()
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaAdminAccess(arenaId)
 
     const supabase = getSupabaseAdmin()
     await new SupabaseWhatsAppChannelRepository(supabase).disconnect(arenaId)

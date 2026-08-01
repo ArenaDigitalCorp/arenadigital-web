@@ -1,50 +1,65 @@
 import { NextRequest, NextResponse } from "next/server";
-import { uploadToR2, arenaBannerKey, spaceImageKey, sanitizeFilename } from "@/lib/r2Client";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { assertArenaAccess, assertCourtAccess } from "@/lib/server-auth";
+import { uploadToR2, arenaBannerKey, spaceImageKey } from "@/lib/r2Client";
+import { AuthorizationError, assertArenaAdminAccess, assertCourtAccess } from "@/lib/server-auth";
+import {
+    UploadPolicyError,
+    createUploadObjectName,
+    validateImageSignature,
+    validateMultipartContentLength,
+    validateUploadDescriptor,
+} from "@/lib/upload-policy";
+import * as z from "zod";
+
+const uploadFieldsSchema = z.discriminatedUnion("type", [
+    z.object({ type: z.literal("banner"), arenaId: z.string().uuid(), spaceId: z.null() }),
+    z.object({ type: z.literal("space"), arenaId: z.string().uuid(), spaceId: z.string().uuid() }),
+]);
 
 export async function POST(request: NextRequest) {
     try {
-        const supabase = await createSupabaseServerClient();
-        const { data: authData } = await supabase.auth.getUser();
-        if (!authData.user) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
-
+        validateMultipartContentLength(request.headers.get("content-length"));
         const formData = await request.formData();
-        const file = formData.get("file") as File;
-        const arenaId = formData.get("arenaId") as string;
-        const spaceId = formData.get("spaceId") as string | null;
-        const type = (formData.get("type") as string) || "space"; // "banner" | "space"
+        const file = formData.get("file");
 
-        if (!file) {
+        if (!(file instanceof File)) {
             return NextResponse.json({ error: "No file received." }, { status: 400 });
         }
 
-        if (!arenaId) {
-            return NextResponse.json({ error: "No arenaId received." }, { status: 400 });
-        }
+        const rawType = formData.get("type");
+        const fields = uploadFieldsSchema.parse({
+            type: rawType,
+            arenaId: formData.get("arenaId"),
+            spaceId: rawType === "banner" ? null : formData.get("spaceId"),
+        });
+        const accepted = validateUploadDescriptor(file);
 
-        await assertArenaAccess(arenaId);
+        await assertArenaAdminAccess(fields.arenaId);
 
         const buffer = Buffer.from(await file.arrayBuffer());
-        const filename = sanitizeFilename(file.name);
+        validateImageSignature(buffer, accepted.contentType);
+        const filename = createUploadObjectName(accepted.extension);
 
         let key: string;
-        if (type === "banner") {
-            key = arenaBannerKey(arenaId, filename);
+        if (fields.type === "banner") {
+            key = arenaBannerKey(fields.arenaId, filename);
         } else {
-            if (!spaceId) {
-                return NextResponse.json({ error: "No spaceId received for space upload." }, { status: 400 });
-            }
-            await assertCourtAccess(spaceId, arenaId);
-            key = spaceImageKey(arenaId, spaceId, filename);
+            await assertCourtAccess(fields.spaceId, fields.arenaId);
+            key = spaceImageKey(fields.arenaId, fields.spaceId, filename);
         }
 
-        const publicUrl = await uploadToR2(buffer, key, file.type);
+        const publicUrl = await uploadToR2(buffer, key, accepted.contentType);
 
         return NextResponse.json({ url: publicUrl });
     } catch (error) {
+        if (error instanceof AuthorizationError) {
+            return NextResponse.json({ error: error.message }, { status: error.status });
+        }
+        if (error instanceof UploadPolicyError) {
+            return NextResponse.json({ error: error.message }, { status: error.status });
+        }
+        if (error instanceof z.ZodError) {
+            return NextResponse.json({ error: "Invalid upload fields." }, { status: 400 });
+        }
         console.error("Error uploading file to R2:", error);
         return NextResponse.json({ error: "Error uploading file." }, { status: 500 });
     }

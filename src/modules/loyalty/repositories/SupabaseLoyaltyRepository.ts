@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ILoyaltyRepository } from './ILoyaltyRepository';
-import type { LoyaltyTransaction, CreateLoyaltyTransactionDTO, AthleteBalance, PaginatedResult } from '../types/loyalty.types';
+import type { LoyaltyTransaction, AthleteBalance, PaginatedResult } from '../types/loyalty.types';
 
 export class SupabaseLoyaltyRepository implements ILoyaltyRepository {
   constructor(private readonly client: SupabaseClient) {}
@@ -29,14 +29,6 @@ export class SupabaseLoyaltyRepository implements ILoyaltyRepository {
 
     if (error) throw new Error(`SupabaseLoyaltyRepository.findRecentRedemptions: ${error.message}`);
     return (data ?? []) as unknown as LoyaltyTransaction[];
-  }
-
-  async create(data: CreateLoyaltyTransactionDTO): Promise<void> {
-    const { error } = await this.client
-      .from('programa_fidelidade_extrato')
-      .insert([{ ...data, data_registro: data.data_registro ?? new Date().toISOString() }]);
-
-    if (error) throw new Error(`SupabaseLoyaltyRepository.create: ${error.message}`);
   }
 
   async getStatement(arenaId: string, page = 1, pageSize = 10, filters?: { athleteName?: string; startDate?: string; endDate?: string }): Promise<PaginatedResult<LoyaltyTransaction>> {

@@ -2,19 +2,16 @@
 
 import { getSupabaseAdmin } from '@/lib/supabase-server';
 import {
-  assertArenaBackofficeAccess,
-  requireAuthenticatedDbUser,
+  assertArenaAdminAccess,
+  assertArenaScopedResourceAccess,
 } from '@/lib/server-auth';
 import { SupabaseFinanceRepository } from '@/modules/finance/repositories/SupabaseFinanceRepository';
 import { revalidatePath } from 'next/cache';
-import type {
-  CreateTransactionDTO,
-  UpdateTransactionDTO,
-} from '@/modules/finance/types/finance.types';
+import { transactionActionSchema } from '@/modules/finance/schemas/transaction-action.schema';
 
 export async function getFinanceDashboardAction(arenaId: string) {
   try {
-    await assertArenaBackofficeAccess(arenaId);
+    await assertArenaAdminAccess(arenaId);
     const repo = new SupabaseFinanceRepository(getSupabaseAdmin());
     const now = new Date();
     const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -65,7 +62,7 @@ export async function getTransactionsAction(
   endDate?: string
 ) {
   try {
-    await assertArenaBackofficeAccess(arenaId);
+    await assertArenaAdminAccess(arenaId);
     const repo = new SupabaseFinanceRepository(getSupabaseAdmin());
     const data = await repo.findByArena(arenaId, type, startDate, endDate);
     return { success: true, data };
@@ -78,14 +75,23 @@ export async function getTransactionsAction(
 
 export async function createTransactionAction(
   arenaId: string,
-  input: Omit<CreateTransactionDTO, 'arena_id' | 'registered_by'>
+  input: unknown
 ) {
   try {
-    await assertArenaBackofficeAccess(arenaId);
-    const { dbUserId } = await requireAuthenticatedDbUser();
+    const { dbUserId } = await assertArenaAdminAccess(arenaId);
+    const parsed = transactionActionSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new Error(parsed.error.issues[0]?.message ?? 'Dados do lançamento inválidos');
+    }
+    const safeInput = {
+      ...parsed.data,
+      total_value: Number(Math.max(0, parsed.data.quantity * parsed.data.unit_value - parsed.data.discount).toFixed(2)),
+      atleta_id: parsed.data.atleta_id ?? null,
+      modo_pagamento_id: parsed.data.modo_pagamento_id ?? null,
+    };
     const repo = new SupabaseFinanceRepository(getSupabaseAdmin());
     const data = await repo.create({
-      ...input,
+      ...safeInput,
       arena_id: arenaId,
       registered_by: dbUserId,
     });
@@ -101,12 +107,23 @@ export async function createTransactionAction(
 export async function updateTransactionAction(
   arenaId: string,
   transactionId: string,
-  input: UpdateTransactionDTO
+  input: unknown
 ) {
   try {
-    await assertArenaBackofficeAccess(arenaId);
+    await assertArenaAdminAccess(arenaId);
+    await assertArenaScopedResourceAccess('transactions', transactionId, { expectedArenaId: arenaId });
+    const parsed = transactionActionSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new Error(parsed.error.issues[0]?.message ?? 'Dados do lançamento inválidos');
+    }
+    const safeInput = {
+      ...parsed.data,
+      total_value: Number(Math.max(0, parsed.data.quantity * parsed.data.unit_value - parsed.data.discount).toFixed(2)),
+      atleta_id: parsed.data.atleta_id ?? null,
+      modo_pagamento_id: parsed.data.modo_pagamento_id ?? null,
+    };
     const repo = new SupabaseFinanceRepository(getSupabaseAdmin());
-    const data = await repo.update(transactionId, input);
+    const data = await repo.update(transactionId, safeInput);
     revalidatePath(`/dashboard/finance/${arenaId}`);
     return { success: true, data };
   } catch (err) {
@@ -121,7 +138,8 @@ export async function deleteTransactionAction(
   transactionId: string
 ) {
   try {
-    await assertArenaBackofficeAccess(arenaId);
+    await assertArenaAdminAccess(arenaId);
+    await assertArenaScopedResourceAccess('transactions', transactionId, { expectedArenaId: arenaId });
     const repo = new SupabaseFinanceRepository(getSupabaseAdmin());
     await repo.delete(transactionId);
     revalidatePath(`/dashboard/finance/${arenaId}`);
@@ -135,7 +153,7 @@ export async function deleteTransactionAction(
 
 export async function getMensalistasComPendenciaAction(arenaId: string) {
   try {
-    await assertArenaBackofficeAccess(arenaId);
+    await assertArenaAdminAccess(arenaId);
     const supabase = getSupabaseAdmin();
 
     const { data: planos, error } = await supabase
@@ -195,7 +213,7 @@ export type AvulsoPendenciaItem = {
 
 export async function getAvulsosComPendenciaAction(arenaId: string) {
   try {
-    await assertArenaBackofficeAccess(arenaId);
+    await assertArenaAdminAccess(arenaId);
     const supabase = getSupabaseAdmin();
 
     const { data, error } = await supabase
@@ -315,7 +333,7 @@ export type AvulsoListItem = AvulsoPendenciaItem & {
 
 export async function getAvulsosTodosAction(arenaId: string) {
   try {
-    await assertArenaBackofficeAccess(arenaId);
+    await assertArenaAdminAccess(arenaId);
     const supabase = getSupabaseAdmin();
 
     const { data, error } = await supabase

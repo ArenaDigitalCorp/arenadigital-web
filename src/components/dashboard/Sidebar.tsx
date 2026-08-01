@@ -42,7 +42,7 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
     // Perfis de acesso
     const isCashier = selectedArenaDetails?.role === "Caixa" && !selectedArenaDetails?.isOwner;
     const isAdmin = selectedArenaDetails?.isOwner || selectedArenaDetails?.role === "Gestor";
-    const isPlatformAdmin = dbUser?.role === "admin";
+    const isPlatformAdmin = dbUser?.platform_access_level === "platform_admin" || dbUser?.platform_access_level === "super_admin";
     const canAccessSubscription = Boolean(isAdmin);
 
     const arenaHref = selectedArena ? `/dashboard/arenas/${selectedArena}` : "/dashboard/arenas";
@@ -276,8 +276,8 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                 onClick={onNavItemClick}
                             >
                                 <Link
-                                    href="/dashboard/admin/mobile-content"
-                                    title={isCollapsed ? "Admin app" : ""}
+                                    href="/dashboard/admin/platform"
+                                    title={isCollapsed ? "Admin Arena Digital" : ""}
                                     className={cn(isCollapsed && "flex size-full items-center justify-center")}
                                 >
                                     <ShieldCheck className={cn(
@@ -285,7 +285,7 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                         !isCollapsed && "mr-2",
                                         pathname.startsWith("/dashboard/admin") && navActiveText
                                     )} />
-                                    {!isCollapsed && <span className="font-medium text-sm">Admin app</span>}
+                                    {!isCollapsed && <span className="font-medium text-sm">Admin Arena Digital</span>}
                                 </Link>
                             </Button>
                         )}

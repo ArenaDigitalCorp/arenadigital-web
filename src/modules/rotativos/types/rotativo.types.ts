@@ -72,6 +72,23 @@ export interface RotativoCreditoSaldo {
   atleta?: { nome_perfil: string } | null;
 }
 
+export interface AtomicRotativoEnrollmentResult {
+  inscricao_id: string;
+  tipo_pagamento: TipoPagamentoInscricao;
+  valor_pago: number;
+  movimento_id: string | null;
+  transaction_id: string | null;
+  idempotent: boolean;
+}
+
+export interface AtomicRotativoCreditPurchaseResult {
+  lote_id: string;
+  movimento_id: string;
+  transaction_id: string;
+  valor_pago: number;
+  idempotent: boolean;
+}
+
 export interface CourtOption {
   id: string;
   name: string;

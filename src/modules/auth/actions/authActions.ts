@@ -2,10 +2,17 @@
 
 import { createSupabaseServerClient } from "@/lib/supabase/server"
 import { getSupabaseAdmin } from "@/lib/supabase-server"
-import { provisionOwnerArena } from "@/modules/users/actions/userActions"
+import { provisionOwnerArena } from "@/modules/users/services/provision-owner-arena"
 import { findUserByCpf, findUserByEmail, normalizeEmail, resolveAuthenticatedDbUser } from "@/lib/account-identity"
 import { isValidCpfOrCnpj, onlyDigits } from "@/lib/brasil-document"
 import { hasWebBackofficeAccess, WEB_BACKOFFICE_ACCESS_DENIED_MESSAGE } from "@/lib/server-auth"
+import { observeServerAction } from "@/lib/observability/server"
+import {
+    ARENA_SIGNUP_INTENT_KEY,
+    consumeArenaSignupIntentMetadata,
+    createArenaSignupIntent,
+    readArenaSignupIntent,
+} from "@/modules/auth/lib/arena-signup-intent"
 
 type AddressData = {
     cep?: string
@@ -34,6 +41,17 @@ type SignUpInput = {
 type ActionResult<T = undefined> =
     | { success: true; data?: T }
     | { success: false; error: string }
+
+type ActionObserver = Awaited<ReturnType<typeof observeServerAction>>
+
+function finishObservedAction<T>(
+    observer: ActionObserver,
+    result: ActionResult<T>,
+    outcome = result.success ? "completed" : "rejected",
+): ActionResult<T> {
+    observer.complete(outcome)
+    return result
+}
 
 function getErrorMessage(error: unknown) {
     if (error instanceof Error) return error.message
@@ -64,38 +82,39 @@ export async function checkArenaSignupEmailAction(emailInput: string): Promise<A
     status: "new-user" | "existing-app-user" | "existing-web-user"
     name?: string | null
 }>> {
+    const observation = await observeServerAction({ component: "auth", operation: "check_signup_email" })
     try {
         const email = normalizeEmail(emailInput)
-        if (!email) return { success: false, error: "Informe um e-mail válido." }
+        if (!email) return finishObservedAction(observation, { success: false, error: "Informe um e-mail válido." })
 
         const admin = getSupabaseAdmin()
         const existingUser = await findUserByEmail(admin, email)
 
         if (!existingUser) {
-            return { success: true, data: { status: "new-user" } }
+            return finishObservedAction(observation, { success: true, data: { status: "new-user" } })
         }
 
         const canAccessWeb = await hasWebBackofficeAccess(existingUser.id)
         if (canAccessWeb) {
-            return {
+            return finishObservedAction(observation, {
                 success: true,
                 data: {
                     status: "existing-web-user",
                     name: existingUser.name,
                 },
-            }
+            })
         }
 
-        return {
+        return finishObservedAction(observation, {
             success: true,
             data: {
                 status: "existing-app-user",
                 name: existingUser.name,
             },
-        }
+        })
     } catch (error) {
-        console.error("checkArenaSignupEmailAction error:", error)
-        return { success: false, error: getErrorMessage(error) }
+        observation.log("error", "auth.check_signup_email.failed", { error })
+        return finishObservedAction(observation, { success: false, error: getErrorMessage(error) }, "failed")
     }
 }
 
@@ -104,9 +123,10 @@ export async function checkArenaSignupEmailAction(emailInput: string): Promise<A
 // O trigger on_auth_user_created já cria a linha em public.users com nome/documento vindos do metadata.
 // A criação da arena fica para depois do callback de confirmação (provisionAfterSignUpAction).
 export async function startSignUpAction(input: SignUpInput): Promise<ActionResult> {
+    const observation = await observeServerAction({ component: "auth", operation: "start_signup" })
     try {
         const validationError = validateArenaSignupData(input)
-        if (validationError) return { success: false, error: validationError }
+        if (validationError) return finishObservedAction(observation, { success: false, error: validationError })
 
         const supabase = await createSupabaseServerClient()
         const admin = getSupabaseAdmin()
@@ -120,20 +140,20 @@ export async function startSignUpAction(input: SignUpInput): Promise<ActionResul
         ])
 
         if (existingUserByEmail) {
-            return {
+            return finishObservedAction(observation, {
                 success: false,
                 error: "Já existe uma conta com este e-mail. O painel web é exclusivo para gestores e o app é exclusivo para atletas. Use outro e-mail para cadastrar uma arena.",
-            }
+            })
         }
 
         if (existingUserByCpf && normalizeEmail(existingUserByCpf.email) !== email) {
-            return {
+            return finishObservedAction(observation, {
                 success: false,
                 error: "Este CPF/CNPJ já está vinculado a outro e-mail. Use o e-mail cadastrado ou recupere o acesso.",
-            }
+            })
         }
 
-        const { error } = await supabase.auth.signUp({
+        const { data: signUpData, error } = await supabase.auth.signUp({
             email,
             password: input.password,
             options: {
@@ -143,69 +163,109 @@ export async function startSignUpAction(input: SignUpInput): Promise<ActionResul
                     lastName: input.lastName,
                     cpf: input.cpf,
                     phone: input.phone,
-                    arenaName: input.arenaName,
-                    arenaDocument: input.arenaDocument,
-                    addressData: input.addressData,
                 },
             },
         })
 
         if (error) {
-            return { success: false, error: error.message }
+            return finishObservedAction(observation, { success: false, error: error.message })
         }
 
-        return { success: true }
+        if (!signUpData.user) {
+            return finishObservedAction(observation, { success: false, error: "Não foi possível iniciar o cadastro." })
+        }
+
+        const intent = createArenaSignupIntent({
+            arenaName: input.arenaName,
+            arenaDocument: input.arenaDocument,
+            phone: input.phone,
+            cpf: input.cpf,
+            addressData: input.addressData,
+        })
+        const { error: intentError } = await admin.auth.admin.updateUserById(signUpData.user.id, {
+            app_metadata: {
+                ...(signUpData.user.app_metadata ?? {}),
+                [ARENA_SIGNUP_INTENT_KEY]: intent,
+            },
+        })
+
+        if (intentError) {
+            await admin.auth.admin.deleteUser(signUpData.user.id).catch(() => null)
+            return finishObservedAction(observation, { success: false, error: "Não foi possível preparar o cadastro da arena. Tente novamente." })
+        }
+
+        return finishObservedAction(observation, { success: true })
     } catch (error) {
-        console.error("startSignUpAction error:", error)
-        return { success: false, error: getErrorMessage(error) }
+        observation.log("error", "auth.start_signup.failed", { error })
+        return finishObservedAction(observation, { success: false, error: getErrorMessage(error) }, "failed")
     }
 }
 
-// Provisiona arena + arena_user a partir do metadata do cadastro.
+// Provisiona arena + arena_user a partir de um intent emitido pelo servidor em
+// app_metadata (não editável pelo usuário).
 // Chamado após confirmação de email (/auth/callback) e no login, para cobrir quem
 // confirma o e-mail mas entra depois pela tela de login.
 export async function provisionAfterSignUpAction(): Promise<ActionResult<{ arenaCreated: boolean }>> {
+    const observation = await observeServerAction({ component: "auth", operation: "provision_signup" })
     try {
         const supabase = await createSupabaseServerClient()
         const { data: authData, error: authError } = await supabase.auth.getUser()
 
         if (authError || !authData.user) {
-            return { success: false, error: "Usuário não autenticado" }
+            return finishObservedAction(observation, { success: false, error: "Usuário não autenticado" })
         }
 
-        const user = authData.user
-        const meta = (user.user_metadata ?? {}) as Record<string, unknown>
-        const arenaName = typeof meta.arenaName === "string" ? meta.arenaName : undefined
-        const arenaDocument = typeof meta.arenaDocument === "string" ? meta.arenaDocument : undefined
-        const phone = typeof meta.phone === "string" ? meta.phone : undefined
-        const addressData = meta.addressData
-
-        // Garante linha em public.users com documento/phone (trigger faz nome+role, mas pode faltar documento em casos de OAuth)
         const admin = getSupabaseAdmin()
-        const cpf = typeof meta.cpf === "string" ? meta.cpf : undefined
-        if (cpf) {
-            await admin.from("users").update({ cpf }).eq("id", user.id)
+        const user = authData.user
+        const dbUser = await resolveAuthenticatedDbUser(admin, user.id)
+        if (!dbUser?.id) {
+            return finishObservedAction(observation, { success: false, error: "Usuário não provisionado" })
         }
 
-        if (arenaName) {
-            await provisionOwnerArena(user.id, arenaName, phone, addressData, arenaDocument)
-            return { success: true, data: { arenaCreated: true } }
+        const intent = readArenaSignupIntent(user.app_metadata)
+        if (!intent) {
+            return finishObservedAction(observation, { success: true, data: { arenaCreated: false } })
         }
 
-        return { success: true, data: { arenaCreated: false } }
+        if (intent.cpf) {
+            const { error: userUpdateError } = await admin
+                .from("users")
+                .update({ cpf: intent.cpf })
+                .eq("id", dbUser.id)
+            if (userUpdateError) throw new Error(userUpdateError.message)
+        }
+
+        const arenaId = await provisionOwnerArena(
+            dbUser.id,
+            intent.arenaName,
+            intent.phone,
+            intent.addressData,
+            intent.arenaDocument,
+        )
+
+        const { error: consumeError } = await admin.auth.admin.updateUserById(user.id, {
+            app_metadata: {
+                ...consumeArenaSignupIntentMetadata(user.app_metadata),
+                arena_signup_provisioned_at: new Date().toISOString(),
+            },
+        })
+        if (consumeError) throw new Error(consumeError.message)
+
+        return finishObservedAction(observation, { success: true, data: { arenaCreated: Boolean(arenaId) } })
     } catch (error) {
-        console.error("provisionAfterSignUpAction error:", error)
-        return { success: false, error: getErrorMessage(error) }
+        observation.log("error", "auth.provision_signup.failed", { error })
+        return finishObservedAction(observation, { success: false, error: getErrorMessage(error) }, "failed")
     }
 }
 
 export async function ensureWebBackofficeAccessAction(): Promise<ActionResult> {
+    const observation = await observeServerAction({ component: "auth", operation: "ensure_backoffice_access" })
     try {
         const supabase = await createSupabaseServerClient()
         const { data: authData, error: authError } = await supabase.auth.getUser()
 
         if (authError || !authData.user) {
-            return { success: false, error: "Usuário não autenticado" }
+            return finishObservedAction(observation, { success: false, error: "Usuário não autenticado" })
         }
 
         const admin = getSupabaseAdmin()
@@ -213,18 +273,18 @@ export async function ensureWebBackofficeAccessAction(): Promise<ActionResult> {
 
         if (!dbUser?.id) {
             await supabase.auth.signOut()
-            return { success: false, error: "Usuário não provisionado para acessar o painel web." }
+            return finishObservedAction(observation, { success: false, error: "Usuário não provisionado para acessar o painel web." })
         }
 
         const canAccessWeb = await hasWebBackofficeAccess(dbUser.id)
         if (!canAccessWeb) {
             await supabase.auth.signOut()
-            return { success: false, error: WEB_BACKOFFICE_ACCESS_DENIED_MESSAGE }
+            return finishObservedAction(observation, { success: false, error: WEB_BACKOFFICE_ACCESS_DENIED_MESSAGE })
         }
 
-        return { success: true }
+        return finishObservedAction(observation, { success: true })
     } catch (error) {
-        console.error("ensureWebBackofficeAccessAction error:", error)
-        return { success: false, error: getErrorMessage(error) }
+        observation.log("error", "auth.ensure_backoffice_access.failed", { error })
+        return finishObservedAction(observation, { success: false, error: getErrorMessage(error) }, "failed")
     }
 }

@@ -1,14 +1,64 @@
 "use server"
 
 import { getSupabaseAdmin } from "@/lib/supabase-server"
-import { assertArenaBackofficeAccess, requireAuthenticatedDbUser } from "@/lib/server-auth"
+import { assertArenaAdminAccess, assertArenaBackofficeAccess, requireAuthenticatedDbUser } from "@/lib/server-auth"
 import { SupabaseLoyaltyRepository } from "@/modules/loyalty/repositories/SupabaseLoyaltyRepository"
 import { revalidatePath } from "next/cache"
+import * as z from "zod"
+
+const validitySchema = z.enum([
+    'indeterminate', '1_mes', '2_meses', '3_meses',
+    '6_meses', '1_ano', '2_anos',
+])
+
+const creditTransactionSchema = z.object({
+    operationId: z.string().uuid(),
+    arenaId: z.string().uuid(),
+    id_atleta: z.string().uuid(),
+    valor: z.number().positive().max(99999999.99).multipleOf(0.01),
+    validade: validitySchema,
+    descricao: z.string().trim().max(1000).optional(),
+}).strict()
+
+const redemptionTransactionSchema = creditTransactionSchema.omit({ validade: true }).strict()
+
+type LoyaltyRpcClient = {
+    rpc: (
+        name: 'record_backoffice_loyalty_transaction',
+        args: Record<string, unknown>,
+    ) => Promise<{ data: unknown; error: { message: string } | null }>
+}
+
+async function recordLoyaltyTransaction(args: {
+    operationId: string
+    arenaId: string
+    athleteId: string
+    kind: 'crédito' | 'resgate'
+    value: number
+    validityCode: z.infer<typeof validitySchema> | null
+    description?: string
+    createdBy: string
+}) {
+    const client = getSupabaseAdmin() as unknown as LoyaltyRpcClient
+    const { data, error } = await client.rpc('record_backoffice_loyalty_transaction', {
+        p_operation_id: args.operationId,
+        p_arena_id: args.arenaId,
+        p_athlete_id: args.athleteId,
+        p_kind: args.kind,
+        p_value: args.value,
+        p_validity_code: args.validityCode,
+        p_description: args.description ?? null,
+        p_created_by: args.createdBy,
+    })
+
+    if (error) throw new Error(error.message)
+    return data
+}
 
 export async function updateCurrencyName(arenaId: string, name: string) {
     try {
         await requireAuthenticatedDbUser()
-        await assertArenaBackofficeAccess(arenaId)
+        await assertArenaAdminAccess(arenaId)
 
         const { error } = await getSupabaseAdmin()
             .from('arenas').update({ nome_moeda_virtual: name }).eq('id', arenaId)
@@ -68,43 +118,20 @@ export async function searchAthletesAction(arenaId: string, query?: string) {
     }
 }
 
-export async function createCreditTransactionAction(data: {
-    arenaId: string;
-    id_atleta: string;
-    valor: number;
-    validade: string;
-    descricao?: string;
-}) {
+export async function createCreditTransactionAction(input: unknown) {
     try {
-        const { dbUserId } = await requireAuthenticatedDbUser()
-        await assertArenaBackofficeAccess(data.arenaId)
+        const parsed = creditTransactionSchema.parse(input)
+        const { dbUserId } = await assertArenaAdminAccess(parsed.arenaId)
 
-        let data_vencimento: string | null = null;
-        const now = new Date();
-
-        if (data.validade === "1_mes") {
-            const d = new Date(now); d.setDate(d.getDate() + 30); data_vencimento = d.toISOString();
-        } else if (data.validade === "2_meses") {
-            const d = new Date(now); d.setDate(d.getDate() + 60); data_vencimento = d.toISOString();
-        } else if (data.validade === "3_meses") {
-            const d = new Date(now); d.setMonth(d.getMonth() + 3); data_vencimento = d.toISOString();
-        } else if (data.validade === "6_meses") {
-            const d = new Date(now); d.setMonth(d.getMonth() + 6); data_vencimento = d.toISOString();
-        } else if (data.validade === "1_ano") {
-            const d = new Date(now); d.setFullYear(d.getFullYear() + 1); data_vencimento = d.toISOString();
-        } else if (data.validade === "2_anos") {
-            const d = new Date(now); d.setFullYear(d.getFullYear() + 2); data_vencimento = d.toISOString();
-        }
-
-        const repo = new SupabaseLoyaltyRepository(getSupabaseAdmin())
-        await repo.create({
-            id_arena: data.arenaId,
-            id_atleta: data.id_atleta,
-            valor: data.valor,
-            tipo: 'crédito',
-            descricao: data.descricao,
-            data_vencimento,
-            created_by: dbUserId
+        await recordLoyaltyTransaction({
+            operationId: parsed.operationId,
+            arenaId: parsed.arenaId,
+            athleteId: parsed.id_atleta,
+            kind: 'crédito',
+            value: parsed.valor,
+            validityCode: parsed.validade,
+            description: parsed.descricao,
+            createdBy: dbUserId,
         })
 
         revalidatePath("/dashboard/loyalty")
@@ -116,25 +143,20 @@ export async function createCreditTransactionAction(data: {
     }
 }
 
-export async function createRedemptionTransactionAction(data: {
-    arenaId: string;
-    id_atleta: string;
-    valor: number;
-    descricao?: string;
-}) {
+export async function createRedemptionTransactionAction(input: unknown) {
     try {
-        const { dbUserId } = await requireAuthenticatedDbUser()
-        await assertArenaBackofficeAccess(data.arenaId)
+        const parsed = redemptionTransactionSchema.parse(input)
+        const { dbUserId } = await assertArenaAdminAccess(parsed.arenaId)
 
-        const repo = new SupabaseLoyaltyRepository(getSupabaseAdmin())
-        await repo.create({
-            id_arena: data.arenaId,
-            id_atleta: data.id_atleta,
-            valor: data.valor,
-            tipo: 'resgate',
-            descricao: data.descricao,
-            data_vencimento: null,
-            created_by: dbUserId
+        await recordLoyaltyTransaction({
+            operationId: parsed.operationId,
+            arenaId: parsed.arenaId,
+            athleteId: parsed.id_atleta,
+            kind: 'resgate',
+            value: parsed.valor,
+            validityCode: null,
+            description: parsed.descricao,
+            createdBy: dbUserId,
         })
 
         revalidatePath("/dashboard/loyalty")

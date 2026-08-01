@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { fetchAllSupabaseRows } from '@/lib/supabase-pagination';
 import type { IFinanceRepository } from './IFinanceRepository';
 import type { Transaction, CreateTransactionDTO, UpdateTransactionDTO, ArenaFinanceSummary, ArenaFinanceDailyRow } from '../types/finance.types';
 
@@ -25,13 +26,14 @@ export class SupabaseFinanceRepository implements IFinanceRepository {
       .eq('arena_id', arenaId)
       .order('launch_date', { ascending: false })
       // launch_date é date-only (00:00) para muitos lançamentos; created_at desempata para manter os mais recentes no topo
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false });
 
     if (type) query = query.eq('type', type);
     if (startDate) query = query.gte('launch_date', startDate);
     if (endDate) query = query.lte('launch_date', endDate);
 
-    const { data, error } = await query;
+    const { data, error } = await fetchAllSupabaseRows(query);
     if (error) throw new Error(`SupabaseFinanceRepository.findByArena: ${error.message}`);
     return (data ?? []) as unknown as Transaction[];
   }

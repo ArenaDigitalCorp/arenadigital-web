@@ -127,7 +127,7 @@ export function CadastradosTab({
     setDetailsOpen(true)
     setIsLoadingParticipants(true)
     setParticipants([])
-    getParticipantsAction(rotativo.id).then((result) => {
+    getParticipantsAction(arenaId, rotativo.id).then((result) => {
       if (result.success) setParticipants(result.data ?? [])
       setIsLoadingParticipants(false)
     })

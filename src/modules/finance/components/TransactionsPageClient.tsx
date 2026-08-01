@@ -99,11 +99,12 @@ export function TransactionsPageClient({ arenaId, type }: Props) {
     const handleDelete = async () => {
         if (!deletingId) return;
         try {
-            await deleteTransactionAction(arenaId, deletingId);
+            const result = await deleteTransactionAction(arenaId, deletingId);
+            if (!result.success) throw new Error(result.error);
             setTransactions(transactions.filter(t => t.id !== deletingId));
             toast.success("Lançamento excluído!");
-        } catch {
-            toast.error("Erro ao excluir lançamento.");
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Erro ao excluir lançamento.");
         } finally {
             setDeletingId(null);
         }

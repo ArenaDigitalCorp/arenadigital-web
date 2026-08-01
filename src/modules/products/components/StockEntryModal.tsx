@@ -25,7 +25,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
 import { createStockEntryAction } from "@/modules/products/actions/stockActions"
 import type { Product } from "@/modules/products/types/product.types"
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Loader2, Package, CalendarIcon } from "lucide-react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -60,6 +60,15 @@ export function StockEntryModal({
     onSuccess,
 }: StockEntryModalProps) {
     const [isSubmitting, setIsSubmitting] = useState(false)
+    const operationId = useRef<string | null>(null)
+
+    useEffect(() => {
+        if (open && operationId.current === null) {
+            operationId.current = crypto.randomUUID()
+        } else if (!open) {
+            operationId.current = null
+        }
+    }, [open])
 
     const form = useForm<StockEntryValues>({
         resolver: zodResolver(stockEntrySchema),
@@ -75,7 +84,9 @@ export function StockEntryModal({
     async function onSubmit(data: StockEntryValues) {
         setIsSubmitting(true)
         try {
+            operationId.current ??= crypto.randomUUID()
             const res = await createStockEntryAction({
+                operation_id: operationId.current,
                 product_id: product.id,
                 arena_id: arenaId,
                 quantity: Number(data.quantity),
@@ -86,6 +97,7 @@ export function StockEntryModal({
             })
             if (!res.success) throw new Error(res.error)
 
+            operationId.current = null
             toast.success(`Entrada de ${data.quantity} unidade(s) registrada com sucesso!`)
             form.reset({
                 entry_date: format(new Date(), "yyyy-MM-dd"),

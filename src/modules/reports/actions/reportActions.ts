@@ -1,7 +1,8 @@
 "use server"
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { assertArenaBackofficeAccess } from '@/lib/server-auth'
+import { assertArenaAdminAccess } from '@/lib/server-auth'
+import { fetchAllSupabaseRows } from '@/lib/supabase-pagination'
 import type {
   PaymentStatusRow,
   PaymentStatusSummary,
@@ -34,7 +35,7 @@ export async function getPaymentStatusReportAction(
   error?: string
 }> {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaAdminAccess(arenaId)
     const supabase = getSupabaseAdmin()
 
     let query = supabase
@@ -42,6 +43,7 @@ export async function getPaymentStatusReportAction(
       .select('id, start_time, status, price, plano_mensalista_id, sport_id, cobranca_por_participante, courts(id, name), sports(id, name), atleta:athlete_id(id, nome_perfil), booking_participants(id, funcao, pago_em, valor)')
       .eq('arena_id', arenaId)
       .order('start_time', { ascending: false })
+      .order('id', { ascending: false })
 
     if (filters.startDate) query = query.gte('start_time', filters.startDate)
     if (filters.endDate) query = query.lte('start_time', filters.endDate + 'T23:59:59')
@@ -69,6 +71,7 @@ export async function getPaymentStatusReportAction(
       `)
       .eq('station_orders.arena_id', arenaId)
       .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
 
     if (filters.startDate) stationPaymentsQuery = stationPaymentsQuery.gte('created_at', filters.startDate)
     if (filters.endDate) stationPaymentsQuery = stationPaymentsQuery.lte('created_at', filters.endDate + 'T23:59:59')
@@ -92,6 +95,7 @@ export async function getPaymentStatusReportAction(
       .eq('tipo_pagamento', 'avulso')
       .eq('rotativo.id_arena', arenaId)
       .order('data_inscricao', { ascending: false })
+      .order('id', { ascending: false })
 
     if (filters.startDate) rotativoInscricoesQuery = rotativoInscricoesQuery.gte('data_inscricao', filters.startDate)
     if (filters.endDate) rotativoInscricoesQuery = rotativoInscricoesQuery.lte('data_inscricao', filters.endDate + 'T23:59:59')
@@ -111,6 +115,7 @@ export async function getPaymentStatusReportAction(
       .eq('tipo', 'compra')
       .not('valor_pago', 'is', null)
       .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
 
     if (filters.startDate) rotativoCreditosQuery = rotativoCreditosQuery.gte('created_at', filters.startDate)
     if (filters.endDate) rotativoCreditosQuery = rotativoCreditosQuery.lte('created_at', filters.endDate + 'T23:59:59')
@@ -132,12 +137,13 @@ export async function getPaymentStatusReportAction(
       .eq('arena_id', arenaId)
       .eq('type', 'entrada')
       .order('launch_date', { ascending: false })
+      .order('id', { ascending: false })
 
     if (filters.startDate) transactionsQuery = transactionsQuery.gte('launch_date', filters.startDate)
     if (filters.endDate) transactionsQuery = transactionsQuery.lte('launch_date', filters.endDate)
 
     const [bookingsResult, courtsResult, sportsResult, stationPaymentsResult, rotativoInscricoesResult, rotativoCreditosResult, transactionsResult] = await Promise.all([
-      query,
+      fetchAllSupabaseRows(query),
       supabase.from('courts').select('id, name').eq('arena_id', arenaId).order('name'),
       supabase
         .from('court_sports')
@@ -145,10 +151,10 @@ export async function getPaymentStatusReportAction(
         .in('court_id',
           (await supabase.from('courts').select('id').eq('arena_id', arenaId)).data?.map(c => c.id) ?? []
         ),
-      sourceFlags.includeStationPayments ? stationPaymentsQuery : Promise.resolve({ data: [], error: null }),
-      sourceFlags.includeRotativoInscricoes ? rotativoInscricoesQuery : Promise.resolve({ data: [], error: null }),
-      sourceFlags.includeRotativoCreditos ? rotativoCreditosQuery : Promise.resolve({ data: [], error: null }),
-      sourceFlags.includeTransactions ? transactionsQuery : Promise.resolve({ data: [], error: null }),
+      sourceFlags.includeStationPayments ? fetchAllSupabaseRows(stationPaymentsQuery) : Promise.resolve({ data: [], error: null }),
+      sourceFlags.includeRotativoInscricoes ? fetchAllSupabaseRows(rotativoInscricoesQuery) : Promise.resolve({ data: [], error: null }),
+      sourceFlags.includeRotativoCreditos ? fetchAllSupabaseRows(rotativoCreditosQuery) : Promise.resolve({ data: [], error: null }),
+      sourceFlags.includeTransactions ? fetchAllSupabaseRows(transactionsQuery) : Promise.resolve({ data: [], error: null }),
     ])
 
     // Bookings é a fonte principal e de onde vêm os filtros — se falhar, o relatório não tem como funcionar.

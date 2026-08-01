@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import * as z from 'zod'
-import { assertArenaBackofficeAccess, requireAuthenticatedDbUser } from '@/lib/server-auth'
+import { AuthorizationError, assertArenaAdminAccess } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { logAuditEvent } from '@/modules/audit/audit-log.service'
 import { MetaWhatsAppClient } from '@/modules/ai-agent/providers/whatsapp/MetaWhatsAppClient'
@@ -59,8 +59,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { dbUserId } = await requireAuthenticatedDbUser()
-    await assertArenaBackofficeAccess(parsed.arenaId)
+    const { dbUserId } = await assertArenaAdminAccess(parsed.arenaId)
 
     const accessToken = await exchangeCodeForToken(parsed.code)
     await new MetaWhatsAppClient().subscribeAppToWaba({ wabaId: parsed.wabaId, accessToken })
@@ -96,8 +95,15 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Falha ao conectar via Embedded Signup'
-    console.error('[whatsapp-embedded-signup]', message)
-    return NextResponse.json({ error: message }, { status: 500 })
+    if (error instanceof AuthorizationError) {
+      return NextResponse.json({ error: error.message }, { status: error.status })
+    }
+
+    // Never emit or log the Meta exchange response: it can contain token or
+    // authorization-code context. Keep only a non-sensitive error class.
+    console.error('[whatsapp-embedded-signup] request failed', {
+      errorType: error instanceof Error ? error.name : 'UnknownError',
+    })
+    return NextResponse.json({ error: 'Falha ao conectar via Embedded Signup' }, { status: 500 })
   }
 }

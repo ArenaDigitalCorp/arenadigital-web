@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useRef } from "react"
-import { Search, Save, X, Loader2, Check } from "lucide-react"
+import { useEffect, useState, useRef } from "react"
+import { Search, X, Loader2, Check } from "lucide-react"
 import { StandardModal } from "@/components/ui/standard-modal"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -31,9 +31,14 @@ export function NewRedemptionModal({ arenaId, isOpen, onClose, onSuccess }: NewR
     const [quantity, setQuantity] = useState("")
     const [description, setDescription] = useState("")
     const [isSaving, setIsSaving] = useState(false)
+    const operationId = useRef<string | null>(null)
 
     // Manual debounce implementation
     const searchTimeout = useRef<NodeJS.Timeout | null>(null)
+
+    useEffect(() => {
+        if (!isOpen) operationId.current = null
+    }, [isOpen])
 
     const handleSearch = (value: string) => {
         setSearch(value)
@@ -78,7 +83,9 @@ export function NewRedemptionModal({ arenaId, isOpen, onClose, onSuccess }: NewR
 
         try {
             setIsSaving(true)
+            operationId.current ??= crypto.randomUUID()
             const result = await createRedemptionTransactionAction({
+                operationId: operationId.current,
                 arenaId,
                 id_atleta: selectedAthlete.id,
                 valor: Number(quantity),
@@ -93,7 +100,7 @@ export function NewRedemptionModal({ arenaId, isOpen, onClose, onSuccess }: NewR
             } else {
                 toast.error(result.error || "Erro ao realizar resgate")
             }
-        } catch (error) {
+        } catch {
             toast.error("Erro inesperado")
         } finally {
             setIsSaving(false)
@@ -106,6 +113,7 @@ export function NewRedemptionModal({ arenaId, isOpen, onClose, onSuccess }: NewR
         setSelectedAthlete(null)
         setQuantity("")
         setDescription("")
+        operationId.current = null
     }
 
     return (

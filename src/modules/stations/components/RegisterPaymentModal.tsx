@@ -30,7 +30,7 @@ import {
 import { toast } from "sonner"
 import type { StationOrder } from "@/modules/stations/types/station.types"
 import { addPaymentAction, closeOrderAndGenerateFinanceAction } from "@/modules/stations/actions/orderActions"
-import { Loader2, X } from "lucide-react"
+import { Loader2 } from "lucide-react"
 
 const paymentSchema = z.object({
     amount: z.string().min(1, "Informe o valor"),
@@ -56,7 +56,6 @@ export function RegisterPaymentModal({
 }: RegisterPaymentModalProps) {
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [showCloseConfirmation, setShowCloseConfirmation] = useState(false)
-    const [currentBalance, setCurrentBalance] = useState(0)
 
     const form = useForm<PaymentValues>({
         resolver: zodResolver(paymentSchema),
@@ -72,7 +71,6 @@ export function RegisterPaymentModal({
         if (order) {
             const paid = order.station_payments?.reduce((acc, p) => acc + p.amount, 0) || 0
             const balance = order.total_value - paid
-            setCurrentBalance(balance)
             form.setValue("amount", balance.toFixed(2))
         }
     }, [order, form, isOpen])
@@ -90,6 +88,7 @@ export function RegisterPaymentModal({
                 payment_method: data.payment_method,
                 observation: data.observation,
                 paid_by_name: data.paid_by_name,
+                idempotency_key: crypto.randomUUID(),
             })
             if (!payRes.success) throw new Error(payRes.error)
 

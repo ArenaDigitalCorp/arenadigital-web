@@ -1740,6 +1740,7 @@ export type Database = {
           plano_mensalista_id: string | null
           price: number | null
           recurrence_id: string | null
+          rental_price: number
           sport_id: string | null
           start_time: string
           status: string | null
@@ -1759,6 +1760,7 @@ export type Database = {
           plano_mensalista_id?: string | null
           price?: number | null
           recurrence_id?: string | null
+          rental_price?: number
           sport_id?: string | null
           start_time: string
           status?: string | null
@@ -1778,6 +1780,7 @@ export type Database = {
           plano_mensalista_id?: string | null
           price?: number | null
           recurrence_id?: string | null
+          rental_price?: number
           sport_id?: string | null
           start_time?: string
           status?: string | null
@@ -3919,6 +3922,8 @@ export type Database = {
           quantity: number
           registered_by: string | null
           registration_date: string
+          source_id: string | null
+          source_type: string | null
           total_value: number
           type: string
           unit_value: number
@@ -3936,6 +3941,8 @@ export type Database = {
           quantity?: number
           registered_by?: string | null
           registration_date?: string
+          source_id?: string | null
+          source_type?: string | null
           total_value?: number
           type: string
           unit_value?: number
@@ -3953,6 +3960,8 @@ export type Database = {
           quantity?: number
           registered_by?: string | null
           registration_date?: string
+          source_id?: string | null
+          source_type?: string | null
           total_value?: number
           type?: string
           unit_value?: number
@@ -4564,6 +4573,27 @@ export type Database = {
         }
         Returns: string
       }
+      confirm_backoffice_booking_payment: {
+        Args: {
+          p_amount?: number | null
+          p_arena_id: string
+          p_booking_id: string
+          p_modo_pagamento_id?: string | null
+          p_registered_by: string
+        }
+        Returns: Database["public"]["Tables"]["bookings"]["Row"]
+      }
+      confirm_backoffice_participant_payment: {
+        Args: {
+          p_amount?: number | null
+          p_arena_id: string
+          p_booking_id: string
+          p_modo_pagamento_id?: string | null
+          p_participant_id: string
+          p_registered_by: string
+        }
+        Returns: string
+      }
       confirm_booking_result: {
         Args: {
           p_atleta_id: string
@@ -4601,6 +4631,50 @@ export type Database = {
           p_visibility?: string
         }
         Returns: string
+      }
+      create_backoffice_booking: {
+        Args: {
+          p_arena_id: string
+          p_athlete_id?: string | null
+          p_athlete_name: string
+          p_booking_type?: string
+          p_cobranca_por_participante?: boolean
+          p_court_id: string
+          p_end_time: string
+          p_modo_pagamento_id?: string | null
+          p_plano_mensalista_id?: string | null
+          p_price?: number
+          p_recurrence_id?: string | null
+          p_registered_by?: string | null
+          p_sport_id?: string | null
+          p_start_time: string
+          p_status?: string
+        }
+        Returns: Database["public"]["Tables"]["bookings"]["Row"]
+      }
+      create_backoffice_bookings: {
+        Args: {
+          p_bookings: Json
+          p_modo_pagamento_id?: string | null
+          p_registered_by?: string | null
+        }
+        Returns: Database["public"]["Tables"]["bookings"]["Row"][]
+      }
+      replace_booking_services_atomic: {
+        Args: {
+          p_arena_id: string
+          p_booking_id: string
+          p_lines?: Json
+        }
+        Returns: number
+      }
+      remove_arena_user_membership_atomic: {
+        Args: {
+          p_arena_id: string
+          p_arena_user_id: string
+          p_user_id: string
+        }
+        Returns: boolean
       }
       create_team: {
         Args: {
@@ -4643,6 +4717,20 @@ export type Database = {
           p_start_time: string
         }
         Returns: string
+      }
+      update_backoffice_booking: {
+        Args: {
+          p_arena_id: string
+          p_athlete_id: string | null
+          p_athlete_name: string
+          p_booking_id: string
+          p_cobranca_por_participante: boolean
+          p_end_time: string
+          p_price: number | null
+          p_sport_id: string | null
+          p_start_time: string
+        }
+        Returns: Database["public"]["Tables"]["bookings"]["Row"]
       }
       current_auth_athlete_app_plan: { Args: never; Returns: string }
       current_auth_athlete_id: { Args: never; Returns: string }

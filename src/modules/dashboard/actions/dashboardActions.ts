@@ -2,6 +2,7 @@
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { assertArenaBackofficeAccess, requireAuthenticatedDbUser } from '@/lib/server-auth'
+import { fetchAllSupabaseRows } from '@/lib/supabase-pagination'
 import { startOfMonth, endOfMonth, subMonths, startOfDay, endOfDay, addHours } from 'date-fns'
 import type { DashboardStats, OccupancyRow } from '@/modules/dashboard/types/dashboard.types'
 
@@ -115,30 +116,34 @@ export async function getDashboardDataAction(
         const courtIds = courtList.map(c => c.id)
 
         const occupancyBookingsPromise = courtIds.length === 0
-            ? Promise.resolve({ data: [] as any[] })
-            : supabase
+            ? Promise.resolve({ data: [] as any[], error: null })
+            : fetchAllSupabaseRows(supabase
                 .from('bookings')
                 .select('court_id, start_time, end_time')
                 .in('court_id', courtIds)
                 .in('status', ['confirmed', 'pending'])
                 .gte('start_time', todayStart)
                 .lte('start_time', searchLimitStr)
+                .order('id', { ascending: true }))
 
         const [bookingCountResult, currentMonthTx, previousMonthTx, activeAthletesResult, occupancyBookingsResult] =
             await Promise.all([
                 supabase.from('bookings').select('*', { count: 'exact', head: true })
                     .in('arena_id', arenaIds).eq('status', 'confirmed')
                     .gte('start_time', todayStart).lte('start_time', todayEnd),
-                supabase.from('transactions').select('total_value')
+                fetchAllSupabaseRows(supabase.from('transactions').select('total_value')
                     .in('arena_id', arenaIds).eq('type', 'entrada')
-                    .gte('launch_date', currentMonthStart).lte('launch_date', currentMonthEnd),
-                supabase.from('transactions').select('total_value')
+                    .gte('launch_date', currentMonthStart).lte('launch_date', currentMonthEnd)
+                    .order('id', { ascending: true })),
+                fetchAllSupabaseRows(supabase.from('transactions').select('total_value')
                     .in('arena_id', arenaIds).eq('type', 'entrada')
-                    .gte('launch_date', previousMonthStart).lte('launch_date', previousMonthEnd),
-                supabase.from('bookings').select('athlete_id')
+                    .gte('launch_date', previousMonthStart).lte('launch_date', previousMonthEnd)
+                    .order('id', { ascending: true })),
+                fetchAllSupabaseRows(supabase.from('bookings').select('athlete_id')
                     .in('arena_id', arenaIds).eq('status', 'confirmed')
                     .gte('start_time', currentMonthStart).lte('start_time', currentMonthEnd)
-                    .not('athlete_id', 'is', null),
+                    .not('athlete_id', 'is', null)
+                    .order('id', { ascending: true })),
                 occupancyBookingsPromise,
             ])
 
