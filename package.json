@@ -18,7 +18,7 @@
     "test:security": "node --test --experimental-strip-types src/modules/auth/lib/arena-signup-intent.test.mjs"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1023.0",
+    "@aws-sdk/client-s3": "^3.1101.0",
     "@hookform/resolvers": "^5.2.2",
     "@stripe/react-stripe-js": "^6.1.0",
     "@stripe/stripe-js": "^9.1.0",
@@ -29,7 +29,7 @@
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
     "lucide-react": "^0.563.0",
-    "next": "16.1.6",
+    "next": "16.2.11",
     "next-themes": "^0.4.6",
     "radix-ui": "^1.4.3",
     "react": "19.2.3",
@@ -40,21 +40,30 @@
     "sonner": "^2.0.7",
     "stripe": "^22.0.1",
     "tailwind-merge": "^3.4.0",
-    "xlsx": "^0.18.5",
+    "write-excel-file": "4.1.1",
     "zod": "^4.3.6"
   },
   "engines": {
     "node": ">=22.19.0 <23"
   },
   "packageManager": "pnpm@10.33.0",
+  "pnpm": {
+    "overrides": {
+      "@babel/core": "7.29.6",
+      "brace-expansion@1.1.13": "1.1.17",
+      "brace-expansion@5.0.5": "5.0.8",
+      "postcss": "8.5.25",
+      "sharp": "0.35.0"
+    }
+  },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
+    "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.1.6",
-    "shadcn": "^3.8.4",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "16.2.11",
+    "shadcn": "4.16.1",
     "tailwindcss": "^4",
     "tw-animate-css": "^1.4.0",
     "typescript": "^5"
