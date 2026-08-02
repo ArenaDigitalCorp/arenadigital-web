@@ -227,7 +227,7 @@ Evolução do Catálogo para agrupar produtos/serviços por família e dar contr
 
 ### 2.12. Agente de IA no WhatsApp (`arena_ai_agents`, `whatsapp_channels`, `whatsapp_webhook_events`, `whatsapp_conversations`, `whatsapp_messages`)
 
-Módulo do **Agente de IA da Arena**: cada arena pode conectar um número de WhatsApp (Meta Cloud API) e ativar um agente LLM (OpenAI) que responde clientes sobre horários, quadras, preços (avulso/mensalista) e disponibilidade. O agente interpreta **texto e áudio** (áudio transcrito por speech-to-text; imagem/vídeo não são interpretados no MVP). Plano completo em `docs/PLANO-Agente-IA-WhatsApp.md`. Migração: `supabase/migrations/20260722_ai_agent_whatsapp.sql`.
+Módulo do **Agente de IA da Arena**: cada arena pode conectar um número de WhatsApp (Meta Cloud API) e ativar um agente LLM (OpenAI) que responde clientes sobre horários, quadras, preços (avulso/mensalista) e disponibilidade. O agente interpreta **texto e áudio** (áudio transcrito por speech-to-text; imagem/vídeo não são interpretados no MVP). Plano completo em `docs/PLANO-Agente-IA-WhatsApp.md`. Migração (repositório arenadigital-db): `supabase/migrations/20260801141000_consolidate_web_ai_whatsapp.sql`.
 
 - **Tabela `arena_ai_agents`:** Configuração do agente por arena (1:1 com `arenas`).
   - `id`, `arena_id` (FK -> `arenas`, **UNIQUE**), `enabled` (liga/desliga o agente), `persona_prompt` (personalidade definida pelo gestor), `model` (default `gpt-4o-mini`), `temperature`, `max_output_tokens`, `monthly_token_cap` (teto de custo), `fallback_message`, `status` ('draft'|'active'|'paused'), `created_by` (FK -> `users`), `created_at`, `updated_at`.

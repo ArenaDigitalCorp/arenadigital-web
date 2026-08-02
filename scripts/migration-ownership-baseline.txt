@@ -1,4 +1,4 @@
-# Legacy SQL already present on 2026-08-01. Removal is allowed; additions are not.
-supabase/migrations/20260721_product_categories_price_history.sql
-supabase/migrations/20260722_ai_agent_whatsapp.sql
-supabase/migrations/20260727_arena_notifications.sql
+# All legacy SQL that used to live here was ported to arenadigital-db/supabase/migrations
+# and removed on 2026-08-02 (see docs/operations/web-schema-consolidation-transition.md in
+# arenadigital-db). No .sql file is allowed in this repo anymore; new migrations must be
+# created directly in arenadigital-db/supabase/migrations.

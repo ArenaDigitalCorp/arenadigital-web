@@ -347,7 +347,7 @@ Server action: getAthletesByArenaAction(arenaId, searchTerm?) — src/modules/at
 Status: Em implementação (MVP — 22/07/2026). Plano completo: docs/PLANO-Agente-IA-WhatsApp.md.
 Módulo: src/modules/ai-agent. Integrações: Meta WhatsApp Business Cloud API + OpenAI (chat/tool calling + transcrição).
 
-14.1 Modelo de dados (migração supabase/migrations/20260722_ai_agent_whatsapp.sql)
+14.1 Modelo de dados (migração arenadigital-db/supabase/migrations/20260801141000_consolidate_web_ai_whatsapp.sql)
 
 arena_ai_agents      -- config por arena (1:1). enabled, persona_prompt, model,
                         temperature, max_output_tokens, monthly_token_cap,
@@ -465,7 +465,7 @@ Extraídos da duplicação entre calendário do espaço e operação do dia:
 
 16. Notificações da Arena (tempo real)
 
-16.1 Modelo de dados (migração supabase/migrations/20260727_arena_notifications.sql)
+16.1 Modelo de dados (migração arenadigital-db/supabase/migrations/20260801142000_consolidate_web_arena_notifications.sql)
 
 arena_notifications
 - id uuid pk
@@ -542,9 +542,11 @@ browser client autenticado — a RLS acima é quem autoriza o canal.
 
 17. Estações — Status "Pendente" da Comanda
 
-Migração (aplicar manualmente no SQL Editor do Supabase — não versionada em migrations
-anteriores porque station_orders foi criada direto no Studio):
-supabase/migrations/20260802_station_order_pending_status.sql
+Migração (repositório arenadigital-db, fonte única do schema):
+supabase/migrations/20260802130000_consolidate_web_station_order_pending_status.sql
+Essa migration também atualiza close_station_order (definida em
+20260801122000_station_order_transaction_safety.sql) para aceitar o fechamento de
+comandas 'pending', além de 'open'.
 
 17.1 Modelo de dados
 
