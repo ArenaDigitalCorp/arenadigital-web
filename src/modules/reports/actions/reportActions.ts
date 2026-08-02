@@ -66,7 +66,7 @@ export async function getPaymentStatusReportAction(
           status,
           customer_name,
           atleta:atleta(nome_perfil),
-          station:stations(name, station_type:station_types(name))
+          station:stations!station_orders_station_id_fkey(name, station_type:station_types(name))
         )
       `)
       .eq('station_orders.arena_id', arenaId)
