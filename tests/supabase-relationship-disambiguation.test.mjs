@@ -6,7 +6,7 @@ async function source(relativePath) {
   return readFile(new URL(`../${relativePath}`, import.meta.url), 'utf8')
 }
 
-test('booking queries disambiguate the court relationship', async () => {
+test('tenant-scoped queries disambiguate duplicate relationships', async () => {
   const repository = await source(
     'src/modules/bookings/repositories/SupabaseBookingRepository.ts'
   )
@@ -16,4 +16,7 @@ test('booking queries disambiguate the court relationship', async () => {
     assert.match(contents, /courts!bookings_court_id_fkey\(/)
     assert.doesNotMatch(contents, /(?<![!\w])courts\(/)
   }
+
+  assert.match(reports, /stations!station_orders_station_id_fkey\(/)
+  assert.doesNotMatch(reports, /station:stations\(/)
 })
