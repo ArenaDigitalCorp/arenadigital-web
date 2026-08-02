@@ -59,6 +59,7 @@ interface StationListItem {
 interface Props {
   arenaId: string;
   initialStations: StationListItem[];
+  canManage: boolean;
 }
 
 /** URL da foto da estação, se existir (evita placeholders quebrados em /public). */
@@ -103,7 +104,7 @@ function stationStatusBadge(status: string | null | undefined) {
   );
 }
 
-export function StationsPageClient({ arenaId, initialStations }: Props) {
+export function StationsPageClient({ arenaId, initialStations, canManage }: Props) {
   const router = useRouter();
   const [stations, setStations] = useState<StationListItem[]>(initialStations);
   const [createOpen, setCreateOpen] = useState(false);
@@ -175,17 +176,17 @@ export function StationsPageClient({ arenaId, initialStations }: Props) {
               Gerencie suas estações, caixas, comandas e itens.
             </p>
           </div>
-          <Button
+          {canManage && <Button
             type="button"
             className="bg-arena-button font-semibold text-white shadow-sm hover:bg-arena-button-hover"
             onClick={() => setCreateOpen(true)}
           >
             <Plus className="mr-2 h-4 w-4" />
             Cadastrar Estação
-          </Button>
+          </Button>}
         </div>
 
-        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        {canManage && <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
             <DialogHeader>
               <DialogTitle>Nova estação</DialogTitle>
@@ -196,9 +197,9 @@ export function StationsPageClient({ arenaId, initialStations }: Props) {
               onSuccess={() => setCreateOpen(false)}
             />
           </DialogContent>
-        </Dialog>
+        </Dialog>}
 
-        <Dialog
+        {canManage && <Dialog
           open={editOpen}
           onOpenChange={(open) => {
             if (!open) closeEdit();
@@ -218,7 +219,7 @@ export function StationsPageClient({ arenaId, initialStations }: Props) {
               />
             ) : null}
           </DialogContent>
-        </Dialog>
+        </Dialog>}
 
         {stations.length > 0 ? (
           <div className="mb-2 flex flex-col gap-3 pb-3 sm:flex-row sm:flex-wrap sm:items-center">
@@ -280,14 +281,14 @@ export function StationsPageClient({ arenaId, initialStations }: Props) {
             <p className="text-lg font-medium text-arena-navy-800/40">
               Nenhuma estação cadastrada aqui.
             </p>
-            <Button
+            {canManage && <Button
               type="button"
               variant="outline"
               className="mt-4 border-arena-navy-800/10 text-arena-navy-800/60"
               onClick={() => setCreateOpen(true)}
             >
               Cadastrar Primeira Estação
-            </Button>
+            </Button>}
           </Card>
         ) : filteredStations.length === 0 ? (
           <Card className="flex flex-col items-center justify-center border border-slate-100 bg-white py-16 shadow-sm">
@@ -331,7 +332,7 @@ export function StationsPageClient({ arenaId, initialStations }: Props) {
                     router.push(`/dashboard/arenas/${arenaId}/stations/${station.id}`)
                   }
                   badge={stationStatusBadge(station.status)}
-                  actions={
+                  actions={canManage ? (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button
@@ -364,7 +365,7 @@ export function StationsPageClient({ arenaId, initialStations }: Props) {
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
-                  }
+                  ) : undefined}
                 >
                   <h4 className="text-[14px] font-semibold leading-tight text-white">
                     {station.name}

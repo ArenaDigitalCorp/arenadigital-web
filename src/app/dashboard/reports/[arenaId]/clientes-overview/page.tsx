@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { assertArenaBackofficeAccess } from '@/lib/server-auth'
+import { assertArenaAdminAccess } from '@/lib/server-auth'
 import { getClientesOverviewAction } from '@/modules/reports/actions/clientesOverviewActions'
 import { ClientesOverviewPageClient } from '@/modules/reports/components/ClientesOverviewPageClient'
 import { tutorialReportCategories } from '@/lib/tutorial-mock-data'
@@ -15,7 +15,7 @@ export default async function ClientesOverviewPage({
     const { tutorial } = await searchParams
 
     try {
-        await assertArenaBackofficeAccess(arenaId)
+        await assertArenaAdminAccess(arenaId)
     } catch {
         redirect('/dashboard/settings/arenas')
     }

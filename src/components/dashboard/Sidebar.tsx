@@ -29,6 +29,7 @@ import { useArena } from "@/contexts/ArenaContext";
 import { useDbUser } from "@/contexts/UserContext";
 import { ArenaSelector } from "./ArenaSelector";
 import { NotificationsBell } from "@/modules/notifications/components/NotificationsBell";
+import { canManageArena } from "@/lib/arena-permissions";
 
 /** Item ativo do menu — ligado a `--arena-accent` em globals.css */
 const navActiveText = "text-arena-accent";
@@ -41,7 +42,7 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
 
     // Perfis de acesso
     const isCashier = selectedArenaDetails?.role === "Caixa" && !selectedArenaDetails?.isOwner;
-    const isAdmin = selectedArenaDetails?.isOwner || selectedArenaDetails?.role === "Gestor";
+    const isAdmin = selectedArenaDetails ? canManageArena(selectedArenaDetails) : false;
     const isPlatformAdmin = dbUser?.platform_access_level === "platform_admin";
     const canAccessSubscription = Boolean(isAdmin);
 
@@ -104,6 +105,7 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                 tutorialKey: "spaces",
                 href: arenaHref,
                 isActive: espacosActive,
+                requiresAdmin: true,
             },
             {
                 icon: Medal,
@@ -125,6 +127,7 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                 tutorialKey: "catalog",
                 href: productsHref,
                 isActive: (p: string) => p.startsWith("/dashboard/settings/products/"),
+                requiresAdmin: true,
             },
             {
                 icon: ClipboardPen,
@@ -153,8 +156,9 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                 tutorialKey: "finance",
                 href: financeHref,
                 isActive: (p: string) => p.startsWith("/dashboard/finance/"),
+                requiresAdmin: true,
             },
-        ];
+        ].filter((item) => !item.requiresAdmin || isAdmin);
 
     const settingsUsersHref = selectedArena ? `/dashboard/settings/users/${selectedArena}` : "/dashboard/settings/users";
     const settingsSubscriptionHref = selectedArena ? `/dashboard/settings/subscription/${selectedArena}` : "/dashboard/settings/subscription";
@@ -293,7 +297,7 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                             </Button>
                         )}
 
-                        {!isCashier && (
+                        {!isCashier && isAdmin && (
                         <div>
                             <Button
                                 variant="ghost"

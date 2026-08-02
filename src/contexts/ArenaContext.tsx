@@ -2,12 +2,14 @@
 
 import React, { createContext, useContext, useReducer, useState, useEffect, useCallback } from "react";
 import { useDbUser } from "@/contexts/UserContext";
+import { usePathname } from "next/navigation";
+import type { ArenaAccessRole } from "@/lib/arena-permissions";
 
 interface Arena {
     id: string;
     name: string;
     isOwner: boolean;
-    role: 'Owner' | 'Gestor' | 'Atendente' | 'Caixa';
+    role: ArenaAccessRole;
     assignedStationId: string | null;
 }
 
@@ -46,6 +48,7 @@ export function ArenaProvider({ children }: { children: React.ReactNode }) {
     const [selectedArena, setSelectedArena] = useState<string>("");
     const [state, dispatch] = useReducer(reducer, { status: 'idle' });
     const { dbUser } = useDbUser();
+    const pathname = usePathname();
 
     const fetchArenas = useCallback(async () => {
         if (!dbUser) {
@@ -73,6 +76,15 @@ export function ArenaProvider({ children }: { children: React.ReactNode }) {
     }, [dbUser]);
 
     useEffect(() => { fetchArenas() }, [fetchArenas]);
+
+    useEffect(() => {
+        if (state.status !== 'success') return;
+        const pathSegments = pathname.split('/').filter(Boolean);
+        const routeArena = state.data.find((arena) => pathSegments.includes(arena.id));
+        if (routeArena && routeArena.id !== selectedArena) {
+            setSelectedArena(routeArena.id);
+        }
+    }, [pathname, selectedArena, state]);
 
     const arenas = state.status === 'success' ? state.data : [];
     const isLoadingArenas = state.status === 'idle' || state.status === 'loading';

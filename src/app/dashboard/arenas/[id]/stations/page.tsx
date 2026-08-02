@@ -3,6 +3,7 @@ import { getStationsWithMetricsAction } from '@/modules/stations/actions/station
 import { StationsPageClient } from '@/modules/stations/components/StationsPageClient'
 import { redirect } from 'next/navigation'
 import { buildTutorialStations } from '@/lib/tutorial-mock-data'
+import { canManageArena } from '@/lib/arena-permissions'
 
 export default async function StationsPage({
     params,
@@ -33,6 +34,7 @@ export default async function StationsPage({
         <StationsPageClient
             arenaId={id}
             initialStations={result.data ?? []}
+            canManage={canManageArena(access)}
         />
     )
 }

@@ -1,4 +1,4 @@
-import { requireAuthenticatedDbUser, assertArenaBackofficeAccess } from '@/lib/server-auth'
+import { requireAuthenticatedDbUser, assertArenaAdminAccess } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { SupabaseArenaRepository } from '@/modules/arenas/repositories/SupabaseArenaRepository'
 import { ArenaForm } from '@/modules/arenas/components/ArenaForm'
@@ -8,7 +8,7 @@ export default async function EditArenaPage({ params }: { params: Promise<{ id: 
     const { id } = await params
 
     try {
-        await assertArenaBackofficeAccess(id)
+        await assertArenaAdminAccess(id)
     } catch {
         redirect('/dashboard/settings/arenas')
     }

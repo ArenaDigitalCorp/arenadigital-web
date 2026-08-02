@@ -3,6 +3,13 @@ import { fetchArenaMembershipByArenaAndUser } from '@/lib/arena-users'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { resolveAuthenticatedDbUser } from '@/lib/account-identity'
 import type { Database } from '@/types/supabase.types'
+import {
+  canAccessArenaBackoffice,
+  canManageArena,
+  canManageArenaSubscription,
+  normalizeArenaMembershipRole,
+  type ArenaAccessRole,
+} from '@/lib/arena-permissions'
 
 export class AuthorizationError extends Error {
   status: number
@@ -31,12 +38,14 @@ export type PlatformSuperAdminProfile = PlatformAdminProfile & {
 
 export type PlatformAccessLevel = 'employee' | 'platform_admin' | 'super_admin'
 
-export type ArenaMembershipRole = 'Gestor' | 'Atendente' | 'Caixa'
+export type { ArenaMembershipRole } from '@/lib/arena-permissions'
 
 export type ArenaAccessProfile = AuthenticatedDbUser & {
   arenaId: string
   isOwner: boolean
-  role: 'Owner' | ArenaMembershipRole
+  isPlatformAdmin: boolean
+  platformAccessLevel: PlatformAccessLevel | null
+  role: ArenaAccessRole
   assignedStationId: string | null
   arenaUserId: string | null
 }
@@ -68,15 +77,7 @@ type PlatformAccessRpcClient = {
   ) => Promise<{ data: string | null; error: { message: string } | null }>
 }
 
-function normalizeArenaMembershipRole(role: string | null | undefined): ArenaMembershipRole | null {
-  if (role === 'Gestor' || role === 'Atendente' || role === 'Caixa') {
-    return role
-  }
-
-  return null
-}
-
-async function getPlatformAccessLevel(dbUserId: string): Promise<PlatformAccessLevel | null> {
+export async function getPlatformAccessLevel(dbUserId: string): Promise<PlatformAccessLevel | null> {
   const supabase = getSupabaseAdmin()
   const { data, error } = await (supabase as unknown as PlatformAccessRpcClient).rpc(
     'get_platform_access_level',
@@ -197,12 +198,15 @@ export async function assertArenaAccess(arenaId: string): Promise<ArenaAccessPro
   const currentUser = await requireAuthenticatedDbUser()
   const supabase = getSupabaseAdmin()
 
-  const { data: ownedArena, error: ownerError } = await supabase
-    .from('arenas')
-    .select('id')
-    .eq('id', arenaId)
-    .eq('owner_id', currentUser.dbUserId)
-    .maybeSingle()
+  const [{ data: ownedArena, error: ownerError }, platformAccessLevel] = await Promise.all([
+    supabase
+      .from('arenas')
+      .select('id')
+      .eq('id', arenaId)
+      .eq('owner_id', currentUser.dbUserId)
+      .maybeSingle(),
+    getPlatformAccessLevel(currentUser.dbUserId),
+  ])
 
   if (ownerError) {
     throw new Error(`Failed to verify arena ownership: ${ownerError.message}`)
@@ -213,7 +217,37 @@ export async function assertArenaAccess(arenaId: string): Promise<ArenaAccessPro
       ...currentUser,
       arenaId,
       isOwner: true,
+      isPlatformAdmin:
+        platformAccessLevel === 'platform_admin' || platformAccessLevel === 'super_admin',
+      platformAccessLevel,
       role: 'Owner',
+      assignedStationId: null,
+      arenaUserId: null,
+    }
+  }
+
+  if (platformAccessLevel === 'platform_admin' || platformAccessLevel === 'super_admin') {
+    const { data: arena, error: arenaError } = await supabase
+      .from('arenas')
+      .select('id')
+      .eq('id', arenaId)
+      .maybeSingle()
+
+    if (arenaError) {
+      throw new Error(`Failed to verify arena existence: ${arenaError.message}`)
+    }
+
+    if (!arena) {
+      throw new AuthorizationError('Arena not found', 404)
+    }
+
+    return {
+      ...currentUser,
+      arenaId,
+      isOwner: false,
+      isPlatformAdmin: true,
+      platformAccessLevel,
+      role: 'PlatformAdmin',
       assignedStationId: null,
       arenaUserId: null,
     }
@@ -242,6 +276,8 @@ export async function assertArenaAccess(arenaId: string): Promise<ArenaAccessPro
     ...currentUser,
     arenaId,
     isOwner: false,
+    isPlatformAdmin: false,
+    platformAccessLevel,
     role,
     assignedStationId: linkedArena.station_id ?? null,
     arenaUserId: linkedArena.id ?? null,
@@ -295,7 +331,7 @@ export async function assertPlatformSuperAdminAccess(): Promise<PlatformSuperAdm
 export async function assertArenaBackofficeAccess(arenaId: string): Promise<ArenaAccessProfile> {
   const access = await assertArenaAccess(arenaId)
 
-  if (!access.isOwner && access.role === 'Caixa') {
+  if (!canAccessArenaBackoffice(access)) {
     throw new AuthorizationError('Forbidden', 403)
   }
 
@@ -310,7 +346,7 @@ export async function assertArenaBackofficeAccess(arenaId: string): Promise<Aren
 export async function assertArenaAdminAccess(arenaId: string): Promise<ArenaAccessProfile> {
   const access = await assertArenaAccess(arenaId)
 
-  if (!access.isOwner && access.role !== 'Gestor') {
+  if (!canManageArena(access)) {
     throw new AuthorizationError('Forbidden', 403)
   }
 
@@ -330,7 +366,7 @@ export async function assertArenaOwnerAccess(arenaId: string): Promise<ArenaAcce
 export async function assertArenaSubscriptionAccess(arenaId: string): Promise<ArenaAccessProfile> {
   const access = await assertArenaAccess(arenaId)
 
-  if (!access.isOwner && access.role !== 'Gestor') {
+  if (!canManageArenaSubscription(access)) {
     throw new AuthorizationError('Forbidden', 403)
   }
 

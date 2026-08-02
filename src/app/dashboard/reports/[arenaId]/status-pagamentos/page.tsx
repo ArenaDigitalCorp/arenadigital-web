@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { assertArenaBackofficeAccess } from '@/lib/server-auth'
+import { assertArenaAdminAccess } from '@/lib/server-auth'
 import { getPaymentStatusReportAction } from '@/modules/reports/actions/reportActions'
 import { StatusPagamentosPageClient } from '@/modules/reports/components/StatusPagamentosPageClient'
 import { format, startOfMonth, endOfMonth } from 'date-fns'
@@ -12,7 +12,7 @@ export default async function StatusPagamentosPage({
   const { arenaId } = await params
 
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaAdminAccess(arenaId)
   } catch {
     redirect('/dashboard/settings/arenas')
   }

@@ -13,7 +13,7 @@ export default async function SettingsArenasPage() {
         .select('arena_id')
         .eq('user_id', dbUserId)
         .in('status', ['Ativo', 'ativo', 'active'])
-        .in('role', ['Gestor', 'Atendente'])
+        .eq('role', 'Gestor')
 
     if (linkedError) {
         throw new Error(`Erro ao carregar arenas vinculadas: ${linkedError.message}`)

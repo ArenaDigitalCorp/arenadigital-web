@@ -3,6 +3,7 @@
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useArena } from "@/contexts/ArenaContext"
+import { canManageArena, type ArenaAccessRole } from "@/lib/arena-permissions"
 
 /**
  * Guard de acesso baseado em perfil.
@@ -15,7 +16,7 @@ import { useArena } from "@/contexts/ArenaContext"
  * @param allowedRoles Lista de roles que podem acessar a rota.
  *                     Usar ['admin'] para Owner/Gestor, ou roles explícitas.
  */
-export function useRoleGuard(allowedRoles: Array<'Owner' | 'Gestor' | 'Atendente' | 'Caixa' | 'admin'>) {
+export function useRoleGuard(allowedRoles: Array<ArenaAccessRole | 'admin'>) {
     const router = useRouter()
     const { selectedArena, selectedArenaDetails, isLoadingArenas } = useArena()
 
@@ -27,7 +28,7 @@ export function useRoleGuard(allowedRoles: Array<'Owner' | 'Gestor' | 'Atendente
 
         // 'admin' é um alias para Owner + Gestor
         const hasAccess = allowedRoles.some((allowed) => {
-            if (allowed === 'admin') return isOwner || role === 'Gestor'
+            if (allowed === 'admin') return canManageArena({ isOwner, role })
             return role === allowed || (allowed === 'Owner' && isOwner)
         })
 
@@ -51,7 +52,7 @@ export function useRoleGuard(allowedRoles: Array<'Owner' | 'Gestor' | 'Atendente
     const isOwner = selectedArenaDetails?.isOwner ?? false
 
     const hasAccess = !isLoading && allowedRoles.some((allowed) => {
-        if (allowed === 'admin') return isOwner || role === 'Gestor'
+        if (allowed === 'admin') return canManageArena({ isOwner, role: role! })
         return role === allowed || (allowed === 'Owner' && isOwner)
     })
 

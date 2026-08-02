@@ -1,4 +1,5 @@
 import { assertArenaBackofficeAccess } from '@/lib/server-auth'
+import { canManageArena } from '@/lib/arena-permissions'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { SupabaseArenaRepository } from '@/modules/arenas/repositories/SupabaseArenaRepository'
 import { SupabaseBookingRepository } from '@/modules/bookings/repositories/SupabaseBookingRepository'
@@ -20,8 +21,9 @@ export default async function ArenaDetailPage({
     const { id } = await params
     const { tab, tutorial } = await searchParams
 
+    let access: Awaited<ReturnType<typeof assertArenaBackofficeAccess>>
     try {
-        await assertArenaBackofficeAccess(id)
+        access = await assertArenaBackofficeAccess(id)
     } catch {
         redirect('/dashboard/settings/arenas')
     }
@@ -35,6 +37,7 @@ export default async function ArenaDetailPage({
                 initialCourts={buildTutorialCourts(id)}
                 initialBookings={buildTutorialBookings(id)}
                 initialTab={initialTab}
+                canManage={canManageArena(access)}
             />
         )
     }
@@ -67,6 +70,7 @@ export default async function ArenaDetailPage({
             initialCourts={courts}
             initialBookings={bookings}
             initialTab={initialTab}
+            canManage={canManageArena(access)}
         />
     )
 }
