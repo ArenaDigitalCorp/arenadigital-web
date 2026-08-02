@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { Activity, ArrowLeft, CalendarClock, CircleDollarSign, MapPinned, Settings2, UsersRound } from "lucide-react"
+import { Activity, ArrowLeft, CalendarClock, CircleDollarSign, LayoutGrid, MapPinned, Settings2, UsersRound } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { getPlatformAdminOverview } from "@/modules/platform-admin/actions/platformAdminActions"
 
@@ -45,7 +45,10 @@ export default async function AdminArenaDetailPage({ params }: { params: Promise
             <h1 className="font-heading text-3xl font-black md:text-5xl">{arena.name}</h1>
             <p className="mt-3 flex items-center gap-2 text-sm text-slate-400"><MapPinned className="h-4 w-4" />{[arena.cityName, arena.stateCode].filter(Boolean).join(" · ") || "Endereço geográfico pendente"}</p>
           </div>
-          <Link href={`/admin/settings?arena=${arena.id}`} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-white px-4 text-sm font-bold text-slate-950 hover:bg-orange-100"><Settings2 className="h-4 w-4" />Configurar Pix e split</Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href={`/dashboard/arenas/${arena.id}`} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 text-sm font-bold text-slate-950 hover:bg-orange-400"><LayoutGrid className="h-4 w-4" />Abrir espaços</Link>
+            <Link href={`/admin/settings?arena=${arena.id}`} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-white px-4 text-sm font-bold text-slate-950 hover:bg-orange-100"><Settings2 className="h-4 w-4" />Configurar Pix e split</Link>
+          </div>
         </div>
       </header>
 

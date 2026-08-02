@@ -65,6 +65,7 @@ interface Props {
   initialCourts: any[];
   initialBookings: Booking[];
   initialTab: ArenaDashboardTab;
+  canManage: boolean;
 }
 
 function getCurrentDayName() {
@@ -114,6 +115,7 @@ export function ArenaDetailPageClient({
   initialCourts,
   initialBookings,
   initialTab,
+  canManage,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
@@ -125,14 +127,16 @@ export function ArenaDetailPageClient({
   const [spaceToCopy, setSpaceToCopy] = useState<any>(null);
   const [copyName, setCopyName] = useState('');
   const [isCopyingSpace, setIsCopyingSpace] = useState(false);
-  const [activeTab, setActiveTab] = useState<ArenaDashboardTab>(initialTab);
+  const [activeTab, setActiveTab] = useState<ArenaDashboardTab>(
+    canManage ? initialTab : 'operacao'
+  );
   const [searchQuery, setSearchQuery] = useState('');
   const [isDayOperationOpen, setIsDayOperationOpen] = useState(false);
   const [isAvailableTimesOpen, setIsAvailableTimesOpen] = useState(false);
 
   useEffect(() => {
-    setActiveTab(initialTab);
-  }, [initialTab]);
+    setActiveTab(canManage ? initialTab : 'operacao');
+  }, [canManage, initialTab]);
 
   const handleDeleteCourt = async () => {
     if (!spaceToDelete) return;
@@ -179,6 +183,7 @@ export function ArenaDetailPageClient({
   };
 
   const handleTabChange = (tab: ArenaDashboardTab) => {
+    if (!canManage && tab !== 'operacao') return;
     setActiveTab(tab);
     router.replace(tab === 'espacos' ? pathname : `${pathname}?tab=${tab}`);
   };
@@ -234,13 +239,13 @@ export function ArenaDetailPageClient({
           value={activeTab}
           onChange={handleTabChange}
           tabs={[
-            { label: 'Espaços', value: 'espacos' },
+            ...(canManage ? [{ label: 'Espaços', value: 'espacos' as const }] : []),
             { label: 'Operação', value: 'operacao' },
-            { label: 'Cadastros', value: 'cadastro' },
+            ...(canManage ? [{ label: 'Cadastros', value: 'cadastro' as const }] : []),
           ]}
         />
 
-        {activeTab === 'espacos' && (
+        {canManage && activeTab === 'espacos' && (
           <div className="space-y-6">
             <div className="flex justify-end gap-3">
               <Button
@@ -399,7 +404,7 @@ export function ArenaDetailPageClient({
           </div>
         )}
 
-        {activeTab === 'cadastro' && (
+        {canManage && activeTab === 'cadastro' && (
           <div className="space-y-8">
             <Card className="rounded-lg border border-slate-100 bg-white px-6 py-6 shadow-sm">
               <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -565,7 +570,7 @@ export function ArenaDetailPageClient({
           )
         )}
 
-        <Dialog
+        {canManage && <Dialog
           open={!!selectedSpace}
           onOpenChange={(open) => {
             if (!open) setSelectedSpace(null);
@@ -679,9 +684,9 @@ export function ArenaDetailPageClient({
               </div>
             )}
           </DialogContent>
-        </Dialog>
+        </Dialog>}
 
-        <Dialog
+        {canManage && <Dialog
           open={!!spaceToCopy}
           onOpenChange={(open) => {
             if (!open && !isCopyingSpace) {
@@ -752,9 +757,9 @@ export function ArenaDetailPageClient({
               </div>
             </div>
           </DialogContent>
-        </Dialog>
+        </Dialog>}
 
-        <ConfirmActionDialog
+        {canManage && <ConfirmActionDialog
           open={!!spaceToDelete}
           onOpenChange={(open) => {
             if (!open && !isDeletingSpace) setSpaceToDelete(null);
@@ -765,7 +770,7 @@ export function ArenaDetailPageClient({
           loadingLabel="Excluindo..."
           loading={isDeletingSpace}
           onConfirm={handleDeleteCourt}
-        />
+        />}
 
         <DayOperationModal
           isOpen={isDayOperationOpen}

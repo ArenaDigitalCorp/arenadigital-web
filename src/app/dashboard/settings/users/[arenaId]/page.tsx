@@ -1,4 +1,4 @@
-import { assertArenaBackofficeAccess } from '@/lib/server-auth'
+import { assertArenaAdminAccess } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { getArenaUsersAction } from '@/modules/users/actions/userActions'
 import { UsersPageClient } from '@/modules/users/components/UsersPageClient'
@@ -16,7 +16,7 @@ export default async function UsersCRUDPage({
     const { tutorial } = await searchParams
 
     try {
-        await assertArenaBackofficeAccess(arenaId)
+        await assertArenaAdminAccess(arenaId)
     } catch {
         redirect('/dashboard/settings/arenas')
     }

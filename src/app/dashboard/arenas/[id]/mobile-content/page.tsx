@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation"
-import { assertArenaBackofficeAccess } from "@/lib/server-auth"
+import { assertArenaAdminAccess } from "@/lib/server-auth"
 import { getSupabaseAdmin } from "@/lib/supabase-server"
 import { SupabaseArenaRepository } from "@/modules/arenas/repositories/SupabaseArenaRepository"
 import { MobileContentPageClient } from "@/modules/mobile-content/components/MobileContentPageClient"
@@ -19,7 +19,7 @@ export default async function ArenaMobileContentPage({
   const { id } = await params
 
   try {
-    await assertArenaBackofficeAccess(id)
+    await assertArenaAdminAccess(id)
   } catch {
     redirect("/dashboard/settings/arenas")
   }

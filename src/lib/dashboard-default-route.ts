@@ -1,6 +1,8 @@
 import { fetchArenaMembershipsByUser } from '@/lib/arena-users'
-import { requireAuthenticatedDbUser } from '@/lib/server-auth'
+import { getPlatformAccessLevel, requireAuthenticatedDbUser } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
+import type { ArenaAccessRole } from '@/lib/arena-permissions'
+import { canManageArena } from '@/lib/arena-permissions'
 
 type DashboardSection =
   | 'arena'
@@ -19,7 +21,7 @@ type DashboardSection =
 type AccessibleArenaTarget = {
   arenaId: string
   isOwner: boolean
-  role: 'Owner' | 'Gestor' | 'Atendente' | 'Caixa'
+  role: ArenaAccessRole
   assignedStationId: string | null
   name: string
 }
@@ -27,10 +29,16 @@ type AccessibleArenaTarget = {
 async function getAccessibleArenaTargets(): Promise<AccessibleArenaTarget[]> {
   const { dbUserId } = await requireAuthenticatedDbUser()
   const supabase = getSupabaseAdmin()
+  const platformAccessLevel = await getPlatformAccessLevel(dbUserId)
+  const isPlatformAdmin =
+    platformAccessLevel === 'platform_admin' || platformAccessLevel === 'super_admin'
 
-  const [ownedArenasResult, linkedArenasResult] = await Promise.all([
+  const [ownedArenasResult, linkedArenasResult, platformArenasResult] = await Promise.all([
     supabase.from('arenas').select('id, name').eq('owner_id', dbUserId).order('name'),
-    fetchArenaMembershipsByUser(supabase, dbUserId, true)
+    fetchArenaMembershipsByUser(supabase, dbUserId, true),
+    isPlatformAdmin
+      ? supabase.from('arenas').select('id, name').order('name')
+      : Promise.resolve({ data: [], error: null }),
   ])
 
   if (ownedArenasResult.error) {
@@ -39,6 +47,10 @@ async function getAccessibleArenaTargets(): Promise<AccessibleArenaTarget[]> {
 
   if (linkedArenasResult.error) {
     throw new Error(`Failed to load linked arenas: ${linkedArenasResult.error.message}`)
+  }
+
+  if (platformArenasResult.error) {
+    throw new Error(`Failed to load platform arenas: ${platformArenasResult.error.message}`)
   }
 
   const arenaMap = new Map<string, AccessibleArenaTarget>()
@@ -50,6 +62,17 @@ async function getAccessibleArenaTargets(): Promise<AccessibleArenaTarget[]> {
       role: 'Owner',
       assignedStationId: null,
       name: arena.name
+    })
+  }
+
+  for (const arena of platformArenasResult.data ?? []) {
+    if (arenaMap.has(arena.id)) continue
+    arenaMap.set(arena.id, {
+      arenaId: arena.id,
+      isOwner: false,
+      role: 'PlatformAdmin',
+      assignedStationId: null,
+      name: arena.name,
     })
   }
 
@@ -92,6 +115,22 @@ export async function resolveDashboardDefaultRoute(section: DashboardSection): P
       : '/dashboard/settings/arenas'
   }
 
+  if (section === 'finance' || section === 'products' || section === 'users' || section === 'reports') {
+    const adminArena = arenas.find((arena) => canManageArena(arena))
+    if (!adminArena) return '/dashboard'
+
+    switch (section) {
+      case 'finance':
+        return `/dashboard/finance/${adminArena.arenaId}`
+      case 'products':
+        return `/dashboard/settings/products/${adminArena.arenaId}`
+      case 'users':
+        return `/dashboard/settings/users/${adminArena.arenaId}`
+      case 'reports':
+        return `/dashboard/reports/${adminArena.arenaId}/status-pagamentos`
+    }
+  }
+
   const primaryArena = arenas[0]
   if (!primaryArena) {
     return '/dashboard/settings/arenas'
@@ -108,20 +147,12 @@ export async function resolveDashboardDefaultRoute(section: DashboardSection): P
       return `/dashboard/arenas/${primaryArena.arenaId}`
     case 'stations':
       return `/dashboard/arenas/${primaryArena.arenaId}/stations`
-    case 'finance':
-      return `/dashboard/finance/${primaryArena.arenaId}`
-    case 'products':
-      return `/dashboard/settings/products/${primaryArena.arenaId}`
     case 'loyalty':
       return `/dashboard/loyalty/${primaryArena.arenaId}`
     case 'rotativo':
       return `/dashboard/rotativo/${primaryArena.arenaId}`
     case 'athletes':
       return `/dashboard/athletes/${primaryArena.arenaId}`
-    case 'users':
-      return `/dashboard/settings/users/${primaryArena.arenaId}`
-    case 'reports':
-      return `/dashboard/reports/${primaryArena.arenaId}/status-pagamentos`
     case 'notifications':
       return `/dashboard/notifications/${primaryArena.arenaId}`
     default:
