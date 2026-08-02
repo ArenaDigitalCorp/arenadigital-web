@@ -41,7 +41,7 @@ export interface StationOrder {
     arena_id: string;
     station_id: string;
     /** Preenchido quando a query inclui `station:stations(...)`. */
-    station?: { station_type_id: string | null } | null;
+    station?: { name?: string; station_type_id: string | null } | null;
     atleta_id?: string;
     customer_id?: string;
     order_number: number;
@@ -53,6 +53,18 @@ export interface StationOrder {
     closed_at?: string;
     station_order_items?: StationOrderItem[];
     station_payments?: StationOrderPayment[];
-    atleta?: { nome_perfil: string };
-    station_customer?: { name: string };
+    atleta?: { nome_perfil: string; telefone?: string | null; cpf?: string | null };
+    station_customer?: { name: string; phone?: string | null; cpf?: string | null };
+}
+
+export interface OrderPrintArena {
+    name: string;
+    phone?: string | null;
+    cpfCnpj: string | null;
+    street: string | null;
+    number: string | null;
+    complement: string | null;
+    neighborhood: string | null;
+    city: string | null;
+    stateUf: string | null;
 }

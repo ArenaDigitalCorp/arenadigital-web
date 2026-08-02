@@ -2,6 +2,7 @@
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { assertArenaAccess, assertStationAccess, assertStationOrderAccess, requireAuthenticatedDbUser } from '@/lib/server-auth'
+import { getArenaBillingAddress } from '@/modules/arenas/usecases/get-arena-billing-address.usecase'
 import type { Database } from '@/types/supabase.types'
 
 type StationOrderInsert = Database['public']['Tables']['station_orders']['Insert']
@@ -59,9 +60,9 @@ export async function getCustomersByArenaAction(arenaId: string) {
 
 const ORDER_WITH_RELATIONS = `
     *,
-    atleta:atleta(nome_perfil),
-    station_customer:station_customers(name),
-    station:stations(station_type_id),
+    atleta:atleta(nome_perfil, telefone, cpf),
+    station_customer:station_customers(name, phone, cpf),
+    station:stations!station_orders_station_id_fkey(name, station_type_id),
     station_order_items(*, product:products(name)),
     station_payments(*)
 ` as const
@@ -80,6 +81,41 @@ export async function getOrderByIdAction(arenaId: string, orderId: string) {
         return { success: true, data }
     } catch (err) {
         const message = err instanceof Error ? err.message : 'Erro ao buscar comanda'
+        return { success: false, error: message, data: null }
+    }
+}
+
+export async function getOrderPrintDataAction(arenaId: string, orderId: string) {
+    try {
+        await assertStationOrderAccess(orderId, arenaId)
+        const supabase = getSupabaseAdmin()
+        const [orderResult, arenaResult, billingAddress] = await Promise.all([
+            supabase
+                .from('station_orders')
+                .select(ORDER_WITH_RELATIONS)
+                .eq('id', orderId)
+                .eq('arena_id', arenaId)
+                .single(),
+            supabase
+                .from('arenas')
+                .select('name, phone')
+                .eq('id', arenaId)
+                .single(),
+            getArenaBillingAddress(arenaId),
+        ])
+
+        if (orderResult.error) throw new Error(orderResult.error.message)
+        if (arenaResult.error) throw new Error(arenaResult.error.message)
+
+        return {
+            success: true,
+            data: {
+                order: orderResult.data,
+                arena: { ...arenaResult.data, ...billingAddress },
+            },
+        }
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Erro ao buscar dados para impressão'
         return { success: false, error: message, data: null }
     }
 }
