@@ -2,12 +2,13 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { ChevronLeft, Loader2, Trash2 } from 'lucide-react';
+import { ChevronLeft, Loader2, Printer, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import type { StationOrder } from '@/modules/stations/types/station.types';
 import {
   getOrderByIdAction,
+  getOrderPrintDataAction,
   updateOrderAction,
 } from '@/modules/stations/actions/orderActions';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -16,6 +17,7 @@ import { RegisterPaymentModal } from '@/modules/stations/components/RegisterPaym
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import { ARENA_BRAND_HEX } from '@/constants/arena-brand-hex';
 
 export default function OrderDetailsPage() {
   const params = useParams();
@@ -29,6 +31,7 @@ export default function OrderDetailsPage() {
   const [isLaunchModalOpen, setIsLaunchModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
 
   const loadOrderData = async () => {
     setIsLoading(true);
@@ -66,6 +69,125 @@ export default function OrderDetailsPage() {
       toast.error('Erro ao cancelar comanda.');
     } finally {
       setIsCancelling(false);
+    }
+  };
+
+  const handlePrint = async () => {
+    if (!order) return;
+    setIsPrinting(true);
+    try {
+      const res = await getOrderPrintDataAction(arenaId, orderId);
+      if (!res.success || !res.data) throw new Error(res.error);
+      const { order: printOrder, arena } = res.data;
+
+      const printWindow = window.open('', '_blank', 'width=420,height=800');
+      if (!printWindow) {
+        toast.error('Habilite pop-ups para imprimir.');
+        return;
+      }
+
+      const totalPaidPrint =
+        printOrder.station_payments?.reduce((acc, p) => acc + p.amount, 0) || 0;
+      const balancePrint = printOrder.total_value - totalPaidPrint;
+      const customerName =
+        printOrder.atleta?.nome_perfil ||
+        printOrder.station_customer?.name ||
+        printOrder.customer_name ||
+        'Cliente avulso';
+      const customerDoc =
+        printOrder.atleta?.cpf || printOrder.station_customer?.cpf || null;
+      const customerPhone =
+        printOrder.atleta?.telefone || printOrder.station_customer?.phone || null;
+
+      const addressParts = [
+        arena.street,
+        arena.number ? `nº ${arena.number}` : null,
+        arena.complement,
+      ]
+        .filter(Boolean)
+        .join(', ');
+      const cityLine = [arena.neighborhood, [arena.city, arena.stateUf].filter(Boolean).join('/')]
+        .filter(Boolean)
+        .join(' - ');
+
+      const money = (v: number) => `R$ ${v.toFixed(2).replace('.', ',')}`;
+
+      const itemsRows = (printOrder.station_order_items ?? [])
+        .map(
+          (item) => `
+        <tr>
+          <td class="qty">${item.quantity}x</td>
+          <td class="desc">${item.product?.name ?? ''}</td>
+          <td class="val">${money(item.total_price)}</td>
+        </tr>`
+        )
+        .join('');
+
+      const paymentsRows = (printOrder.station_payments ?? [])
+        .map(
+          (p) => `
+        <tr>
+          <td class="desc" colspan="2">${p.payment_method}${p.paid_by_name ? ` — ${p.paid_by_name}` : ''}</td>
+          <td class="val">${money(p.amount)}</td>
+        </tr>`
+        )
+        .join('');
+
+      printWindow.document.write(`
+<html><head>
+<title>Romaneio — Comanda #${printOrder.order_number.toString().padStart(3, '0')}</title>
+<style>
+  @page { size: 80mm auto; margin: 4mm; }
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box; }
+  body { font-family: 'Courier New', monospace; color: ${ARENA_BRAND_HEX.navy800}; background: #fff; width: 76mm; font-size: 11px; }
+  h1 { font-size: 13px; font-weight: 700; text-align: center; margin: 0 0 2px; }
+  .center { text-align: center; }
+  .muted { color: #555; }
+  .sep { border-top: 1px dashed #000; margin: 6px 0; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 2px 0; vertical-align: top; }
+  td.qty { width: 28px; }
+  td.val { width: 64px; text-align: right; white-space: nowrap; }
+  .totals td { padding-top: 3px; font-weight: 700; }
+  .badge { display: inline-block; margin-top: 4px; padding: 2px 6px; border: 1px solid #000; font-size: 10px; }
+  footer { margin-top: 10px; text-align: center; font-size: 9px; color: #555; }
+</style>
+</head><body>
+  <h1>${arena.name}</h1>
+  ${addressParts ? `<p class="center muted">${addressParts}</p>` : ''}
+  ${cityLine ? `<p class="center muted">${cityLine}</p>` : ''}
+  ${arena.cpfCnpj ? `<p class="center muted">CNPJ: ${arena.cpfCnpj}</p>` : ''}
+  ${arena.phone ? `<p class="center muted">Tel: ${arena.phone}</p>` : ''}
+  <div class="sep"></div>
+  <p class="center"><strong>ROMANEIO DE COMANDA</strong></p>
+  <p class="center muted">Não é documento fiscal</p>
+  <div class="sep"></div>
+  <p>Comanda: #${printOrder.order_number.toString().padStart(3, '0')}${printOrder.station?.name ? ` — ${printOrder.station.name}` : ''}</p>
+  <p>Abertura: ${format(new Date(printOrder.created_at), "dd/MM/yyyy HH:mm:ss")}</p>
+  <p>Cliente: ${customerName}</p>
+  ${customerDoc ? `<p>CPF: ${customerDoc}</p>` : ''}
+  ${customerPhone ? `<p>Telefone: ${customerPhone}</p>` : ''}
+  <div class="sep"></div>
+  <table>
+    ${itemsRows}
+  </table>
+  <div class="sep"></div>
+  <table class="totals">
+    <tr><td colspan="2">Total produtos:</td><td class="val">${money(printOrder.total_value)}</td></tr>
+    ${paymentsRows ? `<tr><td colspan="3" style="padding-top:6px;font-weight:400" class="muted">Pagamentos:</td></tr>${paymentsRows}` : ''}
+    <tr><td colspan="2">Total pago:</td><td class="val">${money(totalPaidPrint)}</td></tr>
+    <tr><td colspan="2">Saldo restante:</td><td class="val">${money(balancePrint)}</td></tr>
+  </table>
+  <p class="center badge">${printOrder.status === 'closed' ? 'FECHADA' : printOrder.status === 'cancelled' ? 'CANCELADA' : 'ABERTA'}</p>
+  <footer>Impresso em ${format(new Date(), "dd/MM/yyyy 'às' HH:mm:ss")}<br/>Arena Digital</footer>
+  <script>window.onload=()=>{setTimeout(()=>window.print(),400)}</script>
+</body></html>`);
+      printWindow.document.close();
+    } catch (error) {
+      console.error('Error printing order:', error);
+      toast.error('Erro ao gerar romaneio para impressão.');
+    } finally {
+      setIsPrinting(false);
     }
   };
 
@@ -132,30 +254,46 @@ export default function OrderDetailsPage() {
                 'N/A'}
             </p>
           </div>
-          <div
-            className={cn(
-              'rounded-xl p-4 shadow-lg flex items-center gap-4',
-              balance > 0
-                ? 'bg-[linear-gradient(90deg,#F97415_0%,#F9A91F_100%)] text-white shadow-[#F97415]/25'
-                : 'bg-[#E6F8F7] text-arena-navy-800 shadow-[#20B2AA]/10'
-            )}
-          >
-            <span
+          <div className="flex items-center gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handlePrint}
+              disabled={isPrinting}
+              className="rounded-xl border-arena-navy-800/10 font-semibold text-arena-navy-800 shadow-sm hover:bg-arena-navy-800/5"
+            >
+              {isPrinting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Printer className="h-4 w-4" />
+              )}
+              Imprimir romaneio
+            </Button>
+            <div
               className={cn(
-                'font-bold uppercase text-xs',
-                balance > 0 ? 'text-white/85' : 'text-arena-navy-800/60'
+                'rounded-xl p-4 shadow-lg flex items-center gap-4',
+                balance > 0
+                  ? 'bg-[linear-gradient(90deg,#F97415_0%,#F9A91F_100%)] text-white shadow-[#F97415]/25'
+                  : 'bg-[#E6F8F7] text-arena-navy-800 shadow-[#20B2AA]/10'
               )}
             >
-              Saldo:
-            </span>
-            <span
-              className={cn(
-                'text-2xl font-black tabular-nums',
-                balance > 0 ? 'text-white' : 'text-arena-navy-800'
-              )}
-            >
-              R$ {balance.toFixed(2).replace('.', ',')}
-            </span>
+              <span
+                className={cn(
+                  'font-bold uppercase text-xs',
+                  balance > 0 ? 'text-white/85' : 'text-arena-navy-800/60'
+                )}
+              >
+                Saldo:
+              </span>
+              <span
+                className={cn(
+                  'text-2xl font-black tabular-nums',
+                  balance > 0 ? 'text-white' : 'text-arena-navy-800'
+                )}
+              >
+                R$ {balance.toFixed(2).replace('.', ',')}
+              </span>
+            </div>
           </div>
         </div>
       </div>
