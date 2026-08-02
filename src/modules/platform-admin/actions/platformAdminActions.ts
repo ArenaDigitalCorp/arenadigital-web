@@ -24,9 +24,11 @@ type PlatformRpcClient = {
     name:
       | 'list_platform_principals'
       | 'list_platform_security_audit'
+      | 'list_platform_arena_metadata'
       | 'list_internal_employee_plan_assignments'
       | 'manage_platform_principal'
-      | 'manage_internal_employee_plan',
+      | 'manage_internal_employee_plan'
+      | 'manage_platform_arena_profile',
     args: Record<string, unknown>,
   ) => Promise<{ data: unknown; error: { message: string } | null }>
 }
@@ -37,7 +39,6 @@ type ArenaRow = {
   status: string | null
   platform_kind: PlatformArenaKind | null
   app_discoverable: boolean | null
-  platform_notes: string | null
   owner_id: string | null
   created_at: string
   owner: { id: string; name: string | null; email: string } | { id: string; name: string | null; email: string }[] | null
@@ -78,6 +79,7 @@ type BookingActivityRow = { arena_id: string; athlete_id: string | null; start_t
 type AthleteEntitlementRow = { atleta_id: string; plan: 'free' | 'plus'; status: string }
 type MunicipalityRow = { codigo_ibge: number; nome: string; codigo_uf: number }
 type StateRow = { codigo_uf: number; uf: string }
+type ArenaPlatformMetadataRow = { arena_id: string; platform_notes: string | null; updated_at: string }
 
 type ArenaPaymentAccountRow = {
   arena_id: string
@@ -97,6 +99,7 @@ type ArenaPaymentAccountRow = {
   last_status_checked_at: string | null
   activated_at: string | null
   webhook_token_hash: string | null
+  credential_recovery_pending: boolean | null
   metadata: unknown
   updated_at: string | null
 }
@@ -162,16 +165,6 @@ const platformArenaProfileInputSchema = z.object({
     })
   }
 })
-
-type ArenasPlatformProfileQuery = {
-  update(payload: {
-    platform_kind: PlatformArenaKind
-    app_discoverable: boolean
-    platform_notes: string | null
-  }): {
-    eq(column: 'id', value: string): Promise<{ error: { message: string } | null }>
-  }
-}
 
 function asRpcClient(): PlatformRpcClient {
   return getSupabaseAdmin() as unknown as PlatformRpcClient
@@ -255,12 +248,7 @@ function mapPixSplitSettings(row: ArenaPaymentAccountRow | undefined): ArenaPixS
   const paymentFlow = 'arena_subaccount_split' as const
   const webhookConfigured = Boolean(row.webhook_token_hash)
   const credentialRecoveryRequired =
-    Boolean(
-      row.metadata &&
-      !Array.isArray(row.metadata) &&
-      typeof row.metadata === 'object' &&
-      typeof (row.metadata as Record<string, unknown>).asaasCredentialRecovery === 'string',
-    ) || (onboardingStarted && !row.asaas_account_id)
+    row.credential_recovery_pending === true || (onboardingStarted && !row.asaas_account_id)
   return {
     enabled:
       row.status === 'active' &&
@@ -347,6 +335,7 @@ export async function getPlatformAdminOverview(
     principalsResult,
     assignmentsResult,
     auditResult,
+    arenaMetadataResult,
   ] = await Promise.all([
     supabase
       .from('users')
@@ -355,7 +344,7 @@ export async function getPlatformAdminOverview(
       .limit(1000),
     supabase
       .from('arenas')
-      .select('id, name, status, platform_kind, app_discoverable, platform_notes, owner_id, created_at, location, id_municipio, email, phone, cpf_cnpj, address, number, complement, neighborhood, zip_code, owner:users!arenas_owner_id_fkey(id, name, email)')
+      .select('id, name, status, platform_kind, app_discoverable, owner_id, created_at, location, id_municipio, email, phone, cpf_cnpj, address, number, complement, neighborhood, zip_code, owner:users!arenas_owner_id_fkey(id, name, email)')
       .order('created_at', { ascending: false })
       .limit(1000),
     supabase.from('municipios').select('codigo_ibge, nome, codigo_uf').limit(6000),
@@ -368,7 +357,7 @@ export async function getPlatformAdminOverview(
       ? supabase
           .from('arena_payment_accounts')
           .select(
-            'arena_id, asaas_wallet_id, asaas_account_id, holder_name, holder_document, pix_key, platform_fee_basis_points, status, payment_flow, onboarding_status, commercial_info_status, bank_account_info_status, documentation_status, onboarding_url, last_status_checked_at, activated_at, webhook_token_hash, metadata, updated_at',
+            'arena_id, asaas_wallet_id, asaas_account_id, holder_name, holder_document, pix_key, platform_fee_basis_points, status, payment_flow, onboarding_status, commercial_info_status, bank_account_info_status, documentation_status, onboarding_url, last_status_checked_at, activated_at, webhook_token_hash, credential_recovery_pending, metadata, updated_at',
           )
           .eq('provider', 'asaas')
           .limit(1000)
@@ -404,6 +393,7 @@ export async function getPlatformAdminOverview(
     rpc.rpc('list_platform_principals', { p_actor_user_id: profile.dbUserId }),
     rpc.rpc('list_internal_employee_plan_assignments', { p_actor_user_id: profile.dbUserId }),
     rpc.rpc('list_platform_security_audit', { p_actor_user_id: profile.dbUserId, p_limit: 100 }),
+    rpc.rpc('list_platform_arena_metadata', { p_actor_user_id: profile.dbUserId }),
   ])
 
   const queryError =
@@ -421,7 +411,8 @@ export async function getPlatformAdminOverview(
     bookingActivityResult.error ??
     principalsResult.error ??
     assignmentsResult.error ??
-    auditResult.error
+    auditResult.error ??
+    arenaMetadataResult.error
 
   if (queryError) {
     throw new Error(`Falha ao carregar a administração da plataforma: ${queryError.message}`)
@@ -440,6 +431,9 @@ export async function getPlatformAdminOverview(
 
   const paymentAccounts = new Map(
     ((paymentAccountsResult.data ?? []) as ArenaPaymentAccountRow[]).map((account) => [account.arena_id, account]),
+  )
+  const arenaMetadata = new Map(
+    ((arenaMetadataResult.data ?? []) as ArenaPlatformMetadataRow[]).map((metadata) => [metadata.arena_id, metadata]),
   )
 
   const users: PlatformUser[] = (usersResult.data ?? []).map((user) => ({
@@ -516,7 +510,7 @@ export async function getPlatformAdminOverview(
       status: arena.status,
       platformKind: arena.platform_kind ?? 'customer',
       appDiscoverable: arena.app_discoverable ?? true,
-      platformNotes: arena.platform_notes ?? null,
+      platformNotes: arenaMetadata.get(arena.id)?.platform_notes ?? null,
       commercialStatus: commercialStatus(
         arena.status,
         subscription?.status ?? null,
@@ -687,35 +681,15 @@ export async function updatePlatformArenaProfileAction(
   try {
     const profile = await assertPlatformSuperAdminAccess()
     const parsed = platformArenaProfileInputSchema.parse(input)
-    const supabase = getSupabaseAdmin()
-    const { error } = await (
-      supabase as unknown as { from(table: 'arenas'): ArenasPlatformProfileQuery }
-    ).from('arenas').update({
-      platform_kind: parsed.platformKind,
-      app_discoverable: parsed.appDiscoverable,
-      platform_notes: parsed.platformNotes?.trim() || null,
-    }).eq('id', parsed.arenaId)
-
-    if (error) throw new Error(error.message)
-
-    const { error: auditError } = await supabase.from('audit_logs').insert({
-      entity_type: 'arena',
-      entity_id: parsed.arenaId,
-      action: 'platform_arena_profile_updated',
-      actor_id: profile.dbUserId,
-      actor_type: 'user',
-      new_value: {
-        platform_kind: parsed.platformKind,
-        app_discoverable: parsed.appDiscoverable,
-      },
-      metadata: {
-        source: 'super_admin_backoffice',
-        reason: parsed.reason,
-      },
+    const { error } = await asRpcClient().rpc('manage_platform_arena_profile', {
+      p_actor_user_id: profile.dbUserId,
+      p_arena_id: parsed.arenaId,
+      p_platform_kind: parsed.platformKind,
+      p_app_discoverable: parsed.appDiscoverable,
+      p_platform_notes: parsed.platformNotes?.trim() || null,
+      p_reason: parsed.reason,
     })
-    if (auditError) {
-      console.error('[updatePlatformArenaProfileAction] Failed to record audit event', auditError.message)
-    }
+    if (error) throw new Error(error.message)
 
     revalidatePath('/admin/arenas')
     revalidatePath(`/admin/arenas/${parsed.arenaId}`)

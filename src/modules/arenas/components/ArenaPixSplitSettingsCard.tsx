@@ -390,7 +390,7 @@ export function ArenaPixSplitSettingsCard({
                     <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
                         <div>
                             <h4 id="split-operation-title" className="text-sm font-bold text-slate-950">Operação do split</h4>
-                            <p className="mt-1 text-xs leading-5 text-slate-500">A taxa atual passa a valer nas cobranças criadas após o salvamento.</p>
+                            <p className="mt-1 text-xs leading-5 text-slate-500">A comissão é calculada sobre o valor bruto e enviada como valor fixo em cada nova cobrança. A arena recebe o saldo líquido após a tarifa do Asaas.</p>
                         </div>
                         <div className="flex items-start gap-4">
                             <div className="text-right">

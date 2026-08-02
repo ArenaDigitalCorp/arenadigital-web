@@ -16,6 +16,9 @@ function exportedFunctionBody(contents, functionName) {
 test('destructive arena operations remain owner-only and Pix settings are super-admin only', async () => {
   const contents = await source('src/modules/arenas/actions/arenaActions.ts')
   assert.match(exportedFunctionBody(contents, 'deleteArenaAction'), /assertArenaOwnerAccess\(arenaId\)/)
+  assert.match(exportedFunctionBody(contents, 'createArenaAction'), /arenaSchema\.parse\(input\)/)
+  assert.match(exportedFunctionBody(contents, 'createArenaAction'), /owner_id: dbUserId/)
+  assert.match(exportedFunctionBody(contents, 'updateArenaAction'), /arenaSchema\.partial\(\)\.parse\(input\)/)
 
   for (const name of ['getArenaPixSplitSettingsAction', 'updateArenaPixSplitSettingsAction']) {
     const body = exportedFunctionBody(contents, name)
@@ -99,6 +102,16 @@ test('platform principal management protects the last active super admin', async
 test('internal employee plan management is super-admin only', async () => {
   const actions = await source('src/modules/platform-admin/actions/platformAdminActions.ts')
   assert.match(exportedFunctionBody(actions, 'manageInternalEmployeePlanAction'), /assertPlatformSuperAdminAccess\(\)/)
+})
+
+test('arena classification and notes are committed by one audited super-admin RPC', async () => {
+  const actions = await source('src/modules/platform-admin/actions/platformAdminActions.ts')
+  const updateProfile = exportedFunctionBody(actions, 'updatePlatformArenaProfileAction')
+  assert.match(updateProfile, /assertPlatformSuperAdminAccess\(\)/)
+  assert.match(updateProfile, /rpc\('manage_platform_arena_profile'/)
+  assert.doesNotMatch(updateProfile, /from\('arenas'\)\.update/)
+  assert.match(actions, /list_platform_arena_metadata/u)
+  assert.doesNotMatch(actions, /app_discoverable, platform_notes, owner_id/u)
 })
 
 test('user and finance mutations remain restricted to Owner or Gestor', async () => {

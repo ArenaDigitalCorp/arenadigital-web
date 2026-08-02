@@ -10,9 +10,13 @@ const BOOKING_WEBHOOK_EVENTS = [
   'PAYMENT_RECEIVED',
   'PAYMENT_OVERDUE',
   'PAYMENT_REFUND_IN_PROGRESS',
+  'PAYMENT_REFUND_DENIED',
   'PAYMENT_REFUNDED',
   'PAYMENT_DELETED',
   'PAYMENT_RESTORED',
+  'PAYMENT_SPLIT_CANCELLED',
+  'PAYMENT_SPLIT_DIVERGENCE_BLOCK',
+  'PAYMENT_SPLIT_DIVERGENCE_BLOCK_FINISHED',
 ] as const
 
 export type AsaasRegistrationStatus = 'PENDING' | 'AWAITING_APPROVAL' | 'APPROVED' | 'REJECTED'
@@ -23,7 +27,7 @@ export type AsaasSubaccountCreation = {
   apiKey: string
 }
 
-type AsaasSubaccountSummary = {
+export type AsaasSubaccountSummary = {
   id: string
   walletId: string
   cpfCnpj?: string | null
@@ -31,6 +35,17 @@ type AsaasSubaccountSummary = {
 
 type AsaasSubaccountList = {
   data?: AsaasSubaccountSummary[]
+}
+
+export class AsaasRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly payload: unknown,
+  ) {
+    super(message)
+    this.name = 'AsaasRequestError'
+  }
 }
 
 type AsaasSubaccountAccessToken = {
@@ -120,8 +135,18 @@ async function asaasRequest<T>(path: string, apiKey: string, init: { method?: 'G
       payload = null
     }
   }
-  if (!response.ok) throw new Error(errorMessage(response.status, payload))
+  if (!response.ok) throw new AsaasRequestError(errorMessage(response.status, payload), response.status, payload)
   return payload as T
+}
+
+export async function findAsaasSubaccountsByDocument(cpfCnpj: string): Promise<AsaasSubaccountSummary[]> {
+  assertBaasEnabled()
+  const document = cpfCnpj.replace(/\D/gu, '')
+  const response = await asaasRequest<AsaasSubaccountList>(
+    `/v3/accounts?cpfCnpj=${encodeURIComponent(document)}&limit=3`,
+    parentApiKey(),
+  )
+  return response.data ?? []
 }
 
 function webhookConfiguration(email: string, webhookToken: string) {

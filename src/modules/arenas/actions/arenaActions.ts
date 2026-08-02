@@ -19,11 +19,14 @@ import {
     updateArenaPixSplitSettingsSchema,
 } from '@/modules/arenas/schemas/asaas-baas.schema'
 import {
+    AsaasRequestError,
     assertArenaAsaasRuntimeCredentials,
     createAsaasSubaccount,
+    findAsaasSubaccountsByDocument,
     getArenaAsaasOnboardingSnapshot,
     recoverAsaasSubaccountCredential,
 } from '@/modules/arenas/services/asaas-baas.service'
+import { arenaSchema } from '@/modules/arenas/schemas/arena.schema'
 import type { AsaasSubaccountCreation } from '@/modules/arenas/services/asaas-baas.service'
 import type { CreateArenaDTO, UpdateArenaDTO } from '@/modules/arenas/types/arena.types'
 import type {
@@ -106,12 +109,14 @@ export async function getArenaByIdAction(arenaId: string) {
 export async function createArenaAction(input: CreateArenaDTO) {
     try {
         const { dbUserId } = await assertArenaCreationAccess()
-        const location = input.location ?? (await resolveArenaLocation(input)) ?? undefined
-        const arena = await new SupabaseArenaRepository(getSupabaseAdmin()).create({
-            ...input,
-            ...(location ? { location: location as CreateArenaDTO['location'] } : {}),
+        const parsed = arenaSchema.parse(input)
+        const location = (await resolveArenaLocation(parsed as unknown as Partial<CreateArenaDTO>)) ?? undefined
+        const payload = {
+            ...parsed,
+            ...(location ? { location } : {}),
             owner_id: dbUserId,
-        })
+        } as unknown as CreateArenaDTO
+        const arena = await new SupabaseArenaRepository(getSupabaseAdmin()).create(payload)
         revalidatePath('/dashboard/settings/arenas')
         return { success: true, data: arena }
     } catch (err) {
@@ -169,13 +174,13 @@ export async function getMunicipioByIbgeAction(codigoIbge: number) {
 export async function updateArenaAction(arenaId: string, input: UpdateArenaDTO) {
     try {
         await assertArenaAdminAccess(arenaId)
-        const safeInput = { ...input }
-        delete safeInput.owner_id
-        const location = safeInput.location ?? (await resolveArenaLocation(safeInput)) ?? undefined
-        const arena = await new SupabaseArenaRepository(getSupabaseAdmin()).update(arenaId, {
+        const safeInput = arenaSchema.partial().parse(input)
+        const location = (await resolveArenaLocation(safeInput as unknown as Partial<CreateArenaDTO>)) ?? undefined
+        const payload = {
             ...safeInput,
-            ...(location ? { location: location as UpdateArenaDTO['location'] } : {}),
-        })
+            ...(location ? { location } : {}),
+        } as unknown as UpdateArenaDTO
+        const arena = await new SupabaseArenaRepository(getSupabaseAdmin()).update(arenaId, payload)
         revalidatePath(`/dashboard/arenas/${arenaId}/edit`)
         revalidatePath('/dashboard/settings/arenas')
         return { success: true, data: arena }
@@ -230,6 +235,7 @@ type ArenaPaymentAccountRow = {
     last_status_checked_at: string | null
     activated_at: string | null
     webhook_token_hash: string | null
+    credential_recovery_pending: boolean | null
     metadata: Json | null
     updated_at: string | null
 }
@@ -270,6 +276,31 @@ type ClaimSubaccountProvisioningRpc = {
     ): Promise<{ data: boolean | null; error: { message: string } | null }>
 }
 
+type SubaccountRecoveryRpc = {
+    rpc(
+        name: 'store_arena_asaas_credential_recovery',
+        args: {
+            p_arena_id: string
+            p_account_id: string
+            p_wallet_id: string
+            p_encrypted_payload: string
+            p_expires_at: string
+        },
+    ): Promise<{ error: SupabaseErrorLike | null }>
+    rpc(
+        name: 'get_arena_asaas_credential_recovery',
+        args: { p_arena_id: string },
+    ): Promise<{ data: unknown; error: SupabaseErrorLike | null }>
+    rpc(
+        name: 'delete_arena_asaas_credential_recovery',
+        args: { p_arena_id: string },
+    ): Promise<{ error: SupabaseErrorLike | null }>
+    rpc(
+        name: 'release_arena_asaas_subaccount_provisioning',
+        args: { p_arena_id: string; p_request_id: string; p_reason: string },
+    ): Promise<{ data: boolean | null; error: SupabaseErrorLike | null }>
+}
+
 const PAYMENT_ACCOUNT_COLUMNS = [
     'asaas_wallet_id',
     'asaas_account_id',
@@ -287,6 +318,7 @@ const PAYMENT_ACCOUNT_COLUMNS = [
     'last_status_checked_at',
     'activated_at',
     'webhook_token_hash',
+    'credential_recovery_pending',
     'metadata',
     'updated_at',
 ].join(', ')
@@ -415,10 +447,60 @@ function decryptCredentialRecovery(token: string): AsaasCredentialRecoveryPayloa
     return payload as AsaasCredentialRecoveryPayload
 }
 
-function credentialRecoveryToken(metadata: Json | null): string | null {
+function recoveryRpc(): SubaccountRecoveryRpc {
+    return getSupabaseAdmin() as unknown as SubaccountRecoveryRpc
+}
+
+async function storeCredentialRecoveryEnvelope(
+    payload: AsaasCredentialRecoveryPayload,
+): Promise<void> {
+    const encryptedPayload = encryptCredentialRecovery(payload)
+    const { error } = await recoveryRpc().rpc('store_arena_asaas_credential_recovery', {
+        p_arena_id: payload.arenaId,
+        p_account_id: payload.accountId,
+        p_wallet_id: payload.walletId,
+        p_encrypted_payload: encryptedPayload,
+        p_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    })
+    if (error) throw new Error(`Não foi possível proteger a credencial para recuperação: ${error.message}`)
+}
+
+async function loadCredentialRecoveryEnvelope(arenaId: string): Promise<string | null> {
+    const { data, error } = await recoveryRpc().rpc('get_arena_asaas_credential_recovery', {
+        p_arena_id: arenaId,
+    })
+    if (error) throw new Error(error.message)
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return null
+    const token = (data as Record<string, unknown>).encryptedPayload
+    return typeof token === 'string' && token.length > 0 ? token : null
+}
+
+async function deleteCredentialRecoveryEnvelope(arenaId: string): Promise<void> {
+    const { error } = await recoveryRpc().rpc('delete_arena_asaas_credential_recovery', {
+        p_arena_id: arenaId,
+    })
+    if (error) throw new Error(error.message)
+}
+
+function provisioningRequestId(metadata: Json | null): string | null {
     if (!metadata || Array.isArray(metadata) || typeof metadata !== 'object') return null
-    const value = metadata.asaasCredentialRecovery
+    const value = metadata.asaasProvisioningRequestId
     return typeof value === 'string' && value.length > 0 ? value : null
+}
+
+async function releaseProvisioningOrThrow(
+    arenaId: string,
+    requestId: string,
+    reason: string,
+): Promise<void> {
+    const { data, error } = await recoveryRpc().rpc('release_arena_asaas_subaccount_provisioning', {
+        p_arena_id: arenaId,
+        p_request_id: requestId,
+        p_reason: reason,
+    })
+    if (error || data !== true) {
+        throw new Error(`Não foi possível liberar o provisionamento com segurança: ${error?.message ?? 'claim divergente'}`)
+    }
 }
 
 async function storeSubaccountCredentials(
@@ -538,7 +620,7 @@ function mapPixSplitSettings(row: ArenaPaymentAccountRow | null): ArenaPixSplitS
         onboardingStarted,
         webhookConfigured,
         credentialRecoveryRequired:
-            Boolean(credentialRecoveryToken(row.metadata)) ||
+            row.credential_recovery_pending === true ||
             (onboardingStarted && !row.asaas_account_id),
         paymentFlow,
         asaasWalletId: row.asaas_wallet_id ?? '',
@@ -648,9 +730,10 @@ export async function createArenaAsaasSubaccountAction(
         }
 
         const provisioningRpc = getSupabaseAdmin() as unknown as ClaimSubaccountProvisioningRpc
+        const provisioningRequestId = randomUUID()
         const { data: provisioningClaimed, error: provisioningError } = await provisioningRpc.rpc(
             'claim_arena_asaas_subaccount_provisioning',
-            { p_arena_id: parsedArenaId, p_request_id: randomUUID() },
+            { p_arena_id: parsedArenaId, p_request_id: provisioningRequestId },
         )
         if (provisioningError || provisioningClaimed !== true) {
             throw new Error('O provisionamento desta arena já foi iniciado. Sincronize ou recupere o cadastro existente.')
@@ -675,30 +758,54 @@ export async function createArenaAsaasSubaccountAction(
             status: 'pending',
             updated_at: provisioningStartedAt,
         })
-        const subaccount = await createAsaasSubaccount(parsed, webhookToken)
+        let subaccount: AsaasSubaccountCreation
+        try {
+            subaccount = await createAsaasSubaccount(parsed, webhookToken)
+        } catch (error) {
+            if (error instanceof AsaasRequestError && error.status === 401) {
+                await releaseProvisioningOrThrow(
+                    parsedArenaId,
+                    provisioningRequestId,
+                    'asaas_parent_key_unauthorized',
+                )
+            } else if (error instanceof AsaasRequestError && [400, 422].includes(error.status)) {
+                const matches = await findAsaasSubaccountsByDocument(parsed.cpfCnpj)
+                if (matches.length === 0) {
+                    await releaseProvisioningOrThrow(
+                        parsedArenaId,
+                        provisioningRequestId,
+                        'asaas_validation_rejected_without_account',
+                    )
+                } else if (matches.length === 1) {
+                    await updateArenaPaymentAccount(parsedArenaId, {
+                        asaas_account_id: matches[0].id,
+                        asaas_wallet_id: matches[0].walletId,
+                        credential_recovery_pending: true,
+                        updated_at: new Date().toISOString(),
+                    })
+                }
+            }
+            throw error
+        }
 
-        const recoveryToken = encryptCredentialRecovery({
+        const recoveryPayload: AsaasCredentialRecoveryPayload = {
             arenaId: parsedArenaId,
             accountId: subaccount.id,
             walletId: subaccount.walletId,
             apiKey: subaccount.apiKey,
             issuedAt: new Date().toISOString(),
-        })
-        const claimedAccount = await loadArenaPaymentAccount(parsedArenaId)
+        }
+        await storeCredentialRecoveryEnvelope(recoveryPayload)
         const recoveryBaseline = await updateArenaPaymentAccount(parsedArenaId, {
             asaas_account_id: subaccount.id,
             asaas_wallet_id: subaccount.walletId,
-            metadata: {
-                ...((claimedAccount?.metadata && !Array.isArray(claimedAccount.metadata) && typeof claimedAccount.metadata === 'object')
-                    ? claimedAccount.metadata
-                    : {}),
-                asaasCredentialRecovery: recoveryToken,
-            },
+            credential_recovery_pending: true,
             updated_at: new Date().toISOString(),
         })
 
         try {
             await storeSubaccountCredentials(parsedArenaId, subaccount.id, subaccount.walletId, subaccount.apiKey)
+            await deleteCredentialRecoveryEnvelope(parsedArenaId)
         } catch (error) {
             await recordPaymentAudit({
                 arenaId: parsedArenaId,
@@ -767,7 +874,7 @@ export async function recoverArenaAsaasSubaccountCredentialAction(
             throw new Error('Não existe cadastro Asaas pendente de recuperação para esta arena.')
         }
 
-        const token = credentialRecoveryToken(account.metadata)
+        const token = await loadCredentialRecoveryEnvelope(arenaId)
         let credential: AsaasSubaccountCreation
         if (token) {
             const payload = decryptCredentialRecovery(token)
@@ -780,13 +887,41 @@ export async function recoverArenaAsaasSubaccountCredentialAction(
             }
             credential = { id: payload.accountId, walletId: payload.walletId, apiKey: payload.apiKey }
         } else {
+            let accountId = account.asaas_account_id
+            if (!accountId) {
+                const matches = await findAsaasSubaccountsByDocument(account.holder_document)
+                if (matches.length === 0) {
+                    const requestId = provisioningRequestId(account.metadata)
+                    if (!requestId) throw new Error('A subconta não foi localizada e o claim de provisionamento está incompleto.')
+                    await releaseProvisioningOrThrow(arenaId, requestId, 'asaas_recovery_found_no_account')
+                    throw new Error('Nenhuma subconta foi localizada. O provisionamento foi liberado para uma nova tentativa segura.')
+                }
+                if (matches.length > 1) {
+                    throw new Error('Mais de uma subconta foi localizada para o CNPJ; a recuperação exige conferência manual.')
+                }
+                accountId = matches[0].id
+                await updateArenaPaymentAccount(arenaId, {
+                    asaas_account_id: matches[0].id,
+                    asaas_wallet_id: matches[0].walletId,
+                    credential_recovery_pending: true,
+                    updated_at: new Date().toISOString(),
+                })
+            }
             credential = await recoverAsaasSubaccountCredential({
-                accountId: account.asaas_account_id,
+                accountId,
                 cpfCnpj: account.holder_document,
+            })
+            await storeCredentialRecoveryEnvelope({
+                arenaId,
+                accountId: credential.id,
+                walletId: credential.walletId,
+                apiKey: credential.apiKey,
+                issuedAt: new Date().toISOString(),
             })
         }
 
         await storeSubaccountCredentials(arenaId, credential.id, credential.walletId, credential.apiKey)
+        await deleteCredentialRecoveryEnvelope(arenaId)
         const recovered = await loadArenaPaymentAccount(arenaId)
         await recordPaymentAudit({
             arenaId,

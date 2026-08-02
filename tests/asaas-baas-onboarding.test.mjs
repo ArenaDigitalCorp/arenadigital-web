@@ -59,26 +59,33 @@ test('new subaccounts use an exclusive webhook token and persist only its hash',
   assert.match(actions, /webhook_token_hash:\s*webhookTokenHash/u)
 
   const provisioningMarker = actions.indexOf('const provisioningStartedAt')
-  const remoteCreation = actions.indexOf('const subaccount = await createAsaasSubaccount')
+  const remoteCreation = actions.indexOf('subaccount = await createAsaasSubaccount')
+  const recoveryEnvelope = actions.indexOf('await storeCredentialRecoveryEnvelope(recoveryPayload)')
   const recoveryBaseline = actions.indexOf('const recoveryBaseline = await updateArenaPaymentAccount')
   const credentialStore = actions.indexOf('await storeSubaccountCredentials', remoteCreation)
   const accountBaseline = actions.indexOf('const baseline = await saveArenaPaymentAccount')
   assert.ok(
     provisioningMarker >= 0 &&
       remoteCreation > provisioningMarker &&
-      recoveryBaseline > remoteCreation &&
-      credentialStore > remoteCreation &&
+      recoveryEnvelope > remoteCreation &&
+      recoveryBaseline > recoveryEnvelope &&
+      credentialStore > recoveryBaseline &&
       accountBaseline > credentialStore,
     'provisioning and encrypted recovery must be durable before the returned credential is vaulted',
   )
   assert.match(actions, /createCipheriv\('aes-256-gcm'/u)
-  assert.match(actions, /asaasCredentialRecovery:\s*recoveryToken/u)
+  assert.match(actions, /store_arena_asaas_credential_recovery/u)
+  assert.doesNotMatch(actions, /asaasCredentialRecovery:/u)
   assert.match(actions, /recoverArenaAsaasSubaccountCredentialAction/u)
   assert.match(service, /recoverAsaasSubaccountCredential/u)
   assert.match(service, /\/v3\/accounts\?cpfCnpj=/u)
   assert.match(service, /\/accessTokens/u)
   assert.match(actions, /Boolean\(existing\.asaas_account_id\)/u)
   assert.match(actions, /claim_arena_asaas_subaccount_provisioning/u)
+  assert.match(actions, /release_arena_asaas_subaccount_provisioning/u)
+  assert.match(actions, /error\.status === 401/u)
+  assert.match(actions, /\[400, 422\]\.includes\(error\.status\)/u)
+  assert.match(actions, /asaas_recovery_found_no_account/u)
 })
 
 test('status sync uses subaccount runtime credentials and approval guards activation', async () => {
