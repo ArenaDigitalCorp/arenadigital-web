@@ -17,7 +17,9 @@ type StationOrderRpcClient = {
             | 'create_station_order_with_items'
             | 'add_station_order_payment'
             | 'close_station_order'
-            | 'cancel_station_order',
+            | 'cancel_station_order'
+            | 'set_station_order_pending'
+            | 'revert_station_order_to_open',
         args: Record<string, unknown>,
     ) => Promise<{ data: unknown; error: { message: string } | null }>
 }
@@ -212,6 +214,40 @@ export async function addPaymentAction(
         return { success: true, data: Array.isArray(data) ? data[0] : data }
     } catch (err) {
         const message = err instanceof Error ? err.message : 'Erro ao registrar pagamento'
+        return { success: false, error: message, data: null }
+    }
+}
+
+export async function markOrderPendingAction(arenaId: string, orderId: string) {
+    try {
+        await assertStationOrderAccess(orderId, arenaId)
+        const { dbUserId } = await requireAuthenticatedDbUser()
+        const { data, error } = await stationOrderRpc().rpc('set_station_order_pending', {
+            p_arena_id: arenaId,
+            p_order_id: orderId,
+            p_registered_by: dbUserId,
+        })
+        if (error) throw new Error(error.message)
+        return { success: true, data: Array.isArray(data) ? data[0] : data }
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Erro ao marcar comanda como pendente'
+        return { success: false, error: message, data: null }
+    }
+}
+
+export async function revertOrderToOpenAction(arenaId: string, orderId: string) {
+    try {
+        await assertStationOrderAccess(orderId, arenaId)
+        const { dbUserId } = await requireAuthenticatedDbUser()
+        const { data, error } = await stationOrderRpc().rpc('revert_station_order_to_open', {
+            p_arena_id: arenaId,
+            p_order_id: orderId,
+            p_registered_by: dbUserId,
+        })
+        if (error) throw new Error(error.message)
+        return { success: true, data: Array.isArray(data) ? data[0] : data }
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Erro ao reverter comanda para aberta'
         return { success: false, error: message, data: null }
     }
 }

@@ -16,6 +16,7 @@ const MOVEMENT_SELECT = `
   customer_name,
   station_id,
   status,
+  pending_marked_at,
   total_value,
   station:stations!station_orders_station_id_fkey(name),
   atleta:atleta(nome_perfil),
@@ -81,6 +82,7 @@ export async function getStationMovementReportAction(
       customer_name: string | null
       station_id: string
       status: StationMovementRow['status']
+      pending_marked_at: string | null
       total_value: number | null
       station: { name: string | null } | null
       atleta: { nome_perfil: string | null } | null
@@ -104,6 +106,7 @@ export async function getStationMovementReportAction(
         station_id: order.station_id,
         station_name: order.station?.name ?? null,
         status: order.status,
+        pending_marked_at: order.pending_marked_at ?? null,
         payment_method: methods.length > 0 ? methods.join(', ') : null,
         payment_status: paymentStatus,
         total_value: order.total_value ?? 0,

@@ -42,6 +42,13 @@ const paymentStatusConfig: Record<StationMovementPaymentStatus, { label: string;
   pendente: { label: 'Pendente', className: 'bg-red-100 text-red-700 border-red-200' },
 }
 
+const orderStatusConfig: Record<StationMovementRow['status'], { label: string; className: string }> = {
+  open: { label: 'Aberta', className: 'bg-blue-50 text-blue-700 border-blue-200' },
+  pending: { label: 'Pendente', className: 'bg-amber-50 text-amber-700 border-amber-200' },
+  closed: { label: 'Fechada', className: 'bg-teal-50 text-teal-700 border-teal-200' },
+  cancelled: { label: 'Cancelada', className: 'bg-red-50 text-red-700 border-red-200' },
+}
+
 function formatCurrency(value: number) {
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
@@ -206,6 +213,7 @@ export function MovimentacaoEstacoesPageClient({
                 <SelectContent>
                   <SelectItem value="todos">Todos</SelectItem>
                   <SelectItem value="open">Aberta</SelectItem>
+                  <SelectItem value="pending">Pendente</SelectItem>
                   <SelectItem value="closed">Fechada</SelectItem>
                   <SelectItem value="cancelled">Cancelada</SelectItem>
                 </SelectContent>
@@ -251,6 +259,7 @@ export function MovimentacaoEstacoesPageClient({
                 <th className={arenaDataTable.th}>Cliente</th>
                 <th className={arenaDataTable.th}>Estação</th>
                 <th className={arenaDataTable.th}>Comanda</th>
+                <th className={arenaDataTable.th}>Status comanda</th>
                 <th className={arenaDataTable.th}>Situação</th>
                 <th className={arenaDataTable.th}>Forma de pagamento</th>
                 <th className={cn(arenaDataTable.th, "text-arena-button")}>Valor total</th>
@@ -260,7 +269,7 @@ export function MovimentacaoEstacoesPageClient({
             <tbody>
               {isPending ? (
                 <tr>
-                  <td colSpan={8} className={arenaDataTable.emptyCell}>
+                  <td colSpan={9} className={arenaDataTable.emptyCell}>
                     <div className="flex flex-col items-center gap-2">
                       <Loader2 className="h-6 w-6 animate-spin text-arena-button" />
                       Carregando comandas...
@@ -269,7 +278,7 @@ export function MovimentacaoEstacoesPageClient({
                 </tr>
               ) : paginatedRows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className={arenaDataTable.emptyCell}>
+                  <td colSpan={9} className={arenaDataTable.emptyCell}>
                     Nenhuma comanda encontrada para os filtros selecionados.
                   </td>
                 </tr>
@@ -288,6 +297,18 @@ export function MovimentacaoEstacoesPageClient({
                       </td>
                       <td className={cn(arenaDataTable.td, "text-arena-navy-800/60")}>
                         #{row.order_number}
+                      </td>
+                      <td className={arenaDataTable.td}>
+                        <div className="flex flex-col gap-0.5">
+                          <Badge variant="outline" className={orderStatusConfig[row.status].className}>
+                            {orderStatusConfig[row.status].label}
+                          </Badge>
+                          {row.status === 'pending' && row.pending_marked_at && (
+                            <span className="text-[10px] text-arena-navy-800/40">
+                              desde {formatDateTime(row.pending_marked_at)}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className={arenaDataTable.td}>
                         <Badge variant="outline" className={paymentStatusConfig[row.payment_status].className}>

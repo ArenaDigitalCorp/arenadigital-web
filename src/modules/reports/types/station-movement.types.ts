@@ -7,10 +7,11 @@ export type StationMovementRow = {
   customer_name: string | null
   station_id: string
   station_name: string | null
-  status: 'open' | 'closed' | 'cancelled'
+  status: 'open' | 'pending' | 'closed' | 'cancelled'
   payment_method: string | null
   payment_status: StationMovementPaymentStatus
   total_value: number
+  pending_marked_at: string | null
 }
 
 export type StationMovementFilters = {
@@ -19,7 +20,7 @@ export type StationMovementFilters = {
   stationId?: string
   customer?: string
   paymentMethod?: string
-  status?: 'open' | 'closed' | 'cancelled'
+  status?: 'open' | 'pending' | 'closed' | 'cancelled'
   paymentStatus?: StationMovementPaymentStatus
 }
 

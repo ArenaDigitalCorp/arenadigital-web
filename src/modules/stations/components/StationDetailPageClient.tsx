@@ -34,7 +34,7 @@ export function StationDetailPageClient({ arenaId, stationId, initialStation, in
     const [isLoading, setIsLoading] = useState(false)
     const [searchTerm, setSearchTerm] = useState("")
     const [debouncedSearch, setDebouncedSearch] = useState("")
-    const [statusFilter, setStatusFilter] = useState<"open" | "closed" | "todos">("open")
+    const [statusFilter, setStatusFilter] = useState<"open" | "pending" | "closed" | "todos">("open")
     const [dateFrom, setDateFrom] = useState("")
     const [dateTo, setDateTo] = useState("")
     const [page, setPage] = useState(1)
@@ -147,6 +147,7 @@ export function StationDetailPageClient({ arenaId, stationId, initialStation, in
                             <SelectContent>
                                 <SelectItem value="todos">Todos os status</SelectItem>
                                 <SelectItem value="open">Abertas</SelectItem>
+                                <SelectItem value="pending">Pendentes</SelectItem>
                                 <SelectItem value="closed">Fechadas</SelectItem>
                             </SelectContent>
                         </Select>
@@ -213,7 +214,9 @@ export function StationDetailPageClient({ arenaId, stationId, initialStation, in
                             onClick={() => router.push(`/dashboard/arenas/${arenaId}/stations/${stationId}/orders/${order.id}`)}
                             className={cn(
                                 "border-none shadow-sm rounded-2xl overflow-hidden transition-all hover:scale-[1.02] cursor-pointer",
-                                order.status === 'open' ? "bg-gradient-to-br from-[#FFB01F] to-[#FFD043]" : "bg-[#C4CCD0]"
+                                order.status === 'open' && "bg-gradient-to-br from-[#FFB01F] to-[#FFD043]",
+                                order.status === 'pending' && "bg-gradient-to-br from-[#F9C846] to-[#FDE4A5] border border-amber-300",
+                                order.status !== 'open' && order.status !== 'pending' && "bg-[#C4CCD0]"
                             )}
                         >
                             <CardContent className="p-4 relative min-h-[140px] flex flex-col justify-between">
@@ -224,6 +227,11 @@ export function StationDetailPageClient({ arenaId, stationId, initialStation, in
                                     <span className="text-[10px] font-bold text-arena-navy-800/40 uppercase">
                                         Comanda nº #{order.order_number.toString().padStart(3, '0')}
                                     </span>
+                                    {order.status === 'pending' && (
+                                        <span className="ml-2 text-[9px] font-black text-amber-700 bg-white/60 px-1.5 py-0.5 rounded uppercase">
+                                            Pendente
+                                        </span>
+                                    )}
                                     <div className="text-2xl font-black text-arena-navy-800 mt-1">
                                         R$ {order.total_value.toFixed(2).replace('.', ',')}
                                     </div>
@@ -236,7 +244,7 @@ export function StationDetailPageClient({ arenaId, stationId, initialStation, in
                                         Itens: {order.station_order_items?.length || 0}
                                     </div>
                                 </div>
-                                {order.status === 'open' && (
+                                {(order.status === 'open' || order.status === 'pending') && (
                                     <button
                                         onClick={(e) => { e.stopPropagation(); handleLaunchItem(order) }}
                                         className="mt-2 text-[10px] font-black text-white bg-arena-navy-800/20 hover:bg-arena-navy-800/30 py-1.5 px-3 rounded-lg w-fit transition-colors"

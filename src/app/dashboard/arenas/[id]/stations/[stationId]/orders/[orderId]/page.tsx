@@ -2,13 +2,15 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { ChevronLeft, Loader2, Printer, Trash2 } from 'lucide-react';
+import { ChevronLeft, Clock, Loader2, Printer, Trash2, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import type { StationOrder } from '@/modules/stations/types/station.types';
 import {
   getOrderByIdAction,
   getOrderPrintDataAction,
+  markOrderPendingAction,
+  revertOrderToOpenAction,
   updateOrderAction,
 } from '@/modules/stations/actions/orderActions';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -32,6 +34,8 @@ export default function OrderDetailsPage() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [isMarkingPending, setIsMarkingPending] = useState(false);
+  const [isReverting, setIsReverting] = useState(false);
 
   const loadOrderData = async () => {
     setIsLoading(true);
@@ -69,6 +73,43 @@ export default function OrderDetailsPage() {
       toast.error('Erro ao cancelar comanda.');
     } finally {
       setIsCancelling(false);
+    }
+  };
+
+  const handleMarkPending = async () => {
+    if (!order) return;
+    if (!window.confirm('Marcar esta comanda como pendente? O cliente irá efetuar o pagamento em outro momento.'))
+      return;
+
+    setIsMarkingPending(true);
+    try {
+      const result = await markOrderPendingAction(arenaId, order.id);
+      if (!result.success) throw new Error(result.error);
+      toast.success('Comanda marcada como pendente.');
+      loadOrderData();
+    } catch (error) {
+      console.error('Error marking order as pending:', error);
+      toast.error('Erro ao marcar comanda como pendente.');
+    } finally {
+      setIsMarkingPending(false);
+    }
+  };
+
+  const handleRevertToOpen = async () => {
+    if (!order) return;
+    if (!window.confirm('Reverter esta comanda para aberta?')) return;
+
+    setIsReverting(true);
+    try {
+      const result = await revertOrderToOpenAction(arenaId, order.id);
+      if (!result.success) throw new Error(result.error);
+      toast.success('Comanda revertida para aberta.');
+      loadOrderData();
+    } catch (error) {
+      console.error('Error reverting order to open:', error);
+      toast.error('Erro ao reverter comanda para aberta.');
+    } finally {
+      setIsReverting(false);
     }
   };
 
@@ -178,7 +219,7 @@ export default function OrderDetailsPage() {
     <tr><td colspan="2">Total pago:</td><td class="val">${money(totalPaidPrint)}</td></tr>
     <tr><td colspan="2">Saldo restante:</td><td class="val">${money(balancePrint)}</td></tr>
   </table>
-  <p class="center badge">${printOrder.status === 'closed' ? 'FECHADA' : printOrder.status === 'cancelled' ? 'CANCELADA' : 'ABERTA'}</p>
+  <p class="center badge">${printOrder.status === 'closed' ? 'FECHADA' : printOrder.status === 'cancelled' ? 'CANCELADA' : printOrder.status === 'pending' ? 'PENDENTE' : 'ABERTA'}</p>
   <footer>Impresso em ${format(new Date(), "dd/MM/yyyy 'às' HH:mm:ss")}<br/>Arena Digital</footer>
   <script>window.onload=()=>{setTimeout(()=>window.print(),400)}</script>
 </body></html>`);
@@ -235,6 +276,11 @@ export default function OrderDetailsPage() {
               <h1 className="text-4xl font-black text-arena-navy-800 tracking-tight">
                 Comanda nº #{order.order_number.toString().padStart(3, '0')}
               </h1>
+              {order.status === 'pending' && (
+                <span className="bg-amber-50 text-amber-600 px-3 py-1 rounded-full text-xs font-black uppercase border border-amber-200">
+                  Pendente
+                </span>
+              )}
               {order.status === 'closed' && (
                 <span className="bg-[#E6F8F7] text-[#20B2AA] px-3 py-1 rounded-full text-xs font-black uppercase">
                   Fechada
@@ -253,6 +299,11 @@ export default function OrderDetailsPage() {
                 order.customer_name ||
                 'N/A'}
             </p>
+            {order.status === 'pending' && order.pending_marked_at && (
+              <p className="text-amber-600 font-medium text-sm">
+                Pendente desde {format(new Date(order.pending_marked_at), 'dd/MM/yyyy HH:mm')}
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <Button
@@ -305,7 +356,7 @@ export default function OrderDetailsPage() {
             <h2 className="text-xl font-black text-arena-navy-800">
               Itens pedidos
             </h2>
-            {order.status === 'open' && (
+            {(order.status === 'open' || order.status === 'pending') && (
               <div className="flex flex-wrap items-center justify-end gap-3">
                 <Button
                   onClick={() => setIsLaunchModalOpen(true)}
@@ -319,6 +370,38 @@ export default function OrderDetailsPage() {
                 >
                   Registrar pagamento
                 </Button>
+                {order.status === 'open' && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleMarkPending}
+                    disabled={isMarkingPending}
+                    className="rounded-xl border-amber-200 bg-amber-50 font-semibold text-amber-600 shadow-sm hover:bg-amber-100"
+                  >
+                    {isMarkingPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Clock className="h-4 w-4" />
+                    )}
+                    Marcar como pendente
+                  </Button>
+                )}
+                {order.status === 'pending' && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleRevertToOpen}
+                    disabled={isReverting}
+                    className="rounded-xl border-arena-navy-800/10 font-semibold text-arena-navy-800 shadow-sm hover:bg-arena-navy-800/5"
+                  >
+                    {isReverting ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Undo2 className="h-4 w-4" />
+                    )}
+                    Reverter para aberta
+                  </Button>
+                )}
                 <Button
                   type="button"
                   variant="outline"

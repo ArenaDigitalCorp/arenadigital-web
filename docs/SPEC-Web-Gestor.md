@@ -310,7 +310,7 @@ Contrato (StationOrdersFilters — src/modules/stations/types/station.types.ts):
 interface StationOrdersFilters {
   page?: number        // default 1
   pageSize?: number    // 10 | 25 | 50 | 100 (default 25)
-  status?: 'open' | 'closed' | 'todos'  // default na UI: 'open'
+  status?: 'open' | 'pending' | 'closed' | 'todos'  // default na UI: 'open'
   search?: string      // busca por cliente/nº da comanda em todo o banco
   dateFrom?: string    // ISO timestamp (inclusive) — created_at >=
   dateTo?: string      // ISO timestamp (inclusive) — created_at <=
@@ -347,7 +347,7 @@ Server action: getAthletesByArenaAction(arenaId, searchTerm?) — src/modules/at
 Status: Em implementação (MVP — 22/07/2026). Plano completo: docs/PLANO-Agente-IA-WhatsApp.md.
 Módulo: src/modules/ai-agent. Integrações: Meta WhatsApp Business Cloud API + OpenAI (chat/tool calling + transcrição).
 
-14.1 Modelo de dados (migração supabase/migrations/20260722_ai_agent_whatsapp.sql)
+14.1 Modelo de dados (migração arenadigital-db/supabase/migrations/20260801141000_consolidate_web_ai_whatsapp.sql)
 
 arena_ai_agents      -- config por arena (1:1). enabled, persona_prompt, model,
                         temperature, max_output_tokens, monthly_token_cap,
@@ -465,7 +465,7 @@ Extraídos da duplicação entre calendário do espaço e operação do dia:
 
 16. Notificações da Arena (tempo real)
 
-16.1 Modelo de dados (migração supabase/migrations/20260727_arena_notifications.sql)
+16.1 Modelo de dados (migração arenadigital-db/supabase/migrations/20260801142000_consolidate_web_arena_notifications.sql)
 
 arena_notifications
 - id uuid pk
@@ -539,3 +539,62 @@ browser client autenticado — a RLS acima é quem autoriza o canal.
 
 - /dashboard/notifications            -> redirect via resolveDashboardDefaultRoute('notifications')
 - /dashboard/notifications/[arenaId]  -> assertArenaBackofficeAccess + SSR das 100 últimas
+
+17. Estações — Status "Pendente" da Comanda
+
+Migração (repositório arenadigital-db, fonte única do schema):
+supabase/migrations/20260802130000_consolidate_web_station_order_pending_status.sql
+Essa migration também atualiza close_station_order (definida em
+20260801122000_station_order_transaction_safety.sql) para aceitar o fechamento de
+comandas 'pending', além de 'open'.
+
+17.1 Modelo de dados
+
+station_orders (alterações)
+- status: agora aceita 'open' | 'pending' | 'closed' | 'cancelled' (CHECK constraint)
+- pending_marked_at timestamptz null — preenchido ao marcar como pendente, limpo ao
+  reverter para aberta; evita join para exibir "pendente desde" no detalhe e no relatório
+
+station_order_status_history (nova tabela) — auditoria das mudanças manuais de status
+- id uuid pk / order_id uuid fk station_orders / arena_id uuid fk arenas
+- previous_status text / new_status text
+- changed_by uuid fk users — quem fez a mudança
+- created_at timestamptz default now()
+RLS: select restrito a public.is_arena_backoffice_member(arena_id) (mesmo helper da
+seção 16.1); sem policy de insert — só as RPCs abaixo (security definer) gravam.
+
+17.2 RPCs (Postgres, security definer)
+
+- set_station_order_pending(p_arena_id, p_order_id, p_registered_by)
+  Exige status atual = 'open'; seta status='pending', pending_marked_at=now();
+  grava histórico ('open' -> 'pending').
+- revert_station_order_to_open(p_arena_id, p_order_id, p_registered_by)
+  Exige status atual = 'pending'; seta status='open', pending_marked_at=null;
+  grava histórico ('pending' -> 'open').
+
+17.3 Server actions (src/modules/stations/actions/orderActions.ts)
+
+- markOrderPendingAction(arenaId, orderId) -> chama set_station_order_pending
+- revertOrderToOpenAction(arenaId, orderId) -> chama revert_station_order_to_open
+
+17.4 Regras de negócio
+
+- Uma comanda 'pending' permanece totalmente editável (lançar item, registrar
+  pagamento) — mesmo comportamento de 'open'.
+- Reversão manual 'pending' -> 'open' é permitida a qualquer momento.
+- Ao registrar pagamento que zera o saldo, closeOrderAndGenerateFinanceAction fecha a
+  comanda normalmente, independente de estar 'open' ou 'pending'.
+- updateOrderAction (cancelamento) continua restrito a status='cancelled'; marcar como
+  pendente/reverter usa as actions dedicadas acima, não esse endpoint genérico.
+
+17.5 UI
+
+- Detalhe da comanda (orders/[orderId]/page.tsx): badge "Pendente", texto "Pendente
+  desde {data}", botão "Marcar como pendente" (quando open) e "Reverter para aberta"
+  (quando pending); "Lançar item"/"Registrar pagamento" visíveis em open e pending.
+- Listagem da estação (StationDetailPageClient.tsx): filtro de status ganha a opção
+  "Pendentes"; cards de comanda pending têm estilo distinto do open/closed.
+- Relatório Movimentação Estações (MovimentacaoEstacoesPageClient.tsx +
+  stationMovementActions.ts): filtro "Status" ganha "Pendente"; nova coluna "Status
+  comanda" com badge por status e, quando pending, a data de "pendente desde"
+  (StationMovementRow.pending_marked_at).

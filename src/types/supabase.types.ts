@@ -3540,6 +3540,7 @@ export type Database = {
           customer_name: string | null
           id: string
           order_number: number
+          pending_marked_at: string | null
           station_id: string
           status: string | null
           total_value: number
@@ -3554,6 +3555,7 @@ export type Database = {
           customer_name?: string | null
           id?: string
           order_number?: number
+          pending_marked_at?: string | null
           station_id: string
           status?: string | null
           total_value?: number
@@ -3568,6 +3570,7 @@ export type Database = {
           customer_name?: string | null
           id?: string
           order_number?: number
+          pending_marked_at?: string | null
           station_id?: string
           status?: string | null
           total_value?: number
@@ -3600,6 +3603,51 @@ export type Database = {
             columns: ["station_id"]
             isOneToOne: false
             referencedRelation: "stations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      station_order_status_history: {
+        Row: {
+          arena_id: string
+          changed_by: string
+          created_at: string
+          id: string
+          new_status: string
+          order_id: string
+          previous_status: string
+        }
+        Insert: {
+          arena_id: string
+          changed_by: string
+          created_at?: string
+          id?: string
+          new_status: string
+          order_id: string
+          previous_status: string
+        }
+        Update: {
+          arena_id?: string
+          changed_by?: string
+          created_at?: string
+          id?: string
+          new_status?: string
+          order_id?: string
+          previous_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "station_order_status_history_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "station_order_status_history_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "station_orders"
             referencedColumns: ["id"]
           },
         ]
