@@ -8,7 +8,8 @@ import {
 } from "@/lib/arena-users";
 import { assertArenaAdminAccess, assertStationAccess } from "@/lib/server-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-server";
-import { findUserByEmail, findUserById, normalizeEmail } from "@/lib/account-identity";
+import { findUserByAuthUserId, findUserByEmail, normalizeEmail } from "@/lib/account-identity";
+import { isStrongPassword } from "@/lib/password-policy";
 
 type ArenaUserFormData = {
     email: string;
@@ -65,6 +66,14 @@ function getErrorMessage(error: unknown) {
 }
 
 function assertValidArenaUserFormData(data: ArenaUserFormData) {
+    if (data.name.trim().length < 2) {
+        throw new Error('Informe o nome do usuário.');
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(data.email))) {
+        throw new Error('Informe um e-mail válido.');
+    }
+
     if (!['Gestor', 'Atendente', 'Caixa'].includes(data.role)) {
         throw new Error('Papel de usuário inválido.');
     }
@@ -84,8 +93,9 @@ async function getArenaUserLinkOrThrow(arenaId: string, arenaUserId: string): Pr
     return data as ArenaUserLinkRow;
 }
 
-export async function createArenaUserAction(arenaId: string, data: ArenaUserFormData): Promise<ActionResult<{ email: string; id: string; name: string | null; role: string | null }>> {
+export async function createArenaUserAction(arenaId: string, data: ArenaUserFormData): Promise<ActionResult<{ email: string; id: string; name: string | null; role: string | null; usesExistingCredentials: boolean }>> {
     let createdAuthUserId: string | null = null;
+    let existingUserLinkedToCreatedAuth: string | null = null;
 
     try {
         await assertArenaAdminAccess(arenaId);
@@ -105,11 +115,15 @@ export async function createArenaUserAction(arenaId: string, data: ArenaUserForm
         }
 
         let newUser = await findUserByEmail(supabase, email);
+        const usesExistingCredentials = Boolean(newUser?.auth_user_id);
 
-        if (!newUser) {
+        if (!newUser?.auth_user_id) {
             const password = data.senha || data.password;
             if (!password) {
                 throw new Error('Senha é obrigatória para criar um novo usuário.');
+            }
+            if (!isStrongPassword(password)) {
+                throw new Error('A senha não atende aos requisitos de segurança.');
             }
 
             // 1. Criar usuário no Supabase Auth (auto-confirmado, criado por admin)
@@ -117,33 +131,18 @@ export async function createArenaUserAction(arenaId: string, data: ArenaUserForm
                 email,
                 password,
                 email_confirm: true,
-                user_metadata: { firstName: data.name },
+                user_metadata: { firstName: data.name.trim(), name: data.name.trim() },
             });
 
             if (authError || !authData.user) {
                 throw new Error(`Erro ao criar usuário no Auth: ${authError?.message ?? 'desconhecido'}`);
             }
             createdAuthUserId = authData.user.id;
+            if (newUser) existingUserLinkedToCreatedAuth = newUser.id;
 
-            // 2. Trigger on_auth_user_created cria public.users automaticamente.
-            //    Upsert defensivo para garantir nome correto.
-            const { data: createdUser, error: userError } = await supabase
-                .from('users')
-                .upsert({
-                    id: createdAuthUserId,
-                    auth_user_id: createdAuthUserId,
-                    email,
-                    name: data.name,
-                    role: 'gestor',
-                } as never, { onConflict: 'id' })
-                .select('id, email, name, cpf, role')
-                .single();
-
-            if (userError) {
-                console.error("Supabase user error:", userError);
-                throw new Error(`Erro ao criar usuário local: ${userError.message}`);
-            }
-            newUser = createdUser;
+            // 2. O trigger cria ou reconcilia public.users pelo e-mail.
+            newUser = await findUserByAuthUserId(supabase, createdAuthUserId);
+            if (!newUser) throw new Error('A identidade foi criada, mas o usuário local não foi provisionado.');
         } else if (data.name && !newUser.name) {
             const { data: updatedUser, error: updateUserError } = await supabase
                 .from('users')
@@ -192,11 +191,25 @@ export async function createArenaUserAction(arenaId: string, data: ArenaUserForm
             throw new Error(`Erro ao vincular usuário à arena: ${arenaUserError.message}`);
         }
 
-        return { success: true, user: newUser };
+        return {
+            success: true,
+            user: {
+                ...newUser,
+                usesExistingCredentials,
+            },
+        };
     } catch (error: unknown) {
         if (createdAuthUserId) {
             const supabase = getSupabaseAdmin();
-            await supabase.from('users').delete().eq('id', createdAuthUserId);
+            if (existingUserLinkedToCreatedAuth) {
+                await supabase
+                    .from('users')
+                    .update({ auth_user_id: null })
+                    .eq('id', existingUserLinkedToCreatedAuth)
+                    .eq('auth_user_id', createdAuthUserId);
+            } else {
+                await supabase.from('users').delete().eq('id', createdAuthUserId);
+            }
             await supabase.auth.admin.deleteUser(createdAuthUserId).catch(() => null);
         }
         console.error("Error creating arena user:", error);
@@ -222,19 +235,10 @@ export async function updateArenaUserAction(arenaId: string, arenaUserId: string
             throw new Error('Vínculo do usuário não corresponde à arena informada');
         }
 
-        // Atualizar senha no Supabase Auth.
+        // Senha é uma credencial global e não pode ser redefinida por um gestor
+        // de arena, sobretudo quando a mesma identidade participa de outras arenas.
         if (data.senha) {
-            const targetUser = await findUserById(supabase, userId);
-            const targetAuthUserId = targetUser?.auth_user_id ?? targetUser?.id;
-            if (!targetAuthUserId) {
-                throw new Error('Usuário não possui identidade de autenticação vinculada.');
-            }
-            const { error: pwError } = await supabase.auth.admin.updateUserById(targetAuthUserId, {
-                password: data.senha,
-            });
-            if (pwError) {
-                throw new Error(`Erro ao atualizar senha: ${pwError.message}`);
-            }
+            throw new Error('A senha deve ser alterada pelo próprio usuário no fluxo de recuperação de acesso.');
         }
 
         // Atualizar nome em public.users

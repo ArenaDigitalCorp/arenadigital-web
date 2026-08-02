@@ -11,6 +11,7 @@ import {
 import { onlyDigits } from '@/lib/brasil-document'
 import {
     cpfMatches,
+    findUserByAuthUserId,
     findUserByCpf,
     findUserByEmail,
     normalizeEmail,
@@ -153,6 +154,9 @@ export async function linkAthlete(formData: {
         return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" }
     }
 
+    let createdAuthUserId: string | null = null
+    let existingUserLinkedToCreatedAuth: string | null = null
+
     try {
         await requireAuthenticatedDbUser()
         await assertArenaBackofficeAccess(formData.arenaId)
@@ -195,8 +199,8 @@ export async function linkAthlete(formData: {
             }
         }
 
-        // 2. Create User in Supabase Auth without sending the athlete invite email,
-        // somente quando ainda não existe pessoa local.
+        // 2. Garanta uma identidade Auth inclusive para registros locais legados.
+        // O convite permanece desativado; o atleta pode definir senha pela recuperação.
         const firstName = formData.name.split(' ')[0]
         const lastName = formData.name.split(' ').slice(1).join(' ') || undefined
 
@@ -213,7 +217,7 @@ export async function linkAthlete(formData: {
         //     },
         // })
 
-        if (!athleteDbUser) {
+        if (!athleteDbUser?.auth_user_id) {
             const { data: created, error: createErr } = await supabase.auth.admin.createUser({
                 email,
                 email_confirm: true,
@@ -229,90 +233,52 @@ export async function linkAthlete(formData: {
             if (createErr || !created.user) {
                 return { success: false, error: createErr?.message || 'Erro ao criar usuário do atleta.' }
             }
+            createdAuthUserId = created.user.id
+            if (athleteDbUser) existingUserLinkedToCreatedAuth = athleteDbUser.id
 
-            const { error: metadataErr } = await supabase.auth.admin.updateUserById(created.user.id, {
-                email,
-                user_metadata: {
-                    firstName,
-                    lastName,
-                    name: formData.name,
-                    role: 'atleta',
-                    origem_cadastro: 'arena',
-                    cpf: cleanCpf,
-                },
-            })
-            if (metadataErr) throw metadataErr
-
-            // 3. Ensure public.users row exists.
-            const { data: createdDbUser, error: upsertError } = await supabase
-                .from('users')
-                .upsert(
-                    {
-                        id: created.user.id,
-                        auth_user_id: created.user.id,
-                        email,
-                        name: formData.name,
-                        role: 'atleta',
-                        cpf: cleanCpf,
-                    } as never,
-                    { onConflict: 'id' }
-                )
-                .select('id, email, name, cpf, role')
-                .single()
-            if (upsertError) throw upsertError
-            athleteDbUser = createdDbUser
-        } else {
-            const { data: updatedDbUser, error: updateUserError } = await supabase
-                .from('users')
-                .update({
-                    name: athleteDbUser.name || formData.name,
-                    cpf: athleteDbUser.cpf || cleanCpf,
-                })
-                .eq('id', athleteDbUser.id)
-                .select('id, email, name, cpf, role')
-                .single()
-            if (updateUserError) throw updateUserError
-            athleteDbUser = updatedDbUser
+            athleteDbUser = await findUserByAuthUserId(supabase, created.user.id)
+            if (!athleteDbUser) {
+                throw new Error('A identidade do atleta foi criada, mas o perfil local não foi provisionado.')
+            }
         }
 
         if (!athleteDbUser) {
             throw new Error('Não foi possível resolver o usuário do atleta.')
         }
 
-        // 4. Create Atleta profile
-        const repo = new SupabaseAthleteRepository(supabase)
-        const atleta = await repo.create({
-            id_users: athleteDbUser.id,
-            nome_perfil: formData.name,
-            cpf: cleanCpf,
-            telefone: formData.phone,
-            data_nascimento: formData.birthDate || null,
-            cep: formData.cep || null,
-            endereco: formData.endereco || null,
-            endereco_numero: formData.enderecoNumero || null,
-            bairro: formData.bairro || null,
-            id_municipio: formData.idMunicipio || null,
-            origem_cadastro: 'arena',
-            id_arena_cadastro: formData.arenaId,
-            compartilha_info: true
-        });
-
-        // 5. Link to Arena
-        await repo.linkToArena({
-            id_arena: formData.arenaId,
-            id_atleta: atleta.id,
-            origem: 'arena'
-        });
-
-        // 6. Link to Sport
-        await repo.addSport({
-            id_atleta: atleta.id,
-            id_esporte: formData.sportId,
-            id_nivel_habilidade_esporte: formData.nivelHabilidadeId || undefined
-        });
+        // 3. Perfil, vínculo com arena e esporte são um único commit idempotente.
+        const { error: provisionError } = await supabase.rpc('provision_arena_athlete_profile', {
+            p_user_id: athleteDbUser.id,
+            p_arena_id: formData.arenaId,
+            p_name: formData.name,
+            p_cpf: cleanCpf,
+            p_phone: formData.phone,
+            p_birth_date: formData.birthDate || null,
+            p_cep: formData.cep || null,
+            p_address: formData.endereco || null,
+            p_address_number: formData.enderecoNumero || null,
+            p_neighborhood: formData.bairro || null,
+            p_city_id: formData.idMunicipio || null,
+            p_sport_id: formData.sportId,
+            p_level_id: formData.nivelHabilidadeId || null,
+        })
+        if (provisionError) throw new Error(provisionError.message)
 
         return { success: true };
     } catch (error: unknown) {
+        if (createdAuthUserId) {
+            const supabase = getSupabaseAdmin()
+            if (existingUserLinkedToCreatedAuth) {
+                await supabase
+                    .from('users')
+                    .update({ auth_user_id: null })
+                    .eq('id', existingUserLinkedToCreatedAuth)
+                    .eq('auth_user_id', createdAuthUserId)
+            } else {
+                await supabase.from('users').delete().eq('id', createdAuthUserId)
+            }
+            await supabase.auth.admin.deleteUser(createdAuthUserId).catch(() => null)
+        }
         console.error("DEBUG - Full Error in linkAthlete:", error);
         const message = error instanceof Error ? error.message : "Ocorreu um erro inesperado ao vincular o atleta."
         return { success: false, error: message };
