@@ -377,6 +377,21 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                         >
                                             <Link href={reportsHref}>Pagamentos</Link>
                                         </Button>
+                                        <Button
+                                            variant="ghost"
+                                            asChild
+                                            className={cn(
+                                                "h-9 w-full justify-start px-2 text-sm font-normal",
+                                                pathname.includes("movimentacao-estacoes")
+                                                    ? cn(navActiveText, "bg-white/5 hover:bg-white/10 hover:text-arena-accent")
+                                                    : "text-white hover:bg-white/5 hover:text-white"
+                                            )}
+                                            onClick={onNavItemClick}
+                                        >
+                                            <Link href={selectedArena ? `/dashboard/reports/${selectedArena}/movimentacao-estacoes` : "/dashboard/reports"}>
+                                                Movimentação Estações
+                                            </Link>
+                                        </Button>
                                     </div>
                                 </div>
                             )}
