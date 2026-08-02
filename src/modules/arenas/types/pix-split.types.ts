@@ -19,4 +19,5 @@ export interface UpdateArenaPixSplitSettingsInput {
   holderName?: string | null
   holderDocument?: string | null
   pixKey?: string | null
+  platformFeeBasisPoints: number
 }

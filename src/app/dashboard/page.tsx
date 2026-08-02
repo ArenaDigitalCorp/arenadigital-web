@@ -34,10 +34,6 @@ function DashboardPageContent() {
             return
         }
         if (isLoadingUser) return
-        if (dbUser?.platform_access_level === 'super_admin') {
-            router.replace('/dashboard/admin/super-admin')
-            return
-        }
         if (dbUser?.platform_access_level === 'platform_admin') {
             router.replace('/dashboard/admin/platform')
             return
@@ -54,7 +50,7 @@ function DashboardPageContent() {
 
     useEffect(() => {
         if (isLoadingUser || isLoadingArenas) return
-        if (dbUser?.platform_access_level === 'super_admin' || dbUser?.platform_access_level === 'platform_admin') {
+        if (dbUser?.platform_access_level === 'platform_admin') {
             setIsLoading(false)
             return
         }

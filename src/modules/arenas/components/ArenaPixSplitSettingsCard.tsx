@@ -46,7 +46,7 @@ export function ArenaPixSplitSettingsCard({ arenaId, initialSettings }: Props) {
     const badge = statusBadge(settings)
     const BadgeIcon = badge.icon
 
-    const setField = (field: keyof ArenaPixSplitSettings, value: string | boolean) => {
+    const setField = (field: keyof ArenaPixSplitSettings, value: string | boolean | number) => {
         setForm((prev) => ({ ...prev, [field]: value }))
     }
 
@@ -61,6 +61,7 @@ export function ArenaPixSplitSettingsCard({ arenaId, initialSettings }: Props) {
                 holderName: form.holderName,
                 holderDocument: form.holderDocument,
                 pixKey: form.pixKey,
+                platformFeeBasisPoints: form.platformFeeBasisPoints,
             })
 
             if (!res.success) throw new Error(res.error)
@@ -85,8 +86,7 @@ export function ArenaPixSplitSettingsCard({ arenaId, initialSettings }: Props) {
                         <CardTitle>Pix das reservas no app</CardTitle>
                     </div>
                     <CardDescription>
-                        Configure a wallet Asaas da arena para receber reservas do app. O split aplicado é 98% para a
-                        arena e 2% para Arena Digital.
+                        Configure a wallet Asaas da arena e defina o percentual de cada novo pagamento destinado à Arena Digital.
                     </CardDescription>
                 </div>
                 <Badge className={badge.className}>
@@ -125,6 +125,21 @@ export function ArenaPixSplitSettingsCard({ arenaId, initialSettings }: Props) {
                                 Obrigatório para ativar o split. Esse é o identificador da carteira destino dentro do
                                 Asaas.
                             </p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="platform-split-fee">Taxa Arena Digital (%)</Label>
+                            <Input
+                                id="platform-split-fee"
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.01"
+                                value={(form.platformFeeBasisPoints / 100).toFixed(2)}
+                                onChange={(event) => setField("platformFeeBasisPoints", Math.round(Number(event.target.value) * 100))}
+                                inputMode="decimal"
+                            />
+                            <p className="text-xs text-muted-foreground">A alteração vale somente para pagamentos criados depois de salvar.</p>
                         </div>
 
                         <div className="space-y-2">
@@ -175,8 +190,8 @@ export function ArenaPixSplitSettingsCard({ arenaId, initialSettings }: Props) {
 
                     <div className="flex flex-col gap-3 rounded-lg border border-orange-100 bg-white p-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
                         <span>
-                            Taxa Arena Digital: <strong className="text-arena-navy-800">2%</strong>. Repasse arena:{" "}
-                            <strong className="text-arena-navy-800">98%</strong>.
+                            Taxa Arena Digital: <strong className="text-arena-navy-800">{(form.platformFeeBasisPoints / 100).toFixed(2)}%</strong>. Repasse arena:{" "}
+                            <strong className="text-arena-navy-800">{((10000 - form.platformFeeBasisPoints) / 100).toFixed(2)}%</strong>.
                         </span>
                         <Button
                             type="submit"

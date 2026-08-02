@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { CalendarDays, IdCard, KeyRound, LogOut, Mail, Shield, User as UserIcon } from "lucide-react"
+import { CalendarDays, IdCard, KeyRound, LogOut, Mail, PanelsTopLeft, Shield, User as UserIcon } from "lucide-react"
 import { useUser } from "@/hooks/useUser"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -24,6 +24,7 @@ type UserMenuProps = {
   className?: string
   avatarClassName?: string
   showName?: boolean
+  platformAccessLevel?: 'employee' | 'platform_admin' | 'super_admin' | null
 }
 
 type DbUser = {
@@ -33,6 +34,7 @@ type DbUser = {
   cpf: string | null
   role: string | null
   created_at: string
+  platform_access_level: 'employee' | 'platform_admin' | 'super_admin' | null
 }
 
 function formatDate(value: string | null | undefined) {
@@ -78,6 +80,7 @@ export function UserMenu({
   className,
   avatarClassName,
   showName = false,
+  platformAccessLevel,
 }: UserMenuProps) {
   const router = useRouter()
   const { user, signOut } = useUser()
@@ -85,9 +88,11 @@ export function UserMenu({
   const [dbUser, setDbUser] = React.useState<DbUser | null>(null)
   const [accountLoading, setAccountLoading] = React.useState(false)
   const [accountError, setAccountError] = React.useState<string | null>(null)
+  const authUserId = user?.id
 
   React.useEffect(() => {
-    if (!accountOpen) return
+    if (!authUserId) return
+    if (platformAccessLevel !== undefined && !accountOpen) return
 
     let cancelled = false
     async function loadAccount() {
@@ -112,7 +117,7 @@ export function UserMenu({
     return () => {
       cancelled = true
     }
-  }, [accountOpen])
+  }, [accountOpen, authUserId, platformAccessLevel])
 
   if (!user) return null
 
@@ -172,6 +177,12 @@ export function UserMenu({
             <UserIcon className="h-4 w-4 mr-2" />
             Minha conta
           </DropdownMenuItem>
+          {(platformAccessLevel ?? dbUser?.platform_access_level) === 'super_admin' && (
+            <DropdownMenuItem onClick={() => router.push('/admin/overview')} className="cursor-pointer text-orange-200 hover:bg-orange-500/10 focus:bg-orange-500/10 focus:text-orange-100">
+              <PanelsTopLeft className="h-4 w-4 mr-2" />
+              Painel admin
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer text-rose-300 hover:bg-rose-500/10 focus:bg-rose-500/10 focus:text-rose-200">
             <LogOut className="h-4 w-4 mr-2" />
             Sair

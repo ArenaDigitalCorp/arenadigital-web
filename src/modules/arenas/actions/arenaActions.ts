@@ -7,7 +7,7 @@ import {
     assertArenaBackofficeAccess,
     assertArenaCreationAccess,
     assertArenaOwnerAccess,
-    assertPlatformAdminAccess,
+    assertPlatformSuperAdminAccess,
 } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { SupabaseArenaRepository } from '@/modules/arenas/repositories/SupabaseArenaRepository'
@@ -262,7 +262,7 @@ export async function getArenaPixSplitSettingsAction(
     arenaId: string
 ): Promise<{ success: boolean; data: ArenaPixSplitSettings; error?: string }> {
     try {
-        await assertPlatformAdminAccess()
+        await assertPlatformSuperAdminAccess()
         const { data, error } = await arenaPaymentAccountsTable()
             .select(
                 'asaas_wallet_id, asaas_account_id, holder_name, holder_document, pix_key, platform_fee_basis_points, status, updated_at'
@@ -284,10 +284,14 @@ export async function updateArenaPixSplitSettingsAction(
     input: UpdateArenaPixSplitSettingsInput
 ): Promise<{ success: boolean; data: ArenaPixSplitSettings; error?: string }> {
     try {
-        await assertPlatformAdminAccess()
+        const profile = await assertPlatformSuperAdminAccess()
 
         const enabled = Boolean(input.enabled)
         const asaasWalletId = cleanNullableText(input.asaasWalletId)
+        const platformFeeBasisPoints = Number(input.platformFeeBasisPoints)
+        if (!Number.isInteger(platformFeeBasisPoints) || platformFeeBasisPoints < 0 || platformFeeBasisPoints > 10000) {
+            throw new Error('Informe uma taxa de plataforma válida entre 0% e 100%.')
+        }
         if (enabled && !asaasWalletId) {
             throw new Error('Informe o Wallet ID do Asaas para ativar o Pix com split nas reservas do app.')
         }
@@ -300,7 +304,7 @@ export async function updateArenaPixSplitSettingsAction(
             holder_name: cleanNullableText(input.holderName),
             holder_document: onlyDigitsLocal(input.holderDocument),
             pix_key: cleanNullableText(input.pixKey),
-            platform_fee_basis_points: 200,
+            platform_fee_basis_points: platformFeeBasisPoints,
             status: enabled ? 'active' : 'disabled',
             updated_at: new Date().toISOString(),
         }
@@ -314,9 +318,26 @@ export async function updateArenaPixSplitSettingsAction(
 
         if (error) throw new Error(error.message)
 
+        const { error: auditError } = await getSupabaseAdmin().from('audit_logs').insert({
+            entity_type: 'arena_payment_account',
+            entity_id: arenaId,
+            action: 'platform_split_updated',
+            actor_id: profile.dbUserId,
+            actor_type: 'user',
+            new_value: {
+                enabled,
+                platform_fee_basis_points: platformFeeBasisPoints,
+            },
+            metadata: { provider: 'asaas', source: 'super_admin_backoffice' },
+        })
+        if (auditError) {
+            console.error('[updateArenaPixSplitSettingsAction] Failed to record audit event', auditError.message)
+        }
+
         revalidatePath(`/dashboard/arenas/${arenaId}/edit`)
         revalidatePath('/dashboard/admin/platform')
         revalidatePath('/dashboard/admin/super-admin')
+        revalidatePath('/admin/settings')
         revalidatePath('/dashboard/settings/arenas')
         return { success: true, data: mapPixSplitSettings(data) }
     } catch (err) {

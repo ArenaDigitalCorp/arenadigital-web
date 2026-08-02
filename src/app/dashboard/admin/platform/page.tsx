@@ -14,7 +14,7 @@ export default async function PlatformAdminPage() {
   }
 
   if (accessLevel === 'super_admin') {
-    redirect('/dashboard/admin/super-admin')
+    redirect('/admin/overview')
   }
 
   const overview = await getPlatformAdminOverview()

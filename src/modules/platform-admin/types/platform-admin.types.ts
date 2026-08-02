@@ -25,13 +25,41 @@ export type PlatformArena = {
   id: string
   name: string
   status: string | null
-  ownerId: string
+  commercialStatus: 'cliente_ativo' | 'inadimplente' | 'prospect' | 'desativada'
+  ownerId: string | null
   ownerName: string | null
   ownerEmail: string
+  cityName: string | null
+  stateCode: string | null
+  hasLocation: boolean
+  latitude: number | null
+  longitude: number | null
   createdAt: string
   planKey: string | null
+  planLabel: string | null
+  planPriceCents: number
   subscriptionStatus: string | null
+  currentPeriodEnd: string | null
+  athleteCount: number
+  courtCount: number
+  bookingsLast30Days: number
+  bookingsPrevious30Days: number
   pixSplitSettings: ArenaPixSplitSettings
+}
+
+export type PlatformAthlete = {
+  id: string
+  userId: string
+  name: string
+  email: string
+  origin: string
+  plan: 'free' | 'plus'
+  planStatus: string
+  signupArenaId: string | null
+  linkedArenaIds: string[]
+  bookingsLast30Days: number
+  createdAt: string
+  updatedAt: string
 }
 
 export type PlatformMembership = {
@@ -66,6 +94,7 @@ export type PlatformAdminOverview = {
   users: PlatformUser[]
   principals: PlatformPrincipal[]
   arenas: PlatformArena[]
+  athletes: PlatformAthlete[]
   memberships: PlatformMembership[]
   internalPlanAssignments: PlatformInternalPlanAssignment[]
   audit: PlatformAuditEvent[]
