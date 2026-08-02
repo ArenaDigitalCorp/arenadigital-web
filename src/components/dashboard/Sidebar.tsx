@@ -17,6 +17,7 @@ import {
     Package,
     BarChart2,
     ClipboardPen,
+    Crown,
     ShieldCheck,
 } from "lucide-react";
 import Link from "next/link";
@@ -42,7 +43,8 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
     // Perfis de acesso
     const isCashier = selectedArenaDetails?.role === "Caixa" && !selectedArenaDetails?.isOwner;
     const isAdmin = selectedArenaDetails?.isOwner || selectedArenaDetails?.role === "Gestor";
-    const isPlatformAdmin = dbUser?.platform_access_level === "platform_admin" || dbUser?.platform_access_level === "super_admin";
+    const isPlatformAdmin = dbUser?.platform_access_level === "platform_admin";
+    const isSuperAdmin = dbUser?.platform_access_level === "super_admin";
     const canAccessSubscription = Boolean(isAdmin);
 
     const arenaHref = selectedArena ? `/dashboard/arenas/${selectedArena}` : "/dashboard/arenas";
@@ -164,6 +166,10 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
     const isEditingArena = !!pathname.match(/\/dashboard\/arenas\/[^\/]+\/edit$/);
     const isSettingsActive = (pathname.includes("/settings") && !pathname.startsWith("/dashboard/settings/products")) || isEditingArena;
     const isReportsActive = pathname.startsWith("/dashboard/reports/");
+    const isPlatformAdminActive =
+        pathname.startsWith("/dashboard/admin/platform") ||
+        pathname.startsWith("/dashboard/admin/mobile-content");
+    const isSuperAdminActive = pathname.startsWith("/dashboard/admin/super-admin");
 
     const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(isSettingsActive);
     const [isReportsOpen, setIsReportsOpen] = useState<boolean>(isReportsActive);
@@ -254,6 +260,42 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                             );
                         })}
 
+                        {isSuperAdmin && (
+                            <Button
+                                variant="ghost"
+                                className={cn(
+                                    "transition-colors flex items-center rounded-md",
+                                    isCollapsed
+                                        ? cn(
+                                              "h-10 w-10 shrink-0 justify-center p-0",
+                                              isSuperAdminActive
+                                                  ? cn(navActiveText, "bg-white/10 hover:bg-white/15")
+                                                  : "text-white hover:bg-white/10 hover:text-white",
+                                          )
+                                        : cn(
+                                              "w-full gap-1.5 justify-start text-white hover:bg-white/10 hover:text-white",
+                                              isSuperAdminActive &&
+                                                  cn(navActiveText, "bg-white/5 hover:bg-white/10 hover:text-arena-accent"),
+                                          ),
+                                )}
+                                asChild
+                                onClick={onNavItemClick}
+                            >
+                                <Link
+                                    href="/dashboard/admin/super-admin"
+                                    title={isCollapsed ? "Super Admin Arena Digital" : ""}
+                                    className={cn(isCollapsed && "flex size-full items-center justify-center")}
+                                >
+                                    <Crown className={cn(
+                                        "h-5 w-5 transition-all duration-300",
+                                        !isCollapsed && "mr-2",
+                                        isSuperAdminActive && navActiveText
+                                    )} />
+                                    {!isCollapsed && <span className="font-medium text-sm">Super Admin Arena Digital</span>}
+                                </Link>
+                            </Button>
+                        )}
+
                         {isPlatformAdmin && (
                             <Button
                                 variant="ghost"
@@ -262,13 +304,13 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                     isCollapsed
                                         ? cn(
                                               "h-10 w-10 shrink-0 justify-center p-0",
-                                              pathname.startsWith("/dashboard/admin")
+                                              isPlatformAdminActive
                                                   ? cn(navActiveText, "bg-white/10 hover:bg-white/15")
                                                   : "text-white hover:bg-white/10 hover:text-white",
                                           )
                                         : cn(
                                               "w-full gap-1.5 justify-start text-white hover:bg-white/10 hover:text-white",
-                                              pathname.startsWith("/dashboard/admin") &&
+                                              isPlatformAdminActive &&
                                                   cn(navActiveText, "bg-white/5 hover:bg-white/10 hover:text-arena-accent"),
                                           ),
                                 )}
@@ -283,7 +325,7 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                     <ShieldCheck className={cn(
                                         "h-5 w-5 transition-all duration-300",
                                         !isCollapsed && "mr-2",
-                                        pathname.startsWith("/dashboard/admin") && navActiveText
+                                        isPlatformAdminActive && navActiveText
                                     )} />
                                     {!isCollapsed && <span className="font-medium text-sm">Admin Arena Digital</span>}
                                 </Link>

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { assertPlatformAdminAccess } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
+import type { ArenaPixSplitSettings, ArenaPixSplitStatus } from '@/modules/arenas/types/pix-split.types'
 import type {
   PlatformAccessLevel,
   PlatformAdminActionResult,
@@ -41,6 +42,18 @@ type SubscriptionRow = {
   arena_id: string
   plan_key: string
   status: string
+}
+
+type ArenaPaymentAccountRow = {
+  arena_id: string
+  asaas_wallet_id: string | null
+  asaas_account_id: string | null
+  holder_name: string | null
+  holder_document: string | null
+  pix_key: string | null
+  platform_fee_basis_points: number | null
+  status: string | null
+  updated_at: string | null
 }
 
 type PrincipalRow = {
@@ -97,12 +110,57 @@ function firstRelation<T>(value: T | T[] | null): T | null {
   return Array.isArray(value) ? (value[0] ?? null) : value
 }
 
+function defaultPixSplitSettings(): ArenaPixSplitSettings {
+  return {
+    enabled: false,
+    asaasWalletId: '',
+    asaasAccountId: '',
+    holderName: '',
+    holderDocument: '',
+    pixKey: '',
+    status: 'disabled',
+    platformFeeBasisPoints: 200,
+    updatedAt: null,
+  }
+}
+
+function normalizePixSplitStatus(status: string | null): ArenaPixSplitStatus {
+  if (status === 'pending' || status === 'active' || status === 'disabled' || status === 'rejected') {
+    return status
+  }
+  return 'disabled'
+}
+
+function mapPixSplitSettings(row: ArenaPaymentAccountRow | undefined): ArenaPixSplitSettings {
+  if (!row) return defaultPixSplitSettings()
+  return {
+    enabled: row.status === 'active' && Boolean(row.asaas_wallet_id),
+    asaasWalletId: row.asaas_wallet_id ?? '',
+    asaasAccountId: row.asaas_account_id ?? '',
+    holderName: row.holder_name ?? '',
+    holderDocument: row.holder_document ?? '',
+    pixKey: row.pix_key ?? '',
+    status: normalizePixSplitStatus(row.status),
+    platformFeeBasisPoints: Number(row.platform_fee_basis_points ?? 200),
+    updatedAt: row.updated_at ?? null,
+  }
+}
+
 export async function getPlatformAdminOverview(): Promise<PlatformAdminOverview> {
   const profile = await assertPlatformAdminAccess()
   const supabase = getSupabaseAdmin()
   const rpc = asRpcClient()
 
-  const [usersResult, arenasResult, subscriptionsResult, membershipsResult, principalsResult, assignmentsResult, auditResult] = await Promise.all([
+  const [
+    usersResult,
+    arenasResult,
+    subscriptionsResult,
+    paymentAccountsResult,
+    membershipsResult,
+    principalsResult,
+    assignmentsResult,
+    auditResult,
+  ] = await Promise.all([
     supabase
       .from('users')
       .select('id, email, name, role, created_at')
@@ -118,6 +176,13 @@ export async function getPlatformAdminOverview(): Promise<PlatformAdminOverview>
       .select('arena_id, plan_key, status')
       .limit(1000),
     supabase
+      .from('arena_payment_accounts')
+      .select(
+        'arena_id, asaas_wallet_id, asaas_account_id, holder_name, holder_document, pix_key, platform_fee_basis_points, status, updated_at',
+      )
+      .eq('provider', 'asaas')
+      .limit(1000),
+    supabase
       .from('arena_users')
       .select('arena_id, user_id, role, status')
       .limit(5000),
@@ -130,6 +195,7 @@ export async function getPlatformAdminOverview(): Promise<PlatformAdminOverview>
     usersResult.error ??
     arenasResult.error ??
     subscriptionsResult.error ??
+    paymentAccountsResult.error ??
     membershipsResult.error ??
     principalsResult.error ??
     assignmentsResult.error ??
@@ -141,6 +207,10 @@ export async function getPlatformAdminOverview(): Promise<PlatformAdminOverview>
 
   const subscriptions = new Map(
     ((subscriptionsResult.data ?? []) as SubscriptionRow[]).map((subscription) => [subscription.arena_id, subscription]),
+  )
+
+  const paymentAccounts = new Map(
+    ((paymentAccountsResult.data ?? []) as ArenaPaymentAccountRow[]).map((account) => [account.arena_id, account]),
   )
 
   const users: PlatformUser[] = (usersResult.data ?? []).map((user) => ({
@@ -164,6 +234,7 @@ export async function getPlatformAdminOverview(): Promise<PlatformAdminOverview>
       createdAt: arena.created_at,
       planKey: subscription?.plan_key ?? null,
       subscriptionStatus: subscription?.status ?? null,
+      pixSplitSettings: mapPixSplitSettings(paymentAccounts.get(arena.id)),
     }
   })
 

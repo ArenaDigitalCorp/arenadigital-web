@@ -13,6 +13,7 @@ import {
   Search,
   ShieldCheck,
   UsersRound,
+  WalletCards,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
@@ -23,6 +24,7 @@ import {
   manageInternalEmployeePlanAction,
   managePlatformPrincipalAction,
 } from '@/modules/platform-admin/actions/platformAdminActions'
+import { ArenaPixSplitSettingsCard } from '@/modules/arenas/components/ArenaPixSplitSettingsCard'
 import type {
   PlatformAccessLevel,
   PlatformAdminOverview,
@@ -30,6 +32,7 @@ import type {
 
 type Props = {
   overview: PlatformAdminOverview
+  surface?: 'platform' | 'super-admin'
 }
 
 const SELECT_CLASS =
@@ -64,7 +67,7 @@ function eventLabel(event: string) {
   return labels[event] ?? event
 }
 
-export function PlatformAdminConsole({ overview }: Props) {
+export function PlatformAdminConsole({ overview, surface = 'platform' }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [search, setSearch] = useState('')
@@ -82,6 +85,7 @@ export function PlatformAdminConsole({ overview }: Props) {
   const [planArenaId, setPlanArenaId] = useState('')
   const [planEnabled, setPlanEnabled] = useState(true)
   const [planReason, setPlanReason] = useState('')
+  const [pixArenaId, setPixArenaId] = useState(overview.arenas[0]?.id ?? '')
 
   const principalByUser = useMemo(
     () => new Map(overview.principals.map((principal) => [principal.userId, principal])),
@@ -97,6 +101,9 @@ export function PlatformAdminConsole({ overview }: Props) {
     () => new Map(overview.arenas.map((arena) => [arena.id, arena])),
     [overview.arenas],
   )
+
+  const selectedPixArena = pixArenaId ? arenaById.get(pixArenaId) : null
+  const isSuperAdminSurface = surface === 'super-admin'
 
   const linkedArenaIds = useMemo(() => {
     if (!planEmployeeId) return new Set<string>()
@@ -196,13 +203,15 @@ export function PlatformAdminConsole({ overview }: Props) {
           <div>
             <div className="mb-3 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.24em] text-emerald-300">
               <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-              Central Arena Digital · acesso restrito
+              {isSuperAdminSurface ? 'Super Admin Arena Digital · acesso máximo' : 'Central Arena Digital · acesso restrito'}
             </div>
             <h1 className="max-w-3xl text-3xl font-black tracking-tight md:text-5xl">
-              Controle da plataforma
+              {isSuperAdminSurface ? 'Super Admin' : 'Controle da plataforma'}
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300 md:text-base">
-              Administração global de arenas, contas, equipe interna e acessos sem cobrança — com cada operação registrada.
+              {isSuperAdminSurface
+                ? 'Área exclusiva para governança da equipe Arena Digital, permissões globais, Pix, split e auditoria.'
+                : 'Administração global de arenas, contas, equipe interna e acessos sem cobrança — com cada operação registrada.'}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -233,6 +242,45 @@ export function PlatformAdminConsole({ overview }: Props) {
             </div>
           </div>
         ))}
+      </section>
+
+      <section className="grid gap-5 xl:grid-cols-[380px_1fr]">
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-5 flex items-center gap-3">
+            <div className="rounded-lg bg-orange-100 p-2 text-orange-700"><WalletCards className="h-5 w-5" /></div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-950">Pix e split das arenas</h2>
+              <p className="text-sm text-slate-500">Configuração operacional da Arena Digital para recebíveis do app.</p>
+            </div>
+          </div>
+          <label className="space-y-1.5 text-sm font-medium text-slate-700">
+            Arena
+            <select className={SELECT_CLASS} value={pixArenaId} onChange={(event) => setPixArenaId(event.target.value)}>
+              <option value="">Selecione uma arena</option>
+              {overview.arenas.map((arena) => (
+                <option key={arena.id} value={arena.id}>{arena.name} · {arena.ownerEmail}</option>
+              ))}
+            </select>
+          </label>
+          {selectedPixArena && (
+            <div className="mt-4 rounded-lg border border-slate-100 bg-slate-50 p-3 text-sm text-slate-600">
+              <p className="font-semibold text-slate-900">{selectedPixArena.ownerName || 'Responsável sem nome'}</p>
+              <p>{selectedPixArena.ownerEmail}</p>
+              <p className="mt-2 font-mono text-[11px] text-slate-400">{selectedPixArena.id}</p>
+            </div>
+          )}
+        </div>
+        {selectedPixArena ? (
+          <ArenaPixSplitSettingsCard
+            key={selectedPixArena.id}
+            arenaId={selectedPixArena.id}
+            initialSettings={selectedPixArena.pixSplitSettings}
+          />
+        ) : (
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">
+            Selecione uma arena para configurar Wallet ID Asaas, chave Pix e split das reservas mobile.
+          </div>
+        )}
       </section>
 
       <section className="grid gap-5 xl:grid-cols-2">

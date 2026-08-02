@@ -13,11 +13,45 @@ function exportedFunctionBody(contents, functionName) {
   return contents.slice(start, next === -1 ? contents.length : next)
 }
 
-test('destructive arena and Pix settings operations remain owner-only', async () => {
+test('destructive arena operations remain owner-only and Pix settings are platform-admin only', async () => {
   const contents = await source('src/modules/arenas/actions/arenaActions.ts')
-  for (const name of ['deleteArenaAction', 'updateArenaPixSplitSettingsAction']) {
-    assert.match(exportedFunctionBody(contents, name), /assertArenaOwnerAccess\(arenaId\)/)
+  assert.match(exportedFunctionBody(contents, 'deleteArenaAction'), /assertArenaOwnerAccess\(arenaId\)/)
+
+  for (const name of ['getArenaPixSplitSettingsAction', 'updateArenaPixSplitSettingsAction']) {
+    const body = exportedFunctionBody(contents, name)
+    assert.match(body, /assertPlatformAdminAccess\(\)/, `${name} must require platform admin access`)
+    assert.doesNotMatch(body, /assertArenaOwnerAccess\(arenaId\)/, `${name} must not be owner-managed`)
   }
+})
+
+test('Pix split configuration lives in the Arena Digital admin console', async () => {
+  const editPage = await source('src/app/dashboard/arenas/[id]/edit/page.tsx')
+  assert.doesNotMatch(editPage, /ArenaPixSplitSettingsCard/)
+  assert.doesNotMatch(editPage, /getArenaPixSplitSettingsAction/)
+
+  const platformConsole = await source('src/modules/platform-admin/components/PlatformAdminConsole.tsx')
+  assert.match(platformConsole, /ArenaPixSplitSettingsCard/)
+  assert.match(platformConsole, /Pix e split das arenas/)
+
+  const platformActions = await source('src/modules/platform-admin/actions/platformAdminActions.ts')
+  assert.match(platformActions, /from\('arena_payment_accounts'\)/)
+  assert.match(platformActions, /pixSplitSettings/)
+})
+
+test('super admin console is a dedicated super-admin-only route', async () => {
+  const serverAuth = await source('src/lib/server-auth.ts')
+  assert.match(serverAuth, /export async function assertPlatformSuperAdminAccess/)
+  assert.match(exportedFunctionBody(serverAuth, 'assertPlatformSuperAdminAccess'), /profile\.accessLevel !== 'super_admin'/)
+
+  const superAdminPage = await source('src/app/dashboard/admin/super-admin/page.tsx')
+  assert.match(superAdminPage, /assertPlatformSuperAdminAccess/)
+  assert.match(superAdminPage, /surface="super-admin"/)
+  assert.doesNotMatch(superAdminPage, /assertPlatformAdminAccess/)
+
+  const sidebar = await source('src/components/dashboard/Sidebar.tsx')
+  assert.match(sidebar, /const isSuperAdmin = dbUser\?\.platform_access_level === "super_admin"/)
+  assert.match(sidebar, /href="\/dashboard\/admin\/super-admin"/)
+  assert.match(sidebar, />Super Admin</)
 })
 
 test('user and finance mutations remain restricted to Owner or Gestor', async () => {

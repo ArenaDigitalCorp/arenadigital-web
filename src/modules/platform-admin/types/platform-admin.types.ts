@@ -1,3 +1,5 @@
+import type { ArenaPixSplitSettings } from '@/modules/arenas/types/pix-split.types'
+
 export type PlatformAccessLevel = 'employee' | 'platform_admin' | 'super_admin'
 
 export type PlatformPrincipal = {
@@ -29,6 +31,7 @@ export type PlatformArena = {
   createdAt: string
   planKey: string | null
   subscriptionStatus: string | null
+  pixSplitSettings: ArenaPixSplitSettings
 }
 
 export type PlatformMembership = {

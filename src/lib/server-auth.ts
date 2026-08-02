@@ -25,6 +25,10 @@ export type PlatformAdminProfile = AuthenticatedDbUser & {
   accessLevel: 'platform_admin' | 'super_admin'
 }
 
+export type PlatformSuperAdminProfile = PlatformAdminProfile & {
+  accessLevel: 'super_admin'
+}
+
 export type PlatformAccessLevel = 'employee' | 'platform_admin' | 'super_admin'
 
 export type ArenaMembershipRole = 'Gestor' | 'Atendente' | 'Caixa'
@@ -272,6 +276,19 @@ export async function assertPlatformAdminAccess(): Promise<PlatformAdminProfile>
     email: data.email,
     name: data.name,
     accessLevel,
+  }
+}
+
+export async function assertPlatformSuperAdminAccess(): Promise<PlatformSuperAdminProfile> {
+  const profile = await assertPlatformAdminAccess()
+
+  if (profile.accessLevel !== 'super_admin') {
+    throw new AuthorizationError('Forbidden', 403)
+  }
+
+  return {
+    ...profile,
+    accessLevel: 'super_admin',
   }
 }
 

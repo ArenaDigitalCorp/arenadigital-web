@@ -7,6 +7,7 @@ import {
     assertArenaBackofficeAccess,
     assertArenaCreationAccess,
     assertArenaOwnerAccess,
+    assertPlatformAdminAccess,
 } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { SupabaseArenaRepository } from '@/modules/arenas/repositories/SupabaseArenaRepository'
@@ -261,7 +262,7 @@ export async function getArenaPixSplitSettingsAction(
     arenaId: string
 ): Promise<{ success: boolean; data: ArenaPixSplitSettings; error?: string }> {
     try {
-        await assertArenaOwnerAccess(arenaId)
+        await assertPlatformAdminAccess()
         const { data, error } = await arenaPaymentAccountsTable()
             .select(
                 'asaas_wallet_id, asaas_account_id, holder_name, holder_document, pix_key, platform_fee_basis_points, status, updated_at'
@@ -283,7 +284,7 @@ export async function updateArenaPixSplitSettingsAction(
     input: UpdateArenaPixSplitSettingsInput
 ): Promise<{ success: boolean; data: ArenaPixSplitSettings; error?: string }> {
     try {
-        await assertArenaOwnerAccess(arenaId)
+        await assertPlatformAdminAccess()
 
         const enabled = Boolean(input.enabled)
         const asaasWalletId = cleanNullableText(input.asaasWalletId)
@@ -314,6 +315,7 @@ export async function updateArenaPixSplitSettingsAction(
         if (error) throw new Error(error.message)
 
         revalidatePath(`/dashboard/arenas/${arenaId}/edit`)
+        revalidatePath('/dashboard/admin/platform')
         revalidatePath('/dashboard/settings/arenas')
         return { success: true, data: mapPixSplitSettings(data) }
     } catch (err) {
