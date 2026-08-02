@@ -74,7 +74,14 @@ export function UsersPageClient({ arenaId, arenaName, initialUsers, stations }: 
             res = await createArenaUserAction(arenaId, userData);
         }
         if (res.success) {
-            toast.success(selectedUser ? "Usuário atualizado com sucesso!" : "Usuário cadastrado com sucesso!");
+            const reusedCredentials = !selectedUser && res.user?.usesExistingCredentials;
+            toast.success(
+                selectedUser
+                    ? "Usuário atualizado com sucesso!"
+                    : reusedCredentials
+                        ? "Usuário vinculado. Ele deve entrar com a senha que já possui."
+                        : "Usuário cadastrado com sucesso!"
+            );
             setIsModalOpen(false);
             refreshUsers();
         } else {

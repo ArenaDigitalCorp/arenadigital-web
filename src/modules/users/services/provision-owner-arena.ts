@@ -73,13 +73,17 @@ export async function provisionOwnerArena(
 ): Promise<string | null> {
   const supabase = getSupabaseAdmin()
   const arenaAddress = normalizeOwnerArenaAddressData(addressData)
+  const normalizedArenaName = arenaName.trim()
 
-  const { data: existingArena } = await supabase
+  const { data: ownerArenas, error: ownerArenasError } = await supabase
     .from('arenas')
-    .select('id')
+    .select('id, name')
     .eq('owner_id', ownerId)
-    .eq('name', arenaName)
-    .maybeSingle()
+  if (ownerArenasError) throw new Error(`Erro ao verificar arena existente: ${ownerArenasError.message}`)
+
+  const existingArena = ownerArenas?.find(
+    (arena) => arena.name.trim().toLocaleLowerCase('pt-BR') === normalizedArenaName.toLocaleLowerCase('pt-BR'),
+  )
 
   if (existingArena) {
     await ensureOwnerArenaUserLink(supabase, existingArena.id, ownerId)
@@ -89,7 +93,7 @@ export async function provisionOwnerArena(
 
   const cleanArenaDocument = onlyDigits(arenaDocument)
   const arenaInsertData: ArenaInsert = {
-    name: arenaName,
+    name: normalizedArenaName,
     owner_id: ownerId,
     status: 'ativo',
     ...(phone && { phone }),
@@ -132,5 +136,21 @@ export async function provisionOwnerArena(
     return newArena.id
   }
 
-  return null
+  // Outra tentativa pode ter vencido a corrida protegida pelo índice único.
+  // Releia e finalize as partes idempotentes antes de consumir o signup intent.
+  const { data: concurrentArenas, error: concurrentArenaError } = await supabase
+    .from('arenas')
+    .select('id, name')
+    .eq('owner_id', ownerId)
+  if (concurrentArenaError) {
+    throw new Error(`Erro ao reconciliar arena criada: ${concurrentArenaError.message}`)
+  }
+  const concurrentArena = concurrentArenas?.find(
+    (arena) => arena.name.trim().toLocaleLowerCase('pt-BR') === normalizedArenaName.toLocaleLowerCase('pt-BR'),
+  )
+  if (!concurrentArena) throw new Error('A arena não foi criada nem encontrada após a tentativa de provisionamento.')
+
+  await ensureOwnerArenaUserLink(supabase, concurrentArena.id, ownerId)
+  await ensureExperimentalSubscription({ arenaId: concurrentArena.id, actorId: ownerId })
+  return concurrentArena.id
 }

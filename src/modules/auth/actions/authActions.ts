@@ -4,9 +4,11 @@ import { createSupabaseServerClient } from "@/lib/supabase/server"
 import { getSupabaseAdmin } from "@/lib/supabase-server"
 import { provisionOwnerArena } from "@/modules/users/services/provision-owner-arena"
 import { findUserByCpf, findUserByEmail, normalizeEmail, resolveAuthenticatedDbUser } from "@/lib/account-identity"
-import { isValidCpfOrCnpj, onlyDigits } from "@/lib/brasil-document"
+import { isValidCpf, isValidCpfOrCnpj, onlyDigits } from "@/lib/brasil-document"
 import { hasWebBackofficeAccess, WEB_BACKOFFICE_ACCESS_DENIED_MESSAGE } from "@/lib/server-auth"
 import { observeServerAction } from "@/lib/observability/server"
+import { isStrongPassword } from "@/lib/password-policy"
+import { headers } from "next/headers"
 import {
     ARENA_SIGNUP_INTENT_KEY,
     consumeArenaSignupIntentMetadata,
@@ -28,7 +30,6 @@ type AddressData = {
 type SignUpInput = {
     email: string
     password: string
-    emailRedirectTo: string
     firstName: string
     lastName: string
     cpf: string
@@ -58,20 +59,30 @@ function getErrorMessage(error: unknown) {
     return "Erro desconhecido"
 }
 
-function normalizeEmailRedirectTo(value: string) {
+async function getArenaSignupRedirectTo() {
+    const requestOrigin = (await headers()).get('origin')
+    const configuredOrigin = process.env.NEXT_PUBLIC_APP_URL ?? process.env.APP_URL
+    const candidate = requestOrigin || configuredOrigin
+    if (!candidate) return undefined
+
     try {
-        const url = new URL(value)
-        if (!['http:', 'https:'].includes(url.protocol)) return undefined
-        if (url.pathname !== '/auth/callback') return undefined
-        return url.toString()
+        const origin = new URL(candidate)
+        const isLocal = ['localhost', '127.0.0.1'].includes(origin.hostname)
+        if (origin.protocol !== 'https:' && !(isLocal && origin.protocol === 'http:')) return undefined
+        return new URL('/auth/callback?next=/dashboard', origin.origin).toString()
     } catch {
         return undefined
     }
 }
 
-function validateArenaSignupData(input: Pick<SignUpInput, "arenaName" | "arenaDocument" | "phone" | "addressData">) {
+function validateArenaSignupData(input: SignUpInput) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(input.email))) return "Informe um e-mail válido."
+    if (input.firstName.trim().length < 2) return "Informe o nome do responsável."
+    if (input.lastName.trim().length < 2) return "Informe o sobrenome do responsável."
+    if (!isValidCpf(input.cpf)) return "Informe um CPF válido para o responsável."
+    if (!isStrongPassword(input.password)) return "A senha não atende aos requisitos de segurança."
     if (!input.arenaName.trim()) return "Informe o nome da arena."
-    if (!input.phone.trim()) return "Informe o telefone da arena."
+    if (onlyDigits(input.phone).length < 10) return "Informe um telefone válido para a arena."
     if (!onlyDigits(input.arenaDocument)) return "Informe o CPF ou CNPJ da arena."
     if (!isValidCpfOrCnpj(input.arenaDocument)) return "Informe um CPF ou CNPJ válido."
     if (!input.addressData.id_municipio) return "Selecione a cidade da arena."
@@ -79,39 +90,16 @@ function validateArenaSignupData(input: Pick<SignUpInput, "arenaName" | "arenaDo
 }
 
 export async function checkArenaSignupEmailAction(emailInput: string): Promise<ActionResult<{
-    status: "new-user" | "existing-app-user" | "existing-web-user"
-    name?: string | null
+    status: "new-user"
 }>> {
     const observation = await observeServerAction({ component: "auth", operation: "check_signup_email" })
     try {
         const email = normalizeEmail(emailInput)
         if (!email) return finishObservedAction(observation, { success: false, error: "Informe um e-mail válido." })
 
-        const admin = getSupabaseAdmin()
-        const existingUser = await findUserByEmail(admin, email)
-
-        if (!existingUser) {
-            return finishObservedAction(observation, { success: true, data: { status: "new-user" } })
-        }
-
-        const canAccessWeb = await hasWebBackofficeAccess(existingUser.id)
-        if (canAccessWeb) {
-            return finishObservedAction(observation, {
-                success: true,
-                data: {
-                    status: "existing-web-user",
-                    name: existingUser.name,
-                },
-            })
-        }
-
-        return finishObservedAction(observation, {
-            success: true,
-            data: {
-                status: "existing-app-user",
-                name: existingUser.name,
-            },
-        })
+        // Não exponha se a identidade já existe nesta etapa pública. A verificação
+        // autoritativa de e-mail/CPF acontece somente no envio completo.
+        return finishObservedAction(observation, { success: true, data: { status: "new-user" } })
     } catch (error) {
         observation.log("error", "auth.check_signup_email.failed", { error })
         return finishObservedAction(observation, { success: false, error: getErrorMessage(error) }, "failed")
@@ -132,7 +120,8 @@ export async function startSignUpAction(input: SignUpInput): Promise<ActionResul
         const admin = getSupabaseAdmin()
         const email = normalizeEmail(input.email)
         const cleanCpf = onlyDigits(input.cpf)
-        const emailRedirectTo = normalizeEmailRedirectTo(input.emailRedirectTo)
+        const cleanArenaDocument = onlyDigits(input.arenaDocument)
+        const emailRedirectTo = await getArenaSignupRedirectTo()
 
         const [existingUserByEmail, existingUserByCpf] = await Promise.all([
             findUserByEmail(admin, email),
@@ -142,14 +131,14 @@ export async function startSignUpAction(input: SignUpInput): Promise<ActionResul
         if (existingUserByEmail) {
             return finishObservedAction(observation, {
                 success: false,
-                error: "Já existe uma conta com este e-mail. O painel web é exclusivo para gestores e o app é exclusivo para atletas. Use outro e-mail para cadastrar uma arena.",
+                error: "Não foi possível criar esta conta. Se você já possui cadastro, entre ou recupere sua senha.",
             })
         }
 
         if (existingUserByCpf && normalizeEmail(existingUserByCpf.email) !== email) {
             return finishObservedAction(observation, {
                 success: false,
-                error: "Este CPF/CNPJ já está vinculado a outro e-mail. Use o e-mail cadastrado ou recupere o acesso.",
+                error: "Este CPF já está vinculado a outro e-mail. Use o e-mail cadastrado ou recupere o acesso.",
             })
         }
 
@@ -159,10 +148,10 @@ export async function startSignUpAction(input: SignUpInput): Promise<ActionResul
             options: {
                 ...(emailRedirectTo ? { emailRedirectTo } : {}),
                 data: {
-                    firstName: input.firstName,
-                    lastName: input.lastName,
-                    cpf: input.cpf,
-                    phone: input.phone,
+                    firstName: input.firstName.trim(),
+                    lastName: input.lastName.trim(),
+                    cpf: cleanCpf,
+                    phone: input.phone.trim(),
                 },
             },
         })
@@ -176,10 +165,10 @@ export async function startSignUpAction(input: SignUpInput): Promise<ActionResul
         }
 
         const intent = createArenaSignupIntent({
-            arenaName: input.arenaName,
-            arenaDocument: input.arenaDocument,
-            phone: input.phone,
-            cpf: input.cpf,
+            arenaName: input.arenaName.trim(),
+            arenaDocument: cleanArenaDocument,
+            phone: input.phone.trim(),
+            cpf: cleanCpf,
             addressData: input.addressData,
         })
         const { error: intentError } = await admin.auth.admin.updateUserById(signUpData.user.id, {
@@ -227,13 +216,14 @@ export async function provisionAfterSignUpAction(): Promise<ActionResult<{ arena
             return finishObservedAction(observation, { success: true, data: { arenaCreated: false } })
         }
 
-        if (intent.cpf) {
-            const { error: userUpdateError } = await admin
-                .from("users")
-                .update({ cpf: intent.cpf })
-                .eq("id", dbUser.id)
-            if (userUpdateError) throw new Error(userUpdateError.message)
-        }
+        // Intents antigos podiam confundir o documento fiscal da arena com o CPF
+        // do responsável. Limpe esse legado em vez de perpetuar um CNPJ em users.cpf.
+        const ownerCpf = isValidCpf(intent.cpf) ? onlyDigits(intent.cpf) : null
+        const { error: userUpdateError } = await admin
+            .from("users")
+            .update({ cpf: ownerCpf })
+            .eq("id", dbUser.id)
+        if (userUpdateError) throw new Error(userUpdateError.message)
 
         const arenaId = await provisionOwnerArena(
             dbUser.id,

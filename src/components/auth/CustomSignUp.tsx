@@ -15,7 +15,7 @@ import {
     checkArenaSignupEmailAction,
     startSignUpAction,
 } from "@/modules/auth/actions/authActions"
-import { isValidCpfOrCnpj } from "@/lib/brasil-document"
+import { isValidCpf, isValidCpfOrCnpj } from "@/lib/brasil-document"
 
 const maskCpf = (value: string) => {
     return value
@@ -54,11 +54,12 @@ const maskCpfCnpj = (value: string) => {
 
 type EstadoRow = { codigo_uf: number; nome: string; uf: string }
 type MunicipioRow = { codigo_ibge: number; nome: string; codigo_uf: number }
-type AccountMode = "email" | "new-user" | "existing-app-user" | "existing-web-user"
+type AccountMode = "email" | "new-user"
 
 export function CustomSignUp() {
     const [firstName, setFirstName] = React.useState("")
     const [lastName, setLastName] = React.useState("")
+    const [responsibleCpf, setResponsibleCpf] = React.useState("")
     const [phone, setPhone] = React.useState("")
     const [arenaName, setArenaName] = React.useState("")
     const [arenaDocument, setArenaDocument] = React.useState("")
@@ -108,7 +109,6 @@ export function CustomSignUp() {
 
     const [emailAddress, setEmailAddress] = React.useState("")
     const [accountMode, setAccountMode] = React.useState<AccountMode>("email")
-    const [accountName, setAccountName] = React.useState<string | null>(null)
     const [password, setPassword] = React.useState("")
     const [confirmPassword, setConfirmPassword] = React.useState("")
     const [showPassword, setShowPassword] = React.useState(false)
@@ -130,7 +130,6 @@ export function CustomSignUp() {
 
     const resetEmailCheck = () => {
         setAccountMode("email")
-        setAccountName(null)
         setPassword("")
         setConfirmPassword("")
     }
@@ -158,15 +157,6 @@ export function CustomSignUp() {
         }
 
         setAccountMode(res.data.status)
-        setAccountName(res.data.name ?? null)
-
-        if (res.data.status === "existing-app-user") {
-            toast.error("Este e-mail já é usado no app de atletas.")
-        }
-
-        if (res.data.status === "existing-web-user") {
-            toast.info("Essa conta já possui acesso ao painel web.")
-        }
     }
 
     const handleCepBlur = async () => {
@@ -219,18 +209,13 @@ export function CustomSignUp() {
             return
         }
 
-        if (accountMode === "existing-web-user") {
-            toast.error("Essa conta já possui acesso ao painel web. Faça login para continuar.")
-            return
-        }
-
-        if (accountMode === "existing-app-user") {
-            toast.error("Este e-mail já está vinculado ao app de atletas. Use outro e-mail para cadastrar uma arena.")
-            return
-        }
-
         if (!isPasswordValid) {
             toast.error("A senha não atende a todos os requisitos.")
+            return
+        }
+
+        if (!isValidCpf(responsibleCpf)) {
+            toast.error("Informe um CPF válido para o responsável.")
             return
         }
 
@@ -262,14 +247,12 @@ export function CustomSignUp() {
             complement,
         }
 
-        const emailRedirectTo = `${window.location.origin}/auth/callback?next=/dashboard`
         const res = await startSignUpAction({
             email: emailAddress,
             password,
-            emailRedirectTo,
             firstName,
             lastName,
-            cpf: arenaDocument,
+            cpf: responsibleCpf,
             phone,
             arenaName,
             arenaDocument,
@@ -360,27 +343,6 @@ export function CustomSignUp() {
                     </p>
                 )}
 
-                {accountMode === "existing-app-user" && (
-                    <div className="space-y-2 rounded-lg border border-amber-300/40 bg-amber-300/10 px-3 py-3 text-sm text-amber-50">
-                        <p className="font-semibold">Este e-mail já é usado no app de atletas.</p>
-                        <p>
-                            Para manter os acessos separados, contas do app não entram no painel web. Use outro e-mail para cadastrar uma arena.
-                        </p>
-                    </div>
-                )}
-
-                {accountMode === "existing-web-user" && (
-                    <div className="space-y-3 rounded-lg border border-white/15 bg-white/10 px-3 py-3 text-sm text-white/85">
-                        <p>
-                            {accountName ? `${accountName}, essa conta` : "Essa conta"} já possui acesso ao painel web.
-                        </p>
-                        <Link href="/sign-in" className="block">
-                            <Button type="button" className="w-full bg-arena-button hover:bg-arena-button-hover h-11 rounded-lg font-bold">
-                                Ir para login
-                            </Button>
-                        </Link>
-                    </div>
-                )}
             </div>
 
             {accountMode === "new-user" && (
@@ -389,7 +351,7 @@ export function CustomSignUp() {
                 <h2 className="text-xl font-semibold text-white border-b border-white/20 pb-2">
                     Dados Pessoais (Responsável)
                 </h2>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                         <Label htmlFor="firstName" className="text-white/70">Nome</Label>
                         <Input id="firstName" value={firstName} onChange={(e) => setFirstName(e.target.value)} className="bg-white border-none h-12 rounded-lg text-black" required />
@@ -399,10 +361,10 @@ export function CustomSignUp() {
                         <Input id="lastName" value={lastName} onChange={(e) => setLastName(e.target.value)} className="bg-white border-none h-12 rounded-lg text-black" required />
                     </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
-                        <Label htmlFor="arenaDocument" className="text-white/70">CPF/CNPJ</Label>
-                        <Input id="arenaDocument" value={arenaDocument} onChange={(e) => setArenaDocument(maskCpfCnpj(e.target.value))} placeholder="000.000.000-00 ou 00.000.000/0000-00" className="bg-white border-none h-12 rounded-lg text-black" required />
+                        <Label htmlFor="responsibleCpf" className="text-white/70">CPF do responsável</Label>
+                        <Input id="responsibleCpf" value={responsibleCpf} onChange={(e) => setResponsibleCpf(maskCpf(e.target.value))} inputMode="numeric" placeholder="000.000.000-00" className="bg-white border-none h-12 rounded-lg text-black" required />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="phone" className="text-white/70">Telefone da Arena</Label>
@@ -412,6 +374,10 @@ export function CustomSignUp() {
                 <div className="space-y-2">
                     <Label htmlFor="arenaName" className="text-white/70">Nome da Arena</Label>
                     <Input id="arenaName" value={arenaName} placeholder="Ex: Arena Beach Tennis" onChange={(e) => setArenaName(e.target.value)} className="bg-white border-none h-12 rounded-lg text-black" required />
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="arenaDocument" className="text-white/70">CPF/CNPJ da Arena</Label>
+                    <Input id="arenaDocument" value={arenaDocument} onChange={(e) => setArenaDocument(maskCpfCnpj(e.target.value))} inputMode="numeric" placeholder="000.000.000-00 ou 00.000.000/0000-00" className="bg-white border-none h-12 rounded-lg text-black" required />
                 </div>
             </div>
 

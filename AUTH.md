@@ -25,11 +25,11 @@ A aplicação web e o aplicativo usam **Supabase Auth** como provedor de autenti
 ## Fluxo de cadastro do gestor
 
 1. Usuário preenche `CustomSignUp` (`src/components/auth/CustomSignUp.tsx`).
-2. `startSignUpAction()` (`src/modules/auth/actions/authActions.ts`) chama `supabase.auth.signUp({ email, password, options.data: { firstName, lastName, cpf, phone, arenaName, addressData } })`.
+2. O formulário coleta separadamente o CPF do responsável e o CPF/CNPJ fiscal da arena. `startSignUpAction()` valida todo o payload no servidor e chama `supabase.auth.signUp`; somente nome, CPF pessoal e telefone entram no metadata da identidade.
 3. Supabase envia OTP de confirmação para o email.
 4. O trigger `on_auth_user_created` insere automaticamente a linha em `public.users` com `id = auth.users.id`, `role = 'gestor'`, nome/cpf vindos do metadata.
 5. Usuário verifica OTP via `supabase.auth.verifyOtp({ type: 'email', email, token })` — isso já cria a sessão.
-6. `provisionAfterSignUpAction()` cria a `arenas` + `arena_users` para o gestor.
+6. `provisionAfterSignUpAction()` lê o intent de cadastro emitido pelo servidor em `app_metadata`, grava o documento fiscal em `arenas.cpf_cnpj` e cria `arenas` + `arena_users` para o gestor de forma idempotente.
 
 ## Fluxo de login
 
@@ -59,9 +59,11 @@ Login social (Google etc.) está desabilitado por ora — para reativar, habilit
 
 Quando o gestor cria Gestor/Atendente/Caixa pelo backoffice (`/dashboard/settings/users/[arenaId]`):
 
-- `createArenaUserAction` → `supabase.auth.admin.createUser({ email, password, email_confirm: true, user_metadata })` + insere linha em `public.users` (via trigger ou upsert) + cria `arena_users`.
+- `createArenaUserAction` → reutiliza credenciais existentes quando o e-mail já possui Auth; para identidade local legada sem Auth, cria e reconcilia a identidade; depois cria/atualiza `arena_users`.
 - `updateArenaUserAction` → atualiza `public.users` + (se senha) `supabase.auth.admin.updateUserById(id, { password })`.
-- `deleteArenaUserAction` → remove `arena_users` + (se for usuário com `id = auth.users.id`) `supabase.auth.admin.deleteUser(id)`.
+- `deleteArenaUserAction` → chama a RPC atômica que remove o vínculo e só elimina a identidade órfã quando ela não pertence a outra arena.
+
+O cadastro de atleta feito pela arena garante a identidade Auth e chama `provision_arena_athlete_profile`, que cria perfil, vínculo com a arena e esporte em uma única transação idempotente.
 
 ## Tabela `public.users`
 

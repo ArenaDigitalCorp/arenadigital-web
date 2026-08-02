@@ -11,13 +11,31 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { STRONG_PASSWORD_HELP } from "@/lib/password-policy";
+
+type UserFormData = {
+    name: string;
+    email: string;
+    senha: string;
+    role: string;
+    stationId: string;
+    status: string;
+};
+
+type EditableArenaUser = {
+    name?: string | null;
+    email?: string | null;
+    role?: string | null;
+    stationId?: string | null;
+    status?: string | null;
+};
 
 interface UserFormModalProps {
     isOpen: boolean;
     onClose: () => void;
-    user?: any; // To be typed properly later
+    user?: EditableArenaUser | null;
     stations: Array<{ id: string; name: string }>;
-    onSave: (data: any) => Promise<void>;
+    onSave: (data: UserFormData) => Promise<void>;
 }
 
 export function UserFormModal({ isOpen, onClose, user, stations, onSave }: UserFormModalProps) {
@@ -126,18 +144,18 @@ export function UserFormModal({ isOpen, onClose, user, stations, onSave }: UserF
                             />
                         </div>
 
-                        <div className="space-y-1.5">
+                        {!isEditMode && <div className="space-y-1.5">
                             <Label htmlFor="senha" className="text-sm font-medium text-arena-navy-800">Senha</Label>
                             <div className="relative">
                                 <Input
                                     id="senha"
                                     type={showPassword ? "text" : "password"}
-                                    placeholder="Insira uma senha para acesso do usuário com 6 dígitos"
+                                    placeholder="Crie uma senha segura"
                                     value={formData.senha}
                                     onChange={(e) => setFormData({ ...formData, senha: e.target.value })}
                                     className="bg-white border-slate-300 text-slate-800 w-full pr-10 placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-slate-400"
-                                    minLength={6}
-                                    required={!isEditMode}
+                                    minLength={8}
+                                    required
                                 />
                                 <button
                                     type="button"
@@ -147,7 +165,8 @@ export function UserFormModal({ isOpen, onClose, user, stations, onSave }: UserF
                                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                 </button>
                             </div>
-                        </div>
+                            <p className="text-xs text-slate-500">{STRONG_PASSWORD_HELP}</p>
+                        </div>}
 
                         <div className="space-y-1.5">
                             <Label htmlFor="role" className="text-sm font-medium text-arena-navy-800">Perfil</Label>

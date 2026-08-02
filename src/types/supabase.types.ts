@@ -4564,6 +4564,25 @@ export type Database = {
         }
         Returns: string
       }
+      provision_arena_athlete_profile: {
+        Args: {
+          p_address: string | null
+          p_address_number: string | null
+          p_arena_id: string
+          p_birth_date: string | null
+          p_cep: string | null
+          p_city_id: number | null
+          p_cpf: string
+          p_level_id: string | null
+          p_name: string
+          p_neighborhood: string | null
+          p_phone: string | null
+          p_sport_id: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      is_valid_cpf: { Args: { p_value: string }; Returns: boolean }
       confirm_booking_payment: {
         Args: {
           p_booking_payment_id: string
