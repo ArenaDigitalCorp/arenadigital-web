@@ -250,11 +250,13 @@ export function SubscriptionPageClient({
   const selectedPlan =
     plans.find((plan) => plan.key === selectedPlanKey) ?? null;
   const isPartnerSubscription = subscription.planKey === PARTNER_PLAN_KEY;
+  const isInternalSubscription = subscription.hasInternalAccess;
   const subscriptionNotice = getSubscriptionNotice(subscription);
   const resolveBillingPlanKey = (): PlanKey =>
     subscription.planKey ?? selectedPlanKey;
 
-  const hasSubscription = subscription.status !== 'none';
+  const hasSubscription =
+    isInternalSubscription || subscription.status !== 'none';
   const modalPlanChange =
     Boolean(setupData?.planKey) &&
     Boolean(subscription.planKey) &&
@@ -390,7 +392,7 @@ export function SubscriptionPageClient({
         </p>
       </div>
 
-      {planSelectionEnabled && !isPartnerSubscription && (
+      {planSelectionEnabled && !isPartnerSubscription && !isInternalSubscription && (
         <section>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
             {plans.map((plan) => {
@@ -496,7 +498,15 @@ export function SubscriptionPageClient({
               <CardContent className="space-y-5 pt-6">
                 <h3 className="text-lg font-semibold">Plano de assinatura</h3>
 
-                {!hasSubscription && (
+                {isInternalSubscription ? (
+                  <div className="rounded-lg border border-teal-200 bg-teal-50 px-3 py-2.5 text-sm text-teal-900">
+                    <p className="font-medium">Plano interno ativo</p>
+                    <p className="mt-1 text-teal-900/70">
+                      Acesso liberado pela Arena Digital, sem cobrança e sem
+                      necessidade de cartão.
+                    </p>
+                  </div>
+                ) : !hasSubscription && (
                   <div className="rounded-lg border border-arena-button/20 bg-arena-button/5 px-3 py-2.5 text-sm text-[#0D3B45]">
                     <p className="font-medium">Nenhuma assinatura ativa</p>
                     <p className="mt-1 text-muted-foreground">
@@ -588,6 +598,7 @@ export function SubscriptionPageClient({
                 {hasSubscription &&
                   planSelectionEnabled &&
                   !isPartnerSubscription &&
+                  !isInternalSubscription &&
                   selectedPlan &&
                   selectedPlan.key !== subscription.planKey && (
                     <div className="space-y-3 rounded-lg border border-arena-button/20 bg-arena-button/5 p-4">
@@ -689,7 +700,11 @@ export function SubscriptionPageClient({
                     <p className="text-sm text-muted-foreground">
                       Nenhum cartao cadastrado.
                     </p>
-                    {!hasSubscription ? (
+                    {isInternalSubscription ? (
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-muted-foreground">
+                        O plano interno não exige cartão cadastrado.
+                      </div>
+                    ) : !hasSubscription ? (
                       <Button
                         type="button"
                         onClick={() => handleOpenCardModal(selectedPlanKey)}

@@ -189,8 +189,8 @@ export async function getSubscription(arenaId: string): Promise<ArenaSubscriptio
     status: hasInternalAccess ? 'none' : ((data.status as SubscriptionStatus) ?? 'none'),
     hasInternalAccess,
     planKey: hasInternalAccess ? null : parsedKey.success ? parsedKey.data : null,
-    planLabel: hasInternalAccess ? null : planJoin?.label ?? fallbackPlan?.label ?? null,
-    priceCents: hasInternalAccess ? null : planJoin?.price_cents ?? fallbackPlan?.price_cents ?? null,
+    planLabel: planJoin?.label ?? fallbackPlan?.label ?? null,
+    priceCents: planJoin?.price_cents ?? fallbackPlan?.price_cents ?? null,
     maxSpaces: planJoin?.max_spaces ?? fallbackPlan?.max_spaces ?? null,
     currentPeriodEnd:
       hasInternalAccess
