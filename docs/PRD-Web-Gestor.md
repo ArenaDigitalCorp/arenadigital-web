@@ -205,10 +205,21 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
 ### 5.8.3 Listagem de Comandas da Estação (✅ Implementado)
 - Ao acessar uma estação, as comandas são listadas em cards com paginação server-side (o banco pode conter milhares de comandas por dia)
 - Paginação: 10, 25, 50 ou 100 comandas por página (default: 25)
-- Filtro de status: Abertas (default), Fechadas ou Todos os status
+- Filtro de status: Abertas (default), Pendentes, Fechadas ou Todos os status
 - Busca por cliente: consulta todos os registros do banco (não apenas os visíveis na página), respeitando o status selecionado; busca por nome do cliente avulso, nome de perfil do atleta ou nº da comanda
 - Filtro de data de abertura da comanda: intervalo "De" e "Até"
 - Qualquer mudança de filtro/busca retorna à primeira página
+
+---
+
+### 5.8.5 Status "Pendente" da Comanda (✅ Implementado)
+- Objetivo: permitir que o gestor marque manualmente uma comanda aberta como "Pendente" quando o cliente vai efetuar o pagamento em outro momento, sem perder o controle sobre ela.
+- No detalhe da comanda (status Aberta), o gestor pode clicar em "Marcar como pendente"; a comanda passa a exibir o badge "Pendente" e a data/hora em que a mudança ocorreu ("Pendente desde ...").
+- Enquanto pendente, a comanda continua totalmente editável: é possível lançar novos itens e registrar pagamento normalmente, exatamente como uma comanda aberta.
+- O gestor pode reverter manualmente a comanda de "Pendente" para "Aberta" a qualquer momento (botão "Reverter para aberta"), caso tenha marcado por engano.
+- Toda mudança de status (aberta → pendente, pendente → aberta) é registrada com quem alterou e quando, para fins de auditoria.
+- Ao ser paga (saldo chega a zero), a comanda segue o fluxo normal já existente e é fechada automaticamente, independente de estar aberta ou pendente no momento do pagamento.
+- O relatório Relatórios → Movimentação Estações reflete esse status: filtro "Status" com a opção "Pendente" e coluna "Status comanda" mostrando o badge e a data de "pendente desde" na listagem.
 
 ---
 

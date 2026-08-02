@@ -27,7 +27,7 @@ export interface StationOrderPayment {
 export interface StationOrdersFilters {
     page?: number;
     pageSize?: number;
-    status?: 'open' | 'closed' | 'todos';
+    status?: 'open' | 'pending' | 'closed' | 'todos';
     /** Busca por cliente (customer_name ou atleta.nome_perfil) e nº da comanda. */
     search?: string;
     /** ISO timestamp (inclusive) — comandas abertas a partir desta data. */
@@ -46,11 +46,12 @@ export interface StationOrder {
     customer_id?: string;
     order_number: number;
     customer_name?: string;
-    status: 'open' | 'closed' | 'cancelled';
+    status: 'open' | 'pending' | 'closed' | 'cancelled';
     total_value: number;
     created_at: string;
     updated_at: string;
     closed_at?: string;
+    pending_marked_at?: string | null;
     station_order_items?: StationOrderItem[];
     station_payments?: StationOrderPayment[];
     atleta?: { nome_perfil: string; telefone?: string | null; cpf?: string | null };
