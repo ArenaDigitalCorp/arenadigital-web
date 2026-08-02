@@ -40,7 +40,7 @@ export async function getPaymentStatusReportAction(
 
     let query = supabase
       .from('bookings')
-      .select('id, start_time, status, price, plano_mensalista_id, sport_id, cobranca_por_participante, courts(id, name), sports(id, name), atleta:athlete_id(id, nome_perfil), booking_participants(id, funcao, pago_em, valor)')
+      .select('id, start_time, status, price, plano_mensalista_id, sport_id, cobranca_por_participante, courts!bookings_court_id_fkey(id, name), sports(id, name), atleta:athlete_id(id, nome_perfil), booking_participants(id, funcao, pago_em, valor)')
       .eq('arena_id', arenaId)
       .order('start_time', { ascending: false })
       .order('id', { ascending: false })

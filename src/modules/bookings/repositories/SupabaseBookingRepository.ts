@@ -3,7 +3,7 @@ import type { IBookingRepository } from './IBookingRepository';
 import type { Booking, CreateBookingDTO, UpdateBookingDTO } from '../types/booking.types';
 
 const WITH_RELATIONS =
-    '*, courts(id, name), sports(id, name), atleta:athlete_id(id, nome_perfil, telefone), booking_services(id, booking_id, product_id, quantity, unit_price, products(id, name)), booking_participants(id, atleta_id, funcao, status, valor, pago_em, atleta:atleta_id(id, nome_perfil, telefone))' as const;
+    '*, courts!bookings_court_id_fkey(id, name), sports(id, name), atleta:athlete_id(id, nome_perfil, telefone), booking_services(id, booking_id, product_id, quantity, unit_price, products(id, name)), booking_participants(id, atleta_id, funcao, status, valor, pago_em, atleta:atleta_id(id, nome_perfil, telefone))' as const;
 
 type ConflictBookingRow = {
   id: string
@@ -27,7 +27,7 @@ export class SupabaseBookingRepository implements IBookingRepository {
   async findByArena(arenaId: string, startDate?: string, endDate?: string): Promise<Booking[]> {
     let query = this.client
       .from('bookings')
-      .select('*, courts(name)')
+      .select('*, courts!bookings_court_id_fkey(name)')
       .eq('arena_id', arenaId);
 
     if (startDate) query = query.gte('start_time', startDate);
