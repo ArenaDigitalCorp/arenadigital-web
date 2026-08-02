@@ -283,7 +283,8 @@ export function PlatformAdminConsole({ overview, surface = 'platform' }: Props) 
         )}
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-2">
+      <section className={isSuperAdminSurface ? "grid gap-5 xl:grid-cols-2" : "grid gap-5"}>
+        {isSuperAdminSurface && (
         <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-200 px-6 py-5">
             <div className="flex items-center gap-3">
@@ -392,6 +393,7 @@ export function PlatformAdminConsole({ overview, surface = 'platform' }: Props) 
             </div>
           </div>
         </div>
+        )}
 
         <div id="internal-plan-control" className="rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-200 px-6 py-5">

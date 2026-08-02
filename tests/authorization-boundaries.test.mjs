@@ -43,15 +43,28 @@ test('super admin console is a dedicated super-admin-only route', async () => {
   assert.match(serverAuth, /export async function assertPlatformSuperAdminAccess/)
   assert.match(exportedFunctionBody(serverAuth, 'assertPlatformSuperAdminAccess'), /profile\.accessLevel !== 'super_admin'/)
 
+  const platformPage = await source('src/app/dashboard/admin/platform/page.tsx')
+  assert.match(platformPage, /accessLevel === 'super_admin'/)
+  assert.match(platformPage, /redirect\('\/dashboard\/admin\/super-admin'\)/)
+
   const superAdminPage = await source('src/app/dashboard/admin/super-admin/page.tsx')
   assert.match(superAdminPage, /assertPlatformSuperAdminAccess/)
   assert.match(superAdminPage, /surface="super-admin"/)
   assert.doesNotMatch(superAdminPage, /assertPlatformAdminAccess/)
 
   const sidebar = await source('src/components/dashboard/Sidebar.tsx')
+  assert.match(sidebar, /const isPlatformAdmin = dbUser\?\.platform_access_level === "platform_admin"/)
   assert.match(sidebar, /const isSuperAdmin = dbUser\?\.platform_access_level === "super_admin"/)
   assert.match(sidebar, /href="\/dashboard\/admin\/super-admin"/)
-  assert.match(sidebar, />Super Admin</)
+  assert.match(sidebar, /Super Admin Arena Digital/)
+
+  const subscriptionGate = await source('src/components/dashboard/DashboardSubscriptionGate.tsx')
+  assert.match(subscriptionGate, /const isGlobalAdminRoute = pathname\.startsWith\('\/dashboard\/admin'\)/)
+  assert.match(subscriptionGate, /isGlobalAdminRoute \|\| isTutorialAccess/)
+
+  const platformConsole = await source('src/modules/platform-admin/components/PlatformAdminConsole.tsx')
+  assert.match(platformConsole, /isSuperAdminSurface && \(/)
+  assert.match(platformConsole, /Equipe Arena Digital/)
 })
 
 test('user and finance mutations remain restricted to Owner or Gestor', async () => {

@@ -310,6 +310,7 @@ export async function managePlatformPrincipalAction(
 
     if (error) throw new Error(error.message)
     revalidatePath('/dashboard/admin/platform')
+    revalidatePath('/dashboard/admin/super-admin')
     return { success: true }
   } catch (error) {
     return {
@@ -335,6 +336,7 @@ export async function manageInternalEmployeePlanAction(
 
     if (error) throw new Error(error.message)
     revalidatePath('/dashboard/admin/platform')
+    revalidatePath('/dashboard/admin/super-admin')
     return { success: true }
   } catch (error) {
     return {

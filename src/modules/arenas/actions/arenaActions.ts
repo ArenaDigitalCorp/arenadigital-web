@@ -316,6 +316,7 @@ export async function updateArenaPixSplitSettingsAction(
 
         revalidatePath(`/dashboard/arenas/${arenaId}/edit`)
         revalidatePath('/dashboard/admin/platform')
+        revalidatePath('/dashboard/admin/super-admin')
         revalidatePath('/dashboard/settings/arenas')
         return { success: true, data: mapPixSplitSettings(data) }
     } catch (err) {

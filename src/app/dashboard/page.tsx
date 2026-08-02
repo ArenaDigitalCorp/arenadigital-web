@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { OccupancyChart } from "@/modules/dashboard/components/OccupancyChart"
 import type { DashboardStats, OccupancyRow } from "@/modules/dashboard/types/dashboard.types"
 import { useRouter, useSearchParams } from "next/navigation"
+import { useDbUser } from "@/contexts/UserContext"
 import {
     tutorialDashboardOccupancy,
     tutorialDashboardStats,
@@ -18,6 +19,7 @@ import {
 function DashboardPageContent() {
     const router = useRouter()
     const searchParams = useSearchParams()
+    const { dbUser, isLoading: isLoadingUser } = useDbUser()
     const { selectedArena, selectedArenaDetails, isLoadingArenas } = useArena()
     const [stats, setStats] = useState<DashboardStats>({ receita: 0, receitaChange: 0, reservas: 0, quadras: 0, ativos: 0 })
     const [occupancyData, setOccupancyData] = useState<OccupancyRow[]>([])
@@ -31,6 +33,15 @@ function DashboardPageContent() {
             setIsLoading(false)
             return
         }
+        if (isLoadingUser) return
+        if (dbUser?.platform_access_level === 'super_admin') {
+            router.replace('/dashboard/admin/super-admin')
+            return
+        }
+        if (dbUser?.platform_access_level === 'platform_admin') {
+            router.replace('/dashboard/admin/platform')
+            return
+        }
         if (isLoadingArenas) return
         if (selectedArenaDetails?.role === 'Caixa' && selectedArenaDetails.assignedStationId) {
             // Caixa com estação atribuída: vai direto para a estação
@@ -39,10 +50,14 @@ function DashboardPageContent() {
             // Caixa sem estação atribuída: vai para a lista de estações
             router.replace(`/dashboard/arenas/${selectedArena}/stations`)
         }
-    }, [isLoadingArenas, isTutorial, router, selectedArena, selectedArenaDetails])
+    }, [dbUser, isLoadingArenas, isLoadingUser, isTutorial, router, selectedArena, selectedArenaDetails])
 
     useEffect(() => {
-        if (isLoadingArenas) return
+        if (isLoadingUser || isLoadingArenas) return
+        if (dbUser?.platform_access_level === 'super_admin' || dbUser?.platform_access_level === 'platform_admin') {
+            setIsLoading(false)
+            return
+        }
         if (selectedArenaDetails?.role === 'Caixa') {
             setIsLoading(false)
             return
@@ -62,9 +77,9 @@ function DashboardPageContent() {
         }
 
         loadStats()
-    }, [selectedArena, selectedArenaDetails, isLoadingArenas, isTutorial])
+    }, [dbUser, selectedArena, selectedArenaDetails, isLoadingArenas, isLoadingUser, isTutorial])
 
-    if (!isTutorial && (isLoading || isLoadingArenas)) {
+    if (!isTutorial && (isLoading || isLoadingUser || isLoadingArenas)) {
         return (
             <div className="space-y-6">
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

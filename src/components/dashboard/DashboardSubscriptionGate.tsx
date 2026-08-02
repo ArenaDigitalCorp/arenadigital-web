@@ -38,6 +38,7 @@ export function DashboardSubscriptionGate() {
   const { dbUser } = useDbUser()
   const { selectedArena, selectedArenaDetails, isLoadingArenas } = useArena()
   const [state, setState] = useState<State>({ status: 'idle' })
+  const isGlobalAdminRoute = pathname.startsWith('/dashboard/admin')
   const isTutorialAccess = Boolean(
     searchParams.get('tutorial') === '1' &&
     dbUser &&
@@ -49,7 +50,7 @@ export function DashboardSubscriptionGate() {
   )
 
   useEffect(() => {
-    if (isTutorialAccess || isLoadingArenas || !selectedArena || !canManageSubscription) {
+    if (isGlobalAdminRoute || isTutorialAccess || isLoadingArenas || !selectedArena || !canManageSubscription) {
       return
     }
 
@@ -70,10 +71,11 @@ export function DashboardSubscriptionGate() {
       })
 
     return () => controller.abort()
-  }, [canManageSubscription, isLoadingArenas, isTutorialAccess, selectedArena])
+  }, [canManageSubscription, isGlobalAdminRoute, isLoadingArenas, isTutorialAccess, selectedArena])
 
   useEffect(() => {
     if (
+      isGlobalAdminRoute ||
       isTutorialAccess ||
       !selectedArena ||
       !canManageSubscription ||
@@ -101,9 +103,10 @@ export function DashboardSubscriptionGate() {
     ) {
       router.replace(subscriptionPath)
     }
-  }, [canManageSubscription, isTutorialAccess, pathname, router, selectedArena, state])
+  }, [canManageSubscription, isGlobalAdminRoute, isTutorialAccess, pathname, router, selectedArena, state])
 
   if (
+    isGlobalAdminRoute ||
     isTutorialAccess ||
     !selectedArena ||
     !canManageSubscription ||
