@@ -10,6 +10,7 @@ import type {
   PlatformAdminActionResult,
   PlatformAdminOverview,
   PlatformArena,
+  PlatformArenaKind,
   PlatformAthlete,
   PlatformAuditEvent,
   PlatformInternalPlanAssignment,
@@ -34,9 +35,20 @@ type ArenaRow = {
   id: string
   name: string
   status: string | null
+  platform_kind: PlatformArenaKind | null
+  app_discoverable: boolean | null
+  platform_notes: string | null
   owner_id: string | null
   created_at: string
   owner: { id: string; name: string | null; email: string } | { id: string; name: string | null; email: string }[] | null
+  email: string | null
+  phone: string | null
+  cpf_cnpj: string | null
+  address: unknown
+  number: string | null
+  complement: string | null
+  neighborhood: string | null
+  zip_code: string | null
   id_municipio: number | null
   location: unknown
 }
@@ -76,6 +88,16 @@ type ArenaPaymentAccountRow = {
   pix_key: string | null
   platform_fee_basis_points: number | null
   status: string | null
+  payment_flow: string | null
+  onboarding_status: string | null
+  commercial_info_status: string | null
+  bank_account_info_status: string | null
+  documentation_status: string | null
+  onboarding_url: string | null
+  last_status_checked_at: string | null
+  activated_at: string | null
+  webhook_token_hash: string | null
+  metadata: unknown
   updated_at: string | null
 }
 
@@ -125,6 +147,32 @@ const internalPlanInputSchema = z.object({
   reason: z.string().trim().min(8).max(500),
 })
 
+const platformArenaProfileInputSchema = z.object({
+  arenaId: z.string().uuid(),
+  platformKind: z.enum(['customer', 'public_listing', 'demo']),
+  appDiscoverable: z.boolean(),
+  platformNotes: z.string().trim().max(1000).nullable().optional(),
+  reason: z.string().trim().min(8).max(500),
+}).superRefine((input, ctx) => {
+  if (input.platformKind === 'demo' && input.appDiscoverable) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['appDiscoverable'],
+      message: 'Arena demo não pode aparecer na busca pública do app.',
+    })
+  }
+})
+
+type ArenasPlatformProfileQuery = {
+  update(payload: {
+    platform_kind: PlatformArenaKind
+    app_discoverable: boolean
+    platform_notes: string | null
+  }): {
+    eq(column: 'id', value: string): Promise<{ error: { message: string } | null }>
+  }
+}
+
 function asRpcClient(): PlatformRpcClient {
   return getSupabaseAdmin() as unknown as PlatformRpcClient
 }
@@ -170,12 +218,24 @@ function parseLocationPoint(location: unknown): { latitude: number; longitude: n
 function defaultPixSplitSettings(): ArenaPixSplitSettings {
   return {
     enabled: false,
+    hasPaymentAccount: false,
+    onboardingStarted: false,
+    webhookConfigured: false,
+    credentialRecoveryRequired: false,
+    paymentFlow: 'arena_subaccount_split',
     asaasWalletId: '',
     asaasAccountId: '',
     holderName: '',
     holderDocument: '',
     pixKey: '',
     status: 'disabled',
+    onboardingStatus: 'NOT_STARTED',
+    commercialInfoStatus: 'NOT_STARTED',
+    bankAccountInfoStatus: 'NOT_STARTED',
+    documentationStatus: 'NOT_STARTED',
+    onboardingUrl: null,
+    lastStatusCheckedAt: null,
+    activatedAt: null,
     platformFeeBasisPoints: 200,
     updatedAt: null,
   }
@@ -190,17 +250,78 @@ function normalizePixSplitStatus(status: string | null): ArenaPixSplitStatus {
 
 function mapPixSplitSettings(row: ArenaPaymentAccountRow | undefined): ArenaPixSplitSettings {
   if (!row) return defaultPixSplitSettings()
+  const onboardingStatus = normalizeAsaasOnboardingStatus(row.onboarding_status)
+  const onboardingStarted = onboardingStatus !== 'NOT_STARTED'
+  const paymentFlow = 'arena_subaccount_split' as const
+  const webhookConfigured = Boolean(row.webhook_token_hash)
+  const credentialRecoveryRequired =
+    Boolean(
+      row.metadata &&
+      !Array.isArray(row.metadata) &&
+      typeof row.metadata === 'object' &&
+      typeof (row.metadata as Record<string, unknown>).asaasCredentialRecovery === 'string',
+    ) || (onboardingStarted && !row.asaas_account_id)
   return {
-    enabled: row.status === 'active' && Boolean(row.asaas_wallet_id),
+    enabled:
+      row.status === 'active' &&
+      Boolean(row.asaas_wallet_id) &&
+      onboardingStatus === 'APPROVED' && webhookConfigured,
+    hasPaymentAccount: true,
+    onboardingStarted,
+    webhookConfigured,
+    credentialRecoveryRequired,
+    paymentFlow,
     asaasWalletId: row.asaas_wallet_id ?? '',
     asaasAccountId: row.asaas_account_id ?? '',
     holderName: row.holder_name ?? '',
     holderDocument: row.holder_document ?? '',
     pixKey: row.pix_key ?? '',
     status: normalizePixSplitStatus(row.status),
+    onboardingStatus,
+    commercialInfoStatus: normalizeAsaasOnboardingStatus(row.commercial_info_status),
+    bankAccountInfoStatus: normalizeAsaasOnboardingStatus(row.bank_account_info_status),
+    documentationStatus: normalizeAsaasOnboardingStatus(row.documentation_status),
+    onboardingUrl: safeHttpsUrl(row.onboarding_url),
+    lastStatusCheckedAt: row.last_status_checked_at ?? null,
+    activatedAt: row.activated_at ?? null,
     platformFeeBasisPoints: Number(row.platform_fee_basis_points ?? 200),
     updatedAt: row.updated_at ?? null,
   }
+}
+
+function normalizeAsaasOnboardingStatus(
+  status: string | null,
+): ArenaPixSplitSettings['onboardingStatus'] {
+  const normalized = status?.toUpperCase()
+  if (
+    normalized === 'PENDING' ||
+    normalized === 'AWAITING_APPROVAL' ||
+    normalized === 'APPROVED' ||
+    normalized === 'REJECTED'
+  ) {
+    return normalized
+  }
+  return 'NOT_STARTED'
+}
+
+function safeHttpsUrl(value: string | null): string | null {
+  if (!value) return null
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' ? url.toString() : null
+  } catch {
+    return null
+  }
+}
+
+function addressText(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (!value || typeof value !== 'object') return ''
+  for (const key of ['street', 'address', 'logradouro']) {
+    const candidate = (value as Record<string, unknown>)[key]
+    if (typeof candidate === 'string') return candidate
+  }
+  return ''
 }
 
 export async function getPlatformAdminOverview(
@@ -234,7 +355,7 @@ export async function getPlatformAdminOverview(
       .limit(1000),
     supabase
       .from('arenas')
-      .select('id, name, status, owner_id, created_at, location, id_municipio, owner:users!arenas_owner_id_fkey(id, name, email)')
+      .select('id, name, status, platform_kind, app_discoverable, platform_notes, owner_id, created_at, location, id_municipio, email, phone, cpf_cnpj, address, number, complement, neighborhood, zip_code, owner:users!arenas_owner_id_fkey(id, name, email)')
       .order('created_at', { ascending: false })
       .limit(1000),
     supabase.from('municipios').select('codigo_ibge, nome, codigo_uf').limit(6000),
@@ -247,7 +368,7 @@ export async function getPlatformAdminOverview(
       ? supabase
           .from('arena_payment_accounts')
           .select(
-            'arena_id, asaas_wallet_id, asaas_account_id, holder_name, holder_document, pix_key, platform_fee_basis_points, status, updated_at',
+            'arena_id, asaas_wallet_id, asaas_account_id, holder_name, holder_document, pix_key, platform_fee_basis_points, status, payment_flow, onboarding_status, commercial_info_status, bank_account_info_status, documentation_status, onboarding_url, last_status_checked_at, activated_at, webhook_token_hash, metadata, updated_at',
           )
           .eq('provider', 'asaas')
           .limit(1000)
@@ -393,6 +514,9 @@ export async function getPlatformAdminOverview(
       id: arena.id,
       name: arena.name,
       status: arena.status,
+      platformKind: arena.platform_kind ?? 'customer',
+      appDiscoverable: arena.app_discoverable ?? true,
+      platformNotes: arena.platform_notes ?? null,
       commercialStatus: commercialStatus(
         arena.status,
         subscription?.status ?? null,
@@ -402,6 +526,14 @@ export async function getPlatformAdminOverview(
       ownerId: arena.owner_id,
       ownerName: owner?.name ?? null,
       ownerEmail: owner?.email ?? '—',
+      registrationEmail: arena.email ?? owner?.email ?? '',
+      registrationPhone: arena.phone ?? '',
+      registrationDocument: arena.cpf_cnpj ?? '',
+      registrationAddress: addressText(arena.address),
+      registrationAddressNumber: arena.number ?? '',
+      registrationComplement: arena.complement ?? '',
+      registrationProvince: arena.neighborhood ?? '',
+      registrationPostalCode: arena.zip_code ?? '',
       cityName: city?.nome ?? null,
       stateCode: state?.uf ?? null,
       hasLocation: Boolean(arena.location),
@@ -545,6 +677,54 @@ export async function manageInternalEmployeePlanAction(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Não foi possível alterar o plano interno.',
+    }
+  }
+}
+
+export async function updatePlatformArenaProfileAction(
+  input: z.input<typeof platformArenaProfileInputSchema>,
+): Promise<PlatformAdminActionResult> {
+  try {
+    const profile = await assertPlatformSuperAdminAccess()
+    const parsed = platformArenaProfileInputSchema.parse(input)
+    const supabase = getSupabaseAdmin()
+    const { error } = await (
+      supabase as unknown as { from(table: 'arenas'): ArenasPlatformProfileQuery }
+    ).from('arenas').update({
+      platform_kind: parsed.platformKind,
+      app_discoverable: parsed.appDiscoverable,
+      platform_notes: parsed.platformNotes?.trim() || null,
+    }).eq('id', parsed.arenaId)
+
+    if (error) throw new Error(error.message)
+
+    const { error: auditError } = await supabase.from('audit_logs').insert({
+      entity_type: 'arena',
+      entity_id: parsed.arenaId,
+      action: 'platform_arena_profile_updated',
+      actor_id: profile.dbUserId,
+      actor_type: 'user',
+      new_value: {
+        platform_kind: parsed.platformKind,
+        app_discoverable: parsed.appDiscoverable,
+      },
+      metadata: {
+        source: 'super_admin_backoffice',
+        reason: parsed.reason,
+      },
+    })
+    if (auditError) {
+      console.error('[updatePlatformArenaProfileAction] Failed to record audit event', auditError.message)
+    }
+
+    revalidatePath('/admin/arenas')
+    revalidatePath(`/admin/arenas/${parsed.arenaId}`)
+    revalidatePath('/admin/overview')
+    return { success: true }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Não foi possível atualizar a classificação da arena.',
     }
   }
 }
