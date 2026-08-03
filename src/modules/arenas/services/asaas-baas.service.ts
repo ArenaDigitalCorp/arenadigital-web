@@ -37,6 +37,16 @@ type AsaasSubaccountList = {
   data?: AsaasSubaccountSummary[]
 }
 
+type AsaasPixAddressKey = {
+  id?: string | null
+  key?: string | null
+  status?: string | null
+}
+
+type AsaasPixAddressKeyList = {
+  data?: AsaasPixAddressKey[]
+}
+
 export class AsaasRequestError extends Error {
   constructor(
     message: string,
@@ -254,6 +264,54 @@ async function loadSubaccountApiKey(arenaId: string): Promise<string> {
 
 export async function assertArenaAsaasRuntimeCredentials(arenaId: string): Promise<void> {
   await loadSubaccountApiKey(arenaId)
+}
+
+function activePixKey(keys: AsaasPixAddressKey[]): string | null {
+  return keys.find((entry) => entry.status?.toUpperCase() === 'ACTIVE' && entry.key)?.key ?? null
+}
+
+function pendingPixKey(keys: AsaasPixAddressKey[]): AsaasPixAddressKey | null {
+  return keys.find((entry) => {
+    const status = entry.status?.toUpperCase()
+    return entry.key && status && !['DELETED', 'ERROR', 'REJECTED'].includes(status)
+  }) ?? null
+}
+
+async function listAsaasPixKeys(apiKey: string): Promise<AsaasPixAddressKey[]> {
+  const response = await asaasRequest<AsaasPixAddressKeyList>('/v3/pix/addressKeys?limit=100', apiKey)
+  return response.data ?? []
+}
+
+export async function ensureArenaAsaasPixKey(arenaId: string): Promise<string> {
+  const apiKey = await loadSubaccountApiKey(arenaId)
+  const keys = await listAsaasPixKeys(apiKey)
+  const currentActiveKey = activePixKey(keys)
+  if (currentActiveKey) return currentActiveKey
+  if (pendingPixKey(keys)) {
+    throw new Error('A chave Pix da subconta Asaas ainda está aguardando ativação.')
+  }
+
+  let created: AsaasPixAddressKey
+  try {
+    created = await asaasRequest<AsaasPixAddressKey>('/v3/pix/addressKeys', apiKey, {
+      method: 'POST',
+      body: { type: 'EVP' },
+    })
+  } catch (error) {
+    if (!(error instanceof AsaasRequestError) || error.status < 500) throw error
+    const reconciledKeys = await listAsaasPixKeys(apiKey)
+    const reconciledActiveKey = activePixKey(reconciledKeys)
+    if (reconciledActiveKey) return reconciledActiveKey
+    if (pendingPixKey(reconciledKeys)) {
+      throw new Error('A chave Pix da subconta Asaas foi solicitada e ainda está aguardando ativação.')
+    }
+    throw new Error('O resultado da criação da chave Pix não foi confirmado pelo Asaas. Sincronize novamente mais tarde.')
+  }
+  if (!created.key) throw new Error('O Asaas não devolveu a chave Pix criada para a subconta.')
+  if (created.status && created.status.toUpperCase() !== 'ACTIVE') {
+    throw new Error('A chave Pix da subconta Asaas foi criada e ainda está aguardando ativação.')
+  }
+  return created.key
 }
 
 export async function getArenaAsaasOnboardingSnapshot(arenaId: string): Promise<{

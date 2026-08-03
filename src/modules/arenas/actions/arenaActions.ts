@@ -22,6 +22,7 @@ import {
     AsaasRequestError,
     assertArenaAsaasRuntimeCredentials,
     createAsaasSubaccount,
+    ensureArenaAsaasPixKey,
     findAsaasSubaccountsByDocument,
     getArenaAsaasOnboardingSnapshot,
     recoverAsaasSubaccountCredential,
@@ -549,6 +550,7 @@ async function syncArenaAsaasSubaccount(
     const snapshot = await getArenaAsaasOnboardingSnapshot(arenaId)
     const now = new Date().toISOString()
     const approved = snapshot.status.general === 'APPROVED' && Boolean(existing.webhook_token_hash)
+    const pixKey = approved ? await ensureArenaAsaasPixKey(arenaId) : existing.pix_key
     const firstApproval = approved && existing.payment_flow !== 'arena_subaccount_split'
     const onboardingUrl = snapshot.documents
         .find((document) => document.status !== 'APPROVED' && safeOnboardingUrl(document.onboardingUrl))
@@ -564,6 +566,7 @@ async function syncArenaAsaasSubaccount(
         commercial_info_status: snapshot.status.commercialInfo,
         bank_account_info_status: snapshot.status.bankAccountInfo,
         documentation_status: snapshot.status.documentation,
+        pix_key: pixKey,
         onboarding_url: safeOnboardingUrl(onboardingUrl),
         last_status_checked_at: now,
         activated_at: existing.activated_at,
@@ -581,6 +584,7 @@ async function syncArenaAsaasSubaccount(
             commercial_info_status: snapshot.status.commercialInfo,
             bank_account_info_status: snapshot.status.bankAccountInfo,
             documentation_status: snapshot.status.documentation,
+            pix_key_configured: Boolean(updated.pix_key),
             payment_flow: updated.payment_flow,
             status: updated.status,
         },
@@ -677,11 +681,14 @@ export async function updateArenaPixSplitSettingsAction(
             await assertArenaAsaasRuntimeCredentials(arenaId)
         }
 
+        const pixKey = parsed.enabled ? await ensureArenaAsaasPixKey(arenaId) : existing.pix_key
+
         const now = new Date().toISOString()
         const payload: ArenaPaymentAccountPayload = {
             arena_id: arenaId,
             provider: 'asaas',
             payment_flow: 'arena_subaccount_split',
+            pix_key: pixKey,
             platform_fee_basis_points: platformFeeBasisPoints,
             status: parsed.enabled ? 'active' : 'disabled',
             activated_at: parsed.enabled && !existing.activated_at ? now : existing.activated_at,
