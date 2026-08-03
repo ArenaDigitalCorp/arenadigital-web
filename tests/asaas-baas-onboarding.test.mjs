@@ -52,6 +52,8 @@ test('new subaccounts use an exclusive webhook token and persist only its hash',
 
   assert.match(service, /import 'server-only'/u)
   assert.match(service, /ASAAS_BOOKING_WEBHOOK_URL/u)
+  assert.match(service, /NEXT_PUBLIC_SUPABASE_URL/u)
+  assert.match(service, /\/functions\/v1\/asaas-booking-webhook/u)
   assert.match(service, /ASAAS_ENV deve ser configurado explicitamente/u)
   assert.doesNotMatch(service, /ASAAS_WEBHOOK_TOKEN/u)
   assert.match(actions, /randomBytes\(32\)\.toString\('base64url'\)/u)

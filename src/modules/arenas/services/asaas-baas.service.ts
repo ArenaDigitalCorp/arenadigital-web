@@ -106,7 +106,7 @@ function parentApiKey(): string {
 }
 
 function assertBaasEnabled(): void {
-  if (process.env.ASAAS_BAAS_ENABLED !== 'true') {
+  if (process.env.ASAAS_BAAS_ENABLED === 'false') {
     throw new Error('O onboarding Asaas BaaS não está habilitado neste ambiente.')
   }
 }
@@ -160,7 +160,9 @@ export async function findAsaasSubaccountsByDocument(cpfCnpj: string): Promise<A
 }
 
 function webhookConfiguration(email: string, webhookToken: string) {
-  const url = process.env.ASAAS_BOOKING_WEBHOOK_URL?.trim()
+  const explicitUrl = process.env.ASAAS_BOOKING_WEBHOOK_URL?.trim()
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim().replace(/\/$/u, '')
+  const url = explicitUrl || (supabaseUrl ? `${supabaseUrl}/functions/v1/asaas-booking-webhook` : '')
   if (!url) throw new Error('A URL do webhook de reservas não está configurada para o onboarding BaaS.')
 
   return [{
