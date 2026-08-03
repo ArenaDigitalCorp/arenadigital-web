@@ -39,6 +39,7 @@ import type {
   PlatformAccessLevel,
   PlatformAdminOverview,
   PlatformArena,
+  PlatformArenaKind,
 } from "@/modules/platform-admin/types/platform-admin.types"
 import type { SuperAdminSection } from "@/modules/super-admin/sections"
 
@@ -47,6 +48,12 @@ const STATUS_META: Record<PlatformArena["commercialStatus"], { label: string; do
   inadimplente: { label: "Inadimplente", dot: "bg-rose-500", badge: "border-rose-200 bg-rose-50 text-rose-800" },
   prospect: { label: "Prospect", dot: "bg-amber-500", badge: "border-amber-200 bg-amber-50 text-amber-900" },
   desativada: { label: "Desativada", dot: "bg-slate-400", badge: "border-slate-200 bg-slate-100 text-slate-700" },
+}
+
+const KIND_META: Record<PlatformArenaKind, { label: string; badge: string }> = {
+  customer: { label: "Cliente", badge: "border-emerald-200 bg-emerald-50 text-emerald-800" },
+  public_listing: { label: "Catálogo público", badge: "border-sky-200 bg-sky-50 text-sky-800" },
+  demo: { label: "Demo / pitch", badge: "border-violet-200 bg-violet-50 text-violet-800" },
 }
 
 const SECTION_COPY: Record<SuperAdminSection, { eyebrow: string; title: string; description: string }> = {
@@ -105,6 +112,11 @@ function StatusBadge({ status }: { status: PlatformArena["commercialStatus"] }) 
   return <span className={cn("inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-bold", meta.badge)}><span className={cn("h-1.5 w-1.5 rounded-full", meta.dot)} />{meta.label}</span>
 }
 
+function KindBadge({ kind }: { kind: PlatformArenaKind }) {
+  const meta = KIND_META[kind]
+  return <span className={cn("inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-bold", meta.badge)}>{meta.label}</span>
+}
+
 function Overview({ overview }: { overview: PlatformAdminOverview }) {
   const active = overview.arenas.filter((arena) => arena.commercialStatus === "cliente_ativo" && arena.planPriceCents > 0)
   const overdue = overview.arenas.filter((arena) => arena.commercialStatus === "inadimplente")
@@ -160,11 +172,13 @@ function Overview({ overview }: { overview: PlatformAdminOverview }) {
 function Arenas({ overview }: { overview: PlatformAdminOverview }) {
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState<"all" | PlatformArena["commercialStatus"]>("all")
+  const [kindFilter, setKindFilter] = useState<"all" | PlatformArenaKind>("all")
   const [view, setView] = useState<"list" | "map">("list")
   const arenas = overview.arenas.filter((arena) => {
     const matchesFilter = filter === "all" || arena.commercialStatus === filter
+    const matchesKind = kindFilter === "all" || arena.platformKind === kindFilter
     const haystack = `${arena.name} ${arena.ownerName ?? ""} ${arena.ownerEmail} ${arena.cityName ?? ""}`.toLowerCase()
-    return matchesFilter && haystack.includes(query.trim().toLowerCase())
+    return matchesFilter && matchesKind && haystack.includes(query.trim().toLowerCase())
   })
   const mappedArenas = arenas.filter((arena) => arena.latitude !== null && arena.longitude !== null)
 
@@ -176,6 +190,9 @@ function Arenas({ overview }: { overview: PlatformAdminOverview }) {
         <div className="flex flex-wrap gap-2">
           {(["all", "cliente_ativo", "inadimplente", "prospect", "desativada"] as const).map((value) => <button key={value} onClick={() => setFilter(value)} className={cn("rounded-xl border px-3 py-2 text-xs font-bold transition", filter === value ? "border-slate-950 bg-slate-950 text-white" : "border-slate-300 bg-white text-slate-600 hover:border-slate-500")}>{value === "all" ? "Todas" : STATUS_META[value].label}</button>)}
         </div>
+      </div>
+      <div className="mb-4 flex flex-wrap gap-2">
+        {(["all", "customer", "public_listing", "demo"] as const).map((value) => <button key={value} onClick={() => setKindFilter(value)} className={cn("rounded-lg border px-3 py-2 text-xs font-bold transition", kindFilter === value ? "border-orange-500 bg-orange-500 text-slate-950" : "border-slate-300 bg-white text-slate-600 hover:border-slate-500")}>{value === "all" ? "Todos os tipos" : KIND_META[value].label}</button>)}
       </div>
       <div className="mb-4 flex justify-end gap-2">
         <button onClick={() => setView("list")} className={cn("rounded-lg border px-3 py-2 text-xs font-bold", view === "list" ? "border-slate-950 bg-slate-950 text-white" : "border-slate-300 bg-white text-slate-600")}>Lista</button>
@@ -205,7 +222,7 @@ function Arenas({ overview }: { overview: PlatformAdminOverview }) {
             <tbody className="divide-y divide-slate-100">
               {arenas.map((arena) => <tr key={arena.id} className="group hover:bg-orange-50/40">
                 <td className="px-5 py-4"><div className="flex items-start gap-3"><div className={cn("mt-1 grid h-9 w-9 place-items-center rounded-xl", arena.hasLocation ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-400")}><MapPinned className="h-4 w-4" /></div><div><p className="font-bold text-slate-950">{arena.name}</p><p className="mt-1 text-xs text-slate-500">{[arena.cityName, arena.stateCode].filter(Boolean).join(" · ") || "Localização incompleta"}</p></div></div></td>
-                <td className="px-5 py-4"><StatusBadge status={arena.commercialStatus} /></td>
+                <td className="px-5 py-4"><div className="flex flex-wrap gap-2"><StatusBadge status={arena.commercialStatus} /><KindBadge kind={arena.platformKind} />{!arena.appDiscoverable && <Badge variant="outline" className="border-slate-200 text-slate-500">Oculta no app</Badge>}</div></td>
                 <td className="px-5 py-4"><p className="font-semibold">{arena.ownerName || "Sem responsável"}</p><p className="mt-1 text-xs text-slate-500">{arena.ownerEmail}</p></td>
                 <td className="px-5 py-4"><p className="font-semibold">{arena.planLabel || arena.planKey || "Sem assinatura"}</p><p className="mt-1 text-xs text-slate-500">{arena.subscriptionStatus || "—"}</p></td>
                 <td className="px-5 py-4"><p className="font-semibold">{arena.courtCount} quadras</p><p className="mt-1 text-xs text-slate-500">{arena.athleteCount} atletas</p></td>
@@ -277,6 +294,7 @@ function accessLabel(level: PlatformAccessLevel) {
 function SettingsView({ overview, initialArenaId }: { overview: PlatformAdminOverview; initialArenaId?: string }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
+  const [settingsTab, setSettingsTab] = useState<"access" | "billing" | "audit">(initialArenaId ? "billing" : "access")
   const [userId, setUserId] = useState("")
   const [level, setLevel] = useState<PlatformAccessLevel>("employee")
   const [principalEnabled, setPrincipalEnabled] = useState(true)
@@ -301,12 +319,21 @@ function SettingsView({ overview, initialArenaId }: { overview: PlatformAdminOve
   }
 
   return <><PageIntro section="settings" />
-    <div className="grid gap-5 xl:grid-cols-2">
+    <div className="mb-5 flex flex-wrap gap-2">
+      {([
+        ["access", "Acessos"],
+        ["billing", "Pix e split"],
+        ["audit", "Auditoria"],
+      ] as const).map(([value, label]) => (
+        <button key={value} onClick={() => setSettingsTab(value)} className={cn("rounded-xl border px-4 py-2 text-sm font-bold", settingsTab === value ? "border-slate-950 bg-slate-950 text-white" : "border-slate-300 bg-white text-slate-600 hover:border-slate-500")}>{label}</button>
+      ))}
+    </div>
+    {settingsTab === "access" && <div className="grid gap-5 xl:grid-cols-2">
       <section className="rounded-2xl border border-slate-900/10 bg-white p-6"><div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-slate-950 text-white"><ShieldCheck className="h-5 w-5" /></div><div><p className="font-heading text-lg font-black">Administradores</p><p className="text-xs text-slate-500">Permissões globais da plataforma</p></div></div><div className="mt-5 space-y-3">{activePrincipals.map((principal) => <div key={principal.userId} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3"><div className="min-w-0"><p className="truncate text-sm font-bold">{principal.name || principal.email}</p><p className="truncate text-xs text-slate-500">{principal.email}</p></div><Badge variant="outline">{accessLabel(principal.accessLevel)}</Badge></div>)}</div><div className="my-5 h-px bg-slate-200" /><div className="space-y-3"><select value={userId} onChange={(event) => setUserId(event.target.value)} className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Selecione uma conta</option>{overview.users.map((user) => <option key={user.id} value={user.id}>{user.name || user.email}</option>)}</select><div className="grid gap-3 sm:grid-cols-2"><select value={level} onChange={(event) => setLevel(event.target.value as PlatformAccessLevel)} disabled={!principalEnabled} className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm disabled:bg-slate-100"><option value="employee">Funcionário</option><option value="platform_admin">Admin da plataforma</option><option value="super_admin">Super admin</option></select><select value={principalEnabled ? "enable" : "revoke"} onChange={(event) => setPrincipalEnabled(event.target.value === "enable")} className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="enable">Conceder / alterar</option><option value="revoke">Revogar acesso</option></select></div>{principalEnabled && <label className="block text-xs font-semibold text-slate-600">Expiração opcional<Input type="datetime-local" value={principalExpiresAt} onChange={(event) => setPrincipalExpiresAt(event.target.value)} className="mt-1 h-11" /></label>}<Textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Motivo obrigatório para auditoria" /><Button onClick={savePrincipal} disabled={pending} className={cn("w-full text-white", principalEnabled ? "bg-slate-950 hover:bg-slate-800" : "bg-rose-700 hover:bg-rose-600")}><KeyRound className="mr-2 h-4 w-4" />{principalEnabled ? "Salvar acesso" : "Revogar acesso"}</Button></div></section>
       <section className="rounded-2xl border border-slate-900/10 bg-white p-6"><div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-orange-100 text-orange-800"><Sparkles className="h-5 w-5" /></div><div><p className="font-heading text-lg font-black">Plano interno</p><p className="text-xs text-slate-500">Acesso de funcionário, sem cobrança</p></div></div><div className="mt-5 space-y-3"><select value={employeeId} onChange={(event) => { setEmployeeId(event.target.value); setArenaId("") }} className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Selecione o funcionário</option>{activePrincipals.map((principal) => <option key={principal.userId} value={principal.userId}>{principal.name || principal.email}</option>)}</select><select value={arenaId} onChange={(event) => setArenaId(event.target.value)} className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Selecione uma arena vinculada</option>{eligibleArenas.map((arena) => <option key={arena.id} value={arena.id}>{arena.name}</option>)}</select><select value={planEnabled ? "grant" : "revoke"} onChange={(event) => setPlanEnabled(event.target.value === "grant")} className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="grant">Conceder plano interno</option><option value="revoke">Revogar plano interno</option></select><Textarea value={planReason} onChange={(event) => setPlanReason(event.target.value)} placeholder="Motivo obrigatório para auditoria" /><Button onClick={saveInternalPlan} disabled={pending} className={cn("w-full", planEnabled ? "bg-orange-500 text-slate-950 hover:bg-orange-400" : "bg-rose-700 text-white hover:bg-rose-600")}><CircleDollarSign className="mr-2 h-4 w-4" />{planEnabled ? "Conceder acesso sem cobrança" : "Revogar plano interno"}</Button></div><div className="mt-5 space-y-2">{overview.internalPlanAssignments.map((assignment) => <button type="button" key={assignment.arenaId} onClick={() => { setEmployeeId(assignment.employeeUserId); setArenaId(assignment.arenaId); setPlanEnabled(false); setPlanReason("Revogação administrativa do acesso interno") }} className="flex w-full items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-left text-xs text-emerald-900"><span>{overview.arenas.find((arena) => arena.id === assignment.arenaId)?.name ?? assignment.arenaId} · ativo</span><span className="font-bold">Preparar revogação</span></button>)}</div></section>
-    </div>
-    <section className="mt-5 rounded-2xl border border-slate-900/10 bg-white p-6"><div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-end"><div><div className="flex items-center gap-2"><WalletCards className="h-5 w-5 text-orange-600" /><h2 className="font-heading text-xl font-black">Pix e split por arena</h2></div><p className="mt-1 text-sm text-slate-500">Configuração exclusiva do backoffice Arena Digital.</p></div><select value={pixArenaId} onChange={(event) => setPixArenaId(event.target.value)} className="h-11 min-w-64 rounded-lg border border-slate-300 bg-white px-3 text-sm">{overview.arenas.map((arena) => <option key={arena.id} value={arena.id}>{arena.name}</option>)}</select></div>{selectedPixArena && <ArenaPixSplitSettingsCard key={selectedPixArena.id} arenaId={selectedPixArena.id} initialSettings={selectedPixArena.pixSplitSettings} />}</section>
-    <section className="mt-5 overflow-hidden rounded-2xl border border-slate-800 bg-[#07141d] text-white"><div className="border-b border-white/10 px-6 py-5"><p className="font-mono text-[10px] uppercase tracking-[.2em] text-emerald-300">Auditoria</p><h2 className="mt-1 font-heading text-xl font-black">Eventos recentes de segurança</h2></div><div className="divide-y divide-white/10">{overview.audit.slice(0, 15).map((event) => <div key={event.id} className="grid gap-2 px-6 py-4 md:grid-cols-[220px_1fr_120px]"><p className="text-sm font-bold text-emerald-200">{event.eventType.replaceAll("_", " ")}</p><p className="text-sm text-slate-300">{event.reason}</p><time className="text-xs text-slate-500 md:text-right">{date(event.createdAt)}</time></div>)}</div></section>
+    </div>}
+    {settingsTab === "billing" && <section className="rounded-2xl border border-slate-900/10 bg-white p-6"><div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-end"><div><div className="flex items-center gap-2"><WalletCards className="h-5 w-5 text-orange-600" /><h2 className="font-heading text-xl font-black">Pix e split por arena</h2></div><p className="mt-1 text-sm text-slate-500">Onboarding da subconta, aprovação cadastral e taxa aplicada às reservas do aplicativo.</p></div><label className="text-xs font-semibold text-slate-600">Arena<select value={pixArenaId} onChange={(event) => setPixArenaId(event.target.value)} className="mt-1 block h-11 min-w-64 rounded-lg border border-slate-300 bg-white px-3 text-sm font-normal text-slate-950">{overview.arenas.map((arena) => <option key={arena.id} value={arena.id}>{arena.name}</option>)}</select></label></div>{selectedPixArena && <ArenaPixSplitSettingsCard key={selectedPixArena.id} arenaId={selectedPixArena.id} arenaName={selectedPixArena.name} initialSettings={selectedPixArena.pixSplitSettings} registration={{ email: selectedPixArena.registrationEmail, phone: selectedPixArena.registrationPhone, document: selectedPixArena.registrationDocument, address: selectedPixArena.registrationAddress, addressNumber: selectedPixArena.registrationAddressNumber, complement: selectedPixArena.registrationComplement, province: selectedPixArena.registrationProvince, postalCode: selectedPixArena.registrationPostalCode }} />}</section>}
+    {settingsTab === "audit" && <section className="overflow-hidden rounded-2xl border border-slate-800 bg-[#07141d] text-white"><div className="border-b border-white/10 px-6 py-5"><p className="font-mono text-[10px] uppercase tracking-[.2em] text-emerald-300">Auditoria</p><h2 className="mt-1 font-heading text-xl font-black">Eventos recentes de segurança</h2></div><div className="divide-y divide-white/10">{overview.audit.slice(0, 15).map((event) => <div key={event.id} className="grid gap-2 px-6 py-4 md:grid-cols-[220px_1fr_120px]"><p className="text-sm font-bold text-emerald-200">{event.eventType.replaceAll("_", " ")}</p><p className="text-sm text-slate-300">{event.reason}</p><time className="text-xs text-slate-500 md:text-right">{date(event.createdAt)}</time></div>)}</div></section>}
   </>
 }
 

@@ -1,6 +1,7 @@
 import type { ArenaPixSplitSettings } from '@/modules/arenas/types/pix-split.types'
 
 export type PlatformAccessLevel = 'employee' | 'platform_admin' | 'super_admin'
+export type PlatformArenaKind = 'customer' | 'public_listing' | 'demo'
 
 export type PlatformPrincipal = {
   userId: string
@@ -25,10 +26,21 @@ export type PlatformArena = {
   id: string
   name: string
   status: string | null
+  platformKind: PlatformArenaKind
+  appDiscoverable: boolean
+  platformNotes: string | null
   commercialStatus: 'cliente_ativo' | 'inadimplente' | 'prospect' | 'desativada'
   ownerId: string | null
   ownerName: string | null
   ownerEmail: string
+  registrationEmail: string
+  registrationPhone: string
+  registrationDocument: string
+  registrationAddress: string
+  registrationAddressNumber: string
+  registrationComplement: string
+  registrationProvince: string
+  registrationPostalCode: string
   cityName: string | null
   stateCode: string | null
   hasLocation: boolean

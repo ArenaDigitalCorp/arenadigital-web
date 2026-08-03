@@ -2,214 +2,432 @@
 
 import type { FormEvent } from "react"
 import { useState } from "react"
+import {
+    AlertTriangle,
+    Building2,
+    Check,
+    CheckCircle2,
+    CircleDashed,
+    Clock3,
+    ExternalLink,
+    FileCheck2,
+    Landmark,
+    Loader2,
+    RefreshCw,
+    ShieldCheck,
+    WalletCards,
+    XCircle,
+} from "lucide-react"
+import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { updateArenaPixSplitSettingsAction } from "@/modules/arenas/actions/arenaActions"
-import type { ArenaPixSplitSettings } from "@/modules/arenas/types/pix-split.types"
-import { AlertCircle, CheckCircle2, Loader2, WalletCards } from "lucide-react"
-import { toast } from "sonner"
+import {
+    createArenaAsaasSubaccountAction,
+    recoverArenaAsaasSubaccountCredentialAction,
+    syncArenaAsaasSubaccountStatusAction,
+    updateArenaPixSplitSettingsAction,
+} from "@/modules/arenas/actions/arenaActions"
+import type {
+    ArenaAsaasOnboardingStatus,
+    ArenaPixSplitSettings,
+    AsaasCompanyType,
+} from "@/modules/arenas/types/pix-split.types"
+import { cn } from "@/lib/utils"
 
 interface Props {
     arenaId: string
+    arenaName: string
     initialSettings: ArenaPixSplitSettings
+    registration: {
+        email: string
+        phone: string
+        document: string
+        address: string
+        addressNumber: string
+        complement: string
+        province: string
+        postalCode: string
+    }
 }
 
-function statusBadge(settings: ArenaPixSplitSettings) {
-    if (settings.enabled) {
-        return {
-            label: "Pix ativo",
-            className: "bg-emerald-100 text-emerald-800 border-transparent",
-            icon: CheckCircle2,
+type BusyOperation = "create" | "recover" | "sync" | "save" | null
+
+const STATUS_META: Record<ArenaAsaasOnboardingStatus, {
+    label: string
+    className: string
+    icon: typeof CheckCircle2
+}> = {
+    NOT_STARTED: { label: "Não iniciado", className: "text-slate-500", icon: CircleDashed },
+    PENDING: { label: "Pendente", className: "text-amber-700", icon: CircleDashed },
+    AWAITING_APPROVAL: { label: "Em análise", className: "text-sky-700", icon: Clock3 },
+    APPROVED: { label: "Aprovado", className: "text-emerald-700", icon: CheckCircle2 },
+    REJECTED: { label: "Rejeitado", className: "text-rose-700", icon: XCircle },
+}
+
+const COMPANY_TYPES: Array<{ value: AsaasCompanyType; label: string }> = [
+    { value: "MEI", label: "MEI" },
+    { value: "LIMITED", label: "Sociedade limitada" },
+    { value: "INDIVIDUAL", label: "Empresário individual" },
+    { value: "ASSOCIATION", label: "Associação" },
+]
+
+function formatDate(value: string | null): string {
+    if (!value) return "Ainda não sincronizado"
+    return new Intl.DateTimeFormat("pt-BR", {
+        dateStyle: "short",
+        timeStyle: "short",
+    }).format(new Date(value))
+}
+
+function StatusLine({
+    label,
+    status,
+    icon: Icon,
+}: {
+    label: string
+    status: ArenaAsaasOnboardingStatus
+    icon: typeof Building2
+}) {
+    const meta = STATUS_META[status]
+    const StatusIcon = meta.icon
+    return (
+        <div className="flex min-h-14 items-center justify-between gap-4 border-b border-slate-100 py-3 last:border-0">
+            <span className="flex items-center gap-3 text-sm font-medium text-slate-700">
+                <Icon className="h-4 w-4 text-slate-400" aria-hidden="true" />
+                {label}
+            </span>
+            <span className={cn("flex items-center gap-2 text-xs font-bold", meta.className)}>
+                <StatusIcon className="h-4 w-4" aria-hidden="true" />
+                {meta.label}
+            </span>
+        </div>
+    )
+}
+
+export function ArenaPixSplitSettingsCard({
+    arenaId,
+    arenaName,
+    initialSettings,
+    registration,
+}: Props) {
+    const [settings, setSettings] = useState(initialSettings)
+    const [operationalForm, setOperationalForm] = useState(initialSettings)
+    const [busy, setBusy] = useState<BusyOperation>(null)
+    const [showOnboarding, setShowOnboarding] = useState(!initialSettings.onboardingStarted)
+    const [onboardingForm, setOnboardingForm] = useState({
+        name: initialSettings.holderName || arenaName,
+        email: registration.email,
+        cpfCnpj: initialSettings.holderDocument || registration.document,
+        companyType: "LIMITED" as AsaasCompanyType,
+        mobilePhone: registration.phone,
+        incomeValue: "",
+        address: registration.address,
+        addressNumber: registration.addressNumber,
+        complement: registration.complement,
+        province: registration.province,
+        postalCode: registration.postalCode,
+    })
+
+    const isApproved =
+        settings.onboardingStatus === "APPROVED" &&
+        settings.webhookConfigured &&
+        settings.paymentFlow === "arena_subaccount_split"
+
+    function updateSettings(next: ArenaPixSplitSettings) {
+        setSettings(next)
+        setOperationalForm(next)
+    }
+
+    async function handleCreateSubaccount(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault()
+        setBusy("create")
+        try {
+            const result = await createArenaAsaasSubaccountAction(arenaId, {
+                ...onboardingForm,
+                incomeValue: Number(onboardingForm.incomeValue),
+            })
+            if (!result.success) {
+                updateSettings(result.data)
+                throw new Error(result.error)
+            }
+            updateSettings(result.data)
+            setShowOnboarding(false)
+            if (result.warning) toast.warning(result.warning)
+            else toast.success("Subconta criada. Sincronize o status após alguns segundos.")
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Não foi possível criar a subconta Asaas.")
+        } finally {
+            setBusy(null)
         }
     }
-    return {
-        label: "Pix inativo",
-        className: "bg-amber-100 text-amber-900 border-transparent",
-        icon: AlertCircle,
-    }
-}
 
-export function ArenaPixSplitSettingsCard({ arenaId, initialSettings }: Props) {
-    const [settings, setSettings] = useState<ArenaPixSplitSettings>(initialSettings)
-    const [form, setForm] = useState<ArenaPixSplitSettings>(initialSettings)
-    const [saving, setSaving] = useState(false)
-    const badge = statusBadge(settings)
-    const BadgeIcon = badge.icon
-
-    const setField = (field: keyof ArenaPixSplitSettings, value: string | boolean | number) => {
-        setForm((prev) => ({ ...prev, [field]: value }))
-    }
-
-    async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-        event.preventDefault()
-        setSaving(true)
+    async function handleCredentialRecovery() {
+        setBusy("recover")
         try {
-            const res = await updateArenaPixSplitSettingsAction(arenaId, {
-                enabled: form.enabled,
-                asaasWalletId: form.asaasWalletId,
-                asaasAccountId: form.asaasAccountId,
-                holderName: form.holderName,
-                holderDocument: form.holderDocument,
-                pixKey: form.pixKey,
-                platformFeeBasisPoints: form.platformFeeBasisPoints,
-            })
-
-            if (!res.success) throw new Error(res.error)
-
-            setSettings(res.data)
-            setForm(res.data)
-            toast.success(res.data.enabled ? "Pix com split ativado para reservas do app." : "Pix com split desativado.")
+            const result = await recoverArenaAsaasSubaccountCredentialAction(arenaId)
+            if (!result.success) throw new Error(result.error)
+            updateSettings(result.data)
+            toast.success("Credencial protegida no cofre. A sincronização foi liberada.")
         } catch (error) {
-            const message = error instanceof Error ? error.message : "Não foi possível salvar a configuração Pix."
-            toast.error(message)
+            toast.error(error instanceof Error ? error.message : "Não foi possível recuperar a credencial.")
         } finally {
-            setSaving(false)
+            setBusy(null)
+        }
+    }
+
+    async function handleSync() {
+        setBusy("sync")
+        try {
+            const result = await syncArenaAsaasSubaccountStatusAction(arenaId)
+            if (!result.success) throw new Error(result.error)
+            updateSettings(result.data)
+            toast.success(result.data.enabled ? "Status atualizado; o split continua ativo." : "Status cadastral atualizado.")
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Não foi possível sincronizar o status.")
+        } finally {
+            setBusy(null)
+        }
+    }
+
+    async function handleOperationalSave(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault()
+        setBusy("save")
+        try {
+            const result = await updateArenaPixSplitSettingsAction(arenaId, {
+                enabled: operationalForm.enabled,
+                asaasWalletId: operationalForm.asaasWalletId,
+                asaasAccountId: operationalForm.asaasAccountId,
+                holderName: operationalForm.holderName,
+                holderDocument: operationalForm.holderDocument,
+                pixKey: operationalForm.pixKey,
+                platformFeeBasisPoints: operationalForm.platformFeeBasisPoints,
+            })
+            if (!result.success) throw new Error(result.error)
+            updateSettings(result.data)
+            toast.success(result.data.enabled ? "Split ativado para novas reservas." : "Configuração de split atualizada.")
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Não foi possível salvar a configuração.")
+        } finally {
+            setBusy(null)
         }
     }
 
     return (
-        <Card className="border-orange-100 bg-orange-50/30">
-            <CardHeader className="gap-3 sm:flex sm:flex-row sm:items-start sm:justify-between">
-                <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                        <WalletCards className="h-5 w-5 text-arena-button" />
-                        <CardTitle>Pix das reservas no app</CardTitle>
+        <div className="border-t border-slate-200 pt-6">
+            <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+                <div className="flex items-start gap-3">
+                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-slate-950 text-white">
+                        <WalletCards className="h-5 w-5" aria-hidden="true" />
                     </div>
-                    <CardDescription>
-                        Configure a wallet Asaas da arena e defina o percentual de cada novo pagamento destinado à Arena Digital.
-                    </CardDescription>
+                    <div>
+                        <h3 className="text-base font-bold text-slate-950">Conta de recebimento</h3>
+                        <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+                            {settings.onboardingStarted
+                                ? "Subconta da arena, validação cadastral e divisão automática das reservas."
+                                : "Onboarding financeiro da arena e configuração da taxa da plataforma."}
+                        </p>
+                    </div>
                 </div>
-                <Badge className={badge.className}>
-                    <BadgeIcon className="h-3.5 w-3.5" />
-                    {badge.label}
-                </Badge>
-            </CardHeader>
-            <CardContent>
-                <form onSubmit={handleSubmit} className="space-y-5">
-                    <div className="flex items-start justify-between gap-4 rounded-lg border bg-white p-4">
-                        <div className="space-y-1">
-                            <Label htmlFor="app-pix-enabled">Ativar Pix com split para reservas mobile</Label>
-                            <p className="text-sm text-muted-foreground">
-                                Quando ativo, reservas pagas no app geram QR Pix no Asaas e só confirmam agenda após
-                                pagamento.
-                            </p>
-                        </div>
-                        <Switch
-                            id="app-pix-enabled"
-                            checked={form.enabled}
-                            onCheckedChange={(checked) => setField("enabled", checked)}
-                        />
-                    </div>
+                <div className="flex flex-wrap items-center gap-2" aria-live="polite">
+                    <Badge variant="outline" className={cn(
+                        "h-7",
+                        settings.enabled
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                            : "border-slate-200 bg-slate-50 text-slate-600",
+                    )}>
+                        {settings.enabled ? <Check className="h-3.5 w-3.5" /> : <CircleDashed className="h-3.5 w-3.5" />}
+                        {settings.enabled ? "Split ativo" : "Split inativo"}
+                    </Badge>
+                    <Badge variant="outline" className={cn(
+                        "h-7",
+                        "border-sky-200 bg-sky-50 text-sky-800",
+                    )}>
+                        {settings.onboardingStarted ? "Subconta BaaS" : "Não configurado"}
+                    </Badge>
+                </div>
+            </div>
 
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                        <div className="space-y-2 md:col-span-2">
-                            <Label htmlFor="asaas-wallet-id">Wallet ID Asaas da arena</Label>
-                            <Input
-                                id="asaas-wallet-id"
-                                value={form.asaasWalletId}
-                                onChange={(event) => setField("asaasWalletId", event.target.value)}
-                                placeholder="Ex.: 6f2d9d30-..."
-                                autoComplete="off"
-                            />
-                            <p className="text-xs text-muted-foreground">
-                                Obrigatório para ativar o split. Esse é o identificador da carteira destino dentro do
-                                Asaas.
-                            </p>
+            {settings.onboardingStarted && (
+                <div className="mt-7 grid gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(280px,.72fr)]">
+                    <section aria-labelledby="asaas-validation-title">
+                        <div className="flex items-start justify-between gap-4">
+                            <div>
+                                <h4 id="asaas-validation-title" className="text-sm font-bold text-slate-950">Validação cadastral</h4>
+                                <p className="mt-1 text-xs text-slate-500">Última consulta: {formatDate(settings.lastStatusCheckedAt)}</p>
+                            </div>
+                            <Button type="button" variant="outline" size="sm" onClick={handleSync} disabled={busy !== null}>
+                                {busy === "sync" ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+                                Sincronizar
+                            </Button>
                         </div>
-
-                        <div className="space-y-2">
-                            <Label htmlFor="platform-split-fee">Taxa Arena Digital (%)</Label>
-                            <Input
-                                id="platform-split-fee"
-                                type="number"
-                                min="0"
-                                max="100"
-                                step="0.01"
-                                value={(form.platformFeeBasisPoints / 100).toFixed(2)}
-                                onChange={(event) => setField("platformFeeBasisPoints", Math.round(Number(event.target.value) * 100))}
-                                inputMode="decimal"
-                            />
-                            <p className="text-xs text-muted-foreground">A alteração vale somente para pagamentos criados depois de salvar.</p>
+                        <div className="mt-4 border-y border-slate-200">
+                            <StatusLine label="Aprovação geral" status={settings.onboardingStatus} icon={ShieldCheck} />
+                            <StatusLine label="Dados comerciais" status={settings.commercialInfoStatus} icon={Building2} />
+                            <StatusLine label="Conta bancária" status={settings.bankAccountInfoStatus} icon={Landmark} />
+                            <StatusLine label="Documentação" status={settings.documentationStatus} icon={FileCheck2} />
                         </div>
+                        {settings.onboardingUrl && (
+                            <Button asChild variant="outline" className="mt-4 w-full sm:w-auto">
+                                <a href={settings.onboardingUrl} target="_blank" rel="noreferrer">
+                                    <ExternalLink className="h-4 w-4" />
+                                    Abrir envio de documentos
+                                </a>
+                            </Button>
+                        )}
+                    </section>
 
-                        <div className="space-y-2">
-                            <Label htmlFor="asaas-account-id">ID da conta Asaas</Label>
-                            <Input
-                                id="asaas-account-id"
-                                value={form.asaasAccountId}
-                                onChange={(event) => setField("asaasAccountId", event.target.value)}
-                                placeholder="Opcional"
-                                autoComplete="off"
-                            />
-                        </div>
+                    <section aria-labelledby="asaas-account-title" className="lg:border-l lg:border-slate-200 lg:pl-7">
+                        <h4 id="asaas-account-title" className="text-sm font-bold text-slate-950">Registro operacional</h4>
+                        <dl className="mt-4 space-y-4 text-sm">
+                            <div>
+                                <dt className="text-xs text-slate-500">Conta Asaas</dt>
+                                <dd className="mt-1 break-all font-mono text-xs font-semibold text-slate-800">{settings.asaasAccountId || "Pendente"}</dd>
+                            </div>
+                            <div>
+                                <dt className="text-xs text-slate-500">Wallet</dt>
+                                <dd className="mt-1 break-all font-mono text-xs font-semibold text-slate-800">{settings.asaasWalletId || "Pendente"}</dd>
+                            </div>
+                            <div className="flex items-center justify-between gap-4 border-t border-slate-100 pt-4">
+                                <dt className="text-xs text-slate-500">Webhook exclusivo</dt>
+                                <dd className={cn("flex items-center gap-1.5 text-xs font-bold", settings.webhookConfigured ? "text-emerald-700" : "text-rose-700")}>
+                                    {settings.webhookConfigured ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                                    {settings.webhookConfigured ? "Protegido" : "Ausente"}
+                                </dd>
+                            </div>
+                        </dl>
+                    </section>
+                </div>
+            )}
 
-                        <div className="space-y-2">
-                            <Label htmlFor="asaas-pix-key">Chave Pix da arena</Label>
-                            <Input
-                                id="asaas-pix-key"
-                                value={form.pixKey}
-                                onChange={(event) => setField("pixKey", event.target.value)}
-                                placeholder="Opcional para conferência interna"
-                                autoComplete="off"
-                            />
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label htmlFor="asaas-holder-name">Titular</Label>
-                            <Input
-                                id="asaas-holder-name"
-                                value={form.holderName}
-                                onChange={(event) => setField("holderName", event.target.value)}
-                                placeholder="Nome/Razão social"
-                                autoComplete="off"
-                            />
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label htmlFor="asaas-holder-document">CPF/CNPJ do titular</Label>
-                            <Input
-                                id="asaas-holder-document"
-                                value={form.holderDocument}
-                                onChange={(event) => setField("holderDocument", event.target.value)}
-                                placeholder="Somente números ou formatado"
-                                inputMode="numeric"
-                                autoComplete="off"
-                            />
+            {settings.credentialRecoveryRequired && (
+                <div className="mt-6 flex flex-col gap-4 border-y border-rose-200 bg-rose-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex gap-3">
+                        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-rose-700" aria-hidden="true" />
+                        <div>
+                            <p className="text-sm font-bold text-rose-950">Proteção da credencial pendente</p>
+                            <p className="mt-1 text-xs leading-5 text-rose-800">A subconta já existe e nenhuma nova conta será criada.</p>
                         </div>
                     </div>
+                    <Button type="button" variant="outline" onClick={handleCredentialRecovery} disabled={busy !== null}>
+                        {busy === "recover" ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
+                        Proteger credencial
+                    </Button>
+                </div>
+            )}
 
-                    <div className="flex flex-col gap-3 rounded-lg border border-orange-100 bg-white p-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
-                        <span>
-                            Taxa Arena Digital: <strong className="text-arena-navy-800">{(form.platformFeeBasisPoints / 100).toFixed(2)}%</strong>. Repasse arena:{" "}
-                            <strong className="text-arena-navy-800">{((10000 - form.platformFeeBasisPoints) / 100).toFixed(2)}%</strong>.
-                        </span>
-                        <Button
-                            type="submit"
-                            className="bg-arena-button text-white hover:bg-arena-button-hover md:min-w-[180px]"
-                            disabled={saving}
-                        >
-                            {saving ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Salvando...
-                                </>
-                            ) : (
-                                "Salvar Pix do app"
-                            )}
+            {(showOnboarding && !settings.onboardingStarted) && (
+                <form onSubmit={handleCreateSubaccount} className="mt-7" aria-labelledby="asaas-onboarding-title">
+                    <div className="border-b border-slate-200 pb-4">
+                        <h4 id="asaas-onboarding-title" className="text-sm font-bold text-slate-950">
+                            Criar subconta Asaas
+                        </h4>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                            Os dados serão submetidos à validação cadastral do Asaas. A credencial gerada será armazenada no cofre do backend.
+                        </p>
+                    </div>
+                    <div className="mt-5 grid gap-x-4 gap-y-5 md:grid-cols-2 xl:grid-cols-3">
+                        <div className="space-y-2 xl:col-span-2">
+                            <Label htmlFor="baas-name">Nome ou razão social</Label>
+                            <Input id="baas-name" value={onboardingForm.name} onChange={(event) => setOnboardingForm((form) => ({ ...form, name: event.target.value }))} autoComplete="organization" required />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="baas-document">CNPJ</Label>
+                            <Input id="baas-document" value={onboardingForm.cpfCnpj} onChange={(event) => setOnboardingForm((form) => ({ ...form, cpfCnpj: event.target.value }))} inputMode="numeric" autoComplete="off" required />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="baas-company-type">Natureza jurídica</Label>
+                            <select id="baas-company-type" value={onboardingForm.companyType} onChange={(event) => setOnboardingForm((form) => ({ ...form, companyType: event.target.value as AsaasCompanyType }))} className="h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" required>
+                                {COMPANY_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
+                            </select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="baas-email">E-mail</Label>
+                            <Input id="baas-email" type="email" value={onboardingForm.email} onChange={(event) => setOnboardingForm((form) => ({ ...form, email: event.target.value }))} autoComplete="email" required />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="baas-phone">Celular</Label>
+                            <Input id="baas-phone" value={onboardingForm.mobilePhone} onChange={(event) => setOnboardingForm((form) => ({ ...form, mobilePhone: event.target.value }))} inputMode="tel" autoComplete="tel" required />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="baas-income">Faturamento mensal (R$)</Label>
+                            <Input id="baas-income" type="number" min="0.01" step="0.01" value={onboardingForm.incomeValue} onChange={(event) => setOnboardingForm((form) => ({ ...form, incomeValue: event.target.value }))} inputMode="decimal" required />
+                        </div>
+                        <div className="space-y-2 xl:col-span-2">
+                            <Label htmlFor="baas-address">Endereço</Label>
+                            <Input id="baas-address" value={onboardingForm.address} onChange={(event) => setOnboardingForm((form) => ({ ...form, address: event.target.value }))} autoComplete="street-address" required />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="baas-address-number">Número</Label>
+                            <Input id="baas-address-number" value={onboardingForm.addressNumber} onChange={(event) => setOnboardingForm((form) => ({ ...form, addressNumber: event.target.value }))} required />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="baas-complement">Complemento</Label>
+                            <Input id="baas-complement" value={onboardingForm.complement} onChange={(event) => setOnboardingForm((form) => ({ ...form, complement: event.target.value }))} />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="baas-province">Bairro</Label>
+                            <Input id="baas-province" value={onboardingForm.province} onChange={(event) => setOnboardingForm((form) => ({ ...form, province: event.target.value }))} required />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="baas-postal-code">CEP</Label>
+                            <Input id="baas-postal-code" value={onboardingForm.postalCode} onChange={(event) => setOnboardingForm((form) => ({ ...form, postalCode: event.target.value }))} inputMode="numeric" autoComplete="postal-code" required />
+                        </div>
+                    </div>
+                    <div className="mt-6 flex justify-end border-t border-slate-200 pt-5">
+                        <Button type="submit" disabled={busy !== null} className="bg-slate-950 text-white hover:bg-slate-800">
+                            {busy === "create" ? <Loader2 className="animate-spin" /> : <Building2 />}
+                            Criar subconta
                         </Button>
                     </div>
                 </form>
-            </CardContent>
-        </Card>
+            )}
+
+            {isApproved && (
+                <form onSubmit={handleOperationalSave} className="mt-7 border-t border-slate-200 pt-6" aria-labelledby="split-operation-title">
+                    <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+                        <div>
+                            <h4 id="split-operation-title" className="text-sm font-bold text-slate-950">Operação do split</h4>
+                            <p className="mt-1 text-xs leading-5 text-slate-500">A comissão é calculada sobre o valor bruto e enviada como valor fixo em cada nova cobrança. A arena recebe o saldo líquido após a tarifa do Asaas.</p>
+                        </div>
+                        <div className="flex items-start gap-4">
+                            <div className="text-right">
+                                <Label htmlFor="app-pix-enabled">Reservas com Pix</Label>
+                                <p className="mt-1 text-xs text-slate-500">{operationalForm.enabled ? "Ativo" : "Inativo"}</p>
+                            </div>
+                            <Switch id="app-pix-enabled" checked={operationalForm.enabled} onCheckedChange={(enabled) => setOperationalForm((form) => ({ ...form, enabled }))} disabled={!isApproved} />
+                        </div>
+                    </div>
+
+                    <div className="mt-5 grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                            <Label htmlFor="platform-split-fee">Taxa Arena Digital (%)</Label>
+                            <Input id="platform-split-fee" type="number" min="0" max="100" step="0.01" value={(operationalForm.platformFeeBasisPoints / 100).toFixed(2)} onChange={(event) => setOperationalForm((form) => ({ ...form, platformFeeBasisPoints: Math.round(Number(event.target.value) * 100) }))} inputMode="decimal" />
+                        </div>
+                        <div className="flex items-end">
+                            <div className="w-full border-y border-slate-200 py-3 text-sm text-slate-600">
+                                Arena: <strong className="text-slate-950">{((10_000 - operationalForm.platformFeeBasisPoints) / 100).toFixed(2)}%</strong>
+                                <span className="mx-2 text-slate-300">|</span>
+                                Plataforma: <strong className="text-slate-950">{(operationalForm.platformFeeBasisPoints / 100).toFixed(2)}%</strong>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="mt-5 flex justify-end">
+                        <Button type="submit" disabled={busy !== null} className="bg-slate-950 text-white hover:bg-slate-800">
+                            {busy === "save" ? <Loader2 className="animate-spin" /> : <Check />}
+                            Salvar operação
+                        </Button>
+                    </div>
+                </form>
+            )}
+
+            {settings.onboardingStarted && !isApproved && (
+                <div className="mt-7 border-t border-slate-200 pt-5 text-sm text-slate-500">
+                    O split permanece bloqueado até a aprovação geral e a confirmação do webhook exclusivo da subconta.
+                </div>
+            )}
+        </div>
     )
 }

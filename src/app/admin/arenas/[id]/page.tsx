@@ -3,6 +3,7 @@ import { notFound } from "next/navigation"
 import { Activity, ArrowLeft, CalendarClock, CircleDollarSign, LayoutGrid, MapPinned, Settings2, UsersRound } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { getPlatformAdminOverview } from "@/modules/platform-admin/actions/platformAdminActions"
+import { PlatformArenaProfileCard } from "@/modules/platform-admin/components/PlatformArenaProfileCard"
 
 function money(cents: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100)
@@ -19,6 +20,11 @@ export default async function AdminArenaDetailPage({ params }: { params: Promise
     inadimplente: "Inadimplente",
     prospect: "Prospect",
     desativada: "Desativada",
+  } as const
+  const kindLabels = {
+    customer: "Cliente",
+    public_listing: "Catálogo público",
+    demo: "Demo / pitch",
   } as const
 
   const cards = [
@@ -40,6 +46,8 @@ export default async function AdminArenaDetailPage({ params }: { params: Promise
           <div>
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <Badge className="bg-orange-500 text-slate-950">{statusLabels[arena.commercialStatus]}</Badge>
+              <Badge variant="outline" className="border-white/20 text-slate-300">{kindLabels[arena.platformKind]}</Badge>
+              <Badge variant="outline" className="border-white/20 text-slate-300">{arena.appDiscoverable ? "Visível no app" : "Oculta no app"}</Badge>
               <Badge variant="outline" className="border-white/20 text-slate-300">Operação: {arena.status ?? "—"}</Badge>
             </div>
             <h1 className="font-heading text-3xl font-black md:text-5xl">{arena.name}</h1>
@@ -57,7 +65,11 @@ export default async function AdminArenaDetailPage({ params }: { params: Promise
       </div>
 
       <div className="grid gap-5 xl:grid-cols-2">
+        <PlatformArenaProfileCard arena={arena} />
         <section className="rounded-2xl border border-slate-900/10 bg-white p-6"><p className="font-mono text-[10px] uppercase tracking-[.2em] text-slate-500">Responsável</p><h2 className="mt-1 font-heading text-xl font-black">Conta proprietária</h2><dl className="mt-5 space-y-3 text-sm"><div className="flex justify-between gap-4 border-b border-slate-100 pb-3"><dt className="text-slate-500">Nome</dt><dd className="font-bold">{arena.ownerName || "Não definido"}</dd></div><div className="flex justify-between gap-4"><dt className="text-slate-500">E-mail</dt><dd className="font-bold">{arena.ownerEmail}</dd></div></dl></section>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-2">
         <section className="rounded-2xl border border-slate-900/10 bg-white p-6"><p className="font-mono text-[10px] uppercase tracking-[.2em] text-slate-500">Estrutura</p><h2 className="mt-1 font-heading text-xl font-black">Operação cadastrada</h2><div className="mt-5 grid grid-cols-2 gap-3"><div className="rounded-xl bg-slate-50 p-4"><p className="font-heading text-2xl font-black">{arena.courtCount}</p><p className="text-xs text-slate-500">quadras ativas</p></div><div className="rounded-xl bg-slate-50 p-4"><p className="font-heading text-2xl font-black">{arena.hasLocation ? "Sim" : "Não"}</p><p className="text-xs text-slate-500">no mapa</p></div></div><p className="mt-4 flex items-center gap-2 text-xs text-slate-500"><CalendarClock className="h-4 w-4" /> Comparativo anterior: {arena.bookingsPrevious30Days} reservas</p></section>
       </div>
     </div>
