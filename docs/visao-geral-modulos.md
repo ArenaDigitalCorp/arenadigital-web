@@ -295,9 +295,9 @@ Equipe que opera a arena.
 | **Editar** | `updateArenaUserAction` | Atualiza nome/senha/papel/estação/status |
 | **Excluir** | `deleteArenaUserAction` | Desvincula; se for o último vínculo, apaga de `users` e do Auth |
 | Consultar | `getArenaUsersAction` | Lista a equipe da arena |
-| Provisionar (signup) | `provisionOwnerArena` | Cria arena + vínculo Gestor + assinatura experimental ao concluir cadastro |
+| Resolver signup | `resolveSelfServiceArenaSignup` | Consulta o catálogo antes de criar um tenant; cria cliente oculto somente quando não há correspondência e inicia o trial após o provisionamento |
 
-**Conecta com:** `auth` (signup chama `provisionOwnerArena`), `stations` (Caixa ↔ estação), `payments` (provisiona trial).
+**Conecta com:** `auth` (signup chama a resolução transacional), `platform-admin` (fila de reivindicações), `stations` (Caixa ↔ estação) e `payments` (trial somente após aprovação/provisionamento).
 
 ---
 
@@ -307,7 +307,10 @@ Cadastro/onboarding de gestores.
 | Pode | Ação | Detalhe |
 |---|---|---|
 | **Iniciar cadastro** | `startSignUpAction` | `auth.signUp` com metadata (nome, cpf, telefone, arena, endereço); envia confirmação por e-mail |
-| **Provisionar pós-cadastro** | `provisionAfterSignUpAction` | Após confirmar e-mail, garante `public.users` e cria a arena via `provisionOwnerArena` |
+| **Resolver pós-cadastro** | `provisionAfterSignUpAction` | Após confirmar o e-mail, resolve a identidade da arena: provisiona um cliente oculto, abre reivindicação de local público ou bloqueia duplicidade/conflito |
+| Consultar análise | `/sign-up/status` | Mantém o solicitante autenticado fora do backoffice enquanto o vínculo aguarda revisão |
+
+O CPF/CNPJ informado identifica candidatos, mas não comprova propriedade. Quando uma arena já existe no catálogo público, somente um superadmin pode aprovar o vínculo; a aprovação preserva o `arena_id`, cria o acesso Gestor e só então ativa o plano experimental.
 
 **Conecta com:** `users` (provisionamento), `payments` (trial inicial).
 

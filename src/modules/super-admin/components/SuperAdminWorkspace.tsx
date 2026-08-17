@@ -31,6 +31,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
+import { PublicArenaListingDialog } from "@/modules/platform-admin/components/PublicArenaListingDialog"
+import { PublicArenaImportDialog } from "@/modules/platform-admin/components/PublicArenaImportDialog"
+import { ArenaClaimRequestsCard } from "@/modules/platform-admin/components/ArenaClaimRequestsCard"
 import {
   manageInternalEmployeePlanAction,
   managePlatformPrincipalAction,
@@ -48,7 +51,18 @@ const STATUS_META: Record<PlatformArena["commercialStatus"], { label: string; do
   inadimplente: { label: "Inadimplente", dot: "bg-rose-500", badge: "border-rose-200 bg-rose-50 text-rose-800" },
   prospect: { label: "Prospect", dot: "bg-amber-500", badge: "border-amber-200 bg-amber-50 text-amber-900" },
   desativada: { label: "Desativada", dot: "bg-slate-400", badge: "border-slate-200 bg-slate-100 text-slate-700" },
+  catalogo_publico: { label: "Catálogo público", dot: "bg-sky-500", badge: "border-sky-200 bg-sky-50 text-sky-800" },
+  demonstracao: { label: "Demonstração", dot: "bg-violet-500", badge: "border-violet-200 bg-violet-50 text-violet-800" },
 }
+
+const COMMERCIAL_STATUS_ORDER: PlatformArena["commercialStatus"][] = [
+  "cliente_ativo",
+  "inadimplente",
+  "prospect",
+  "desativada",
+  "catalogo_publico",
+  "demonstracao",
+]
 
 const KIND_META: Record<PlatformArenaKind, { label: string; badge: string }> = {
   customer: { label: "Cliente", badge: "border-emerald-200 bg-emerald-50 text-emerald-800" },
@@ -58,7 +72,7 @@ const KIND_META: Record<PlatformArenaKind, { label: string; badge: string }> = {
 
 const SECTION_COPY: Record<SuperAdminSection, { eyebrow: string; title: string; description: string }> = {
   overview: { eyebrow: "Visão executiva", title: "A operação inteira, em uma tela.", description: "Clientes, receita, comunidade e sinais de risco atualizados a partir da base da plataforma." },
-  arenas: { eyebrow: "Base nacional", title: "Arenas e prospects", description: "A mesma malha de locais que sustenta o produto, organizada por estágio comercial e atividade." },
+  arenas: { eyebrow: "Base nacional", title: "Clientes e locais públicos", description: "A mesma malha de locais que sustenta o produto, separando relação comercial, catálogo e disponibilidade no aplicativo." },
   finance: { eyebrow: "Receita recorrente", title: "Financeiro da plataforma", description: "Assinaturas, MRR estimado e contas que exigem acompanhamento comercial." },
   athletes: { eyebrow: "Comunidade", title: "Atletas da plataforma", description: "Planos, origem, vínculos com arenas e frequência recente de cada conta." },
   engagement: { eyebrow: "Saúde da base", title: "Uso e engajamento", description: "Ranking de atividade e alertas precoces de arenas que podem entrar em risco de churn." },
@@ -121,6 +135,7 @@ function Overview({ overview }: { overview: PlatformAdminOverview }) {
   const active = overview.arenas.filter((arena) => arena.commercialStatus === "cliente_ativo" && arena.planPriceCents > 0)
   const overdue = overview.arenas.filter((arena) => arena.commercialStatus === "inadimplente")
   const prospects = overview.arenas.filter((arena) => arena.commercialStatus === "prospect")
+  const publicListings = overview.arenas.filter((arena) => arena.commercialStatus === "catalogo_publico")
   const mrr = active.reduce((total, arena) => total + arena.planPriceCents, 0)
   const dormant = active.filter((arena) => arena.bookingsLast30Days === 0)
   const ranked = [...overview.arenas].sort((a, b) => b.bookingsLast30Days - a.bookingsLast30Days).slice(0, 6)
@@ -131,7 +146,7 @@ function Overview({ overview }: { overview: PlatformAdminOverview }) {
       <PageIntro section="overview" action={<div className="inline-flex items-center gap-2 rounded-full border border-emerald-700/20 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800"><span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" /> Dados operacionais ao vivo</div>} />
       <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
         <MetricCard label="MRR estimado" value={money(mrr)} detail={`${active.length} assinatura${active.length === 1 ? "" : "s"} ativa${active.length === 1 ? "" : "s"}`} icon={BadgeDollarSign} tone="orange" />
-        <MetricCard label="Arenas no mapa" value={String(overview.arenas.filter((arena) => arena.hasLocation).length)} detail={`${prospects.length} prospect${prospects.length === 1 ? "" : "s"} compondo a base`} icon={MapPinned} tone="dark" />
+        <MetricCard label="Arenas no mapa" value={String(overview.arenas.filter((arena) => arena.hasLocation).length)} detail={`${publicListings.length} loca${publicListings.length === 1 ? "l" : "is"} no catálogo · ${prospects.length} prospect${prospects.length === 1 ? "" : "s"}`} icon={MapPinned} tone="dark" />
         <MetricCard label="Atletas" value={overview.athletes.length.toLocaleString("pt-BR")} detail={`${overview.athletes.filter((athlete) => athlete.bookingsLast30Days > 0).length} ativos em 30 dias`} icon={UsersRound} tone="light" />
         <MetricCard label="Atenção" value={String(overdue.length + dormant.length)} detail={`${overdue.length} em atraso · ${dormant.length} sem uso`} icon={CircleAlert} tone="light" />
       </div>
@@ -155,10 +170,10 @@ function Overview({ overview }: { overview: PlatformAdminOverview }) {
         </section>
 
         <section className="rounded-2xl border border-slate-800 bg-[#07141d] p-6 text-white shadow-sm">
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-orange-300">Funil comercial</p>
-          <h2 className="mt-1 font-heading text-xl font-black">Carteira de arenas</h2>
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-orange-300">Composição da base</p>
+          <h2 className="mt-1 font-heading text-xl font-black">Relação com a plataforma</h2>
           <div className="mt-6 space-y-3">
-            {(Object.keys(STATUS_META) as PlatformArena["commercialStatus"][]).map((status) => {
+            {COMMERCIAL_STATUS_ORDER.map((status) => {
               const count = overview.arenas.filter((arena) => arena.commercialStatus === status).length
               return <div key={status} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[.035] px-4 py-3"><div className="flex items-center gap-3"><span className={cn("h-2.5 w-2.5 rounded-full", STATUS_META[status].dot)} /><span className="text-sm text-slate-300">{STATUS_META[status].label}</span></div><strong className="font-heading text-xl">{count}</strong></div>
             })}
@@ -184,11 +199,12 @@ function Arenas({ overview }: { overview: PlatformAdminOverview }) {
 
   return (
     <>
-      <PageIntro section="arenas" />
+      <PageIntro section="arenas" action={overview.currentAccessLevel === "super_admin" ? <div className="flex flex-wrap gap-2"><PublicArenaImportDialog /><PublicArenaListingDialog /></div> : undefined} />
+      {overview.currentAccessLevel === "super_admin" && <ArenaClaimRequestsCard requests={overview.arenaClaimRequests} />}
       <div className="mb-5 grid gap-3 lg:grid-cols-[1fr_auto]">
         <div className="relative"><Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por arena, responsável ou cidade" className="h-12 border-slate-300 bg-white pl-11" /></div>
         <div className="flex flex-wrap gap-2">
-          {(["all", "cliente_ativo", "inadimplente", "prospect", "desativada"] as const).map((value) => <button key={value} onClick={() => setFilter(value)} className={cn("rounded-xl border px-3 py-2 text-xs font-bold transition", filter === value ? "border-slate-950 bg-slate-950 text-white" : "border-slate-300 bg-white text-slate-600 hover:border-slate-500")}>{value === "all" ? "Todas" : STATUS_META[value].label}</button>)}
+          {(["all", ...COMMERCIAL_STATUS_ORDER] as const).map((value) => <button key={value} onClick={() => setFilter(value)} className={cn("rounded-xl border px-3 py-2 text-xs font-bold transition", filter === value ? "border-slate-950 bg-slate-950 text-white" : "border-slate-300 bg-white text-slate-600 hover:border-slate-500")}>{value === "all" ? "Todas" : STATUS_META[value].label}</button>)}
         </div>
       </div>
       <div className="mb-4 flex flex-wrap gap-2">
@@ -212,7 +228,7 @@ function Arenas({ overview }: { overview: PlatformAdminOverview }) {
             })}
             <div className="absolute bottom-5 left-5 rounded-xl border border-white/10 bg-slate-950/80 px-4 py-3 backdrop-blur"><p className="font-heading text-2xl font-black">{mappedArenas.length}</p><p className="text-xs text-slate-400">arenas geolocalizadas no filtro</p></div>
           </div>
-          <div className="p-6"><p className="font-mono text-[10px] uppercase tracking-[.2em] text-orange-300">Cobertura</p><h2 className="mt-1 font-heading text-xl font-black">Mapa de arenas do Brasil</h2><p className="mt-2 text-sm leading-6 text-slate-400">Clientes e prospects usam a mesma base geográfica. A classificação comercial não altera a disponibilidade operacional.</p><div className="mt-6 space-y-3">{(Object.keys(STATUS_META) as PlatformArena["commercialStatus"][]).map((status) => <div key={status} className="flex items-center justify-between rounded-xl border border-white/10 px-3 py-2.5"><span className="flex items-center gap-2 text-sm text-slate-300"><span className={cn("h-2 w-2 rounded-full", STATUS_META[status].dot)} />{STATUS_META[status].label}</span><strong>{mappedArenas.filter((arena) => arena.commercialStatus === status).length}</strong></div>)}</div><div className="mt-6 rounded-xl border border-amber-300/15 bg-amber-300/5 p-4 text-xs leading-5 text-amber-100">{arenas.length - mappedArenas.length} arena{arenas.length - mappedArenas.length === 1 ? "" : "s"} ainda {arenas.length - mappedArenas.length === 1 ? "precisa" : "precisam"} de coordenadas.</div></div>
+          <div className="p-6"><p className="font-mono text-[10px] uppercase tracking-[.2em] text-orange-300">Cobertura</p><h2 className="mt-1 font-heading text-xl font-black">Mapa de arenas do Brasil</h2><p className="mt-2 text-sm leading-6 text-slate-400">Clientes e locais públicos usam a mesma base geográfica, mas preservam relações distintas com a plataforma.</p><div className="mt-6 space-y-3">{COMMERCIAL_STATUS_ORDER.map((status) => <div key={status} className="flex items-center justify-between rounded-xl border border-white/10 px-3 py-2.5"><span className="flex items-center gap-2 text-sm text-slate-300"><span className={cn("h-2 w-2 rounded-full", STATUS_META[status].dot)} />{STATUS_META[status].label}</span><strong>{mappedArenas.filter((arena) => arena.commercialStatus === status).length}</strong></div>)}</div><div className="mt-6 rounded-xl border border-amber-300/15 bg-amber-300/5 p-4 text-xs leading-5 text-amber-100">{arenas.length - mappedArenas.length} arena{arenas.length - mappedArenas.length === 1 ? "" : "s"} ainda {arenas.length - mappedArenas.length === 1 ? "precisa" : "precisam"} de coordenadas.</div></div>
         </section>
       )}
       {view === "list" && <section className="overflow-hidden rounded-2xl border border-slate-900/10 bg-white shadow-sm">
@@ -294,6 +310,7 @@ function accessLabel(level: PlatformAccessLevel) {
 function SettingsView({ overview, initialArenaId }: { overview: PlatformAdminOverview; initialArenaId?: string }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
+  const customerArenas = overview.arenas.filter((arena) => arena.platformKind === "customer")
   const [settingsTab, setSettingsTab] = useState<"access" | "billing" | "audit">(initialArenaId ? "billing" : "access")
   const [userId, setUserId] = useState("")
   const [level, setLevel] = useState<PlatformAccessLevel>("employee")
@@ -304,9 +321,9 @@ function SettingsView({ overview, initialArenaId }: { overview: PlatformAdminOve
   const [arenaId, setArenaId] = useState("")
   const [planEnabled, setPlanEnabled] = useState(true)
   const [planReason, setPlanReason] = useState("")
-  const [pixArenaId, setPixArenaId] = useState(overview.arenas.some((arena) => arena.id === initialArenaId) ? (initialArenaId ?? "") : (overview.arenas[0]?.id ?? ""))
+  const [pixArenaId, setPixArenaId] = useState(customerArenas.some((arena) => arena.id === initialArenaId) ? (initialArenaId ?? "") : (customerArenas[0]?.id ?? ""))
   const activePrincipals = overview.principals.filter((item) => item.status === "active")
-  const selectedPixArena = overview.arenas.find((arena) => arena.id === pixArenaId)
+  const selectedPixArena = customerArenas.find((arena) => arena.id === pixArenaId)
   const eligibleArenas = overview.arenas.filter((arena) => arena.ownerId === employeeId || overview.memberships.some((membership) => membership.userId === employeeId && membership.arenaId === arena.id && ["Ativo", "ativo", "active"].includes(membership.status)))
 
   function savePrincipal() {
@@ -332,7 +349,7 @@ function SettingsView({ overview, initialArenaId }: { overview: PlatformAdminOve
       <section className="rounded-2xl border border-slate-900/10 bg-white p-6"><div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-slate-950 text-white"><ShieldCheck className="h-5 w-5" /></div><div><p className="font-heading text-lg font-black">Administradores</p><p className="text-xs text-slate-500">Permissões globais da plataforma</p></div></div><div className="mt-5 space-y-3">{activePrincipals.map((principal) => <div key={principal.userId} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3"><div className="min-w-0"><p className="truncate text-sm font-bold">{principal.name || principal.email}</p><p className="truncate text-xs text-slate-500">{principal.email}</p></div><Badge variant="outline">{accessLabel(principal.accessLevel)}</Badge></div>)}</div><div className="my-5 h-px bg-slate-200" /><div className="space-y-3"><select value={userId} onChange={(event) => setUserId(event.target.value)} className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Selecione uma conta</option>{overview.users.map((user) => <option key={user.id} value={user.id}>{user.name || user.email}</option>)}</select><div className="grid gap-3 sm:grid-cols-2"><select value={level} onChange={(event) => setLevel(event.target.value as PlatformAccessLevel)} disabled={!principalEnabled} className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm disabled:bg-slate-100"><option value="employee">Funcionário</option><option value="platform_admin">Admin da plataforma</option><option value="super_admin">Super admin</option></select><select value={principalEnabled ? "enable" : "revoke"} onChange={(event) => setPrincipalEnabled(event.target.value === "enable")} className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="enable">Conceder / alterar</option><option value="revoke">Revogar acesso</option></select></div>{principalEnabled && <label className="block text-xs font-semibold text-slate-600">Expiração opcional<Input type="datetime-local" value={principalExpiresAt} onChange={(event) => setPrincipalExpiresAt(event.target.value)} className="mt-1 h-11" /></label>}<Textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Motivo obrigatório para auditoria" /><Button onClick={savePrincipal} disabled={pending} className={cn("w-full text-white", principalEnabled ? "bg-slate-950 hover:bg-slate-800" : "bg-rose-700 hover:bg-rose-600")}><KeyRound className="mr-2 h-4 w-4" />{principalEnabled ? "Salvar acesso" : "Revogar acesso"}</Button></div></section>
       <section className="rounded-2xl border border-slate-900/10 bg-white p-6"><div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-orange-100 text-orange-800"><Sparkles className="h-5 w-5" /></div><div><p className="font-heading text-lg font-black">Plano interno</p><p className="text-xs text-slate-500">Acesso de funcionário, sem cobrança</p></div></div><div className="mt-5 space-y-3"><select value={employeeId} onChange={(event) => { setEmployeeId(event.target.value); setArenaId("") }} className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Selecione o funcionário</option>{activePrincipals.map((principal) => <option key={principal.userId} value={principal.userId}>{principal.name || principal.email}</option>)}</select><select value={arenaId} onChange={(event) => setArenaId(event.target.value)} className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Selecione uma arena vinculada</option>{eligibleArenas.map((arena) => <option key={arena.id} value={arena.id}>{arena.name}</option>)}</select><select value={planEnabled ? "grant" : "revoke"} onChange={(event) => setPlanEnabled(event.target.value === "grant")} className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="grant">Conceder plano interno</option><option value="revoke">Revogar plano interno</option></select><Textarea value={planReason} onChange={(event) => setPlanReason(event.target.value)} placeholder="Motivo obrigatório para auditoria" /><Button onClick={saveInternalPlan} disabled={pending} className={cn("w-full", planEnabled ? "bg-orange-500 text-slate-950 hover:bg-orange-400" : "bg-rose-700 text-white hover:bg-rose-600")}><CircleDollarSign className="mr-2 h-4 w-4" />{planEnabled ? "Conceder acesso sem cobrança" : "Revogar plano interno"}</Button></div><div className="mt-5 space-y-2">{overview.internalPlanAssignments.map((assignment) => <button type="button" key={assignment.arenaId} onClick={() => { setEmployeeId(assignment.employeeUserId); setArenaId(assignment.arenaId); setPlanEnabled(false); setPlanReason("Revogação administrativa do acesso interno") }} className="flex w-full items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-left text-xs text-emerald-900"><span>{overview.arenas.find((arena) => arena.id === assignment.arenaId)?.name ?? assignment.arenaId} · ativo</span><span className="font-bold">Preparar revogação</span></button>)}</div></section>
     </div>}
-    {settingsTab === "billing" && <section className="rounded-2xl border border-slate-900/10 bg-white p-6"><div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-end"><div><div className="flex items-center gap-2"><WalletCards className="h-5 w-5 text-orange-600" /><h2 className="font-heading text-xl font-black">Pix e split por arena</h2></div><p className="mt-1 text-sm text-slate-500">Onboarding da subconta, aprovação cadastral e taxa aplicada às reservas do aplicativo.</p></div><label className="text-xs font-semibold text-slate-600">Arena<select value={pixArenaId} onChange={(event) => setPixArenaId(event.target.value)} className="mt-1 block h-11 min-w-64 rounded-lg border border-slate-300 bg-white px-3 text-sm font-normal text-slate-950">{overview.arenas.map((arena) => <option key={arena.id} value={arena.id}>{arena.name}</option>)}</select></label></div>{selectedPixArena && <ArenaPixSplitSettingsCard key={selectedPixArena.id} arenaId={selectedPixArena.id} arenaName={selectedPixArena.name} initialSettings={selectedPixArena.pixSplitSettings} registration={{ email: selectedPixArena.registrationEmail, phone: selectedPixArena.registrationPhone, document: selectedPixArena.registrationDocument, address: selectedPixArena.registrationAddress, addressNumber: selectedPixArena.registrationAddressNumber, complement: selectedPixArena.registrationComplement, province: selectedPixArena.registrationProvince, postalCode: selectedPixArena.registrationPostalCode }} />}</section>}
+    {settingsTab === "billing" && <section className="rounded-2xl border border-slate-900/10 bg-white p-6"><div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-end"><div><div className="flex items-center gap-2"><WalletCards className="h-5 w-5 text-orange-600" /><h2 className="font-heading text-xl font-black">Pix e split por arena</h2></div><p className="mt-1 text-sm text-slate-500">Onboarding da subconta, aprovação cadastral e taxa aplicada às reservas do aplicativo.</p></div>{customerArenas.length > 0 && <label className="text-xs font-semibold text-slate-600">Arena<select value={pixArenaId} onChange={(event) => setPixArenaId(event.target.value)} className="mt-1 block h-11 min-w-64 rounded-lg border border-slate-300 bg-white px-3 text-sm font-normal text-slate-950">{customerArenas.map((arena) => <option key={arena.id} value={arena.id}>{arena.name}</option>)}</select></label>}</div>{selectedPixArena ? <ArenaPixSplitSettingsCard key={selectedPixArena.id} arenaId={selectedPixArena.id} arenaName={selectedPixArena.name} initialSettings={selectedPixArena.pixSplitSettings} registration={{ email: selectedPixArena.registrationEmail, phone: selectedPixArena.registrationPhone, document: selectedPixArena.registrationDocument, address: selectedPixArena.registrationAddress, addressNumber: selectedPixArena.registrationAddressNumber, complement: selectedPixArena.registrationComplement, province: selectedPixArena.registrationProvince, postalCode: selectedPixArena.registrationPostalCode }} /> : <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">Nenhuma arena cliente disponível para configurar pagamentos.</p>}</section>}
     {settingsTab === "audit" && <section className="overflow-hidden rounded-2xl border border-slate-800 bg-[#07141d] text-white"><div className="border-b border-white/10 px-6 py-5"><p className="font-mono text-[10px] uppercase tracking-[.2em] text-emerald-300">Auditoria</p><h2 className="mt-1 font-heading text-xl font-black">Eventos recentes de segurança</h2></div><div className="divide-y divide-white/10">{overview.audit.slice(0, 15).map((event) => <div key={event.id} className="grid gap-2 px-6 py-4 md:grid-cols-[220px_1fr_120px]"><p className="text-sm font-bold text-emerald-200">{event.eventType.replaceAll("_", " ")}</p><p className="text-sm text-slate-300">{event.reason}</p><time className="text-xs text-slate-500 md:text-right">{date(event.createdAt)}</time></div>)}</div></section>}
   </>
 }
