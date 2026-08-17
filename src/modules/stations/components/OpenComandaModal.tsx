@@ -29,6 +29,7 @@ import { isCatalogService, matchesProductOrServiceSearch, normalizeCatalogStatus
 import { Plus, Minus, Search, Check, X, Loader2, Trash2 } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { cn, normalizeString } from "@/lib/utils"
+import { trackAction } from "@/lib/telemetry/client"
 
 const openComandaSchema = z.object({
     quantity: z.string().min(1, "Informe a quantidade"),
@@ -229,11 +230,21 @@ export function OpenComandaModal({
             )
             if (!orderRes.success) throw new Error(orderRes.error)
 
+            trackAction("order_open", "success", {
+                arena_id: arenaId,
+                station_id: stationId,
+                items_count: selectedItems.length,
+            })
             toast.success("Comanda aberta com sucesso!")
             onSuccess()
             handleClose()
         } catch (error) {
             console.error("Error opening comanda:", error)
+            trackAction("order_open", "failure", {
+                arena_id: arenaId,
+                station_id: stationId,
+                source: "exception",
+            })
             toast.error("Erro ao abrir comanda.")
         } finally {
             setIsSubmitting(false)

@@ -30,6 +30,7 @@ import { useDbUser } from "@/contexts/UserContext";
 import { ArenaSelector } from "./ArenaSelector";
 import { NotificationsBell } from "@/modules/notifications/components/NotificationsBell";
 import { canManageArena } from "@/lib/arena-permissions";
+import { trackNavigation } from "@/lib/telemetry/client";
 
 /** Item ativo do menu — ligado a `--arena-accent` em globals.css */
 const navActiveText = "text-arena-accent";
@@ -280,7 +281,10 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                           ),
                                 )}
                                 asChild
-                                onClick={onNavItemClick}
+                                onClick={() => {
+                                    trackNavigation("Admin Arena Digital", "/dashboard/admin/platform");
+                                    onNavItemClick?.();
+                                }}
                             >
                                 <Link
                                     href="/dashboard/admin/platform"
@@ -358,7 +362,10 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                                     ? cn(navActiveText, "bg-white/5 hover:bg-white/10 hover:text-arena-accent")
                                                     : "text-white hover:bg-white/5 hover:text-white"
                                             )}
-                                            onClick={onNavItemClick}
+                                            onClick={() => {
+                                                trackNavigation("Atletas e clientes", selectedArena ? `/dashboard/reports/${selectedArena}/clientes-overview` : "/dashboard/reports");
+                                                onNavItemClick?.();
+                                            }}
                                         >
                                             <Link href={selectedArena ? `/dashboard/reports/${selectedArena}/clientes-overview` : "/dashboard/reports"}>
                                                 Atletas e clientes

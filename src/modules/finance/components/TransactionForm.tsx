@@ -38,6 +38,7 @@ import { cn } from "@/lib/utils";
 import { createTransactionAction, updateTransactionAction, getModoPagamentoAction } from "@/modules/finance/actions/financeActions";
 import { getAthletesByArenaAction } from "@/modules/athletes/actions/athleteActions";
 import { toast } from "sonner";
+import { trackAction } from "@/lib/telemetry/client";
 import { useEffect, useState } from "react";
 import { transactionSchema, type TransactionFormValues } from "@/modules/finance/schemas/transaction.schema";
 
@@ -161,6 +162,12 @@ export function TransactionForm({
                     modo_pagamento_id: values.modo_pagamento_id || null,
                 });
                 if (!res.success) throw new Error(res.error)
+                trackAction("finance_transaction", "success", {
+                    arena_id: arenaId,
+                    entity_id: transaction.id,
+                    entity_type: "transaction",
+                    edit_mode: true,
+                });
                 toast.success("Lançamento atualizado com sucesso!");
             } else {
                 const res = await createTransactionAction(arenaId, {
@@ -169,10 +176,21 @@ export function TransactionForm({
                     modo_pagamento_id: values.modo_pagamento_id || null,
                 });
                 if (!res.success) throw new Error(res.error)
+                trackAction("finance_transaction", "success", {
+                    arena_id: arenaId,
+                    entity_type: "transaction",
+                    edit_mode: false,
+                });
                 toast.success("Lançamento realizado com sucesso!");
             }
             onSuccess();
         } catch (error) {
+            trackAction("finance_transaction", "failure", {
+                arena_id: arenaId,
+                entity_type: "transaction",
+                edit_mode: isEditing,
+                source: error instanceof Error ? "exception" : "unknown_error",
+            });
             toast.error(isEditing ? "Erro ao atualizar lançamento." : "Erro ao realizar lançamento.");
         }
     };

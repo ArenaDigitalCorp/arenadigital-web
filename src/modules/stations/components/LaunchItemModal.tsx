@@ -22,6 +22,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
+import { trackAction } from "@/lib/telemetry/client"
 import type { StationOrder } from "@/modules/stations/types/station.types"
 import { addOrderItemsAction } from "@/modules/stations/actions/orderActions"
 import { getProductsByArenaAction } from "@/modules/products/actions/stockActions"
@@ -169,11 +170,21 @@ export function LaunchItemModal({
             // Add all items in bulk and capture the created items
             const itemsRes = await addOrderItemsAction(arenaId, order.id, itemsToLaunch.map(({ order_id, ...item }) => item))
             if (!itemsRes.success) throw new Error(itemsRes.error)
+            trackAction("order_item_add", "success", {
+                arena_id: arenaId,
+                order_id: order.id,
+                items_count: itemsToLaunch.length,
+            })
             toast.success("Itens lançados com sucesso!")
             onSuccess()
             handleClose()
         } catch (error) {
             console.error("Error launching items:", error)
+            trackAction("order_item_add", "failure", {
+                arena_id: arenaId,
+                order_id: order.id,
+                source: "exception",
+            })
             toast.error("Erro ao lançar itens.")
         } finally {
             setIsSubmitting(false)

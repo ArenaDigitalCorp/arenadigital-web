@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { Logo } from '@/components/shared/Logo'
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser'
 import { ensureWebBackofficeAccessAction, provisionAfterSignUpAction } from '@/modules/auth/actions/authActions'
+import { trackAction } from '@/lib/telemetry/client'
 
 const inputLight =
   'w-full rounded-lg border border-zinc-700 bg-white px-3 py-2.5 text-sm text-black placeholder-zinc-500 outline-none transition focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400'
@@ -45,12 +46,14 @@ export default function SignInPage() {
     setLoading(true)
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
+      trackAction('signin_password', 'failure', { source: 'auth_provider' })
       setLoading(false)
       toast.error(error.message)
       return
     }
 
     if (!data.session) {
+      trackAction('signin_password', 'failure', { source: 'missing_session' })
       setLoading(false)
       toast.error('Não foi possível iniciar sua sessão. Tente novamente.')
       return
@@ -63,12 +66,14 @@ export default function SignInPage() {
 
     const webAccess = await ensureWebBackofficeAccessAction()
     if (!webAccess.success) {
+      trackAction('signin_password', 'failure', { source: 'web_access_denied' })
       await supabase.auth.signOut()
       setLoading(false)
       toast.error(webAccess.error)
       return
     }
 
+    trackAction('signin_password', 'success')
     window.location.replace(redirectTo)
   }
 
@@ -84,10 +89,12 @@ export default function SignInPage() {
     })
     setLoading(false)
     if (error) {
+      trackAction('signin_otp', 'failure', { source: 'auth_provider' })
       toast.error(error.message)
       return
     }
     toast.success('Link de acesso enviado para seu e-mail.')
+    trackAction('signin_otp', 'success')
     setMode('otp_verify')
   }
 
@@ -99,10 +106,12 @@ export default function SignInPage() {
     })
     setLoading(false)
     if (error) {
+      trackAction('password_reset_request', 'failure', { source: 'auth_provider' })
       toast.error(error.message)
       return
     }
     toast.success('Enviamos um e-mail com instruções para redefinir sua senha.')
+    trackAction('password_reset_request', 'success')
     setMode('password')
   }
 
