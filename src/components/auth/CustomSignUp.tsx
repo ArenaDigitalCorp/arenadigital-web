@@ -16,6 +16,7 @@ import {
     startSignUpAction,
 } from "@/modules/auth/actions/authActions"
 import { isValidCpf, isValidCpfOrCnpj } from "@/lib/brasil-document"
+import { track, trackAction } from "@/lib/telemetry/client"
 
 const maskCpf = (value: string) => {
     return value
@@ -147,6 +148,7 @@ export function CustomSignUp() {
         setEmailLookupLoading(false)
 
         if (!res.success) {
+            trackAction("signup_email_check", "failure", { source: "server_result" })
             toast.error(res.error)
             return
         }
@@ -157,6 +159,7 @@ export function CustomSignUp() {
         }
 
         setAccountMode(res.data.status)
+        track("signup_email_check_success")
     }
 
     const handleCepBlur = async () => {
@@ -262,10 +265,12 @@ export function CustomSignUp() {
         setLoading(false)
 
         if (!res.success) {
+            trackAction("signup_submit", "failure", { source: "server_result" })
             toast.error(res.error || "Erro ao criar conta.")
             return
         }
 
+        trackAction("signup_submit", "success")
         setPendingVerification(true)
         toast.success("Link de confirmação enviado para seu e-mail!")
     }

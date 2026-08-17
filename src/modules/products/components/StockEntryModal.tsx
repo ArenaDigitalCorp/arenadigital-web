@@ -29,6 +29,7 @@ import { useEffect, useRef, useState } from "react"
 import { Loader2, Package, CalendarIcon } from "lucide-react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { trackAction } from "@/lib/telemetry/client"
 
 const stockEntrySchema = z.object({
     entry_date: z.string().min(1, "Informe a data de entrada"),
@@ -98,6 +99,10 @@ export function StockEntryModal({
             if (!res.success) throw new Error(res.error)
 
             operationId.current = null
+            trackAction("stock_entry", "success", {
+                arena_id: arenaId,
+                product_id: product.id,
+            })
             toast.success(`Entrada de ${data.quantity} unidade(s) registrada com sucesso!`)
             form.reset({
                 entry_date: format(new Date(), "yyyy-MM-dd"),
@@ -110,6 +115,11 @@ export function StockEntryModal({
             onOpenChange(false)
         } catch (error: any) {
             console.error("Error creating stock entry:", error)
+            trackAction("stock_entry", "failure", {
+                arena_id: arenaId,
+                product_id: product.id,
+                source: "exception",
+            })
             toast.error(`Erro ao registrar entrada: ${error.message || "Erro desconhecido"}`)
         } finally {
             setIsSubmitting(false)

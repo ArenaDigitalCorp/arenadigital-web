@@ -5,6 +5,7 @@ import { AlertCircle } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { trackClientError } from "@/lib/telemetry/client"
 
 export type DashboardRouteError = Error & { digest?: string }
 
@@ -34,10 +35,12 @@ export function DashboardErrorState({
   useEffect(() => {
     if (logLabel) {
       console.error(`[${logLabel}]`, error)
+      trackClientError(logLabel, error)
       return
     }
 
     console.error(error)
+    trackClientError("dashboard_error_boundary", error)
   }, [error, logLabel])
 
   return (

@@ -2,8 +2,13 @@ import type { Metadata } from "next";
 import { Exo, Manrope, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ClientInstrumentation } from "@/components/telemetry/ClientInstrumentation";
+import { TelemetryErrorReporter } from "@/components/telemetry/TelemetryErrorReporter";
+import { TelemetryPageView } from "@/components/telemetry/TelemetryPageView";
 import Script from "next/script";
 import "./globals.css";
+
+const googleAnalyticsId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 
 const exo = Exo({
   variable: "--font-exo",
@@ -37,18 +42,21 @@ export default function RootLayout({
       <body
         className={`${exo.variable} ${manrope.variable} ${manrope.className} ${geistMono.variable} antialiased`}
       >
-        <Script
-          src="https://www.googletagmanager.com/gtag/js?id=G-0H2NWTG99B"
+        {googleAnalyticsId && <Script
+          src={`https://www.googletagmanager.com/gtag/js?id=${googleAnalyticsId}`}
           strategy="afterInteractive"
-        />
-        <Script id="google-analytics" strategy="afterInteractive">
+        />}
+        {googleAnalyticsId && <Script id="google-analytics" strategy="afterInteractive">
           {`
             window.dataLayer = window.dataLayer || [];
             function gtag(){dataLayer.push(arguments);}
             gtag('js', new Date());
-            gtag('config', 'G-0H2NWTG99B');
+            gtag('config', ${JSON.stringify(googleAnalyticsId)});
           `}
-        </Script>
+        </Script>}
+        <ClientInstrumentation />
+        <TelemetryPageView />
+        <TelemetryErrorReporter />
         <TooltipProvider>
           {children}
         </TooltipProvider>

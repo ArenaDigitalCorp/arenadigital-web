@@ -13,6 +13,7 @@ import {
   Trophy,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { trackAction } from '@/lib/telemetry/client';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -290,6 +291,11 @@ export function SubscriptionPageClient({
 
       const data = await res.json();
       if (!res.ok) {
+        trackAction('subscription_setup', 'failure', {
+          arena_id: arenaId,
+          plan_key: planKey,
+          source: 'http_error',
+        });
         toast.error(data.error ?? 'Erro ao iniciar cadastro do cartao.');
         return;
       }
@@ -305,7 +311,19 @@ export function SubscriptionPageClient({
         planLabel: data.planLabel,
         priceCents: data.priceCents,
       });
+      trackAction('subscription_setup', 'success', {
+        arena_id: arenaId,
+        plan_key: planKey,
+        provider: data.cardCollection?.provider,
+      });
       setCardModalOpen(true);
+    } catch (error) {
+      trackAction('subscription_setup', 'failure', {
+        arena_id: arenaId,
+        plan_key: planKey,
+        source: error instanceof Error ? 'exception' : 'unknown_error',
+      });
+      toast.error('Erro ao iniciar cadastro do cartao.');
     } finally {
       setActionLoading(false);
     }
@@ -322,6 +340,10 @@ export function SubscriptionPageClient({
       });
 
       if (!res.ok) {
+        trackAction('subscription_cancel', 'failure', {
+          arena_id: arenaId,
+          source: 'http_error',
+        });
         const data = await res.json();
         toast.error(data.error ?? 'Erro ao cancelar assinatura.');
         return;
@@ -330,8 +352,15 @@ export function SubscriptionPageClient({
       toast.success(
         'Assinatura cancelada. O acesso segue ativo ate o fim do periodo atual.'
       );
+      trackAction('subscription_cancel', 'success', { arena_id: arenaId });
       setCancelModalOpen(false);
       await refreshSubscription();
+    } catch (error) {
+      trackAction('subscription_cancel', 'failure', {
+        arena_id: arenaId,
+        source: error instanceof Error ? 'exception' : 'unknown_error',
+      });
+      toast.error('Erro ao cancelar assinatura.');
     } finally {
       setActionLoading(false);
     }
@@ -348,13 +377,24 @@ export function SubscriptionPageClient({
       });
 
       if (!res.ok) {
+        trackAction('subscription_reactivate', 'failure', {
+          arena_id: arenaId,
+          source: 'http_error',
+        });
         const data = await res.json();
         toast.error(data.error ?? 'Erro ao reativar assinatura.');
         return;
       }
 
       toast.success('Assinatura reativada com sucesso.');
+      trackAction('subscription_reactivate', 'success', { arena_id: arenaId });
       await refreshSubscription();
+    } catch (error) {
+      trackAction('subscription_reactivate', 'failure', {
+        arena_id: arenaId,
+        source: error instanceof Error ? 'exception' : 'unknown_error',
+      });
+      toast.error('Erro ao reativar assinatura.');
     } finally {
       setActionLoading(false);
     }

@@ -66,6 +66,7 @@ import {
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn, normalizeString } from '@/lib/utils';
+import { track, trackAction } from '@/lib/telemetry/client';
 
 const DIAS_SEMANA = [
   { value: 0, label: 'Domingo' },
@@ -571,14 +572,18 @@ export function BookingModal({
         additionalAthleteIds: additionalParticipants.map((p) => p.id),
       });
       if (!result.success) {
-        toast.error(
-          result.error ??
-            (existingBooking ? 'Erro ao atualizar reserva' : 'Erro ao criar reserva')
-        );
+        trackAction('booking_save', 'failure', { arena_id: arenaId });
+        toast.error(result.error ?? (existingBooking ? 'Erro ao atualizar reserva' : 'Erro ao criar reserva'));
         return;
       }
 
       bookingOperationId.current = null;
+      trackAction('booking_save', 'success', {
+        arena_id: arenaId,
+        booking_type: 'avulso',
+        edit_mode: Boolean(existingBooking),
+        recurring: isRecurring,
+      });
       if (existingBooking) {
         toast.success('Reserva atualizada com sucesso!');
         onSuccess();
@@ -599,7 +604,14 @@ export function BookingModal({
       onSuccess();
       onClose();
       resetForm();
-    } catch {
+    } catch (error) {
+      trackAction('booking_save', 'failure', {
+        arena_id: arenaId,
+        booking_type: 'avulso',
+        edit_mode: Boolean(existingBooking),
+        recurring: isRecurring,
+        source: error instanceof Error ? 'exception' : 'unknown_error',
+      });
       toast.error('Erro ao criar reserva');
     } finally {
       setIsSaving(false);
@@ -635,13 +647,29 @@ export function BookingModal({
         additional_athlete_ids: additionalParticipants.map((p) => p.id),
       });
 
-      if (!result.success) throw new Error(result.error);
+      if (!result.success) {
+        trackAction('membership_plan_save', 'failure', {
+          arena_id: arenaId,
+          booking_type: 'mensalista',
+          source: 'server_result',
+        });
+        throw new Error(result.error);
+      }
 
+      trackAction('membership_plan_save', 'success', {
+        arena_id: arenaId,
+        booking_type: 'mensalista',
+      });
       toast.success('Plano mensalista criado com sucesso!');
       onSuccess();
       onClose();
       resetForm();
     } catch (error) {
+      trackAction('membership_plan_save', 'failure', {
+        arena_id: arenaId,
+        booking_type: 'mensalista',
+        source: error instanceof Error ? 'exception' : 'unknown_error',
+      });
       toast.error(
         error instanceof Error ? error.message : 'Erro ao criar mensalista'
       );
@@ -762,10 +790,22 @@ export function BookingModal({
         existingBooking?.id
       );
       if (!result.success) {
+        trackAction('booking_conflict_check', 'failure', {
+          arena_id: arenaId,
+          court_id: courtId,
+          booking_type: bookingType,
+          source: 'server_result',
+        });
         toast.error(result.error ?? 'Erro ao verificar conflitos');
         return;
       }
       if (result.conflicts.length > 0) {
+        track('booking_conflict_detected', {
+          arena_id: arenaId,
+          court_id: courtId,
+          booking_type: bookingType,
+          conflict_count: result.conflicts.length,
+        });
         setConflicts(result.conflicts);
         return;
       }

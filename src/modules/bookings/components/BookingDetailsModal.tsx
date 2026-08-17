@@ -20,6 +20,7 @@ import {
 } from "@/modules/bookings/actions/bookingActions"
 import { ConfirmarPagamentoDialog } from "@/modules/bookings/components/ConfirmarPagamentoDialog"
 import { toast } from "sonner"
+import { trackAction } from "@/lib/telemetry/client"
 
 interface BookingDetailsModalProps {
     isOpen: boolean
@@ -76,11 +77,22 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, onEdit, bookin
         try {
             const result = await updateBookingStatusAction(booking.arena_id, booking.id, "cancelled")
             if (!result.success) throw new Error(result.error)
+            trackAction("booking_cancel", "success", {
+                arena_id: booking.arena_id,
+                entity_id: booking.id,
+                entity_type: "booking",
+            })
             toast.success("Reserva cancelada com sucesso!")
             onSuccess()
             onClose()
         } catch (error) {
             console.error("Error cancelling booking:", error)
+            trackAction("booking_cancel", "failure", {
+                arena_id: booking.arena_id,
+                entity_id: booking.id,
+                entity_type: "booking",
+                source: "exception",
+            })
             toast.error(error instanceof Error ? error.message : "Erro ao cancelar reserva.")
         } finally {
             setIsCancelling(false)
@@ -93,11 +105,22 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, onEdit, bookin
         try {
             const res = await confirmarPagamentoAvulsoAction(arenaId, booking.id, valor)
             if (!res.success) throw new Error(res.error)
+            trackAction("booking_payment", "success", {
+                arena_id: arenaId,
+                entity_id: booking.id,
+                entity_type: "booking",
+            })
             toast.success("Pagamento confirmado!")
             setShowConfirmPayment(false)
             onSuccess()
             onClose()
         } catch (error) {
+            trackAction("booking_payment", "failure", {
+                arena_id: arenaId,
+                entity_id: booking.id,
+                entity_type: "booking",
+                source: "exception",
+            })
             toast.error(error instanceof Error ? error.message : "Erro ao confirmar pagamento")
         } finally {
             setIsConfirmingPayment(false)
@@ -115,9 +138,20 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, onEdit, bookin
                 valor
             )
             if (!res.success) throw new Error(res.error)
+            trackAction("booking_payment", "success", {
+                arena_id: arenaId,
+                entity_id: booking.id,
+                entity_type: "booking",
+            })
             toast.success("Pagamento do participante confirmado!")
             onSuccess()
         } catch (error) {
+            trackAction("booking_payment", "failure", {
+                arena_id: arenaId,
+                entity_id: booking.id,
+                entity_type: "booking",
+                source: "exception",
+            })
             toast.error(error instanceof Error ? error.message : "Erro ao confirmar pagamento")
         } finally {
             setConfirmingParticipantId(null)

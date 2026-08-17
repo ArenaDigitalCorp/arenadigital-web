@@ -37,6 +37,7 @@ import {
 } from "@/modules/products/types/product.types"
 import { useEffect, useState } from "react"
 import { Loader2 } from "lucide-react"
+import { trackAction } from "@/lib/telemetry/client"
 
 const productFormSchema = z.object({
     name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
@@ -262,6 +263,12 @@ function ProductFormInner({
                 status: data.status,
             })
             if (!res.success) throw new Error(res.error)
+            trackAction("catalog_item_save", "success", {
+                arena_id: arenaId,
+                entity_id: product.id,
+                entity_type: "product",
+                edit_mode: true,
+            })
             toast.success("Produto atualizado com sucesso!")
         } else {
             const res = await createProductAction(arenaId, {
@@ -276,6 +283,11 @@ function ProductFormInner({
                 status: data.status,
             })
             if (!res.success) throw new Error(res.error)
+            trackAction("catalog_item_save", "success", {
+                arena_id: arenaId,
+                entity_type: "product",
+                edit_mode: false,
+            })
             toast.success("Produto criado com sucesso!")
         }
     }
@@ -301,10 +313,21 @@ function ProductFormInner({
         if (product) {
             const res = await updateProductAction(arenaId, product.id, baseInput)
             if (!res.success) throw new Error(res.error)
+            trackAction("catalog_item_save", "success", {
+                arena_id: arenaId,
+                entity_id: product.id,
+                entity_type: "service",
+                edit_mode: true,
+            })
             toast.success("Serviço atualizado com sucesso!")
         } else {
             const res = await createProductAction(arenaId, baseInput)
             if (!res.success) throw new Error(res.error)
+            trackAction("catalog_item_save", "success", {
+                arena_id: arenaId,
+                entity_type: "service",
+                edit_mode: false,
+            })
             toast.success("Serviço cadastrado com sucesso!")
         }
     }
@@ -317,6 +340,12 @@ function ProductFormInner({
             onOpenChange(false)
         } catch (error: unknown) {
             console.error("Error saving product:", error)
+            trackAction("catalog_item_save", "failure", {
+                arena_id: arenaId,
+                entity_type: "product",
+                edit_mode: Boolean(product),
+                source: "exception",
+            })
             const msg = error instanceof Error ? error.message : "Erro desconhecido"
             toast.error(`Erro ao salvar produto: ${msg}`)
         } finally {
@@ -332,6 +361,12 @@ function ProductFormInner({
             onOpenChange(false)
         } catch (error: unknown) {
             console.error("Error saving service:", error)
+            trackAction("catalog_item_save", "failure", {
+                arena_id: arenaId,
+                entity_type: "service",
+                edit_mode: Boolean(product),
+                source: "exception",
+            })
             const msg = error instanceof Error ? error.message : "Erro desconhecido"
             toast.error(`Erro ao salvar serviço: ${msg}`)
         } finally {

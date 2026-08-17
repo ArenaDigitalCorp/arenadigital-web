@@ -28,6 +28,7 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { toast } from "sonner"
+import { trackAction } from "@/lib/telemetry/client"
 import type { StationOrder } from "@/modules/stations/types/station.types"
 import { addPaymentAction, closeOrderAndGenerateFinanceAction } from "@/modules/stations/actions/orderActions"
 import { Loader2 } from "lucide-react"
@@ -98,12 +99,22 @@ export function RegisterPaymentModal({
             if (newBalance <= 0) {
                 setShowCloseConfirmation(true)
             } else {
+                trackAction("order_payment", "success", {
+                    arena_id: order.arena_id,
+                    order_id: order.id,
+                    payment_method: data.payment_method,
+                })
                 toast.success("Pagamento registrado!")
                 onSuccess()
                 handleClose()
             }
         } catch (error) {
             console.error("Error registering payment:", error)
+            trackAction("order_payment", "failure", {
+                arena_id: order.arena_id,
+                order_id: order.id,
+                source: "exception",
+            })
             toast.error("Erro ao registrar pagamento.")
         } finally {
             setIsSubmitting(false)
@@ -117,11 +128,20 @@ export function RegisterPaymentModal({
         try {
             const res = await closeOrderAndGenerateFinanceAction(order.arena_id, order.id)
             if (!res.success) throw new Error(res.error)
+            trackAction("order_close", "success", {
+                arena_id: order.arena_id,
+                order_id: order.id,
+            })
             toast.success("Comanda fechada com sucesso!")
             onSuccess()
             handleClose()
         } catch (error) {
             console.error("Error closing comanda:", error)
+            trackAction("order_close", "failure", {
+                arena_id: order.arena_id,
+                order_id: order.id,
+                source: "exception",
+            })
             toast.error("Erro ao fechar comanda.")
         } finally {
             setIsSubmitting(false)
