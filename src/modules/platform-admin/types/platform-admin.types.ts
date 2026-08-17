@@ -2,6 +2,13 @@ import type { ArenaPixSplitSettings } from '@/modules/arenas/types/pix-split.typ
 
 export type PlatformAccessLevel = 'employee' | 'platform_admin' | 'super_admin'
 export type PlatformArenaKind = 'customer' | 'public_listing' | 'demo'
+export type PlatformCommercialStatus =
+  | 'cliente_ativo'
+  | 'inadimplente'
+  | 'prospect'
+  | 'desativada'
+  | 'catalogo_publico'
+  | 'demonstracao'
 
 export type PlatformPrincipal = {
   userId: string
@@ -19,6 +26,7 @@ export type PlatformUser = {
   email: string
   name: string | null
   role: string | null
+  hasAuthIdentity: boolean
   createdAt: string
 }
 
@@ -29,7 +37,7 @@ export type PlatformArena = {
   platformKind: PlatformArenaKind
   appDiscoverable: boolean
   platformNotes: string | null
-  commercialStatus: 'cliente_ativo' | 'inadimplente' | 'prospect' | 'desativada'
+  commercialStatus: PlatformCommercialStatus
   ownerId: string | null
   ownerName: string | null
   ownerEmail: string
@@ -115,4 +123,111 @@ export type PlatformAdminOverview = {
 export type PlatformAdminActionResult = {
   success: boolean
   error?: string
+}
+
+export type PlatformReferenceState = {
+  code: number
+  name: string
+  uf: string
+}
+
+export type PlatformReferenceMunicipality = {
+  code: number
+  name: string
+}
+
+export type PlatformReferenceSport = {
+  id: string
+  name: string
+}
+
+export type PublicArenaListingFormOptions = {
+  states: PlatformReferenceState[]
+  sports: PlatformReferenceSport[]
+}
+
+export type CreatePublicArenaListingResult = PlatformAdminActionResult & {
+  arenaId?: string
+}
+
+export type PublicArenaImportSource = 'csv' | 'openstreetmap' | 'receita_cnpj' | 'brasilapi'
+export type PublicArenaImportItemStatus = 'ready' | 'duplicate' | 'invalid' | 'applied'
+
+export type PublicArenaImportDraft = {
+  external_id: string | null
+  name: string
+  cnpj: string | null
+  address: string
+  number: string | null
+  complement: string | null
+  neighborhood: string | null
+  zip_code: string | null
+  phone: string | null
+  email: string | null
+  description: string | null
+  municipality_id: number | string | null
+  sport_ids: string[]
+  latitude: number | string | null
+  longitude: number | string | null
+  platform_notes: string | null
+}
+
+export type PublicArenaImportPreviewRow = {
+  rowNumber: number
+  item: PublicArenaImportDraft
+  errors: string[]
+}
+
+export type PublicArenaImportItem = PublicArenaImportDraft & {
+  id: string
+  rowNumber: number
+  status: PublicArenaImportItemStatus
+  errors: string[]
+  arenaId: string | null
+}
+
+export type PublicArenaImportCounts = {
+  total: number
+  ready: number
+  duplicate: number
+  invalid: number
+  applied: number
+}
+
+export type PublicArenaImportBatch = {
+  id: string
+  operationId: string
+  source: PublicArenaImportSource
+  filename: string | null
+  status: string
+  counts: PublicArenaImportCounts
+  items: PublicArenaImportItem[]
+  createdAt: string | null
+  updatedAt: string | null
+}
+
+export type PublicArenaImportBatchSummary = Omit<PublicArenaImportBatch, 'items'>
+
+export type PublicArenaImportBatchResult = PlatformAdminActionResult & {
+  batch?: PublicArenaImportBatch
+}
+
+export type PublicArenaImportBatchListResult = PlatformAdminActionResult & {
+  batches: PublicArenaImportBatchSummary[]
+}
+
+export type OpenStreetMapArenaDiscoveryResult = PlatformAdminActionResult & {
+  items?: PublicArenaImportDraft[]
+  count?: number
+}
+
+export type PlatformEligibleOwner = {
+  id: string
+  name: string | null
+  email: string
+  role: string | null
+}
+
+export type PlatformEligibleOwnerSearchResult = PlatformAdminActionResult & {
+  users: PlatformEligibleOwner[]
 }

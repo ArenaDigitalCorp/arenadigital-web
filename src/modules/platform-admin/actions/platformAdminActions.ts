@@ -2,10 +2,37 @@
 
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
+import { getLocationPointFromAddress } from '@/lib/geocoding'
+import { observeServerAction } from '@/lib/observability/server'
 import { assertPlatformAdminAccess, assertPlatformSuperAdminAccess } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import type { ArenaPixSplitSettings, ArenaPixSplitStatus } from '@/modules/arenas/types/pix-split.types'
+import { getArenaCommercialStatus } from '@/modules/platform-admin/lib/commercial-status'
+import {
+  normalizePublicArenaImportBatch,
+  normalizePublicArenaImportBatchList,
+} from '@/modules/platform-admin/lib/public-arena-import-result'
+import {
+  applyPublicArenaImportBatchInputSchema,
+  claimPublicArenaAsCustomerInputSchema,
+  discoverOpenStreetMapArenasInputSchema,
+  listPublicArenaImportBatchesInputSchema,
+  publicArenaImportBatchIdSchema,
+  searchEligibleArenaOwnersInputSchema,
+  stagePublicArenaImportBatchInputSchema,
+  type ApplyPublicArenaImportBatchInput,
+  type ClaimPublicArenaAsCustomerInput,
+  type DiscoverOpenStreetMapArenasInput,
+  type StagePublicArenaImportBatchInput,
+} from '@/modules/platform-admin/schemas/public-arena-import.schema'
+import {
+  publicArenaListingInputSchema,
+  type ParsedPublicArenaListingInput,
+  type PublicArenaListingInput,
+} from '@/modules/platform-admin/schemas/public-arena-listing.schema'
 import type {
+  CreatePublicArenaListingResult,
+  OpenStreetMapArenaDiscoveryResult,
   PlatformAccessLevel,
   PlatformAdminActionResult,
   PlatformAdminOverview,
@@ -16,7 +43,13 @@ import type {
   PlatformInternalPlanAssignment,
   PlatformMembership,
   PlatformPrincipal,
+  PlatformReferenceMunicipality,
+  PlatformEligibleOwnerSearchResult,
   PlatformUser,
+  PublicArenaImportBatchListResult,
+  PublicArenaImportBatchResult,
+  PublicArenaImportDraft,
+  PublicArenaListingFormOptions,
 } from '@/modules/platform-admin/types/platform-admin.types'
 
 type PlatformRpcClient = {
@@ -28,7 +61,13 @@ type PlatformRpcClient = {
       | 'list_internal_employee_plan_assignments'
       | 'manage_platform_principal'
       | 'manage_internal_employee_plan'
-      | 'manage_platform_arena_profile',
+      | 'manage_platform_arena_profile'
+      | 'create_public_arena_listing'
+      | 'stage_public_arena_import_batch'
+      | 'get_public_arena_import_batch'
+      | 'list_public_arena_import_batches'
+      | 'apply_public_arena_import_batch'
+      | 'claim_public_arena_as_customer',
     args: Record<string, unknown>,
   ) => Promise<{ data: unknown; error: { message: string } | null }>
 }
@@ -78,7 +117,7 @@ type CourtRow = { arena_id: string; status: string | null }
 type BookingActivityRow = { arena_id: string; athlete_id: string | null; start_time: string; status: string | null }
 type AthleteEntitlementRow = { atleta_id: string; plan: 'free' | 'plus'; status: string }
 type MunicipalityRow = { codigo_ibge: number; nome: string; codigo_uf: number }
-type StateRow = { codigo_uf: number; uf: string }
+type StateRow = { codigo_uf: number; nome?: string; uf: string }
 type ArenaPlatformMetadataRow = { arena_id: string; platform_notes: string | null; updated_at: string }
 
 type ArenaPaymentAccountRow = {
@@ -172,23 +211,6 @@ function asRpcClient(): PlatformRpcClient {
 
 function firstRelation<T>(value: T | T[] | null): T | null {
   return Array.isArray(value) ? (value[0] ?? null) : value
-}
-
-function commercialStatus(
-  arenaStatus: string | null,
-  subscriptionStatus: string | null,
-  currentPeriodEnd: string | null,
-  isInternalPlan: boolean,
-): PlatformArena['commercialStatus'] {
-  if (['inativo', 'inactive'].includes(arenaStatus ?? '')) return 'desativada'
-  if (isInternalPlan) return 'cliente_ativo'
-  if (['past_due', 'unpaid', 'incomplete_expired'].includes(subscriptionStatus ?? '')) return 'inadimplente'
-  if (subscriptionStatus === 'active' || subscriptionStatus === 'trialing') {
-    if (currentPeriodEnd && new Date(currentPeriodEnd).getTime() <= Date.now()) return 'inadimplente'
-    return 'cliente_ativo'
-  }
-  if (['canceled', 'paused'].includes(subscriptionStatus ?? '')) return 'desativada'
-  return 'prospect'
 }
 
 function parseLocationPoint(location: unknown): { latitude: number; longitude: number } | null {
@@ -312,6 +334,119 @@ function addressText(value: unknown): string {
   return ''
 }
 
+type PublicArenaLocationResolution = {
+  wkt: string | null
+  precision: 'address' | 'municipality' | 'unavailable'
+}
+
+async function resolvePublicArenaLocation(
+  input: ParsedPublicArenaListingInput,
+): Promise<PublicArenaLocationResolution> {
+  const supabase = getSupabaseAdmin()
+  const { data: municipality, error: municipalityError } = await supabase
+    .from('municipios')
+    .select('nome, codigo_uf, latitude, longitude')
+    .eq('codigo_ibge', input.municipalityId)
+    .maybeSingle()
+
+  if (municipalityError) throw new Error(municipalityError.message)
+  if (!municipality || municipality.codigo_uf !== input.stateCode) {
+    throw new Error('O município selecionado não pertence ao estado informado.')
+  }
+
+  const { data: state, error: stateError } = await supabase
+    .from('estados')
+    .select('uf')
+    .eq('codigo_uf', input.stateCode)
+    .maybeSingle()
+
+  if (stateError) throw new Error(stateError.message)
+  if (!state) throw new Error('Estado não encontrado.')
+
+  const point = await getLocationPointFromAddress({
+    street: input.address,
+    number: input.number,
+    neighborhood: input.neighborhood,
+    city: municipality.nome,
+    state: state.uf,
+  })
+  if (point) return { wkt: point, precision: 'address' }
+
+  if (municipality.latitude != null && municipality.longitude != null) {
+    return {
+      wkt: `POINT(${municipality.longitude} ${municipality.latitude})`,
+      precision: 'municipality',
+    }
+  }
+  return { wkt: null, precision: 'unavailable' }
+}
+
+export async function getPublicArenaListingFormOptionsAction(): Promise<{
+  success: boolean
+  data?: PublicArenaListingFormOptions
+  error?: string
+}> {
+  try {
+    await assertPlatformSuperAdminAccess()
+    const supabase = getSupabaseAdmin()
+    const [statesResult, sportsResult] = await Promise.all([
+      supabase.from('estados').select('codigo_uf, nome, uf').order('nome'),
+      supabase.from('sports').select('id, name').order('name'),
+    ])
+
+    const queryError = statesResult.error ?? sportsResult.error
+    if (queryError) throw new Error(queryError.message)
+
+    return {
+      success: true,
+      data: {
+        states: (statesResult.data ?? []).map((state) => ({
+          code: state.codigo_uf,
+          name: state.nome,
+          uf: state.uf,
+        })),
+        sports: (sportsResult.data ?? []).map((sport) => ({ id: sport.id, name: sport.name })),
+      },
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Não foi possível carregar os dados do formulário.',
+    }
+  }
+}
+
+export async function getPublicArenaMunicipalitiesAction(codigoUf: number): Promise<{
+  success: boolean
+  data: PlatformReferenceMunicipality[]
+  error?: string
+}> {
+  try {
+    await assertPlatformSuperAdminAccess()
+    const parsedStateCode = z.number().int().positive().parse(codigoUf)
+    const { data, error } = await getSupabaseAdmin()
+      .from('municipios')
+      .select('codigo_ibge, nome')
+      .eq('codigo_uf', parsedStateCode)
+      .order('nome')
+
+    if (error) throw new Error(error.message)
+    return {
+      success: true,
+      data: (data ?? []).map((municipality) => ({
+        code: municipality.codigo_ibge,
+        name: municipality.nome,
+      })),
+    }
+  } catch (error) {
+    return {
+      success: false,
+      data: [],
+      error: error instanceof Error ? error.message : 'Não foi possível carregar os municípios.',
+    }
+  }
+}
+
 export async function getPlatformAdminOverview(
   options: { includePaymentSettings?: boolean } = {},
 ): Promise<PlatformAdminOverview> {
@@ -339,7 +474,7 @@ export async function getPlatformAdminOverview(
   ] = await Promise.all([
     supabase
       .from('users')
-      .select('id, email, name, role, created_at')
+      .select('id, email, name, role, auth_user_id, created_at')
       .order('created_at', { ascending: false })
       .limit(1000),
     supabase
@@ -441,6 +576,7 @@ export async function getPlatformAdminOverview(
     email: user.email,
     name: user.name,
     role: user.role,
+    hasAuthIdentity: Boolean(user.auth_user_id),
     createdAt: user.created_at,
   }))
 
@@ -509,14 +645,15 @@ export async function getPlatformAdminOverview(
       name: arena.name,
       status: arena.status,
       platformKind: arena.platform_kind ?? 'customer',
-      appDiscoverable: arena.app_discoverable ?? true,
+      appDiscoverable: arena.app_discoverable ?? false,
       platformNotes: arenaMetadata.get(arena.id)?.platform_notes ?? null,
-      commercialStatus: commercialStatus(
-        arena.status,
-        subscription?.status ?? null,
-        subscription?.current_period_end ?? null,
-        Boolean(plan?.is_internal),
-      ),
+      commercialStatus: getArenaCommercialStatus({
+        platformKind: arena.platform_kind ?? 'customer',
+        arenaStatus: arena.status,
+        subscriptionStatus: subscription?.status ?? null,
+        currentPeriodEnd: subscription?.current_period_end ?? null,
+        isInternalPlan: Boolean(plan?.is_internal),
+      }),
       ownerId: arena.owner_id,
       ownerName: owner?.name ?? null,
       ownerEmail: owner?.email ?? '—',
@@ -700,5 +837,324 @@ export async function updatePlatformArenaProfileAction(
       success: false,
       error: error instanceof Error ? error.message : 'Não foi possível atualizar a classificação da arena.',
     }
+  }
+}
+
+export async function createPublicArenaListingAction(
+  input: PublicArenaListingInput,
+): Promise<CreatePublicArenaListingResult> {
+  const observer = await observeServerAction({
+    component: 'platform_admin',
+    operation: 'create_public_arena_listing',
+  })
+
+  try {
+    const profile = await assertPlatformSuperAdminAccess()
+    const parsed = publicArenaListingInputSchema.parse(input)
+    const location = await resolvePublicArenaLocation(parsed)
+    const { data, error } = await asRpcClient().rpc('create_public_arena_listing', {
+      p_actor_user_id: profile.dbUserId,
+      p_name: parsed.name,
+      p_id_municipio: parsed.municipalityId,
+      p_address: parsed.address,
+      p_number: parsed.number?.trim() || null,
+      p_complement: parsed.complement?.trim() || null,
+      p_neighborhood: parsed.neighborhood?.trim() || null,
+      p_zip_code: parsed.zipCode || null,
+      p_phone: parsed.phone?.trim() || null,
+      p_email: parsed.email?.trim().toLowerCase() || null,
+      p_cnpj: parsed.cnpj || null,
+      p_description: parsed.description?.trim() || null,
+      p_location_wkt: location.wkt,
+      p_sport_ids: [...new Set(parsed.sportIds)],
+      p_source: 'manual',
+      p_external_id: null,
+      p_platform_notes: parsed.platformNotes?.trim() || null,
+      p_reason: parsed.reason,
+    })
+
+    if (error) throw new Error(error.message)
+    const arenaId = z.string().uuid().parse(data)
+
+    revalidatePath('/admin')
+    revalidatePath('/admin/overview')
+    revalidatePath('/admin/arenas')
+    revalidatePath(`/admin/arenas/${arenaId}`)
+    revalidatePath('/dashboard/admin/platform')
+    revalidatePath('/dashboard/admin/super-admin')
+    observer.complete('completed', {
+      arena_id: arenaId,
+      source: 'manual',
+      sport_count: parsed.sportIds.length,
+      location_precision: location.precision,
+    })
+    return { success: true, arenaId }
+  } catch (error) {
+    observer.complete('failed', {
+      error_type: error instanceof z.ZodError ? 'validation' : 'operation',
+    })
+    return {
+      success: false,
+      error:
+        error instanceof z.ZodError
+          ? (error.issues[0]?.message ?? 'Revise os dados informados.')
+          : error instanceof Error
+            ? error.message
+            : 'Não foi possível criar o local público.',
+    }
+  }
+}
+
+function revalidatePublicArenaCatalogPaths(arenaId?: string) {
+  revalidatePath('/admin')
+  revalidatePath('/admin/overview')
+  revalidatePath('/admin/arenas')
+  revalidatePath('/dashboard/admin/platform')
+  revalidatePath('/dashboard/admin/super-admin')
+  if (arenaId) revalidatePath(`/admin/arenas/${arenaId}`)
+}
+
+export async function stagePublicArenaImportBatchAction(
+  input: StagePublicArenaImportBatchInput,
+): Promise<PublicArenaImportBatchResult> {
+  const observer = await observeServerAction({ component: 'platform_admin', operation: 'stage_public_arena_import_batch' })
+  try {
+    const profile = await assertPlatformSuperAdminAccess()
+    const parsed = stagePublicArenaImportBatchInputSchema.parse(input)
+    const { data, error } = await asRpcClient().rpc('stage_public_arena_import_batch', {
+      p_actor_user_id: profile.dbUserId,
+      p_operation_id: parsed.operationId,
+      p_source: parsed.source,
+      p_filename: parsed.filename?.trim() || `${parsed.source}-importacao`,
+      p_items: parsed.items,
+      p_reason: parsed.reason,
+    })
+    if (error) throw new Error(error.message)
+    const batch = normalizePublicArenaImportBatch(data)
+    observer.complete('completed', {
+      batch_id: batch.id,
+      source: batch.source,
+      total_count: batch.counts.total,
+      ready_count: batch.counts.ready,
+      duplicate_count: batch.counts.duplicate,
+      invalid_count: batch.counts.invalid,
+    })
+    return { success: true, batch }
+  } catch (error) {
+    observer.complete('failed', { error_type: error instanceof z.ZodError ? 'validation' : 'operation' })
+    return { success: false, error: error instanceof Error ? error.message : 'Não foi possível validar o lote de arenas.' }
+  }
+}
+
+export async function getPublicArenaImportBatchAction(batchId: string): Promise<PublicArenaImportBatchResult> {
+  try {
+    const profile = await assertPlatformSuperAdminAccess()
+    const parsedBatchId = publicArenaImportBatchIdSchema.parse(batchId)
+    const { data, error } = await asRpcClient().rpc('get_public_arena_import_batch', {
+      p_actor_user_id: profile.dbUserId,
+      p_batch_id: parsedBatchId,
+    })
+    if (error) throw new Error(error.message)
+    return { success: true, batch: normalizePublicArenaImportBatch(data) }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Não foi possível carregar o lote de arenas.' }
+  }
+}
+
+export async function listPublicArenaImportBatchesAction(limit = 20): Promise<PublicArenaImportBatchListResult> {
+  try {
+    const profile = await assertPlatformSuperAdminAccess()
+    const parsedLimit = listPublicArenaImportBatchesInputSchema.parse(limit)
+    const { data, error } = await asRpcClient().rpc('list_public_arena_import_batches', {
+      p_actor_user_id: profile.dbUserId,
+      p_limit: parsedLimit,
+    })
+    if (error) throw new Error(error.message)
+    return { success: true, batches: normalizePublicArenaImportBatchList(data) }
+  } catch (error) {
+    return { success: false, batches: [], error: error instanceof Error ? error.message : 'Não foi possível listar os lotes de arenas.' }
+  }
+}
+
+export async function applyPublicArenaImportBatchAction(
+  input: ApplyPublicArenaImportBatchInput,
+): Promise<PublicArenaImportBatchResult> {
+  const observer = await observeServerAction({ component: 'platform_admin', operation: 'apply_public_arena_import_batch' })
+  try {
+    const profile = await assertPlatformSuperAdminAccess()
+    const parsed = applyPublicArenaImportBatchInputSchema.parse(input)
+    const uniqueItemIds = [...new Set(parsed.itemIds)]
+    if (uniqueItemIds.length !== parsed.itemIds.length) throw new Error('A seleção contém linhas repetidas.')
+    const { data, error } = await asRpcClient().rpc('apply_public_arena_import_batch', {
+      p_actor_user_id: profile.dbUserId,
+      p_batch_id: parsed.batchId,
+      p_item_ids: uniqueItemIds,
+      p_reason: parsed.reason,
+    })
+    if (error) throw new Error(error.message)
+    const batch = normalizePublicArenaImportBatch(data)
+    revalidatePublicArenaCatalogPaths()
+    observer.complete('completed', {
+      batch_id: batch.id,
+      source: batch.source,
+      selected_count: uniqueItemIds.length,
+      applied_count: batch.counts.applied,
+      remaining_ready_count: batch.counts.ready,
+    })
+    return { success: true, batch }
+  } catch (error) {
+    observer.complete('failed', { error_type: error instanceof z.ZodError ? 'validation' : 'operation' })
+    return { success: false, error: error instanceof Error ? error.message : 'Não foi possível aplicar o lote de arenas.' }
+  }
+}
+
+export async function claimPublicArenaAsCustomerAction(
+  input: ClaimPublicArenaAsCustomerInput,
+): Promise<PlatformAdminActionResult> {
+  const observer = await observeServerAction({ component: 'platform_admin', operation: 'claim_public_arena_as_customer' })
+  try {
+    const profile = await assertPlatformSuperAdminAccess()
+    const parsed = claimPublicArenaAsCustomerInputSchema.parse(input)
+    const { error } = await asRpcClient().rpc('claim_public_arena_as_customer', {
+      p_actor_user_id: profile.dbUserId,
+      p_arena_id: parsed.arenaId,
+      p_owner_user_id: parsed.ownerUserId,
+      p_reason: parsed.reason,
+      p_keep_discoverable: parsed.keepDiscoverable,
+    })
+    if (error) throw new Error(error.message)
+    revalidatePublicArenaCatalogPaths(parsed.arenaId)
+    observer.complete('completed', { arena_id: parsed.arenaId, keep_discoverable: parsed.keepDiscoverable })
+    return { success: true }
+  } catch (error) {
+    observer.complete('failed', { error_type: error instanceof z.ZodError ? 'validation' : 'operation' })
+    return { success: false, error: error instanceof Error ? error.message : 'Não foi possível converter o local em cliente.' }
+  }
+}
+
+export async function searchEligibleArenaOwnersAction(query: string): Promise<PlatformEligibleOwnerSearchResult> {
+  try {
+    await assertPlatformSuperAdminAccess()
+    const term = searchEligibleArenaOwnersInputSchema.parse(query)
+    let ownerQuery = getSupabaseAdmin()
+      .from('users')
+      .select('id, name, email, role')
+      .not('auth_user_id', 'is', null)
+      .neq('role', 'atleta')
+      .order('name', { ascending: true })
+      .limit(20)
+    ownerQuery = term.includes('@')
+      ? ownerQuery.ilike('email', `%${term}%`)
+      : ownerQuery.ilike('name', `%${term}%`)
+    const { data, error } = await ownerQuery
+    if (error) throw new Error(error.message)
+    return {
+      success: true,
+      users: (data ?? []).map((user) => ({ id: user.id, name: user.name, email: user.email, role: user.role })),
+    }
+  } catch (error) {
+    return { success: false, users: [], error: error instanceof Error ? error.message : 'Não foi possível buscar contas proprietárias.' }
+  }
+}
+
+type OpenStreetMapElement = {
+  type?: unknown
+  id?: unknown
+  lat?: unknown
+  lon?: unknown
+  center?: { lat?: unknown; lon?: unknown }
+  tags?: Record<string, unknown>
+}
+
+function osmText(tags: Record<string, unknown>, ...keys: string[]): string | null {
+  for (const key of keys) {
+    const value = tags[key]
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return null
+}
+
+export async function discoverOpenStreetMapArenasAction(
+  input: DiscoverOpenStreetMapArenasInput,
+): Promise<OpenStreetMapArenaDiscoveryResult> {
+  const observer = await observeServerAction({ component: 'platform_admin', operation: 'discover_openstreetmap_arenas' })
+  try {
+    await assertPlatformSuperAdminAccess()
+    const parsed = discoverOpenStreetMapArenasInputSchema.parse(input)
+    const supabase = getSupabaseAdmin()
+    const [{ data: municipality, error: municipalityError }, { data: sports, error: sportsError }] = await Promise.all([
+      supabase.from('municipios').select('codigo_ibge, nome, codigo_uf').eq('codigo_ibge', parsed.municipalityId).maybeSingle(),
+      supabase.from('sports').select('id').in('id', parsed.sportIds),
+    ])
+    if (municipalityError) throw new Error(municipalityError.message)
+    if (sportsError) throw new Error(sportsError.message)
+    if (!municipality || municipality.codigo_uf !== parsed.stateCode) throw new Error('O município não pertence ao estado selecionado.')
+    if ((sports ?? []).length !== new Set(parsed.sportIds).size) throw new Error('Um ou mais esportes selecionados não existem.')
+
+    const overpassQuery = `[out:json][timeout:15];
+area["boundary"="administrative"]["IBGE:GEOCODIGO"="${parsed.municipalityId}"]->.searchArea;
+(
+  nwr["leisure"~"^(sports_centre|pitch|stadium)$"](area.searchArea);
+);
+out center 200;`
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 20_000)
+    let response: Response
+    try {
+      response = await fetch('https://overpass-api.de/api/interpreter', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+          'User-Agent': 'ArenaDigital-Web-Admin/1.0',
+        },
+        body: new URLSearchParams({ data: overpassQuery }),
+        cache: 'no-store',
+        signal: controller.signal,
+      })
+    } finally {
+      clearTimeout(timeout)
+    }
+    if (response.status === 429 || response.status === 504) throw new Error('O OpenStreetMap está ocupado agora. Aguarde alguns minutos e tente novamente.')
+    if (!response.ok) throw new Error('Não foi possível consultar o OpenStreetMap para este município.')
+    const rawText = await response.text()
+    if (rawText.length > 2_000_000) throw new Error('A consulta retornou dados demais. Restrinja o município.')
+    const raw = JSON.parse(rawText) as { elements?: OpenStreetMapElement[] }
+    const seen = new Set<string>()
+    const items: PublicArenaImportDraft[] = []
+    for (const element of raw.elements ?? []) {
+      if (items.length >= 200) break
+      const type = typeof element.type === 'string' ? element.type : ''
+      const id = typeof element.id === 'number' || typeof element.id === 'string' ? String(element.id) : ''
+      const tags = element.tags && typeof element.tags === 'object' ? element.tags : {}
+      const name = osmText(tags, 'name', 'operator', 'brand')
+      const latitude = Number(element.lat ?? element.center?.lat)
+      const longitude = Number(element.lon ?? element.center?.lon)
+      const externalId = `osm:${type}/${id}`
+      if (!type || !id || !name || !Number.isFinite(latitude) || !Number.isFinite(longitude) || seen.has(externalId)) continue
+      seen.add(externalId)
+      items.push({
+        external_id: externalId,
+        name,
+        cnpj: null,
+        address: osmText(tags, 'addr:street', 'addr:place', 'addr:full') ?? municipality.nome,
+        number: osmText(tags, 'addr:housenumber'),
+        complement: null,
+        neighborhood: osmText(tags, 'addr:suburb', 'addr:neighbourhood'),
+        zip_code: osmText(tags, 'addr:postcode'),
+        phone: osmText(tags, 'contact:phone', 'phone'),
+        email: osmText(tags, 'contact:email', 'email'),
+        description: osmText(tags, 'description', 'sport'),
+        municipality_id: parsed.municipalityId,
+        sport_ids: [...new Set(parsed.sportIds)],
+        latitude,
+        longitude,
+        platform_notes: 'Origem OpenStreetMap; revisar dados antes de publicar no aplicativo.',
+      })
+    }
+    observer.complete('completed', { source: 'openstreetmap', municipality_id: parsed.municipalityId, result_count: items.length })
+    return { success: true, items, count: items.length }
+  } catch (error) {
+    observer.complete('failed', { error_type: error instanceof z.ZodError ? 'validation' : 'operation' })
+    return { success: false, error: error instanceof Error ? error.message : 'Não foi possível consultar o OpenStreetMap.' }
   }
 }
