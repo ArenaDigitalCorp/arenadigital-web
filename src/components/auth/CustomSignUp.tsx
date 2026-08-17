@@ -286,7 +286,7 @@ export function CustomSignUp() {
                         Confirme seu e-mail
                     </h2>
                     <p className="text-sm leading-relaxed text-white/75">
-                        Enviamos um link de confirmação para ativar sua conta gestora e entrar no dashboard.
+                        Enviamos um link para confirmar sua conta. Depois disso, você entrará no painel ou acompanhará a validação de propriedade, caso a arena já exista no catálogo.
                         {" "}
                         <span className="font-semibold text-white">{emailAddress}</span>
                     </p>
@@ -383,6 +383,7 @@ export function CustomSignUp() {
                 <div className="space-y-2">
                     <Label htmlFor="arenaDocument" className="text-white/70">CPF/CNPJ da Arena</Label>
                     <Input id="arenaDocument" value={arenaDocument} onChange={(e) => setArenaDocument(maskCpfCnpj(e.target.value))} inputMode="numeric" placeholder="000.000.000-00 ou 00.000.000/0000-00" className="bg-white border-none h-12 rounded-lg text-black" required />
+                    <p className="text-xs leading-5 text-white/60">Se a arena já estiver no catálogo público, este dado ajuda a localizar o cadastro, mas a propriedade será confirmada pela nossa equipe.</p>
                 </div>
             </div>
 

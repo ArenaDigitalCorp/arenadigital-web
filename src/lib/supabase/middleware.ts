@@ -37,6 +37,7 @@ export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   const isProtected = PROTECTED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))
   const isAuthPath = AUTH_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))
+  const isSignupReviewPath = pathname === '/sign-up/status'
 
   // Server Actions são POSTs para a própria rota. Responder com redirect aqui faz o
   // cliente RSC receber HTML e quebrar com "An unexpected response was received from
@@ -51,7 +52,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(redirectUrl)
   }
 
-  if (isAuthPath && user && !isServerAction) {
+  if (isAuthPath && !isSignupReviewPath && user && !isServerAction) {
     const redirectUrl = request.nextUrl.clone()
     redirectUrl.pathname = '/dashboard'
     redirectUrl.search = ''

@@ -6,6 +6,7 @@ import { getLocationPointFromAddress } from '@/lib/geocoding'
 import { observeServerAction } from '@/lib/observability/server'
 import { assertPlatformAdminAccess, assertPlatformSuperAdminAccess } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
+import { ensureExperimentalSubscription } from '@/modules/payments/usecases/ensure-experimental-subscription.usecase'
 import type { ArenaPixSplitSettings, ArenaPixSplitStatus } from '@/modules/arenas/types/pix-split.types'
 import { getArenaCommercialStatus } from '@/modules/platform-admin/lib/commercial-status'
 import {
@@ -18,12 +19,14 @@ import {
   discoverOpenStreetMapArenasInputSchema,
   listPublicArenaImportBatchesInputSchema,
   publicArenaImportBatchIdSchema,
+  reviewArenaClaimRequestInputSchema,
   searchEligibleArenaOwnersInputSchema,
   stagePublicArenaImportBatchInputSchema,
   type ApplyPublicArenaImportBatchInput,
   type ClaimPublicArenaAsCustomerInput,
   type DiscoverOpenStreetMapArenasInput,
   type StagePublicArenaImportBatchInput,
+  type ReviewArenaClaimRequestInput,
 } from '@/modules/platform-admin/schemas/public-arena-import.schema'
 import {
   publicArenaListingInputSchema,
@@ -36,6 +39,7 @@ import type {
   PlatformAccessLevel,
   PlatformAdminActionResult,
   PlatformAdminOverview,
+  PlatformArenaClaimRequest,
   PlatformArena,
   PlatformArenaKind,
   PlatformAthlete,
@@ -67,7 +71,9 @@ type PlatformRpcClient = {
       | 'get_public_arena_import_batch'
       | 'list_public_arena_import_batches'
       | 'apply_public_arena_import_batch'
-      | 'claim_public_arena_as_customer',
+      | 'claim_public_arena_as_customer'
+      | 'list_arena_claim_requests'
+      | 'review_arena_claim_request',
     args: Record<string, unknown>,
   ) => Promise<{ data: unknown; error: { message: string } | null }>
 }
@@ -119,6 +125,21 @@ type AthleteEntitlementRow = { atleta_id: string; plan: 'free' | 'plus'; status:
 type MunicipalityRow = { codigo_ibge: number; nome: string; codigo_uf: number }
 type StateRow = { codigo_uf: number; nome?: string; uf: string }
 type ArenaPlatformMetadataRow = { arena_id: string; platform_notes: string | null; updated_at: string }
+type ArenaClaimRequestRow = {
+  id: string
+  requester_user_id: string
+  requester_name: string | null
+  requester_email: string
+  arena_id: string | null
+  arena_name: string | null
+  municipality_name: string | null
+  request_kind: PlatformArenaClaimRequest['requestKind']
+  status: PlatformArenaClaimRequest['status']
+  submitted_arena_name: string
+  created_at: string
+  reviewed_at: string | null
+  review_reason: string | null
+}
 
 type ArenaPaymentAccountRow = {
   arena_id: string
@@ -471,6 +492,7 @@ export async function getPlatformAdminOverview(
     assignmentsResult,
     auditResult,
     arenaMetadataResult,
+    arenaClaimRequestsResult,
   ] = await Promise.all([
     supabase
       .from('users')
@@ -529,6 +551,13 @@ export async function getPlatformAdminOverview(
     rpc.rpc('list_internal_employee_plan_assignments', { p_actor_user_id: profile.dbUserId }),
     rpc.rpc('list_platform_security_audit', { p_actor_user_id: profile.dbUserId, p_limit: 100 }),
     rpc.rpc('list_platform_arena_metadata', { p_actor_user_id: profile.dbUserId }),
+    profile.accessLevel === 'super_admin'
+      ? rpc.rpc('list_arena_claim_requests', {
+          p_actor_user_id: profile.dbUserId,
+          p_status: null,
+          p_limit: 100,
+        })
+      : Promise.resolve({ data: [] as ArenaClaimRequestRow[], error: null }),
   ])
 
   const queryError =
@@ -547,7 +576,8 @@ export async function getPlatformAdminOverview(
     principalsResult.error ??
     assignmentsResult.error ??
     auditResult.error ??
-    arenaMetadataResult.error
+    arenaMetadataResult.error ??
+    arenaClaimRequestsResult.error
 
   if (queryError) {
     throw new Error(`Falha ao carregar a administração da plataforma: ${queryError.message}`)
@@ -724,6 +754,24 @@ export async function getPlatformAdminOverview(
     updatedAt: assignment.updated_at,
   }))
 
+  const arenaClaimRequests: PlatformArenaClaimRequest[] = (
+    (arenaClaimRequestsResult.data ?? []) as ArenaClaimRequestRow[]
+  ).map((request) => ({
+    id: request.id,
+    requesterUserId: request.requester_user_id,
+    requesterName: request.requester_name,
+    requesterEmail: request.requester_email,
+    arenaId: request.arena_id,
+    arenaName: request.arena_name,
+    municipalityName: request.municipality_name,
+    requestKind: request.request_kind,
+    status: request.status,
+    submittedArenaName: request.submitted_arena_name,
+    createdAt: request.created_at,
+    reviewedAt: request.reviewed_at,
+    reviewReason: request.review_reason,
+  }))
+
   return {
     currentAccessLevel: profile.accessLevel,
     users,
@@ -731,6 +779,7 @@ export async function getPlatformAdminOverview(
     arenas,
     athletes,
     memberships,
+    arenaClaimRequests,
     internalPlanAssignments,
     audit,
   }
@@ -1029,6 +1078,61 @@ export async function claimPublicArenaAsCustomerAction(
   } catch (error) {
     observer.complete('failed', { error_type: error instanceof z.ZodError ? 'validation' : 'operation' })
     return { success: false, error: error instanceof Error ? error.message : 'Não foi possível converter o local em cliente.' }
+  }
+}
+
+export async function reviewArenaClaimRequestAction(
+  input: ReviewArenaClaimRequestInput,
+): Promise<PlatformAdminActionResult> {
+  const observer = await observeServerAction({
+    component: 'platform_admin',
+    operation: 'review_arena_claim_request',
+  })
+
+  try {
+    const profile = await assertPlatformSuperAdminAccess()
+    const parsed = reviewArenaClaimRequestInputSchema.parse(input)
+    const { data, error } = await asRpcClient().rpc('review_arena_claim_request', {
+      p_actor_user_id: profile.dbUserId,
+      p_request_id: parsed.requestId,
+      p_decision: parsed.decision,
+      p_reason: parsed.reason,
+      p_keep_discoverable: parsed.keepDiscoverable,
+    })
+    if (error) throw new Error(error.message)
+
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      throw new Error('A revisão retornou um resultado inválido.')
+    }
+
+    const result = data as Record<string, unknown>
+    const arenaId = typeof result.arena_id === 'string' ? result.arena_id : null
+    const requesterUserId = typeof result.requester_user_id === 'string' ? result.requester_user_id : null
+    if (parsed.decision === 'approve') {
+      if (!arenaId || !requesterUserId) throw new Error('A arena aprovada não pôde ser identificada.')
+      const trial = await ensureExperimentalSubscription({ arenaId, actorId: requesterUserId })
+      if (!trial.created && trial.reason === 'plan_not_found') {
+        throw new Error('O vínculo foi aprovado, mas o plano experimental não está disponível. Tente novamente após corrigir o catálogo de planos.')
+      }
+    }
+
+    revalidatePath('/admin/arenas')
+    revalidatePath('/admin/overview')
+    revalidatePath('/sign-up/status')
+    if (arenaId) revalidatePath(`/admin/arenas/${arenaId}`)
+    observer.complete('completed', {
+      request_id: parsed.requestId,
+      decision: parsed.decision,
+      arena_id: arenaId,
+      keep_discoverable: parsed.keepDiscoverable,
+    })
+    return { success: true }
+  } catch (error) {
+    observer.complete('failed', { error_type: error instanceof z.ZodError ? 'validation' : 'operation' })
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Não foi possível revisar a solicitação.',
+    }
   }
 }
 

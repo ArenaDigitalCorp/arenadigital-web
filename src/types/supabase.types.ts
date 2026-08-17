@@ -4779,6 +4779,32 @@ export type Database = {
         Args: { p_actor_user_id: string; p_batch_id: string }
         Returns: Json
       }
+      get_self_service_arena_signup_status: {
+        Args: { p_requester_user_id: string }
+        Returns: Json
+      }
+      list_arena_claim_requests: {
+        Args: {
+          p_actor_user_id: string
+          p_limit?: number
+          p_status?: string
+        }
+        Returns: {
+          arena_id: string
+          arena_name: string
+          created_at: string
+          id: string
+          municipality_name: string
+          request_kind: string
+          requester_email: string
+          requester_name: string
+          requester_user_id: string
+          review_reason: string
+          reviewed_at: string
+          status: string
+          submitted_arena_name: string
+        }[]
+      }
       list_public_arena_import_batches: {
         Args: { p_actor_user_id: string; p_limit?: number }
         Returns: Json
@@ -5140,6 +5166,17 @@ export type Database = {
         Args: { p_atleta_id: string }
         Returns: string
       }
+      resolve_self_service_arena_signup: {
+        Args: {
+          p_address_data: Json
+          p_arena_name: string
+          p_document: string
+          p_operation_id: string
+          p_phone: string
+          p_requester_user_id: string
+        }
+        Returns: Json
+      }
       resolve_signup_identity: {
         Args: { p_cpf: string; p_email: string }
         Returns: {
@@ -5172,6 +5209,16 @@ export type Database = {
           p_request_id: string
         }
         Returns: string
+      }
+      review_arena_claim_request: {
+        Args: {
+          p_actor_user_id: string
+          p_decision: string
+          p_keep_discoverable?: boolean
+          p_reason: string
+          p_request_id: string
+        }
+        Returns: Json
       }
       respond_team_membership: {
         Args: { p_accept: boolean; p_membership_id: string }

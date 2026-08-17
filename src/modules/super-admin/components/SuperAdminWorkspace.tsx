@@ -33,6 +33,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { PublicArenaListingDialog } from "@/modules/platform-admin/components/PublicArenaListingDialog"
 import { PublicArenaImportDialog } from "@/modules/platform-admin/components/PublicArenaImportDialog"
+import { ArenaClaimRequestsCard } from "@/modules/platform-admin/components/ArenaClaimRequestsCard"
 import {
   manageInternalEmployeePlanAction,
   managePlatformPrincipalAction,
@@ -199,6 +200,7 @@ function Arenas({ overview }: { overview: PlatformAdminOverview }) {
   return (
     <>
       <PageIntro section="arenas" action={overview.currentAccessLevel === "super_admin" ? <div className="flex flex-wrap gap-2"><PublicArenaImportDialog /><PublicArenaListingDialog /></div> : undefined} />
+      {overview.currentAccessLevel === "super_admin" && <ArenaClaimRequestsCard requests={overview.arenaClaimRequests} />}
       <div className="mb-5 grid gap-3 lg:grid-cols-[1fr_auto]">
         <div className="relative"><Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por arena, responsável ou cidade" className="h-12 border-slate-300 bg-white pl-11" /></div>
         <div className="flex flex-wrap gap-2">

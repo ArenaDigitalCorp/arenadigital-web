@@ -59,7 +59,8 @@ Para os fluxos já mapeados, `TelemetryPageView` registra telas automaticamente 
 | Área | Eventos |
 | --- | --- |
 | Navegação | `screen_view`, `navigation_click` |
-| Cadastro e acesso | `signup_email_check_success/failure`, `signup_submit_success/failure`, `signin_password_success/failure`, `signin_otp_success/failure`, `password_reset_request_success/failure` |
+| Cadastro e acesso | `signup_email_check_success/failure`, `signup_submit_success/failure`, `signin_password_success/failure`, `signin_otp_success/failure`, `password_reset_request_success/failure`; spans server-side `auth.provision_signup.*` distinguem `provisioned`, `claim_pending`, `access_conflict` e `rejected` |
+| Revisão de propriedade | span server-side `platform_admin.review_arena_claim_request.*`, somente com IDs técnicos, decisão e resultado; não envia nome, e-mail, telefone, documento ou motivo livre |
 | Reservas | `booking_save_success/failure`, `booking_conflict_detected`, `booking_cancel_success/failure`, `booking_payment_success/failure` |
 | Mensalistas | `membership_plan_save_success/failure` |
 | Estações/comandas | `order_open_success/failure`, `order_item_add_success/failure`, `order_payment_success/failure`, `order_close_success/failure` |

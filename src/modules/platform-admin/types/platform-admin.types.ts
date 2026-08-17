@@ -109,6 +109,24 @@ export type PlatformInternalPlanAssignment = {
   updatedAt: string
 }
 
+export type ArenaClaimRequestStatus = 'pending' | 'approved' | 'rejected' | 'blocked'
+
+export type PlatformArenaClaimRequest = {
+  id: string
+  requesterUserId: string
+  requesterName: string | null
+  requesterEmail: string
+  arenaId: string | null
+  arenaName: string | null
+  municipalityName: string | null
+  requestKind: 'public_listing_claim' | 'existing_customer_conflict' | 'ambiguous_match'
+  status: ArenaClaimRequestStatus
+  submittedArenaName: string
+  createdAt: string
+  reviewedAt: string | null
+  reviewReason: string | null
+}
+
 export type PlatformAdminOverview = {
   currentAccessLevel: 'platform_admin' | 'super_admin'
   users: PlatformUser[]
@@ -116,6 +134,7 @@ export type PlatformAdminOverview = {
   arenas: PlatformArena[]
   athletes: PlatformAthlete[]
   memberships: PlatformMembership[]
+  arenaClaimRequests: PlatformArenaClaimRequest[]
   internalPlanAssignments: PlatformInternalPlanAssignment[]
   audit: PlatformAuditEvent[]
 }

@@ -58,6 +58,13 @@ export const claimPublicArenaAsCustomerInputSchema = z.object({
   keepDiscoverable: z.boolean(),
 }).strict()
 
+export const reviewArenaClaimRequestInputSchema = z.object({
+  requestId: z.string().uuid(),
+  decision: z.enum(['approve', 'reject']),
+  reason: z.string().trim().min(8).max(500),
+  keepDiscoverable: z.boolean(),
+}).strict()
+
 export const discoverOpenStreetMapArenasInputSchema = z.object({
   stateCode: z.number().int().positive(),
   municipalityId: z.number().int().positive(),
@@ -69,4 +76,5 @@ export const searchEligibleArenaOwnersInputSchema = z.string().trim().min(3).max
 export type StagePublicArenaImportBatchInput = z.input<typeof stagePublicArenaImportBatchInputSchema>
 export type ApplyPublicArenaImportBatchInput = z.input<typeof applyPublicArenaImportBatchInputSchema>
 export type ClaimPublicArenaAsCustomerInput = z.input<typeof claimPublicArenaAsCustomerInputSchema>
+export type ReviewArenaClaimRequestInput = z.input<typeof reviewArenaClaimRequestInputSchema>
 export type DiscoverOpenStreetMapArenasInput = z.input<typeof discoverOpenStreetMapArenasInputSchema>

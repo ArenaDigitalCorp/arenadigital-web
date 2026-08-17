@@ -41,11 +41,17 @@ export async function GET(request: Request) {
         return observation.respond(NextResponse.redirect(new URL(`/sign-in?error=${encodeURIComponent(error.message)}`, url.origin)))
     }
 
-    // Garante que gestores autenticados via OAuth/magic link tenham provisionamento
-    // (se o metadata tiver arenaName, provisionAfterSignUpAction cria arena+arena_user).
+    // Resolve o signup depois da confirmação. Uma correspondência com o catálogo
+    // abre análise manual; somente cadastros sem correspondência criam um tenant.
     const provision = await provisionAfterSignUpAction()
     if (!provision.success) {
         observation.log("error", "auth.callback.provision_failed")
+        return observation.respond(NextResponse.redirect(new URL(`/sign-in?error=${encodeURIComponent(provision.error)}`, url.origin)))
+    }
+
+    if (provision.data && ['claim_pending', 'access_conflict', 'rejected'].includes(provision.data.status)) {
+        observation.log("info", "auth.callback.signup_requires_review", { status: provision.data.status })
+        return observation.respond(NextResponse.redirect(new URL('/sign-up/status', url.origin)))
     }
 
     const webAccess = await ensureWebBackofficeAccessAction()
