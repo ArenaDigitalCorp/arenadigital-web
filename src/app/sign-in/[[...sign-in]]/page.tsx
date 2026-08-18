@@ -61,7 +61,16 @@ export default function SignInPage() {
 
     const provision = await provisionAfterSignUpAction()
     if (!provision.success) {
-      console.error('provisionAfterSignUpAction:', provision.error)
+      trackAction('signin_password', 'failure', { source: 'signup_resolution' })
+      setLoading(false)
+      toast.error(provision.error)
+      return
+    }
+
+    if (provision.data && ['claim_pending', 'access_conflict', 'rejected'].includes(provision.data.status)) {
+      trackAction('signin_password', 'success', { destination: 'signup_status', status: provision.data.status })
+      window.location.replace('/sign-up/status')
+      return
     }
 
     const webAccess = await ensureWebBackofficeAccessAction()

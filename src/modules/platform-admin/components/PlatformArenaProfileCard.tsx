@@ -24,6 +24,12 @@ export function PlatformArenaProfileCard({ arena }: { arena: PlatformArena }) {
   const isDemo = platformKind === "demo"
   const effectiveDiscoverable = isDemo ? false : appDiscoverable
 
+  function kindTransitionDisabled(kind: PlatformArenaKind) {
+    if (kind === "customer" && arena.ownerId === null) return true
+    if (kind === "public_listing" && arena.ownerId !== null && arena.platformKind !== "public_listing") return true
+    return false
+  }
+
   function save() {
     if (reason.trim().length < 8) {
       toast.error("Informe um motivo de auditoria com pelo menos 8 caracteres.")
@@ -67,9 +73,14 @@ export function PlatformArenaProfileCard({ arena }: { arena: PlatformArena }) {
             className="mt-2 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold normal-case tracking-normal text-slate-950"
           >
             {(Object.keys(KIND_LABEL) as PlatformArenaKind[]).map((kind) => (
-              <option key={kind} value={kind}>{KIND_LABEL[kind]}</option>
+              <option key={kind} value={kind} disabled={kindTransitionDisabled(kind)}>{KIND_LABEL[kind]}</option>
             ))}
           </select>
+          {arena.ownerId === null && (
+            <span className="mt-2 block text-xs font-normal normal-case tracking-normal text-slate-500">
+              Para virar cliente, este local precisa passar pelo fluxo de vínculo com uma conta proprietária.
+            </span>
+          )}
         </label>
 
         <button

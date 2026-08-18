@@ -47,13 +47,20 @@ test('signup redirect is server-derived and full payload validation is server-si
   assert.match(actions, /isStrongPassword\(input\.password\)/)
 })
 
-test('owner arena provisioning reconciles a concurrent unique-index winner', async () => {
-  const provisioner = await source('src/modules/users/services/provision-owner-arena.ts')
+test('owner signup resolves catalog identity before provisioning a trial', async () => {
+  const [actions, resolver] = await Promise.all([
+    source('src/modules/auth/actions/authActions.ts'),
+    source('src/modules/users/services/resolve-self-service-arena-signup.ts'),
+  ])
+  const provision = exportedFunctionBody(actions, 'provisionAfterSignUpAction')
 
-  assert.match(provisioner, /normalizedArenaName = arenaName\.trim\(\)/)
-  assert.match(provisioner, /concurrentArenas/)
-  assert.match(provisioner, /ensureOwnerArenaUserLink\(supabase, concurrentArena\.id, ownerId\)/)
-  assert.match(provisioner, /ensureExperimentalSubscription\(\{ arenaId: concurrentArena\.id, actorId: ownerId \}\)/)
+  assert.match(provision, /resolveSelfServiceArenaSignup\(/)
+  assert.match(provision, /operationId: user\.id/)
+  assert.doesNotMatch(provision, /from\(["']arenas["']\)\.(insert|update)/)
+  assert.match(resolver, /rpc\('resolve_self_service_arena_signup'/)
+  assert.match(resolver, /result\.status === 'provisioned'/)
+  assert.match(resolver, /ensureExperimentalSubscription\(\{ arenaId: result\.arenaId, actorId: input\.requesterUserId \}\)/)
+  assert.match(resolver, /trial\.reason === 'plan_not_found'/)
 })
 
 test('backoffice registrations provision missing auth identities and commit athlete links atomically', async () => {

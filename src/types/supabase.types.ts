@@ -614,6 +614,7 @@ export type Database = {
       arenas: {
         Row: {
           address: Json | null
+          app_discoverable: boolean
           banner_url: string | null
           complement: string | null
           cpf_cnpj: string | null
@@ -630,8 +631,9 @@ export type Database = {
           nome_moeda_virtual: string | null
           number: string | null
           opening_hours: Json | null
-          owner_id: string
+          owner_id: string | null
           phone: string | null
+          platform_kind: string
           show_presence: boolean | null
           sports: string[] | null
           status: string | null
@@ -640,6 +642,7 @@ export type Database = {
         }
         Insert: {
           address?: Json | null
+          app_discoverable?: boolean
           banner_url?: string | null
           complement?: string | null
           cpf_cnpj?: string | null
@@ -656,8 +659,9 @@ export type Database = {
           nome_moeda_virtual?: string | null
           number?: string | null
           opening_hours?: Json | null
-          owner_id: string
+          owner_id?: string | null
           phone?: string | null
+          platform_kind?: string
           show_presence?: boolean | null
           sports?: string[] | null
           status?: string | null
@@ -666,6 +670,7 @@ export type Database = {
         }
         Update: {
           address?: Json | null
+          app_discoverable?: boolean
           banner_url?: string | null
           complement?: string | null
           cpf_cnpj?: string | null
@@ -682,8 +687,9 @@ export type Database = {
           nome_moeda_virtual?: string | null
           number?: string | null
           opening_hours?: Json | null
-          owner_id?: string
+          owner_id?: string | null
           phone?: string | null
+          platform_kind?: string
           show_presence?: boolean | null
           sports?: string[] | null
           status?: string | null
@@ -4555,6 +4561,15 @@ export type Database = {
           }
       app_limit_day_start: { Args: { p_reference?: string }; Returns: string }
       app_limit_month_start: { Args: { p_reference?: string }; Returns: string }
+      apply_public_arena_import_batch: {
+        Args: {
+          p_actor_user_id: string
+          p_batch_id: string
+          p_item_ids: string[]
+          p_reason: string
+        }
+        Returns: Json
+      }
       assert_athlete_connection_peer_acceptance_slot: {
         Args: { p_atleta_id: string }
         Returns: undefined
@@ -4599,6 +4614,16 @@ export type Database = {
       cancel_rotativo_inscricao: {
         Args: { p_atleta_id: string; p_rotativo_id: string }
         Returns: boolean
+      }
+      claim_public_arena_as_customer: {
+        Args: {
+          p_actor_user_id: string
+          p_arena_id: string
+          p_keep_discoverable?: boolean
+          p_owner_user_id: string
+          p_reason: string
+        }
+        Returns: Json
       }
       claim_my_legacy_athlete_profile: { Args: never; Returns: string }
       complete_my_athlete_signup: {
@@ -4683,6 +4708,29 @@ export type Database = {
           retry_after_seconds: number
         }[]
       }
+      create_public_arena_listing: {
+        Args: {
+          p_actor_user_id: string
+          p_address: string
+          p_cnpj?: string
+          p_complement?: string
+          p_description?: string
+          p_email?: string
+          p_external_id?: string
+          p_id_municipio: number
+          p_location_wkt?: string
+          p_name: string
+          p_neighborhood?: string
+          p_number?: string
+          p_phone?: string
+          p_platform_notes?: string
+          p_reason?: string
+          p_source?: string
+          p_sport_ids?: string[]
+          p_zip_code?: string
+        }
+        Returns: string
+      }
       create_open_game: {
         Args: {
           p_arena_id: string
@@ -4726,6 +4774,40 @@ export type Database = {
           p_registered_by?: string | null
         }
         Returns: Database["public"]["Tables"]["bookings"]["Row"][]
+      }
+      get_public_arena_import_batch: {
+        Args: { p_actor_user_id: string; p_batch_id: string }
+        Returns: Json
+      }
+      get_self_service_arena_signup_status: {
+        Args: { p_requester_user_id: string }
+        Returns: Json
+      }
+      list_arena_claim_requests: {
+        Args: {
+          p_actor_user_id: string
+          p_limit?: number
+          p_status?: string
+        }
+        Returns: {
+          arena_id: string
+          arena_name: string
+          created_at: string
+          id: string
+          municipality_name: string
+          request_kind: string
+          requester_email: string
+          requester_name: string
+          requester_user_id: string
+          review_reason: string
+          reviewed_at: string
+          status: string
+          submitted_arena_name: string
+        }[]
+      }
+      list_public_arena_import_batches: {
+        Args: { p_actor_user_id: string; p_limit?: number }
+        Returns: Json
       }
       replace_booking_services_atomic: {
         Args: {
@@ -5084,6 +5166,17 @@ export type Database = {
         Args: { p_atleta_id: string }
         Returns: string
       }
+      resolve_self_service_arena_signup: {
+        Args: {
+          p_address_data: Json
+          p_arena_name: string
+          p_document: string
+          p_operation_id: string
+          p_phone: string
+          p_requester_user_id: string
+        }
+        Returns: Json
+      }
       resolve_signup_identity: {
         Args: { p_cpf: string; p_email: string }
         Returns: {
@@ -5117,6 +5210,16 @@ export type Database = {
         }
         Returns: string
       }
+      review_arena_claim_request: {
+        Args: {
+          p_actor_user_id: string
+          p_decision: string
+          p_keep_discoverable?: boolean
+          p_reason: string
+          p_request_id: string
+        }
+        Returns: Json
+      }
       respond_team_membership: {
         Args: { p_accept: boolean; p_membership_id: string }
         Returns: string
@@ -5131,6 +5234,7 @@ export type Database = {
         Returns: {
           address: Json
           banner_url: string
+          can_book_in_app: boolean
           comodidades: string[]
           complement: string
           description: string
@@ -5151,6 +5255,7 @@ export type Database = {
           number: string
           opening_hours: Json
           phone: string
+          platform_kind: string
           sports: string[]
           status: string
           tiktok: string
@@ -5378,6 +5483,17 @@ export type Database = {
       st_boundingdiagonal: {
         Args: { fits?: boolean; geom: unknown }
         Returns: unknown
+      }
+      stage_public_arena_import_batch: {
+        Args: {
+          p_actor_user_id: string
+          p_filename: string
+          p_items: Json
+          p_operation_id: string
+          p_reason: string
+          p_source: string
+        }
+        Returns: Json
       }
       st_buffer:
         | {

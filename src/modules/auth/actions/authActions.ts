@@ -2,7 +2,6 @@
 
 import { createSupabaseServerClient } from "@/lib/supabase/server"
 import { getSupabaseAdmin } from "@/lib/supabase-server"
-import { provisionOwnerArena } from "@/modules/users/services/provision-owner-arena"
 import { findUserByCpf, findUserByEmail, normalizeEmail, resolveAuthenticatedDbUser } from "@/lib/account-identity"
 import { isValidCpf, isValidCpfOrCnpj, onlyDigits } from "@/lib/brasil-document"
 import { hasWebBackofficeAccess, WEB_BACKOFFICE_ACCESS_DENIED_MESSAGE } from "@/lib/server-auth"
@@ -15,6 +14,11 @@ import {
     createArenaSignupIntent,
     readArenaSignupIntent,
 } from "@/modules/auth/lib/arena-signup-intent"
+import {
+    getSelfServiceArenaSignupStatus,
+    resolveSelfServiceArenaSignup,
+    type SelfServiceArenaSignupResult,
+} from "@/modules/users/services/resolve-self-service-arena-signup"
 
 type AddressData = {
     cep?: string
@@ -190,11 +194,12 @@ export async function startSignUpAction(input: SignUpInput): Promise<ActionResul
     }
 }
 
-// Provisiona arena + arena_user a partir de um intent emitido pelo servidor em
-// app_metadata (não editável pelo usuário).
+// Resolve a identidade da arena a partir de um intent emitido pelo servidor em
+// app_metadata (não editável pelo usuário). Somente cria tenant quando o catálogo
+// não contém uma correspondência segura; os demais casos entram em revisão.
 // Chamado após confirmação de email (/auth/callback) e no login, para cobrir quem
 // confirma o e-mail mas entra depois pela tela de login.
-export async function provisionAfterSignUpAction(): Promise<ActionResult<{ arenaCreated: boolean }>> {
+export async function provisionAfterSignUpAction(): Promise<ActionResult<SelfServiceArenaSignupResult>> {
     const observation = await observeServerAction({ component: "auth", operation: "provision_signup" })
     try {
         const supabase = await createSupabaseServerClient()
@@ -213,7 +218,8 @@ export async function provisionAfterSignUpAction(): Promise<ActionResult<{ arena
 
         const intent = readArenaSignupIntent(user.app_metadata)
         if (!intent) {
-            return finishObservedAction(observation, { success: true, data: { arenaCreated: false } })
+            const currentStatus = await getSelfServiceArenaSignupStatus(dbUser.id)
+            return finishObservedAction(observation, { success: true, data: currentStatus }, currentStatus.status)
         }
 
         // Intents antigos podiam confundir o documento fiscal da arena com o CPF
@@ -225,23 +231,25 @@ export async function provisionAfterSignUpAction(): Promise<ActionResult<{ arena
             .eq("id", dbUser.id)
         if (userUpdateError) throw new Error(userUpdateError.message)
 
-        const arenaId = await provisionOwnerArena(
-            dbUser.id,
-            intent.arenaName,
-            intent.phone,
-            intent.addressData,
-            intent.arenaDocument,
-        )
+        const result = await resolveSelfServiceArenaSignup({
+            requesterUserId: dbUser.id,
+            operationId: user.id,
+            arenaName: intent.arenaName,
+            phone: intent.phone,
+            document: intent.arenaDocument,
+            addressData: intent.addressData,
+        })
 
         const { error: consumeError } = await admin.auth.admin.updateUserById(user.id, {
             app_metadata: {
                 ...consumeArenaSignupIntentMetadata(user.app_metadata),
                 arena_signup_provisioned_at: new Date().toISOString(),
+                arena_signup_resolution: result.status,
             },
         })
         if (consumeError) throw new Error(consumeError.message)
 
-        return finishObservedAction(observation, { success: true, data: { arenaCreated: Boolean(arenaId) } })
+        return finishObservedAction(observation, { success: true, data: result }, result.status)
     } catch (error) {
         observation.log("error", "auth.provision_signup.failed", { error })
         return finishObservedAction(observation, { success: false, error: getErrorMessage(error) }, "failed")

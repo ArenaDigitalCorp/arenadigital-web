@@ -4,6 +4,7 @@ import { Activity, ArrowLeft, CalendarClock, CircleDollarSign, LayoutGrid, MapPi
 import { Badge } from "@/components/ui/badge"
 import { getPlatformAdminOverview } from "@/modules/platform-admin/actions/platformAdminActions"
 import { PlatformArenaProfileCard } from "@/modules/platform-admin/components/PlatformArenaProfileCard"
+import { PublicArenaCustomerClaimCard } from "@/modules/platform-admin/components/PublicArenaCustomerClaimCard"
 
 function money(cents: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100)
@@ -20,6 +21,8 @@ export default async function AdminArenaDetailPage({ params }: { params: Promise
     inadimplente: "Inadimplente",
     prospect: "Prospect",
     desativada: "Desativada",
+    catalogo_publico: "Catálogo público",
+    demonstracao: "Demonstração",
   } as const
   const kindLabels = {
     customer: "Cliente",
@@ -53,10 +56,10 @@ export default async function AdminArenaDetailPage({ params }: { params: Promise
             <h1 className="font-heading text-3xl font-black md:text-5xl">{arena.name}</h1>
             <p className="mt-3 flex items-center gap-2 text-sm text-slate-400"><MapPinned className="h-4 w-4" />{[arena.cityName, arena.stateCode].filter(Boolean).join(" · ") || "Endereço geográfico pendente"}</p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          {arena.platformKind === "customer" && <div className="flex flex-wrap gap-2">
             <Link href={`/dashboard/arenas/${arena.id}`} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 text-sm font-bold text-slate-950 hover:bg-orange-400"><LayoutGrid className="h-4 w-4" />Abrir espaços</Link>
             <Link href={`/admin/settings?arena=${arena.id}`} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-white px-4 text-sm font-bold text-slate-950 hover:bg-orange-100"><Settings2 className="h-4 w-4" />Configurar Pix e split</Link>
-          </div>
+          </div>}
         </div>
       </header>
 
@@ -68,6 +71,10 @@ export default async function AdminArenaDetailPage({ params }: { params: Promise
         <PlatformArenaProfileCard arena={arena} />
         <section className="rounded-2xl border border-slate-900/10 bg-white p-6"><p className="font-mono text-[10px] uppercase tracking-[.2em] text-slate-500">Responsável</p><h2 className="mt-1 font-heading text-xl font-black">Conta proprietária</h2><dl className="mt-5 space-y-3 text-sm"><div className="flex justify-between gap-4 border-b border-slate-100 pb-3"><dt className="text-slate-500">Nome</dt><dd className="font-bold">{arena.ownerName || "Não definido"}</dd></div><div className="flex justify-between gap-4"><dt className="text-slate-500">E-mail</dt><dd className="font-bold">{arena.ownerEmail}</dd></div></dl></section>
       </div>
+
+      {arena.platformKind === "public_listing" && arena.ownerId === null && (
+        <PublicArenaCustomerClaimCard arena={arena} />
+      )}
 
       <div className="grid gap-5 xl:grid-cols-2">
         <section className="rounded-2xl border border-slate-900/10 bg-white p-6"><p className="font-mono text-[10px] uppercase tracking-[.2em] text-slate-500">Estrutura</p><h2 className="mt-1 font-heading text-xl font-black">Operação cadastrada</h2><div className="mt-5 grid grid-cols-2 gap-3"><div className="rounded-xl bg-slate-50 p-4"><p className="font-heading text-2xl font-black">{arena.courtCount}</p><p className="text-xs text-slate-500">quadras ativas</p></div><div className="rounded-xl bg-slate-50 p-4"><p className="font-heading text-2xl font-black">{arena.hasLocation ? "Sim" : "Não"}</p><p className="text-xs text-slate-500">no mapa</p></div></div><p className="mt-4 flex items-center gap-2 text-xs text-slate-500"><CalendarClock className="h-4 w-4" /> Comparativo anterior: {arena.bookingsPrevious30Days} reservas</p></section>
