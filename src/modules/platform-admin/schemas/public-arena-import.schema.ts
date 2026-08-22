@@ -45,6 +45,32 @@ export const publicArenaImportBatchIdSchema = z.string().uuid()
 
 export const listPublicArenaImportBatchesInputSchema = z.number().int().min(1).max(25)
 
+export const createPublicArenaImportCampaignInputSchema = z.object({
+  operationId: z.string().uuid(),
+  name: z.string().trim().min(3).max(120),
+  municipalityIds: z.array(z.number().int().positive()).min(1).max(100),
+  sportIds: z.array(z.string().uuid()).min(1).max(12),
+  maxAttempts: z.number().int().min(1).max(5),
+  maxResultsPerMunicipality: z.number().int().min(10).max(200),
+  startImmediately: z.boolean(),
+  reason: z.string().trim().min(8).max(500),
+}).strict()
+
+export const listPublicArenaImportCampaignsInputSchema = z.number().int().min(1).max(50)
+
+export const publicArenaImportCampaignStatusInputSchema = z.object({
+  campaignId: z.string().uuid(),
+  status: z.enum(['running', 'paused']),
+  reason: z.string().trim().min(8).max(500),
+}).strict()
+
+export const retryPublicArenaImportCampaignInputSchema = z.object({
+  campaignId: z.string().uuid(),
+  reason: z.string().trim().min(8).max(500),
+}).strict()
+
+export const runPublicArenaImportWorkerInputSchema = z.number().int().min(1).max(5)
+
 export const applyPublicArenaImportBatchInputSchema = z.object({
   batchId: z.string().uuid(),
   itemIds: z.array(z.string().uuid()).min(1).max(PUBLIC_ARENA_IMPORT_MAX_ITEMS),
@@ -78,3 +104,6 @@ export type ApplyPublicArenaImportBatchInput = z.input<typeof applyPublicArenaIm
 export type ClaimPublicArenaAsCustomerInput = z.input<typeof claimPublicArenaAsCustomerInputSchema>
 export type ReviewArenaClaimRequestInput = z.input<typeof reviewArenaClaimRequestInputSchema>
 export type DiscoverOpenStreetMapArenasInput = z.input<typeof discoverOpenStreetMapArenasInputSchema>
+export type CreatePublicArenaImportCampaignInput = z.input<typeof createPublicArenaImportCampaignInputSchema>
+export type PublicArenaImportCampaignStatusInput = z.input<typeof publicArenaImportCampaignStatusInputSchema>
+export type RetryPublicArenaImportCampaignInput = z.input<typeof retryPublicArenaImportCampaignInputSchema>

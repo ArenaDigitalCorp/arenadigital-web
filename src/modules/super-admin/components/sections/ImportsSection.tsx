@@ -16,6 +16,7 @@ import {
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { PublicArenaImportDialog } from "@/modules/platform-admin/components/PublicArenaImportDialog"
+import { PublicArenaImportCampaigns } from "@/modules/platform-admin/components/PublicArenaImportCampaigns"
 import { PublicArenaListingDialog } from "@/modules/platform-admin/components/PublicArenaListingDialog"
 import { listPublicArenaImportBatchesAction } from "@/modules/platform-admin/actions/platformAdminActions"
 import type {
@@ -118,6 +119,12 @@ export function ImportsSection({ overview }: { overview: PlatformAdminOverview }
         <MetricCard label="Qualidade pendente" value={incompleteListings.length.toLocaleString("pt-BR")} detail="Sem município ou coordenadas" icon={CircleAlert} tone={incompleteListings.length > 0 ? "warning" : "paper"} />
       </div>
 
+      {overview.currentAccessLevel === "super_admin" && (
+        <div className="mt-4">
+          <PublicArenaImportCampaigns />
+        </div>
+      )}
+
       <Panel
         eyebrow="Plano operacional"
         title="Do mapa público ao catálogo confiável"
@@ -150,8 +157,8 @@ export function ImportsSection({ overview }: { overview: PlatformAdminOverview }
               <p className="mt-2 text-xs leading-5 text-slate-500">CSV próprio ou exportação tratada de bases de CNPJ. Ideal para campanhas e lotes já qualificados.</p>
             </div>
             <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-xs leading-5 text-sky-950">
-              <strong className="block">Próxima automação recomendada</strong>
-              Agendar descoberta por regiões prioritárias, guardar checkpoint por município e limitar concorrência/rate limit. O pipeline deve continuar criando rascunhos, nunca publicação automática.
+              <strong className="block">Automação disponível</strong>
+              Crie campanhas territoriais com checkpoint por município e tentativas controladas. O pipeline continua criando rascunhos, nunca publicação automática.
             </div>
           </div>
         </Panel>
