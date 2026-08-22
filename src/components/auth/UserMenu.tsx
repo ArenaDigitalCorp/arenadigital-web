@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { CalendarDays, IdCard, KeyRound, LogOut, Mail, PanelsTopLeft, Shield, User as UserIcon } from "lucide-react"
+import { CalendarDays, IdCard, KeyRound, LogOut, Mail, Shield, User as UserIcon } from "lucide-react"
 import { useUser } from "@/hooks/useUser"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -177,12 +177,6 @@ export function UserMenu({
             <UserIcon className="h-4 w-4 mr-2" />
             Minha conta
           </DropdownMenuItem>
-          {(platformAccessLevel ?? dbUser?.platform_access_level) === 'super_admin' && (
-            <DropdownMenuItem onClick={() => router.push('/admin/overview')} className="cursor-pointer text-orange-200 hover:bg-orange-500/10 focus:bg-orange-500/10 focus:text-orange-100">
-              <PanelsTopLeft className="h-4 w-4 mr-2" />
-              Painel admin
-            </DropdownMenuItem>
-          )}
           <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer text-rose-300 hover:bg-rose-500/10 focus:bg-rose-500/10 focus:text-rose-200">
             <LogOut className="h-4 w-4 mr-2" />
             Sair

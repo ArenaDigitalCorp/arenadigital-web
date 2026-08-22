@@ -36,8 +36,11 @@ test('Pix split configuration lives only in the independent Super Admin backoffi
   assert.doesNotMatch(platformConsole, /ArenaPixSplitSettingsCard/)
 
   const superAdminWorkspace = await source('src/modules/super-admin/components/SuperAdminWorkspace.tsx')
-  assert.match(superAdminWorkspace, /ArenaPixSplitSettingsCard/)
-  assert.match(superAdminWorkspace, /Pix e split por arena/)
+  assert.match(superAdminWorkspace, /SettingsSection/)
+
+  const settingsSection = await source('src/modules/super-admin/components/sections/SettingsSection.tsx')
+  assert.match(settingsSection, /ArenaPixSplitSettingsCard/)
+  assert.match(settingsSection, /Pix e split/)
 
   const platformActions = await source('src/modules/platform-admin/actions/platformAdminActions.ts')
   assert.match(platformActions, /from\('arena_payment_accounts'\)/)
@@ -72,9 +75,12 @@ test('super admin backoffice has an independent super-admin-only layout', async 
   assert.doesNotMatch(sidebar, /href="\/dashboard\/admin\/super-admin"/)
 
   const userMenu = await source('src/components/auth/UserMenu.tsx')
-  assert.match(userMenu, /=== 'super_admin'/)
-  assert.match(userMenu, /Painel admin/)
-  assert.match(userMenu, /router\.push\('\/admin\/overview'\)/)
+  assert.doesNotMatch(userMenu, /Painel admin/)
+  assert.doesNotMatch(userMenu, /router\.push\('\/admin\/overview'\)/)
+
+  const dashboardLayout = await source('src/app/dashboard/layout.tsx')
+  assert.match(dashboardLayout, /platformAccessLevel === "super_admin"/)
+  assert.match(dashboardLayout, /redirect\("\/admin\/overview"\)/)
 
   const dashboardPage = await source('src/app/dashboard/page.tsx')
   assert.doesNotMatch(dashboardPage, /platform_access_level === 'super_admin'[\s\S]{0,120}router\.replace/)
@@ -84,11 +90,14 @@ test('super admin backoffice has an independent super-admin-only layout', async 
   assert.match(subscriptionGate, /isGlobalAdminRoute\s*\|\|\s*isTutorialAccess/)
 
   const shell = await source('src/modules/super-admin/components/SuperAdminShell.tsx')
-  assert.match(shell, /Voltar para minha arena/)
+  assert.doesNotMatch(shell, /Voltar para minha arena/)
   assert.match(shell, /\/admin\/arenas/)
   assert.match(shell, /\/admin\/finance/)
   assert.match(shell, /\/admin\/athletes/)
   assert.match(shell, /\/admin\/engagement/)
+
+  const adminArenaPage = await source('src/app/admin/arenas/[id]/page.tsx')
+  assert.doesNotMatch(adminArenaPage, /\/dashboard\/arenas\/\$\{arena\.id\}/)
 })
 
 test('platform principal management protects the last active super admin', async () => {

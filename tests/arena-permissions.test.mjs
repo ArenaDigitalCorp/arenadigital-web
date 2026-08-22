@@ -12,7 +12,6 @@ const subjects = {
   manager: { isOwner: false, role: 'Gestor' },
   attendant: { isOwner: false, role: 'Atendente' },
   cashier: { isOwner: false, role: 'Caixa' },
-  platformAdmin: { isOwner: false, role: 'PlatformAdmin' },
 }
 
 async function source(relativePath) {
@@ -22,7 +21,6 @@ async function source(relativePath) {
 test('arena capability matrix keeps management and ownership boundaries explicit', () => {
   assert.equal(canManageArena(subjects.owner), true)
   assert.equal(canManageArena(subjects.manager), true)
-  assert.equal(canManageArena(subjects.platformAdmin), true)
   assert.equal(canManageArena(subjects.attendant), false)
   assert.equal(canManageArena(subjects.cashier), false)
 
@@ -31,20 +29,20 @@ test('arena capability matrix keeps management and ownership boundaries explicit
 
   assert.equal(canManageArenaSubscription(subjects.owner), true)
   assert.equal(canManageArenaSubscription(subjects.manager), true)
-  assert.equal(canManageArenaSubscription(subjects.platformAdmin), false)
 })
 
-test('platform admins can enter arena operations without becoming owners', async () => {
+test('platform administrators stay isolated from customer arena operations', async () => {
   const serverAuth = await source('src/lib/server-auth.ts')
-  assert.match(serverAuth, /role: 'PlatformAdmin'/)
+  assert.match(serverAuth, /Platform administrators cannot access customer arena backoffices/)
+  assert.doesNotMatch(serverAuth, /role: 'PlatformAdmin'/)
   assert.match(serverAuth, /if \(!access\.isOwner\)/)
 
   const arenasApi = await source('src/app/api/arenas/route.ts')
-  assert.match(arenasApi, /platformArenasResult/)
-  assert.match(arenasApi, /role: 'PlatformAdmin'/)
+  assert.doesNotMatch(arenasApi, /platformArenasResult/)
+  assert.doesNotMatch(arenasApi, /role: 'PlatformAdmin'/)
 
   const adminArenaPage = await source('src/app/admin/arenas/[id]/page.tsx')
-  assert.match(adminArenaPage, /\/dashboard\/arenas\/\$\{arena\.id\}/)
+  assert.doesNotMatch(adminArenaPage, /\/dashboard\/arenas\/\$\{arena\.id\}/)
 })
 
 test('admin-only screens use the same server guard as their mutations', async () => {

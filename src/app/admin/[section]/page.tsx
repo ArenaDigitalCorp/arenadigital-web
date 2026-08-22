@@ -9,6 +9,8 @@ export default async function AdminSectionPage({ params, searchParams }: { param
   const { section } = await params
   const { arena } = await searchParams
   if (!SUPER_ADMIN_SECTIONS.includes(section as SuperAdminSection)) notFound()
-  const overview = await getPlatformAdminOverview({ includePaymentSettings: section === "settings" })
+  const overview = await getPlatformAdminOverview({
+    includePaymentSettings: section === "settings" || section === "finance",
+  })
   return <SuperAdminWorkspace overview={overview} section={section as SuperAdminSection} initialArenaId={arena} />
 }

@@ -4,7 +4,11 @@ import { createSupabaseServerClient } from "@/lib/supabase/server"
 import { getSupabaseAdmin } from "@/lib/supabase-server"
 import { findUserByCpf, findUserByEmail, normalizeEmail, resolveAuthenticatedDbUser } from "@/lib/account-identity"
 import { isValidCpf, isValidCpfOrCnpj, onlyDigits } from "@/lib/brasil-document"
-import { hasWebBackofficeAccess, WEB_BACKOFFICE_ACCESS_DENIED_MESSAGE } from "@/lib/server-auth"
+import {
+    getPlatformAccessLevel,
+    hasWebBackofficeAccess,
+    WEB_BACKOFFICE_ACCESS_DENIED_MESSAGE,
+} from "@/lib/server-auth"
 import { observeServerAction } from "@/lib/observability/server"
 import { isStrongPassword } from "@/lib/password-policy"
 import { headers } from "next/headers"
@@ -46,6 +50,10 @@ type SignUpInput = {
 type ActionResult<T = undefined> =
     | { success: true; data?: T }
     | { success: false; error: string }
+
+type WebBackofficeAccess = {
+    adminDestination: '/admin/overview' | '/dashboard/admin/platform' | null
+}
 
 type ActionObserver = Awaited<ReturnType<typeof observeServerAction>>
 
@@ -256,7 +264,7 @@ export async function provisionAfterSignUpAction(): Promise<ActionResult<SelfSer
     }
 }
 
-export async function ensureWebBackofficeAccessAction(): Promise<ActionResult> {
+export async function ensureWebBackofficeAccessAction(): Promise<ActionResult<WebBackofficeAccess>> {
     const observation = await observeServerAction({ component: "auth", operation: "ensure_backoffice_access" })
     try {
         const supabase = await createSupabaseServerClient()
@@ -280,7 +288,17 @@ export async function ensureWebBackofficeAccessAction(): Promise<ActionResult> {
             return finishObservedAction(observation, { success: false, error: WEB_BACKOFFICE_ACCESS_DENIED_MESSAGE })
         }
 
-        return finishObservedAction(observation, { success: true })
+        const platformAccessLevel = await getPlatformAccessLevel(dbUser.id)
+        const adminDestination = platformAccessLevel === 'super_admin'
+            ? '/admin/overview'
+            : platformAccessLevel === 'platform_admin'
+                ? '/dashboard/admin/platform'
+                : null
+
+        return finishObservedAction(observation, {
+            success: true,
+            data: { adminDestination },
+        })
     } catch (error) {
         observation.log("error", "auth.ensure_backoffice_access.failed", { error })
         return finishObservedAction(observation, { success: false, error: getErrorMessage(error) }, "failed")

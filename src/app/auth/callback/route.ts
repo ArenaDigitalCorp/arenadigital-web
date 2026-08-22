@@ -62,5 +62,9 @@ export async function GET(request: Request) {
         return observation.respond(NextResponse.redirect(new URL(`/sign-in?error=${encodeURIComponent(webAccess.error)}`, url.origin)))
     }
 
-    return observation.respond(NextResponse.redirect(new URL(next, url.origin)))
+    const destination = next === '/reset-password'
+        ? next
+        : webAccess.data?.adminDestination ?? next
+
+    return observation.respond(NextResponse.redirect(new URL(destination, url.origin)))
 }

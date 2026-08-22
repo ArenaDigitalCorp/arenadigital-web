@@ -83,7 +83,7 @@ export default function SignInPage() {
     }
 
     trackAction('signin_password', 'success')
-    window.location.replace(redirectTo)
+    window.location.replace(webAccess.data?.adminDestination ?? redirectTo)
   }
 
   const handleOtpRequest = async (e: React.FormEvent) => {

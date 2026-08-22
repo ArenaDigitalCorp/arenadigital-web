@@ -164,9 +164,9 @@ export async function requireWebBackofficeAccess(): Promise<AuthenticatedDbUser>
 }
 
 /**
- * Arena creation is a tenant-ownership operation. It is intentionally limited
- * to platform admins and users who already own an arena; first-arena creation
- * is performed by the protected signup provisioning flow.
+ * Arena creation is a tenant-ownership operation. Platform identities are
+ * intentionally isolated from customer backoffices; first-arena creation is
+ * performed by the protected signup provisioning flow.
  */
 export async function assertArenaCreationAccess(): Promise<AuthenticatedDbUser> {
   const currentUser = await requireAuthenticatedDbUser()
@@ -186,8 +186,11 @@ export async function assertArenaCreationAccess(): Promise<AuthenticatedDbUser> 
     throw new Error(`Failed to verify arena ownership: ${arenaError.message}`)
   }
 
-  const isPlatformAdmin = platformAccessLevel === 'platform_admin' || platformAccessLevel === 'super_admin'
-  if (!isPlatformAdmin && !ownedArena) {
+  if (platformAccessLevel === 'platform_admin' || platformAccessLevel === 'super_admin') {
+    throw new AuthorizationError('Platform administrators cannot access customer arena backoffices', 403)
+  }
+
+  if (!ownedArena) {
     throw new AuthorizationError('Forbidden', 403)
   }
 
@@ -212,42 +215,18 @@ export async function assertArenaAccess(arenaId: string): Promise<ArenaAccessPro
     throw new Error(`Failed to verify arena ownership: ${ownerError.message}`)
   }
 
+  if (platformAccessLevel === 'platform_admin' || platformAccessLevel === 'super_admin') {
+    throw new AuthorizationError('Platform administrators cannot access customer arena backoffices', 403)
+  }
+
   if (ownedArena) {
     return {
       ...currentUser,
       arenaId,
       isOwner: true,
-      isPlatformAdmin:
-        platformAccessLevel === 'platform_admin' || platformAccessLevel === 'super_admin',
+      isPlatformAdmin: false,
       platformAccessLevel,
       role: 'Owner',
-      assignedStationId: null,
-      arenaUserId: null,
-    }
-  }
-
-  if (platformAccessLevel === 'platform_admin' || platformAccessLevel === 'super_admin') {
-    const { data: arena, error: arenaError } = await supabase
-      .from('arenas')
-      .select('id')
-      .eq('id', arenaId)
-      .maybeSingle()
-
-    if (arenaError) {
-      throw new Error(`Failed to verify arena existence: ${arenaError.message}`)
-    }
-
-    if (!arena) {
-      throw new AuthorizationError('Arena not found', 404)
-    }
-
-    return {
-      ...currentUser,
-      arenaId,
-      isOwner: false,
-      isPlatformAdmin: true,
-      platformAccessLevel,
-      role: 'PlatformAdmin',
       assignedStationId: null,
       arenaUserId: null,
     }
