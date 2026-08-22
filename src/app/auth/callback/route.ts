@@ -43,13 +43,14 @@ export async function GET(request: Request) {
 
     // Resolve o signup depois da confirmação. Uma correspondência com o catálogo
     // abre análise manual; somente cadastros sem correspondência criam um tenant.
+    // A falha aqui é best-effort: quem já tem conta segue para o painel, onde o
+    // acesso continua sendo validado por ensureWebBackofficeAccessAction.
     const provision = await provisionAfterSignUpAction()
     if (!provision.success) {
         observation.log("error", "auth.callback.provision_failed")
-        return observation.respond(NextResponse.redirect(new URL(`/sign-in?error=${encodeURIComponent(provision.error)}`, url.origin)))
     }
 
-    if (provision.data && ['claim_pending', 'access_conflict', 'rejected'].includes(provision.data.status)) {
+    if (provision.success && provision.data && ['claim_pending', 'access_conflict', 'rejected'].includes(provision.data.status)) {
         observation.log("info", "auth.callback.signup_requires_review", { status: provision.data.status })
         return observation.respond(NextResponse.redirect(new URL('/sign-up/status', url.origin)))
     }
@@ -57,6 +58,7 @@ export async function GET(request: Request) {
     const webAccess = await ensureWebBackofficeAccessAction()
     if (!webAccess.success) {
         observation.log("warn", "auth.callback.access_denied")
+        await supabase.auth.signOut()
         return observation.respond(NextResponse.redirect(new URL(`/sign-in?error=${encodeURIComponent(webAccess.error)}`, url.origin)))
     }
 
