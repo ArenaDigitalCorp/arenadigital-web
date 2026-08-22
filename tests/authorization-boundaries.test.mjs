@@ -81,7 +81,7 @@ test('super admin backoffice has an independent super-admin-only layout', async 
 
   const subscriptionGate = await source('src/components/dashboard/DashboardSubscriptionGate.tsx')
   assert.match(subscriptionGate, /const isGlobalAdminRoute = pathname\.startsWith\('\/dashboard\/admin'\)/)
-  assert.match(subscriptionGate, /isGlobalAdminRoute \|\| isTutorialAccess/)
+  assert.match(subscriptionGate, /isGlobalAdminRoute\s*\|\|\s*isTutorialAccess/)
 
   const shell = await source('src/modules/super-admin/components/SuperAdminShell.tsx')
   assert.match(shell, /Voltar para minha arena/)
