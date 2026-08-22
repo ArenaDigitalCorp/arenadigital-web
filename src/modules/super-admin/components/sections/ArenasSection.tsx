@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { ArenaClaimRequestsCard } from "@/modules/platform-admin/components/ArenaClaimRequestsCard"
+import { ArenaCoverageMap } from "@/modules/platform-admin/components/ArenaCoverageMap"
 import { PublicArenaListingDialog } from "@/modules/platform-admin/components/PublicArenaListingDialog"
 import type {
   PlatformAdminOverview,
@@ -43,26 +44,7 @@ function ArenaMap({ arenas }: { arenas: PlatformArena[] }) {
   return (
     <section className="grid overflow-hidden rounded-2xl border border-slate-800 bg-arena-navy-950 text-white shadow-sm lg:grid-cols-[1fr_330px]">
       <div className="relative min-h-[520px] overflow-hidden border-white/10 lg:border-r">
-        <div className="absolute inset-0 opacity-40 [background-image:linear-gradient(rgba(255,255,255,.045)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.045)_1px,transparent_1px)] [background-size:32px_32px]" />
-        <svg viewBox="0 0 420 460" className="absolute left-1/2 top-1/2 h-[88%] -translate-x-1/2 -translate-y-1/2 text-emerald-950/60" aria-hidden="true">
-          <path fill="currentColor" stroke="rgba(255,255,255,.18)" strokeWidth="2" d="M113 19 169 12 217 31 254 27 282 49 324 56 351 88 384 105 365 139 375 173 346 197 341 231 314 250 302 292 278 315 267 354 231 381 211 426 181 448 160 414 135 389 126 352 97 324 88 287 58 265 66 226 43 196 56 158 75 136 72 96 94 70Z" />
-        </svg>
-        {mappedArenas.map((arena) => {
-          const left = Math.min(94, Math.max(6, (((arena.longitude ?? -54) + 74) / 40) * 100))
-          const top = Math.min(94, Math.max(6, ((5 - (arena.latitude ?? -15)) / 39) * 100))
-          return (
-            <Link
-              key={arena.id}
-              href={`/admin/arenas/${arena.id}`}
-              title={`${arena.name} · ${STATUS_META[arena.commercialStatus].label}`}
-              className={cn(
-                "absolute z-10 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_5px_rgba(255,255,255,.08)] transition hover:z-20 hover:scale-150 focus:z-20 focus:scale-150 focus:outline-none focus:ring-2 focus:ring-orange-300",
-                STATUS_META[arena.commercialStatus].dot,
-              )}
-              style={{ left: `${left}%`, top: `${top}%` }}
-            />
-          )
-        })}
+        <ArenaCoverageMap arenas={mappedArenas} />
         <div className="absolute bottom-5 left-5 rounded-xl border border-white/10 bg-slate-950/80 px-4 py-3 backdrop-blur">
           <p className="font-heading text-2xl font-black">{mappedArenas.length}</p>
           <p className="text-xs text-slate-400">arenas no mapa deste filtro</p>
@@ -70,8 +52,8 @@ function ArenaMap({ arenas }: { arenas: PlatformArena[] }) {
       </div>
       <div className="p-5">
         <p className="font-mono text-[9px] font-bold uppercase tracking-[.2em] text-orange-300">Cobertura geográfica</p>
-        <h2 className="mt-1 font-heading text-xl font-black">Brasil em construção</h2>
-        <p className="mt-2 text-xs leading-5 text-slate-400">O mapa é uma visão de cobertura, não uma ferramenta cartográfica de precisão.</p>
+        <h2 className="mt-1 font-heading text-xl font-black">Mapa operacional</h2>
+        <p className="mt-2 text-xs leading-5 text-slate-400">Localização real pelas coordenadas cadastradas. Clique em um marcador para abrir a arena.</p>
         <div className="mt-5 space-y-2">
           {COMMERCIAL_STATUS_ORDER.map((status) => (
             <div key={status} className="flex items-center justify-between rounded-xl border border-white/10 px-3 py-2.5">
