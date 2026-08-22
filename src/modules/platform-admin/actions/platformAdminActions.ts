@@ -14,19 +14,31 @@ import {
   normalizePublicArenaImportBatchList,
 } from '@/modules/platform-admin/lib/public-arena-import-result'
 import {
+  normalizePublicArenaImportCampaign,
+  normalizePublicArenaImportCampaignList,
+} from '@/modules/platform-admin/lib/public-arena-import-campaign-result'
+import {
   applyPublicArenaImportBatchInputSchema,
   claimPublicArenaAsCustomerInputSchema,
+  createPublicArenaImportCampaignInputSchema,
   discoverOpenStreetMapArenasInputSchema,
   listPublicArenaImportBatchesInputSchema,
+  listPublicArenaImportCampaignsInputSchema,
+  publicArenaImportCampaignStatusInputSchema,
   publicArenaImportBatchIdSchema,
+  retryPublicArenaImportCampaignInputSchema,
   reviewArenaClaimRequestInputSchema,
+  runPublicArenaImportWorkerInputSchema,
   searchEligibleArenaOwnersInputSchema,
   stagePublicArenaImportBatchInputSchema,
   type ApplyPublicArenaImportBatchInput,
   type ClaimPublicArenaAsCustomerInput,
+  type CreatePublicArenaImportCampaignInput,
   type DiscoverOpenStreetMapArenasInput,
   type StagePublicArenaImportBatchInput,
   type ReviewArenaClaimRequestInput,
+  type PublicArenaImportCampaignStatusInput,
+  type RetryPublicArenaImportCampaignInput,
 } from '@/modules/platform-admin/schemas/public-arena-import.schema'
 import {
   publicArenaListingInputSchema,
@@ -52,6 +64,9 @@ import type {
   PlatformUser,
   PublicArenaImportBatchListResult,
   PublicArenaImportBatchResult,
+  PublicArenaImportCampaignListResult,
+  PublicArenaImportCampaignResult,
+  PublicArenaImportWorkerResult,
   PublicArenaImportDraft,
   PublicArenaListingFormOptions,
 } from '@/modules/platform-admin/types/platform-admin.types'
@@ -73,7 +88,12 @@ type PlatformRpcClient = {
       | 'apply_public_arena_import_batch'
       | 'claim_public_arena_as_customer'
       | 'list_arena_claim_requests'
-      | 'review_arena_claim_request',
+      | 'review_arena_claim_request'
+      | 'create_public_arena_import_campaign'
+      | 'list_public_arena_import_campaigns'
+      | 'get_public_arena_import_campaign'
+      | 'set_public_arena_import_campaign_status'
+      | 'retry_public_arena_import_campaign_failures',
     args: Record<string, unknown>,
   ) => Promise<{ data: unknown; error: { message: string } | null }>
 }
@@ -1022,6 +1042,152 @@ export async function listPublicArenaImportBatchesAction(limit = 20): Promise<Pu
     return { success: true, batches: normalizePublicArenaImportBatchList(data) }
   } catch (error) {
     return { success: false, batches: [], error: error instanceof Error ? error.message : 'Não foi possível listar os lotes de arenas.' }
+  }
+}
+
+export async function createPublicArenaImportCampaignAction(
+  input: CreatePublicArenaImportCampaignInput,
+): Promise<PublicArenaImportCampaignResult> {
+  const observer = await observeServerAction({
+    component: 'platform_admin',
+    operation: 'create_public_arena_import_campaign',
+  })
+  try {
+    const profile = await assertPlatformSuperAdminAccess()
+    const parsed = createPublicArenaImportCampaignInputSchema.parse(input)
+    const municipalityIds = [...new Set(parsed.municipalityIds)]
+    const sportIds = [...new Set(parsed.sportIds)]
+    const { data, error } = await asRpcClient().rpc('create_public_arena_import_campaign', {
+      p_actor_user_id: profile.dbUserId,
+      p_operation_id: parsed.operationId,
+      p_name: parsed.name,
+      p_municipality_ids: municipalityIds,
+      p_sport_ids: sportIds,
+      p_max_attempts: parsed.maxAttempts,
+      p_max_results_per_municipality: parsed.maxResultsPerMunicipality,
+      p_start_immediately: parsed.startImmediately,
+      p_reason: parsed.reason,
+    })
+    if (error) throw new Error(error.message)
+    const campaign = normalizePublicArenaImportCampaign(data)
+    revalidatePath('/admin/imports')
+    observer.complete('completed', {
+      campaign_id: campaign.id,
+      municipality_count: municipalityIds.length,
+      sport_count: sportIds.length,
+      start_immediately: parsed.startImmediately,
+    })
+    return { success: true, campaign }
+  } catch (error) {
+    observer.complete('failed', { error_type: error instanceof z.ZodError ? 'validation' : 'operation' })
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Não foi possível criar a campanha de importação.',
+    }
+  }
+}
+
+export async function listPublicArenaImportCampaignsAction(
+  limit = 20,
+): Promise<PublicArenaImportCampaignListResult> {
+  try {
+    const profile = await assertPlatformSuperAdminAccess()
+    const parsedLimit = listPublicArenaImportCampaignsInputSchema.parse(limit)
+    const { data, error } = await asRpcClient().rpc('list_public_arena_import_campaigns', {
+      p_actor_user_id: profile.dbUserId,
+      p_limit: parsedLimit,
+    })
+    if (error) throw new Error(error.message)
+    return { success: true, campaigns: normalizePublicArenaImportCampaignList(data) }
+  } catch (error) {
+    return {
+      success: false,
+      campaigns: [],
+      error: error instanceof Error ? error.message : 'Não foi possível listar as campanhas de importação.',
+    }
+  }
+}
+
+export async function setPublicArenaImportCampaignStatusAction(
+  input: PublicArenaImportCampaignStatusInput,
+): Promise<PublicArenaImportCampaignResult> {
+  try {
+    const profile = await assertPlatformSuperAdminAccess()
+    const parsed = publicArenaImportCampaignStatusInputSchema.parse(input)
+    const { data, error } = await asRpcClient().rpc('set_public_arena_import_campaign_status', {
+      p_actor_user_id: profile.dbUserId,
+      p_campaign_id: parsed.campaignId,
+      p_status: parsed.status,
+      p_reason: parsed.reason,
+    })
+    if (error) throw new Error(error.message)
+    revalidatePath('/admin/imports')
+    return { success: true, campaign: normalizePublicArenaImportCampaign(data) }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Não foi possível alterar a campanha.',
+    }
+  }
+}
+
+export async function retryPublicArenaImportCampaignAction(
+  input: RetryPublicArenaImportCampaignInput,
+): Promise<PublicArenaImportCampaignResult> {
+  try {
+    const profile = await assertPlatformSuperAdminAccess()
+    const parsed = retryPublicArenaImportCampaignInputSchema.parse(input)
+    const { data, error } = await asRpcClient().rpc('retry_public_arena_import_campaign_failures', {
+      p_actor_user_id: profile.dbUserId,
+      p_campaign_id: parsed.campaignId,
+      p_reason: parsed.reason,
+    })
+    if (error) throw new Error(error.message)
+    revalidatePath('/admin/imports')
+    return { success: true, campaign: normalizePublicArenaImportCampaign(data) }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Não foi possível repetir as falhas da campanha.',
+    }
+  }
+}
+
+export async function runPublicArenaImportWorkerAction(
+  limit = 1,
+): Promise<PublicArenaImportWorkerResult> {
+  const emptyResult = { claimed: 0, staged: 0, empty: 0, retrying: 0, failed: 0 }
+  try {
+    await assertPlatformSuperAdminAccess()
+    const parsedLimit = runPublicArenaImportWorkerInputSchema.parse(limit)
+    const { data, error } = await getSupabaseAdmin().functions.invoke('public-arena-import-worker', {
+      body: { limit: parsedLimit },
+    })
+    if (error) throw new Error(error.message)
+    const workerResultSchema = z.object({
+      ok: z.literal(true),
+      claimed: z.number().int().nonnegative(),
+      staged: z.number().int().nonnegative(),
+      empty: z.number().int().nonnegative(),
+      retrying: z.number().int().nonnegative(),
+      failed: z.number().int().nonnegative(),
+    })
+    const result = workerResultSchema.parse(data)
+    revalidatePath('/admin/imports')
+    return {
+      success: true,
+      claimed: result.claimed,
+      staged: result.staged,
+      empty: result.empty,
+      retrying: result.retrying,
+      failed: result.failed,
+    }
+  } catch (error) {
+    return {
+      success: false,
+      ...emptyResult,
+      error: error instanceof Error ? error.message : 'Não foi possível executar o ciclo de descoberta.',
+    }
   }
 }
 

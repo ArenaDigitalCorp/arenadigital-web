@@ -235,6 +235,85 @@ export type PublicArenaImportBatchListResult = PlatformAdminActionResult & {
   batches: PublicArenaImportBatchSummary[]
 }
 
+export type PublicArenaImportCampaignStatus =
+  | 'running'
+  | 'paused'
+  | 'completed'
+  | 'completed_with_errors'
+
+export type PublicArenaImportJobStatus =
+  | 'pending'
+  | 'processing'
+  | 'retry_wait'
+  | 'staged'
+  | 'empty'
+  | 'failed'
+
+export type PublicArenaImportCampaignJob = {
+  id: string
+  municipalityId: number
+  municipalityName: string
+  stateCode: number
+  stateUf: string
+  status: PublicArenaImportJobStatus
+  attemptCount: number
+  nextAttemptAt: string | null
+  lastBatchId: string | null
+  candidateCount: number
+  readyCount: number
+  duplicateCount: number
+  invalidCount: number
+  lastErrorCode: string | null
+  updatedAt: string | null
+  completedAt: string | null
+}
+
+export type PublicArenaImportCampaign = {
+  id: string
+  operationId: string
+  name: string
+  source: 'openstreetmap'
+  status: PublicArenaImportCampaignStatus
+  sportIds: string[]
+  maxAttempts: number
+  maxResultsPerMunicipality: number
+  reason: string
+  createdByUserId: string
+  createdAt: string
+  updatedAt: string
+  startedAt: string | null
+  pausedAt: string | null
+  completedAt: string | null
+  totalCount: number
+  pendingCount: number
+  processingCount: number
+  stagedCount: number
+  emptyCount: number
+  failedCount: number
+  candidateCount: number
+  readyCount: number
+  duplicateCount: number
+  invalidCount: number
+  batchCount: number
+  jobs: PublicArenaImportCampaignJob[]
+}
+
+export type PublicArenaImportCampaignResult = PlatformAdminActionResult & {
+  campaign?: PublicArenaImportCampaign
+}
+
+export type PublicArenaImportCampaignListResult = PlatformAdminActionResult & {
+  campaigns: PublicArenaImportCampaign[]
+}
+
+export type PublicArenaImportWorkerResult = PlatformAdminActionResult & {
+  claimed: number
+  staged: number
+  empty: number
+  retrying: number
+  failed: number
+}
+
 export type OpenStreetMapArenaDiscoveryResult = PlatformAdminActionResult & {
   items?: PublicArenaImportDraft[]
   count?: number
