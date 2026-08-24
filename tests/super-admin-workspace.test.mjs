@@ -18,7 +18,9 @@ test('admin navigation exposes the complete information architecture without are
   assert.match(shell, /href: "\/admin\/imports"/u)
   assert.match(shell, /href: "\/admin\/users"/u)
   assert.match(shell, /aria-current=\{active \? "page" : undefined\}/u)
-  assert.doesNotMatch(shell, /href="\/dashboard"/u)
+  assert.match(shell, /canReturnToOwnedArena &&/u)
+  assert.match(shell, /href="\/dashboard"/u)
+  assert.doesNotMatch(shell, /\/dashboard\/arenas\//u)
 })
 
 test('workspace routes each area to a dedicated section component', async () => {

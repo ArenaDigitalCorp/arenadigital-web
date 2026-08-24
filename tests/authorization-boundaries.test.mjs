@@ -67,11 +67,16 @@ test('super admin backoffice has an independent super-admin-only layout', async 
 
   const adminLayout = await source('src/app/admin/layout.tsx')
   assert.match(adminLayout, /assertPlatformSuperAdminAccess/)
+  assert.match(adminLayout, /hasDirectArenaOwnership\(profile\.dbUserId\)/)
+  assert.match(adminLayout, /canReturnToOwnedArena=\{canReturnToOwnedArena\}/)
   assert.match(adminLayout, /SuperAdminShell/)
   assert.doesNotMatch(adminLayout, /DashboardLayoutWrapper|ArenaProvider|DashboardSubscriptionGate/)
 
   const sidebar = await source('src/components/dashboard/Sidebar.tsx')
   assert.match(sidebar, /const isPlatformAdmin = dbUser\?\.platform_access_level === "platform_admin"/)
+  assert.match(sidebar, /const isSuperAdmin = dbUser\?\.platform_access_level === "super_admin"/)
+  assert.match(sidebar, /isSuperAdmin[\s\S]{0,80}"\/admin\/overview"/)
+  assert.match(sidebar, /Administração da plataforma/)
   assert.doesNotMatch(sidebar, /href="\/dashboard\/admin\/super-admin"/)
 
   const userMenu = await source('src/components/auth/UserMenu.tsx')
@@ -79,7 +84,8 @@ test('super admin backoffice has an independent super-admin-only layout', async 
   assert.doesNotMatch(userMenu, /router\.push\('\/admin\/overview'\)/)
 
   const dashboardLayout = await source('src/app/dashboard/layout.tsx')
-  assert.match(dashboardLayout, /platformAccessLevel === "super_admin"/)
+  assert.match(dashboardLayout, /hasDirectArenaOwnership\(currentUser\.dbUserId\)/)
+  assert.match(dashboardLayout, /platformAccessLevel === "super_admin" && !ownsArena/)
   assert.match(dashboardLayout, /redirect\("\/admin\/overview"\)/)
 
   const dashboardPage = await source('src/app/dashboard/page.tsx')
@@ -90,7 +96,9 @@ test('super admin backoffice has an independent super-admin-only layout', async 
   assert.match(subscriptionGate, /isGlobalAdminRoute\s*\|\|\s*isTutorialAccess/)
 
   const shell = await source('src/modules/super-admin/components/SuperAdminShell.tsx')
-  assert.doesNotMatch(shell, /Voltar para minha arena/)
+  assert.match(shell, /canReturnToOwnedArena &&/)
+  assert.match(shell, /href="\/dashboard"/)
+  assert.match(shell, /Voltar para minha arena/)
   assert.match(shell, /\/admin\/arenas/)
   assert.match(shell, /\/admin\/finance/)
   assert.match(shell, /\/admin\/athletes/)

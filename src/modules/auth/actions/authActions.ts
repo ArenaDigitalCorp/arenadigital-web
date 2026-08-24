@@ -6,6 +6,7 @@ import { findUserByCpf, findUserByEmail, normalizeEmail, resolveAuthenticatedDbU
 import { isValidCpf, isValidCpfOrCnpj, onlyDigits } from "@/lib/brasil-document"
 import {
     getPlatformAccessLevel,
+    hasDirectArenaOwnership,
     hasWebBackofficeAccess,
     WEB_BACKOFFICE_ACCESS_DENIED_MESSAGE,
 } from "@/lib/server-auth"
@@ -289,7 +290,10 @@ export async function ensureWebBackofficeAccessAction(): Promise<ActionResult<We
         }
 
         const platformAccessLevel = await getPlatformAccessLevel(dbUser.id)
-        const adminDestination = platformAccessLevel === 'super_admin'
+        const ownsArena = platformAccessLevel === 'super_admin'
+            ? await hasDirectArenaOwnership(dbUser.id)
+            : false
+        const adminDestination = platformAccessLevel === 'super_admin' && !ownsArena
             ? '/admin/overview'
             : platformAccessLevel === 'platform_admin'
                 ? '/dashboard/admin/platform'

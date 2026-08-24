@@ -45,6 +45,15 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
     const isCashier = selectedArenaDetails?.role === "Caixa" && !selectedArenaDetails?.isOwner;
     const isAdmin = selectedArenaDetails ? canManageArena(selectedArenaDetails) : false;
     const isPlatformAdmin = dbUser?.platform_access_level === "platform_admin";
+    const isSuperAdmin = dbUser?.platform_access_level === "super_admin";
+    const platformWorkspaceHref = isSuperAdmin
+        ? "/admin/overview"
+        : isPlatformAdmin
+            ? "/dashboard/admin/platform"
+            : null;
+    const platformWorkspaceLabel = isSuperAdmin
+        ? "Administração da plataforma"
+        : "Admin Arena Digital";
     const canAccessSubscription = Boolean(isAdmin);
 
     const arenaHref = selectedArena ? `/dashboard/arenas/${selectedArena}` : "/dashboard/arenas";
@@ -169,7 +178,8 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
     const isEditingArena = !!pathname.match(/\/dashboard\/arenas\/[^\/]+\/edit$/);
     const isSettingsActive = (pathname.includes("/settings") && !pathname.startsWith("/dashboard/settings/products")) || isEditingArena;
     const isReportsActive = pathname.startsWith("/dashboard/reports/");
-    const isPlatformAdminActive =
+    const isPlatformWorkspaceActive =
+        pathname.startsWith("/admin") ||
         pathname.startsWith("/dashboard/admin/platform") ||
         pathname.startsWith("/dashboard/admin/mobile-content");
 
@@ -262,7 +272,7 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                             );
                         })}
 
-                        {isPlatformAdmin && (
+                        {platformWorkspaceHref && (
                             <Button
                                 variant="ghost"
                                 className={cn(
@@ -270,33 +280,33 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                     isCollapsed
                                         ? cn(
                                               "h-10 w-10 shrink-0 justify-center p-0",
-                                              isPlatformAdminActive
+                                              isPlatformWorkspaceActive
                                                   ? cn(navActiveText, "bg-white/10 hover:bg-white/15")
                                                   : "text-white hover:bg-white/10 hover:text-white",
                                           )
                                         : cn(
                                               "w-full gap-1.5 justify-start text-white hover:bg-white/10 hover:text-white",
-                                              isPlatformAdminActive &&
+                                              isPlatformWorkspaceActive &&
                                                   cn(navActiveText, "bg-white/5 hover:bg-white/10 hover:text-arena-accent"),
                                           ),
                                 )}
                                 asChild
                                 onClick={() => {
-                                    trackNavigation("Admin Arena Digital", "/dashboard/admin/platform");
+                                    trackNavigation(platformWorkspaceLabel, platformWorkspaceHref);
                                     onNavItemClick?.();
                                 }}
                             >
                                 <Link
-                                    href="/dashboard/admin/platform"
-                                    title={isCollapsed ? "Admin Arena Digital" : ""}
+                                    href={platformWorkspaceHref}
+                                    title={isCollapsed ? platformWorkspaceLabel : ""}
                                     className={cn(isCollapsed && "flex size-full items-center justify-center")}
                                 >
                                     <ShieldCheck className={cn(
                                         "h-5 w-5 transition-all duration-300",
                                         !isCollapsed && "mr-2",
-                                        isPlatformAdminActive && navActiveText
+                                        isPlatformWorkspaceActive && navActiveText
                                     )} />
-                                    {!isCollapsed && <span className="font-medium text-sm">Admin Arena Digital</span>}
+                                    {!isCollapsed && <span className="font-medium text-sm">{platformWorkspaceLabel}</span>}
                                 </Link>
                             </Button>
                         )}

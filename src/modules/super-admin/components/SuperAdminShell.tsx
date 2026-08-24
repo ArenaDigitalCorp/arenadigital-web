@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import { useState } from "react"
 import {
   Activity,
+  ArrowLeft,
   Building2,
   Database,
   LayoutDashboard,
@@ -126,7 +127,13 @@ function Brand() {
   )
 }
 
-export function SuperAdminShell({ children }: { children: React.ReactNode }) {
+export function SuperAdminShell({
+  children,
+  canReturnToOwnedArena,
+}: {
+  children: React.ReactNode
+  canReturnToOwnedArena: boolean
+}) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const currentItem = ALL_ITEMS.find((item) => isActivePath(pathname, item.href)) ?? ALL_ITEMS[0]
@@ -161,6 +168,16 @@ export function SuperAdminShell({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="p-4 pt-0">
+            {canReturnToOwnedArena && (
+              <Link
+                href="/dashboard"
+                onClick={() => setMobileOpen(false)}
+                className="mb-3 flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2.5 text-xs font-semibold text-slate-300 transition hover:border-orange-400/30 hover:bg-white/[.055] hover:text-white"
+              >
+                <ArrowLeft className="h-4 w-4 text-orange-300" />
+                Voltar para minha arena
+              </Link>
+            )}
             <div className="rounded-2xl border border-emerald-400/15 bg-emerald-400/5 p-3.5">
               <div className="flex items-center gap-2 text-[11px] font-bold text-emerald-300"><ShieldCheck className="h-4 w-4" /> Ambiente restrito</div>
               <p className="mt-1.5 text-[9px] leading-4 text-slate-500">Ações sensíveis exigem autorização de servidor e auditoria.</p>
