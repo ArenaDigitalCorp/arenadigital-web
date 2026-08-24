@@ -18,6 +18,13 @@ async function source(relativePath) {
   return readFile(new URL(`../${relativePath}`, import.meta.url), 'utf8')
 }
 
+function exportedFunctionBody(contents, functionName) {
+  const start = contents.indexOf(`export async function ${functionName}`)
+  assert.notEqual(start, -1, `${functionName} must exist`)
+  const next = contents.indexOf('\nexport async function ', start + 1)
+  return contents.slice(start, next === -1 ? contents.length : next)
+}
+
 test('arena capability matrix keeps management and ownership boundaries explicit', () => {
   assert.equal(canManageArena(subjects.owner), true)
   assert.equal(canManageArena(subjects.manager), true)
@@ -31,13 +38,23 @@ test('arena capability matrix keeps management and ownership boundaries explicit
   assert.equal(canManageArenaSubscription(subjects.manager), true)
 })
 
-test('platform administrators stay isolated from customer arena operations', async () => {
+test('platform identities stay isolated while a super admin can access only a directly owned arena', async () => {
   const serverAuth = await source('src/lib/server-auth.ts')
   assert.match(serverAuth, /Platform administrators cannot access customer arena backoffices/)
   assert.doesNotMatch(serverAuth, /role: 'PlatformAdmin'/)
   assert.match(serverAuth, /if \(!access\.isOwner\)/)
 
+  const arenaAccess = exportedFunctionBody(serverAuth, 'assertArenaAccess')
+  const ownedArenaDecision = arenaAccess.indexOf('if (ownedArena)')
+  const superAdminDenial = arenaAccess.indexOf("if (platformAccessLevel === 'super_admin')")
+  const membershipLookup = arenaAccess.indexOf('fetchArenaMembershipByArenaAndUser')
+  assert.ok(ownedArenaDecision !== -1 && ownedArenaDecision < superAdminDenial)
+  assert.ok(superAdminDenial < membershipLookup)
+  assert.match(arenaAccess, /Super administrators can only access arenas they directly own/)
+
   const arenasApi = await source('src/app/api/arenas/route.ts')
+  assert.match(arenasApi, /getPlatformAccessLevel\(dbUserId\)/)
+  assert.match(arenasApi, /platformAccessLevel === 'super_admin'[\s\S]{0,100}Promise\.resolve\(\{ data: \[\], error: null \}\)/)
   assert.doesNotMatch(arenasApi, /platformArenasResult/)
   assert.doesNotMatch(arenasApi, /role: 'PlatformAdmin'/)
 

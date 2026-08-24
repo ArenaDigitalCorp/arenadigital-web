@@ -2,6 +2,7 @@ import { DashboardLayoutWrapper } from "@/components/dashboard/DashboardLayoutWr
 import {
     AuthorizationError,
     getPlatformAccessLevel,
+    hasDirectArenaOwnership,
     requireWebBackofficeAccess,
     type PlatformAccessLevel,
 } from "@/lib/server-auth";
@@ -13,10 +14,14 @@ export default async function DashboardLayout({
     children: React.ReactNode;
 }) {
     let platformAccessLevel: PlatformAccessLevel | null = null;
+    let ownsArena = false;
 
     try {
         const currentUser = await requireWebBackofficeAccess();
         platformAccessLevel = await getPlatformAccessLevel(currentUser.dbUserId);
+        ownsArena = platformAccessLevel === "super_admin"
+            ? await hasDirectArenaOwnership(currentUser.dbUserId)
+            : false;
     } catch (error) {
         if (error instanceof AuthorizationError) {
             const params = new URLSearchParams({ error: error.message });
@@ -26,7 +31,7 @@ export default async function DashboardLayout({
         throw error;
     }
 
-    if (platformAccessLevel === "super_admin") {
+    if (platformAccessLevel === "super_admin" && !ownsArena) {
         redirect("/admin/overview");
     }
 

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { fetchArenaMembershipsByUser } from '@/lib/arena-users'
 import {
   AuthorizationError,
+  getPlatformAccessLevel,
   requireAuthenticatedDbUser,
 } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
@@ -19,6 +20,7 @@ export async function GET() {
   try {
     const { dbUserId } = await requireAuthenticatedDbUser()
     const supabase = getSupabaseAdmin()
+    const platformAccessLevel = await getPlatformAccessLevel(dbUserId)
 
     const [ownedArenasResult, linkedArenasResult] = await Promise.all([
       supabase
@@ -26,7 +28,9 @@ export async function GET() {
         .select('id, name')
         .eq('owner_id', dbUserId)
         .order('name'),
-      fetchArenaMembershipsByUser(supabase, dbUserId, true),
+      platformAccessLevel === 'super_admin'
+        ? Promise.resolve({ data: [], error: null })
+        : fetchArenaMembershipsByUser(supabase, dbUserId, true),
     ])
 
     if (ownedArenasResult.error) {
