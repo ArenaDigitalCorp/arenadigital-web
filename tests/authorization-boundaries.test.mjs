@@ -73,15 +73,16 @@ test('super admin backoffice has an independent super-admin-only layout', async 
   assert.doesNotMatch(adminLayout, /DashboardLayoutWrapper|ArenaProvider|DashboardSubscriptionGate/)
 
   const sidebar = await source('src/components/dashboard/Sidebar.tsx')
-  assert.match(sidebar, /const isPlatformAdmin = dbUser\?\.platform_access_level === "platform_admin"/)
-  assert.match(sidebar, /const isSuperAdmin = dbUser\?\.platform_access_level === "super_admin"/)
-  assert.match(sidebar, /isSuperAdmin[\s\S]{0,80}"\/admin\/overview"/)
-  assert.match(sidebar, /Administração da plataforma/)
+  assert.doesNotMatch(sidebar, /Administração da plataforma/)
+  assert.doesNotMatch(sidebar, /platformWorkspaceHref/)
   assert.doesNotMatch(sidebar, /href="\/dashboard\/admin\/super-admin"/)
 
   const userMenu = await source('src/components/auth/UserMenu.tsx')
   assert.doesNotMatch(userMenu, /Painel admin/)
-  assert.doesNotMatch(userMenu, /router\.push\('\/admin\/overview'\)/)
+  assert.match(userMenu, /platformAccessLevel === 'super_admin'[\s\S]{0,80}'\/admin\/overview'/)
+  assert.match(userMenu, /platformAccessLevel === 'platform_admin'[\s\S]{0,80}'\/dashboard\/admin\/platform'/)
+  assert.match(userMenu, /adminAreaHref &&/)
+  assert.match(userMenu, /Área admin/)
 
   const dashboardLayout = await source('src/app/dashboard/layout.tsx')
   assert.match(dashboardLayout, /hasDirectArenaOwnership\(currentUser\.dbUserId\)/)
