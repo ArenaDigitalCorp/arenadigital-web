@@ -88,7 +88,7 @@ const SECTION_COPY: Record<
     index: "03",
     eyebrow: "Expansão da cobertura",
     title: "Importação",
-    description: "Descubra locais públicos, revise duplicatas e publique um catálogo confiável em lotes auditáveis.",
+    description: "Encontre locais públicos, revise os dados e adicione arenas ao catálogo com segurança.",
   },
   finance: {
     index: "04",
@@ -151,30 +151,22 @@ export function PageIntro({
   const copy = SECTION_COPY[section]
 
   return (
-    <header className="relative mb-6 overflow-hidden rounded-[28px] border border-slate-900/10 bg-white px-5 py-6 shadow-[0_18px_55px_rgba(7,20,29,.06)] sm:px-7 sm:py-7">
-      <div className="pointer-events-none absolute inset-y-0 right-0 w-1/3 opacity-70 [background-image:linear-gradient(135deg,transparent_0%,transparent_46%,rgba(249,116,21,.09)_46%,rgba(249,116,21,.09)_48%,transparent_48%,transparent_100%)] [background-size:28px_28px]" />
-      <div className="relative flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
-        <div className="flex min-w-0 gap-4 sm:gap-5">
-          <span className="font-mono text-xs font-bold tracking-[0.16em] text-orange-600 sm:pt-1">
-            {copy.index}
-          </span>
-          <div>
-            <div className="flex flex-wrap items-center gap-3">
-              <p className="font-mono text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
-                {copy.eyebrow}
-              </p>
-              {signal}
-            </div>
-            <h1 className="mt-2 font-heading text-3xl font-black tracking-tight text-arena-navy-950 sm:text-[40px] sm:leading-none">
-              {copy.title}
-            </h1>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 sm:text-[15px]">
-              {copy.description}
-            </p>
-          </div>
+    <header className="mb-6 flex flex-col justify-between gap-4 px-0.5 py-1 sm:flex-row sm:items-end">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-xs font-semibold text-orange-700">
+            {copy.eyebrow}
+          </p>
+          {signal}
         </div>
-        {action && <div className="flex shrink-0 flex-wrap gap-2 pl-8 sm:pl-10 xl:pl-0">{action}</div>}
+        <h1 className="mt-1.5 font-heading text-3xl font-bold tracking-tight text-arena-navy-950 sm:text-4xl">
+          {copy.title}
+        </h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+          {copy.description}
+        </p>
       </div>
+      {action && <div className="flex shrink-0 flex-wrap gap-2">{action}</div>}
     </header>
   )
 }
@@ -195,18 +187,17 @@ export function MetricCard({
   return (
     <article
       className={cn(
-        "group relative min-h-36 overflow-hidden rounded-2xl border p-5 transition-transform duration-200 hover:-translate-y-0.5",
+        "relative rounded-2xl border p-4",
         tone === "paper" && "border-slate-900/10 bg-white text-slate-950",
-        tone === "navy" && "border-slate-800 bg-arena-navy-950 text-white",
-        tone === "orange" && "border-orange-500 bg-[linear-gradient(135deg,#f97415,#f9a91f)] text-arena-navy-950",
+        tone === "navy" && "border-slate-200 bg-slate-950 text-white",
+        tone === "orange" && "border-orange-200 bg-orange-50 text-slate-950",
         tone === "warning" && "border-rose-200 bg-rose-50 text-rose-950",
       )}
     >
-      <div className="absolute -bottom-12 -right-10 h-32 w-32 rounded-full border-[24px] border-current opacity-[0.045]" />
-      <div className="relative flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-4">
         <p
           className={cn(
-            "font-mono text-[9px] font-bold uppercase tracking-[0.2em]",
+            "text-[11px] font-semibold",
             tone === "navy" ? "text-slate-400" : "text-slate-600",
           )}
         >
@@ -214,18 +205,18 @@ export function MetricCard({
         </p>
         <span
           className={cn(
-            "grid h-9 w-9 shrink-0 place-items-center rounded-xl",
+            "grid h-8 w-8 shrink-0 place-items-center rounded-lg",
             tone === "navy" && "bg-white/10 text-orange-300",
-            tone === "orange" && "bg-slate-950/10 text-slate-950",
-            tone === "paper" && "bg-slate-100 text-orange-700",
+            tone === "orange" && "bg-orange-100 text-orange-800",
+            tone === "paper" && "bg-slate-100 text-slate-600",
             tone === "warning" && "bg-rose-100 text-rose-700",
           )}
         >
           <Icon className="h-4 w-4" />
         </span>
       </div>
-      <p className="relative mt-4 font-heading text-[32px] font-black leading-none tracking-tight">{value}</p>
-      <p className={cn("relative mt-2 text-xs", tone === "navy" ? "text-slate-400" : "text-slate-600")}>{detail}</p>
+      <p className="mt-3 font-heading text-3xl font-bold leading-none tracking-tight">{value}</p>
+      <p className={cn("mt-2 text-xs", tone === "navy" ? "text-slate-400" : "text-slate-500")}>{detail}</p>
     </article>
   )
 }
@@ -335,7 +326,17 @@ export function KindBadge({ kind }: { kind: PlatformArenaKind }) {
   return <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold", meta.badge)}>{meta.label}</span>
 }
 
-export function EmptyState({ icon: Icon, title, description }: { icon: ComponentType<{ className?: string }>; title: string; description: string }) {
+export function EmptyState({
+  icon: Icon,
+  title,
+  description,
+  action,
+}: {
+  icon: ComponentType<{ className?: string }>
+  title: string
+  description: string
+  action?: ReactNode
+}) {
   return (
     <div className="px-6 py-12 text-center">
       <span className="mx-auto grid h-11 w-11 place-items-center rounded-2xl bg-slate-100 text-slate-400">
@@ -343,6 +344,7 @@ export function EmptyState({ icon: Icon, title, description }: { icon: Component
       </span>
       <p className="mt-3 text-sm font-bold text-slate-700">{title}</p>
       <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-slate-500">{description}</p>
+      {action && <div className="mt-4 flex justify-center">{action}</div>}
     </div>
   )
 }

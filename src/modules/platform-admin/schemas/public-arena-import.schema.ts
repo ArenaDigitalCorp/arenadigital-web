@@ -43,7 +43,7 @@ export const stagePublicArenaImportBatchInputSchema = z.object({
 
 export const publicArenaImportBatchIdSchema = z.string().uuid()
 
-export const listPublicArenaImportBatchesInputSchema = z.number().int().min(1).max(25)
+export const listPublicArenaImportBatchesInputSchema = z.number().int().min(1).max(100)
 
 export const createPublicArenaImportCampaignInputSchema = z.object({
   operationId: z.string().uuid(),
