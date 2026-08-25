@@ -39,17 +39,32 @@ test('workspace routes each area to a dedicated section component', async () => 
   }
 })
 
-test('public arena import has a visible operational plan, reviewed discovery and batch history', async () => {
-  const imports = await source('src/modules/super-admin/components/sections/ImportsSection.tsx')
+test('public arena import keeps one primary action and progressively separates batches from campaigns', async () => {
+  const [imports, importSchema] = await Promise.all([
+    source('src/modules/super-admin/components/sections/ImportsSection.tsx'),
+    source('src/modules/platform-admin/schemas/public-arena-import.schema.ts'),
+  ])
 
-  assert.match(imports, /PublicArenaImportDialog/u)
-  assert.match(imports, /listPublicArenaImportBatchesAction\(12\)/u)
-  assert.match(imports, /Descobrir/u)
-  assert.match(imports, /Qualificar/u)
-  assert.match(imports, /Deduplicar/u)
-  assert.match(imports, /Publicar/u)
-  assert.match(imports, /OpenStreetMap/u)
-  assert.match(imports, /criando rascunhos, nunca publicação automática/u)
+  const primaryImportActions = imports.match(
+    /<PublicArenaImportDialog onBatchChange=\{refreshBatch\} \/>/gu,
+  ) ?? []
+
+  assert.equal(primaryImportActions.length, 1)
+  assert.doesNotMatch(imports, /PublicArenaListingDialog/u)
+  assert.match(imports, /const BATCH_HISTORY_LIMIT = 100/u)
+  assert.match(imports, /listPublicArenaImportBatchesAction\(BATCH_HISTORY_LIMIT\)/u)
+  assert.match(importSchema, /listPublicArenaImportBatchesInputSchema = z\.number\(\)\.int\(\)\.min\(1\)\.max\(100\)/u)
+  assert.match(imports, /setBatches\(result\.batches\)/u)
+  assert.match(imports, /Mostrar mais lotes/u)
+  assert.match(imports, /<Tabs defaultValue="batches"/u)
+  assert.match(imports, /<TabsTrigger value="batches"[\s\S]*?>[\s\S]*?Lotes/u)
+  assert.match(imports, /<TabsTrigger value="campaigns"[\s\S]*?>Campanhas<\/TabsTrigger>/u)
+  assert.match(imports, /<PublicArenaImportCampaigns onBatchesChange=\{loadBatches\} \/>/u)
+  assert.match(imports, /batchId=\{batch\.id\}/u)
+  assert.match(imports, /<details[^>]*>[\s\S]*?<summary[^>]*>[\s\S]*?Como funciona a importação\?/u)
+  assert.match(imports, /Importar não publica\./u)
+  assert.match(imports, /As arenas entram ocultas e sem cliente, assinatura ou quadra\./u)
+  assert.match(imports, /A publicação no app continua sendo uma decisão separada na tela da arena\./u)
 })
 
 test('users owns platform access while settings remains focused on global operations', async () => {

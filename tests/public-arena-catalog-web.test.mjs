@@ -134,8 +134,8 @@ test('reviewed imports are superadmin-only, idempotent RPC-backed and hidden by 
   assert.match(actions, /p_operation_id: parsed\.operationId/u)
   assert.match(actions, /rpc\('apply_public_arena_import_batch'/u)
   assert.match(actions, /IBGE:GEOCODIGO/u)
-  assert.match(dialog, /Nenhuma arena aparece no app antes de uma publicação separada/u)
-  assert.match(dialog, /Aplicar cria arenas ocultas, sem cliente, assinatura ou quadra/u)
+  assert.match(dialog, /As arenas serão adicionadas/u)
+  assert.match(dialog, /ocultas<\/strong>, sem cliente, assinatura ou quadra/u)
   assert.match(dialog, /Dados © OpenStreetMap contributors \(ODbL\)/u)
 })
 
