@@ -209,6 +209,7 @@ export function buildTutorialMonthlyPlans(arenaId: string): PlanoMensalistaComDe
     sessoes_por_mes: 4,
     data_inicio: TODAY,
     valor_mensal: Number(value),
+    creation_fingerprint: null,
     created_at: NOW,
     data_encerramento_prevista: null,
     data_encerramento_efetiva: null,
@@ -264,6 +265,8 @@ export function buildTutorialLoyalty(arenaId: string) {
     data_vencimento: null,
     created_at: NOW,
     created_by: null,
+    operation_id: null,
+    validity_code: null,
     atleta: { nome_perfil: athlete },
   })
   return {
