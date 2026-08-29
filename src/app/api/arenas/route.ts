@@ -21,19 +21,16 @@ export async function GET() {
     const { dbUserId } = await requireAuthenticatedDbUser()
     const supabase = getSupabaseAdmin()
     const platformAccessLevel = await getPlatformAccessLevel(dbUserId)
-    const isPlatformAdmin =
-      platformAccessLevel === 'platform_admin' || platformAccessLevel === 'super_admin'
 
-    const [ownedArenasResult, linkedArenasResult, platformArenasResult] = await Promise.all([
+    const [ownedArenasResult, linkedArenasResult] = await Promise.all([
       supabase
         .from('arenas')
         .select('id, name')
         .eq('owner_id', dbUserId)
         .order('name'),
-      fetchArenaMembershipsByUser(supabase, dbUserId, true),
-      isPlatformAdmin
-        ? supabase.from('arenas').select('id, name').order('name')
-        : Promise.resolve({ data: [], error: null }),
+      platformAccessLevel === 'super_admin'
+        ? Promise.resolve({ data: [], error: null })
+        : fetchArenaMembershipsByUser(supabase, dbUserId, true),
     ])
 
     if (ownedArenasResult.error) {
@@ -42,10 +39,6 @@ export async function GET() {
 
     if (linkedArenasResult.error) {
       throw new Error(`Failed to load linked arenas: ${linkedArenasResult.error.message}`)
-    }
-
-    if (platformArenasResult.error) {
-      throw new Error(`Failed to load platform arenas: ${platformArenasResult.error.message}`)
     }
 
     const arenaMap = new Map<string, ArenaSummary>()
@@ -57,17 +50,6 @@ export async function GET() {
         isOwner: true,
         role: 'Owner',
         assignedStationId: null
-      })
-    }
-
-    for (const arena of platformArenasResult.data ?? []) {
-      if (arenaMap.has(arena.id)) continue
-      arenaMap.set(arena.id, {
-        id: arena.id,
-        name: arena.name,
-        isOwner: false,
-        role: 'PlatformAdmin',
-        assignedStationId: null,
       })
     }
 

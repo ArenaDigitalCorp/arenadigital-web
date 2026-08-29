@@ -59,15 +59,15 @@ export default function SignInPage() {
       return
     }
 
+    // A resolução do cadastro é best-effort no login: quem já tem conta não pode
+    // ficar preso porque a consulta falhou. Quem decide o acesso continua sendo
+    // ensureWebBackofficeAccessAction e os asserts de arena.
     const provision = await provisionAfterSignUpAction()
     if (!provision.success) {
-      trackAction('signin_password', 'failure', { source: 'signup_resolution' })
-      setLoading(false)
-      toast.error(provision.error)
-      return
+      trackAction('signup_resolution', 'failure', { source: 'signin_password' })
     }
 
-    if (provision.data && ['claim_pending', 'access_conflict', 'rejected'].includes(provision.data.status)) {
+    if (provision.success && provision.data && ['claim_pending', 'access_conflict', 'rejected'].includes(provision.data.status)) {
       trackAction('signin_password', 'success', { destination: 'signup_status', status: provision.data.status })
       window.location.replace('/sign-up/status')
       return
@@ -83,7 +83,7 @@ export default function SignInPage() {
     }
 
     trackAction('signin_password', 'success')
-    window.location.replace(redirectTo)
+    window.location.replace(webAccess.data?.adminDestination ?? redirectTo)
   }
 
   const handleOtpRequest = async (e: React.FormEvent) => {

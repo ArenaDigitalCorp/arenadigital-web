@@ -36,7 +36,7 @@ test('subscription page treats internal access as an active internal plan', asyn
   assert.match(page, /O plano interno não exige cartão cadastrado/u)
   assert.match(
     page,
-    /planSelectionEnabled && !isPartnerSubscription && !isInternalSubscription/u,
+    /planSelectionEnabled\s*&&\s*!isPartnerSubscription\s*&&\s*!isInternalSubscription/u,
     'internal plans should not show paid-plan selection as the current billing state'
   )
 })

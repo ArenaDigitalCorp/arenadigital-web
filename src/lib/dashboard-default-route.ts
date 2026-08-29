@@ -1,5 +1,5 @@
 import { fetchArenaMembershipsByUser } from '@/lib/arena-users'
-import { getPlatformAccessLevel, requireAuthenticatedDbUser } from '@/lib/server-auth'
+import { requireAuthenticatedDbUser } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import type { ArenaAccessRole } from '@/lib/arena-permissions'
 import { canManageArena } from '@/lib/arena-permissions'
@@ -29,16 +29,10 @@ type AccessibleArenaTarget = {
 async function getAccessibleArenaTargets(): Promise<AccessibleArenaTarget[]> {
   const { dbUserId } = await requireAuthenticatedDbUser()
   const supabase = getSupabaseAdmin()
-  const platformAccessLevel = await getPlatformAccessLevel(dbUserId)
-  const isPlatformAdmin =
-    platformAccessLevel === 'platform_admin' || platformAccessLevel === 'super_admin'
 
-  const [ownedArenasResult, linkedArenasResult, platformArenasResult] = await Promise.all([
+  const [ownedArenasResult, linkedArenasResult] = await Promise.all([
     supabase.from('arenas').select('id, name').eq('owner_id', dbUserId).order('name'),
     fetchArenaMembershipsByUser(supabase, dbUserId, true),
-    isPlatformAdmin
-      ? supabase.from('arenas').select('id, name').order('name')
-      : Promise.resolve({ data: [], error: null }),
   ])
 
   if (ownedArenasResult.error) {
@@ -47,10 +41,6 @@ async function getAccessibleArenaTargets(): Promise<AccessibleArenaTarget[]> {
 
   if (linkedArenasResult.error) {
     throw new Error(`Failed to load linked arenas: ${linkedArenasResult.error.message}`)
-  }
-
-  if (platformArenasResult.error) {
-    throw new Error(`Failed to load platform arenas: ${platformArenasResult.error.message}`)
   }
 
   const arenaMap = new Map<string, AccessibleArenaTarget>()
@@ -62,17 +52,6 @@ async function getAccessibleArenaTargets(): Promise<AccessibleArenaTarget[]> {
       role: 'Owner',
       assignedStationId: null,
       name: arena.name
-    })
-  }
-
-  for (const arena of platformArenasResult.data ?? []) {
-    if (arenaMap.has(arena.id)) continue
-    arenaMap.set(arena.id, {
-      arenaId: arena.id,
-      isOwner: false,
-      role: 'PlatformAdmin',
-      assignedStationId: null,
-      name: arena.name,
     })
   }
 

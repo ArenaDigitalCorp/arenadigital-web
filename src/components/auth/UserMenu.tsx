@@ -1,13 +1,15 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { CalendarDays, IdCard, KeyRound, LogOut, Mail, PanelsTopLeft, Shield, User as UserIcon } from "lucide-react"
+import { CalendarDays, IdCard, KeyRound, LogOut, Mail, Shield, ShieldCheck, User as UserIcon } from "lucide-react"
 import { useUser } from "@/hooks/useUser"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
+import { trackNavigation } from "@/lib/telemetry/client"
 
 function getInitials(name: string | null | undefined, email: string | null | undefined) {
   const source = name?.trim() || email?.trim() || "?"
@@ -89,6 +91,11 @@ export function UserMenu({
   const [accountLoading, setAccountLoading] = React.useState(false)
   const [accountError, setAccountError] = React.useState<string | null>(null)
   const authUserId = user?.id
+  const adminAreaHref = platformAccessLevel === 'super_admin'
+    ? '/admin/overview'
+    : platformAccessLevel === 'platform_admin'
+      ? '/dashboard/admin/platform'
+      : null
 
   React.useEffect(() => {
     if (!authUserId) return
@@ -177,12 +184,18 @@ export function UserMenu({
             <UserIcon className="h-4 w-4 mr-2" />
             Minha conta
           </DropdownMenuItem>
-          {(platformAccessLevel ?? dbUser?.platform_access_level) === 'super_admin' && (
-            <DropdownMenuItem onClick={() => router.push('/admin/overview')} className="cursor-pointer text-orange-200 hover:bg-orange-500/10 focus:bg-orange-500/10 focus:text-orange-100">
-              <PanelsTopLeft className="h-4 w-4 mr-2" />
-              Painel admin
+          {adminAreaHref && (
+            <DropdownMenuItem asChild className="cursor-pointer text-white hover:bg-white/10 focus:bg-white/10">
+              <Link
+                href={adminAreaHref}
+                onClick={() => trackNavigation("Área admin", adminAreaHref)}
+              >
+                <ShieldCheck className="h-4 w-4 mr-2" />
+                Área admin
+              </Link>
             </DropdownMenuItem>
           )}
+          <DropdownMenuSeparator className="bg-white/10" />
           <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer text-rose-300 hover:bg-rose-500/10 focus:bg-rose-500/10 focus:text-rose-200">
             <LogOut className="h-4 w-4 mr-2" />
             Sair

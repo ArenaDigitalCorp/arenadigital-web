@@ -10,8 +10,17 @@ const actionPath = new URL(
 const componentPaths = [
   '../src/modules/bookings/components/MensalistasView.tsx',
   '../src/modules/bookings/components/MensalistasPageClient.tsx',
-  '../src/modules/finance/components/FinanceDashboardClient.tsx',
 ].map((path) => new URL(path, import.meta.url))
+
+const financeDashboardPath = new URL(
+  '../src/modules/finance/components/FinanceDashboardClient.tsx',
+  import.meta.url
+)
+
+const billingActionPath = new URL(
+  '../src/modules/mensalistas/actions/mensalistaActions.ts',
+  import.meta.url
+)
 
 test('mensalista mutations route exclusively through the three atomic RPCs', async () => {
   const source = await readFile(actionPath, 'utf8')
@@ -48,15 +57,25 @@ test('identity and confirmation price are not overposted to monthly RPCs', async
   assert.match(confirmCall, /p_expected_booking_start/)
 })
 
-test('every monthly confirmation caller sends the displayed pending booking', async () => {
+test('legacy monthly confirmation callers still send the displayed pending booking', async () => {
   const sources = await Promise.all(
     componentPaths.map((path) => readFile(path, 'utf8'))
   )
 
   assert.match(sources[0], /confirmDialog\.proximo_mes_reservado as string/)
   assert.match(sources[1], /plano\.proximo_mes_reservado as string/)
-  assert.match(sources[2], /confirmDialog\.expectedBookingStart/)
-  assert.match(sources[2], /expectedBookingStart: plano\.proximo_mes_reservado/)
+})
+
+test('finance dashboard routes mensalista pendencies to the mensalista detail, not an inline confirm', async () => {
+  const finance = await readFile(financeDashboardPath, 'utf8')
+
+  // The monthly payment flow now lives in the mensalistas module. The finance
+  // dashboard only links to the responsible's detail page.
+  assert.doesNotMatch(finance, /confirmarMesMensalistaAction/)
+  assert.match(
+    finance,
+    /href=\{`\/dashboard\/arenas\/\$\{arenaId\}\/mensalistas\/\$\{plano\.athlete_id\}/
+  )
 })
 
 test('monthly action input validation covers tenant identifiers and schedule bounds', async () => {
@@ -67,4 +86,58 @@ test('monthly action input validation covers tenant identifiers and schedule bou
   assert.match(source, /assertMonthlyPlanAthletes/)
   assert.match(source, /sessoes_por_mes: z\.number\(\)\.int\(\)\.min\(1\)\.max\(8\)/)
   assert.match(source, /horario_fim > input\.horario_inicio/)
+})
+
+test('mensalista billing mutations use typed atomic RPCs behind server authorization', async () => {
+  const source = await readFile(billingActionPath, 'utf8')
+
+  for (const rpcName of [
+    'generate_mensalista_mensalidades_atomic',
+    'configure_mensalista_rateio_atomic',
+    'register_mensalista_payment_atomic',
+    'launch_mensalista_credit_atomic',
+    'withdraw_mensalista_credit_atomic',
+    'set_mensalista_termination_atomic',
+  ]) {
+    assert.match(source, new RegExp(`\\.rpc\\(\\s*['"]${rpcName}['"]`))
+  }
+
+  for (const schemaName of [
+    'configureRateioSchema',
+    'registrarPagamentoSchema',
+    'lancarCreditoSchema',
+    'retirarCreditoSchema',
+    'setEncerramentoSchema',
+  ]) {
+    assert.match(source, new RegExp(`${schemaName}\\.parse\\(input\\)`))
+  }
+
+  assert.equal(
+    source.match(/await assertArenaBackofficeAccess\(/g)?.length,
+    7
+  )
+  assert.equal(source.match(/await requireAuthenticatedDbUser\(\)/g)?.length, 7)
+  assert.doesNotMatch(source, /as unknown as RpcClient|type RpcClient/)
+
+  for (const table of [
+    'mensalista_mensalidades',
+    'mensalista_cobrancas',
+    'mensalista_pagamentos',
+    'mensalista_creditos',
+  ]) {
+    assert.doesNotMatch(
+      source,
+      new RegExp(`\\.from\\(['"]${table}['"]\\)[\\s\\S]{0,120}\\.(?:insert|update|delete)\\(`)
+    )
+  }
+})
+
+test('mensalista financial operation IDs are validated and forwarded unchanged', async () => {
+  const source = await readFile(billingActionPath, 'utf8')
+
+  assert.equal(
+    source.match(/p_operation_id:\s*parsed\.operationId/g)?.length,
+    3
+  )
+  assert.doesNotMatch(source, /p_operation_id:\s*(?:crypto\.randomUUID|randomUUID)/)
 })

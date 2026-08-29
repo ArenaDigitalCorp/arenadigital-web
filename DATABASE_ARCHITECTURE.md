@@ -239,6 +239,17 @@ Módulo do **Agente de IA da Arena**: cada arena pode conectar um número de Wha
 - **Isolamento entre arenas (regra de ouro):** o `arena_id` é sempre derivado do `whatsapp_channels.phone_number_id` recebido no webhook — **nunca** do texto da mensagem ou do LLM. Todas as consultas das ferramentas do agente são filtradas por esse `arena_id`.
 - **RLS:** políticas permissivas `Allow all for ...` no padrão atual do projeto. **Exceção de segurança:** o token de acesso (`access_token_encrypted`) é protegido por **cifra em aplicação**, não por RLS.
 
+### 2.13. Mensalistas — Camada de cobrança mensal (`mensalista_mensalidades`, `mensalista_cobrancas`, `mensalista_pagamentos`, `mensalista_creditos`)
+
+Sobre `planos_mensalista` (a "recorrência": um responsável pode ter N linhas) foi criada uma camada de cobrança mensal explícita, para o gestor controlar recebimento por competência, rateio da mensalidade entre várias pessoas, crédito manual em R$ e previsão de encerramento. Migrações (arenadigital-db): `supabase/migrations/20260828120000_mensalista_billing_schema.sql` + `..._mensalista_generate_mensalidades/_configure_rateio/_register_payment/_launch_credit/_set_termination.sql` + `20260828120100_mensalista_billing_acl.sql`. Detalhe em `docs/SPEC-Web-Gestor.md` §18.
+
+- **`planos_mensalista` (novas colunas):** `data_encerramento_prevista`, `encerramento_observacao`, `data_encerramento_efetiva`, `dia_vencimento`.
+- **`mensalista_mensalidades`:** cobrança mensal de uma recorrência numa `competencia` (dia 1). `valor_total` (snapshot de `valor_mensal`), `rateio` bool, `status` ('aberto'|'parcial'|'quitado'|'cancelado'). UNIQUE (`plano_id`, `competencia`).
+- **`mensalista_cobrancas`:** parcela por pessoa (1 quando não há rateio). `atleta_id` NULL = participante avulso (só `nome`). `valor_devido`/`valor_pago`/`credito_aplicado`, `pago_em`, `ativo` (toggle do rateio).
+- **`mensalista_pagamentos`:** evento de pagamento (parciais múltiplos). `valor` (dinheiro, espelhado em `transactions` com `source_type='mensalista_pagamento'`), `credito_aplicado` (não entra no caixa), `data_pagamento`, `transaction_id`.
+- **`mensalista_creditos`:** livro-razão de crédito manual por atleta/arena, `valor` com sinal (entrada > 0; `uso`/`retirada` < 0). `tipo IN ('lancamento','uso','estorno','ajuste','retirada')` — `retirada` (desconto manual parcial do saldo, trava em zero) adicionado em `20260828130000_mensalista_credit_withdraw.sql`. View `mensalista_credito_saldo` = `SUM(valor)` por atleta.
+- **RLS:** `SELECT` para `authenticated` via `public.can_access_arena(arena_id)`; escrita só pelas 5 RPCs `SECURITY DEFINER` (EXECUTE só para `service_role`). Backfill converte `transactions.source_type='monthly_plan_month'` em mensalidade quitada + cobrança + pagamento.
+
 ---
 
 ## 3. Row Level Security (RLS) policies 🛡️

@@ -130,8 +130,8 @@ function capitalizeFirst(str: string) {
 }
 
 function formatSpaceLimit(maxSpaces: number) {
-  if (hasUnlimitedSpaces(maxSpaces)) return 'Espaços ilimitados.'
-  return `Até ${maxSpaces} espaços/quadras incluídos.`
+  if (hasUnlimitedSpaces(maxSpaces)) return 'Espaços ilimitados.';
+  return `Até ${maxSpaces} espaços/quadras incluídos.`;
 }
 
 function getPlanRules(plan: SubscriptionPlanOption) {
@@ -242,10 +242,10 @@ export function SubscriptionPageClient({
   const [actionLoading, setActionLoading] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [cardModalOpen, setCardModalOpen] = useState(false);
-  const [selectedPlanKey, setSelectedPlanKey] = useState<UserSelectablePlanKey>(
+  const [selectedPlanKey, setSelectedPlanKey] = useState<UserSelectablePlanKey | null>(
     plans.some((plan) => plan.key === initialSubscription.planKey)
       ? (initialSubscription.planKey as UserSelectablePlanKey)
-      : plans[0]?.key ?? 'starter'
+      : null
   );
 
   const selectedPlan =
@@ -253,7 +253,7 @@ export function SubscriptionPageClient({
   const isPartnerSubscription = subscription.planKey === PARTNER_PLAN_KEY;
   const isInternalSubscription = subscription.hasInternalAccess;
   const subscriptionNotice = getSubscriptionNotice(subscription);
-  const resolveBillingPlanKey = (): PlanKey =>
+  const resolveBillingPlanKey = (): PlanKey | null =>
     subscription.planKey ?? selectedPlanKey;
 
   const hasSubscription =
@@ -279,7 +279,14 @@ export function SubscriptionPageClient({
     }
   }
 
-  async function handleOpenCardModal(planKey: PlanKey = resolveBillingPlanKey()) {
+  async function handleOpenCardModal(
+    planKey: PlanKey | null = resolveBillingPlanKey()
+  ) {
+    if (!planKey) {
+      toast.error('Selecione um plano para continuar.');
+      return;
+    }
+
     setActionLoading(true);
 
     try {
@@ -432,99 +439,99 @@ export function SubscriptionPageClient({
         </p>
       </div>
 
-      {planSelectionEnabled && !isPartnerSubscription && !isInternalSubscription && (
-        <section>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {plans.map((plan) => {
-              const isSelected = plan.key === selectedPlanKey;
-              const isCurrent = subscription.planKey === plan.key;
-              const presentation = PLAN_PRESENTATION[plan.key];
-              const PlanIcon = presentation.icon;
-              const rules = getPlanRules(plan);
+      {planSelectionEnabled &&
+        !isPartnerSubscription &&
+        !isInternalSubscription && (
+          <section>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+              {plans.map((plan) => {
+                const isSelected = plan.key === selectedPlanKey;
+                const presentation = PLAN_PRESENTATION[plan.key];
+                const PlanIcon = presentation.icon;
+                const rules = getPlanRules(plan);
 
-              return (
-                <Card
-                  key={plan.key}
-                  className={cn(
-                    'relative overflow-hidden rounded-lg border-slate-200 bg-white py-0 shadow-sm transition-[border-color,box-shadow,transform] duration-200',
-                    isSelected &&
-                      'border-arena-button shadow-[0_0_0_1px_rgba(255,107,0,0.16),0_10px_28px_rgba(0,43,64,0.08)]',
-                    !isSelected && 'hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md'
-                  )}
-                >
-                  <CardContent className="flex h-full flex-col p-5">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={cn(
-                            'flex h-10 w-10 items-center justify-center rounded-lg',
-                            presentation.iconClassName
+                return (
+                  <Card
+                    key={plan.key}
+                    className={cn(
+                      'relative overflow-hidden rounded-lg border-slate-200 bg-white py-0 shadow-sm transition-[border-color,box-shadow,transform] duration-200',
+                      isSelected &&
+                        'border-arena-button shadow-[0_0_0_1px_rgba(255,107,0,0.16),0_10px_28px_rgba(0,43,64,0.08)]',
+                      !isSelected &&
+                        'hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md'
+                    )}
+                  >
+                    <CardContent className="flex h-full flex-col p-5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={cn(
+                              'flex h-10 w-10 items-center justify-center rounded-lg',
+                              presentation.iconClassName
+                            )}
+                          >
+                            <PlanIcon className="h-5 w-5" />
+                          </div>
+                          <h4 className="font-heading text-lg font-black text-arena-navy-800">
+                            {plan.label}
+                          </h4>
+                        </div>
+                      </div>
+
+                      <div className="mt-5 border-y border-slate-100 py-4">
+                        <p className="font-heading text-3xl font-black leading-none text-arena-navy-800">
+                          {formatPrice(plan.priceCents)}
+                          {plan.key !== 'experimental' && (
+                            <span className="ml-1 font-sans text-sm font-semibold text-arena-navy-800/50">
+                              /mês
+                            </span>
                           )}
-                        >
-                          <PlanIcon className="h-5 w-5" />
-                        </div>
-                        <h4 className="font-heading text-lg font-black text-arena-navy-800">
-                          {plan.label}
-                        </h4>
+                        </p>
+                        <p className="mt-2 text-xs font-medium text-arena-navy-800/50">
+                          {plan.key === 'experimental'
+                            ? 'Gratuito por até 5 dias'
+                            : 'Plano anual'}
+                        </p>
                       </div>
-                      <div className="flex flex-wrap justify-end gap-1.5">
-                        {isCurrent && (
-                          <Badge className="bg-teal-700 text-white">Plano atual</Badge>
-                        )}
+
+                      <div className="mt-4 flex items-start gap-2 rounded-md bg-slate-50 px-3 py-2.5 text-sm font-bold text-arena-navy-800">
+                        <Building2 className="mt-0.5 h-4 w-4 shrink-0 text-teal-700" />
+                        <span>{formatSpaceLimit(plan.maxSpaces)}</span>
                       </div>
-                    </div>
 
-                    <div className="mt-5 border-y border-slate-100 py-4">
-                      <p className="font-heading text-3xl font-black leading-none text-arena-navy-800">
-                        {formatPrice(plan.priceCents)}
-                        {plan.key !== 'experimental' && (
-                          <span className="ml-1 font-sans text-sm font-semibold text-arena-navy-800/50">
-                            /mês
-                          </span>
+                      <div className="mt-4 flex-1 space-y-2">
+                        {rules.map((rule) => (
+                          <div
+                            key={rule}
+                            className="flex items-start gap-2 text-sm text-arena-navy-800/75"
+                          >
+                            <Check className="mt-0.5 h-4 w-4 shrink-0 text-teal-700" />
+                            <span>{rule}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <Button
+                        type="button"
+                        variant={isSelected ? 'default' : 'outline'}
+                        aria-pressed={isSelected}
+                        className={cn(
+                          'mt-5 w-full rounded-md font-bold',
+                          isSelected
+                            ? 'bg-arena-button text-white hover:bg-arena-button-hover'
+                            : 'border-slate-300 text-arena-navy-800 hover:bg-slate-50'
                         )}
-                      </p>
-                      <p className="mt-2 text-xs font-medium text-arena-navy-800/50">
-                        {plan.key === 'experimental'
-                          ? 'Gratuito por até 5 dias'
-                          : 'Plano anual'}
-                      </p>
-                    </div>
-
-                    <div className="mt-4 flex items-start gap-2 rounded-md bg-slate-50 px-3 py-2.5 text-sm font-bold text-arena-navy-800">
-                      <Building2 className="mt-0.5 h-4 w-4 shrink-0 text-teal-700" />
-                      <span>{formatSpaceLimit(plan.maxSpaces)}</span>
-                    </div>
-
-                    <div className="mt-4 flex-1 space-y-2">
-                      {rules.map((rule) => (
-                        <div key={rule} className="flex items-start gap-2 text-sm text-arena-navy-800/75">
-                          <Check className="mt-0.5 h-4 w-4 shrink-0 text-teal-700" />
-                          <span>{rule}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    <Button
-                      type="button"
-                      variant={isSelected ? 'default' : 'outline'}
-                      aria-pressed={isSelected}
-                      className={cn(
-                        'mt-5 w-full rounded-md font-bold',
-                        isSelected
-                          ? 'bg-arena-button text-white hover:bg-arena-button-hover'
-                          : 'border-slate-300 text-arena-navy-800 hover:bg-slate-50'
-                      )}
-                      onClick={() => setSelectedPlanKey(plan.key)}
-                    >
-                      {isSelected ? 'Plano selecionado' : 'Selecionar plano'}
-                    </Button>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </section>
-      )}
+                        onClick={() => setSelectedPlanKey(plan.key)}
+                      >
+                        {isSelected ? 'Plano selecionado' : 'Selecionar plano'}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
       <Tabs defaultValue="dados-basicos">
         <TabsList variant="line">
@@ -546,18 +553,20 @@ export function SubscriptionPageClient({
                       necessidade de cartão.
                     </p>
                   </div>
-                ) : !hasSubscription && (
-                  <div className="rounded-lg border border-arena-button/20 bg-arena-button/5 px-3 py-2.5 text-sm text-[#0D3B45]">
-                    <p className="font-medium">Nenhuma assinatura ativa</p>
-                    <p className="mt-1 text-muted-foreground">
-                      Cadastre o cartão em &quot;Dados do cartão&quot; nesta
-                      página para ativar
-                      {selectedPlan
-                        ? ` o plano ${selectedPlan.label}`
-                        : ' a assinatura'}
-                      .
-                    </p>
-                  </div>
+                ) : (
+                  !hasSubscription && (
+                    <div className="rounded-lg border border-arena-button/20 bg-arena-button/5 px-3 py-2.5 text-sm text-[#0D3B45]">
+                      <p className="font-medium">Nenhuma assinatura ativa</p>
+                      <p className="mt-1 text-muted-foreground">
+                        Cadastre o cartão em &quot;Dados do cartão&quot; nesta
+                        página para ativar
+                        {selectedPlan
+                          ? ` o plano ${selectedPlan.label}`
+                          : ' a assinatura'}
+                        .
+                      </p>
+                    </div>
+                  )
                 )}
 
                 <div className="grid grid-cols-2 gap-x-8 gap-y-5">
@@ -626,10 +635,14 @@ export function SubscriptionPageClient({
                 </div>
 
                 {subscriptionNotice && (
-                  <div className={`flex items-start gap-2 rounded-md p-3 text-sm ${subscriptionNotice.className}`}>
+                  <div
+                    className={`flex items-start gap-2 rounded-md p-3 text-sm ${subscriptionNotice.className}`}
+                  >
                     <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                     <div>
-                      <p className="font-semibold">{subscriptionNotice.title}</p>
+                      <p className="font-semibold">
+                        {subscriptionNotice.title}
+                      </p>
                       <p>{subscriptionNotice.message}</p>
                     </div>
                   </div>
@@ -723,9 +736,7 @@ export function SubscriptionPageClient({
                         <button
                           type="button"
                           onClick={() =>
-                            handleOpenCardModal(
-                              resolveBillingPlanKey()
-                            )
+                            handleOpenCardModal(resolveBillingPlanKey())
                           }
                           disabled={actionLoading}
                           className="text-sm text-[#1B7B8A] hover:underline disabled:opacity-50"
@@ -762,9 +773,7 @@ export function SubscriptionPageClient({
                           <button
                             type="button"
                             onClick={() =>
-                              handleOpenCardModal(
-                                resolveBillingPlanKey()
-                              )
+                              handleOpenCardModal(resolveBillingPlanKey())
                             }
                             disabled={actionLoading}
                             className="text-sm text-[#1B7B8A] hover:underline disabled:opacity-50"

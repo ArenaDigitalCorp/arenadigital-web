@@ -598,3 +598,160 @@ seção 16.1); sem policy de insert — só as RPCs abaixo (security definer) gr
   stationMovementActions.ts): filtro "Status" ganha "Pendente"; nova coluna "Status
   comanda" com badge por status e, quando pending, a data de "pendente desde"
   (StationMovementRow.pending_marked_at).
+
+## 18. Mensalistas — Gestão, Rateio, Crédito e Previsão de Encerramento
+
+Remodelagem da tela de Mensalistas (28/08/2026). `planos_mensalista` continua sendo a
+entidade "recorrência" (um atleta com N horários = N linhas em `planos_mensalista`).
+Sobre ela foi criada uma camada de cobrança mensal explícita.
+
+Migrações (repositório arenadigital-db, fonte única do schema):
+- `supabase/migrations/20260828120000_mensalista_billing_schema.sql` — tabelas, view,
+  colunas em `planos_mensalista`, RLS, grants e backfill.
+- `20260828120010_mensalista_generate_mensalidades.sql`
+- `20260828120020_mensalista_configure_rateio.sql`
+- `20260828120030_mensalista_register_payment.sql`
+- `20260828120040_mensalista_launch_credit.sql`
+- `20260828120050_mensalista_set_termination.sql`
+- `20260828120100_mensalista_billing_acl.sql` — REVOKE/GRANT EXECUTE (service_role) das 5 RPCs.
+
+As RPCs atômicas antigas (`create_/cancel_/confirm_monthly_plan_month_atomic`) continuam
+no banco; a nova UI não chama mais `confirm_monthly_plan_month_atomic` — a confirmação do
+mês passa pelo fluxo de pagamento abaixo.
+
+### 18.1 Modelo de dados
+
+`planos_mensalista` (novas colunas)
+- data_encerramento_prevista date — mês a partir do qual a recorrência será encerrada
+- encerramento_observacao text
+- data_encerramento_efetiva date — preenchida quando o plano realmente encerra
+- dia_vencimento smallint check (1..28)
+
+`mensalista_mensalidades` — cobrança mensal de uma recorrência numa competência
+- id uuid pk / arena_id fk arenas / plano_id fk planos_mensalista on delete cascade
+- athlete_id uuid fk atleta — responsável (desnormalizado para agrupar/consultar)
+- competencia date not null (dia 1 do mês) / valor_total numeric(10,2) — snapshot de valor_mensal
+- rateio boolean default false
+- status text check ('aberto' | 'parcial' | 'quitado' | 'cancelado')
+- vencimento date / created_at / updated_at
+- unique (plano_id, competencia)
+
+`mensalista_cobrancas` — parcela por pessoa (1 linha quando não há rateio)
+- id uuid pk / arena_id / mensalidade_id fk on delete cascade
+- atleta_id uuid fk atleta on delete set null — NULL = participante avulso (só nome)
+- nome text not null / valor_devido / valor_pago / credito_aplicado numeric(10,2)
+- pago_em timestamptz — preenchido quando valor_pago + credito_aplicado >= valor_devido
+- modo_pagamento_id fk modo_pagamento / ativo boolean default true (toggle do rateio)
+- observacao text / created_at / updated_at
+
+`mensalista_pagamentos` — evento de pagamento (permite parciais múltiplos)
+- id uuid pk (= chave de idempotência da RPC) / arena_id / cobranca_id fk on delete cascade
+- valor numeric(10,2) — dinheiro (espelhado em public.transactions)
+- credito_aplicado numeric(10,2) — parte paga com crédito (não entra no caixa)
+- data_pagamento date / modo_pagamento_id / observacao / registered_by fk users
+- transaction_id fk transactions on delete set null / created_at
+
+`mensalista_creditos` — livro-razão de crédito manual por atleta e arena (valor com sinal)
+- id uuid pk / arena_id / atleta_id fk atleta on delete cascade
+- tipo text check ('lancamento' | 'uso' | 'estorno' | 'ajuste' | 'retirada')
+  ('retirada' adicionado em `20260828130000_mensalista_credit_withdraw.sql`)
+- valor numeric(10,2) not null, <> 0 — entrada de crédito > 0; uso e retirada < 0
+- descricao text / cobranca_id fk (quando tipo='uso') / registered_by fk users / created_at
+
+`mensalista_credito_saldo` (view) — arena_id, atleta_id, saldo = SUM(valor)
+
+RLS (todas as tabelas): select para authenticated com `public.can_access_arena(arena_id)`;
+sem policy de insert/update/delete — só as RPCs (security definer, service_role) gravam.
+
+Backfill: cada `public.transactions` com source_type='monthly_plan_month' vira uma
+`mensalista_mensalidades` quitada + 1 `mensalista_cobrancas` do responsável +
+1 `mensalista_pagamentos` ligado à transação. Idempotente.
+
+### 18.2 RPCs (Postgres, security definer, search_path = '')
+
+- `generate_mensalista_mensalidades_atomic(p_arena_id, p_competencia, p_registered_by)`
+  Para cada recorrência ativa da arena na competência (data_inicio <= fim do mês,
+  status <> 'cancelado', antes de data_encerramento_efetiva), garante 1 mensalidade
+  (unique plano_id+competencia) + 1 cobrança default do responsável. Idempotente
+  (advisory lock por arena+competencia). Chamada a cada load da tela.
+
+- `configure_mensalista_rateio_atomic(p_arena_id, p_mensalidade_id, p_rateio, p_participantes jsonb, p_registered_by)`
+  p_participantes = [{ atleta_id?, nome, ativo, valor }]. Congela as parcelas já pagas,
+  apaga as não pagas e recria a partir da lista. rateio=false colapsa numa parcela do
+  responsável. Valida Σ(ativas) + Σ(travadas) = valor_total (tolerância 0,01) e que os
+  atleta_id pertencem à arena. Recalcula o status da mensalidade.
+
+- `register_mensalista_payment_atomic(p_operation_id, p_arena_id, p_cobranca_id, p_valor, p_credito_aplicado, p_data, p_modo_pagamento_id, p_observacao, p_registered_by)`
+  Idempotente (p_operation_id = id do pagamento). Rejeita overpay. Crédito exige
+  cobrança com atleta_id e saldo suficiente (grava `mensalista_creditos` tipo='uso',
+  valor negativo). Insere `mensalista_pagamentos`; atualiza a cobrança (valor_pago,
+  credito_aplicado, pago_em). Só a parte em dinheiro vai para `public.transactions`
+  (type='entrada', category='Mensalidade', source_type='mensalista_pagamento',
+  source_id=pagamento.id, ON CONFLICT DO UPDATE). Recalcula o status. Ao transicionar
+  para 'quitado' (plano ativo): confirma os `bookings` 'reservado' da competência
+  (price/rental_price = valor_total / sessoes_por_mes) e gera 1 mês 'reservado' à frente
+  via `public._insert_monthly_plan_month_bookings`, exceto se
+  data_encerramento_prevista cobrir o mês seguinte.
+
+- `launch_mensalista_credit_atomic(p_operation_id, p_arena_id, p_atleta_id, p_valor, p_descricao, p_registered_by)`
+  Idempotente (p_operation_id = id do crédito). Valida atleta na arena. Insere
+  `mensalista_creditos` (tipo 'lancamento' se valor > 0, senão 'ajuste'). Não gera
+  transação. Retorna o novo saldo.
+
+- `withdraw_mensalista_credit_atomic(p_operation_id, p_arena_id, p_atleta_id, p_valor, p_descricao, p_registered_by)`
+  (`20260828130000` + `..._acl.sql`). Retirada manual de crédito. Idempotente
+  (p_operation_id = id do movimento). `p_valor` é a magnitude; grava
+  `mensalista_creditos` tipo='retirada', valor = -abs(p_valor). Trava por
+  `advisory_xact_lock` e **rejeita se `saldo < valor`** (`ERRCODE 55000`), então pode
+  ser feita em várias parcelas até zerar. Não gera transação. Retorna o novo saldo.
+
+- `set_mensalista_termination_atomic(p_arena_id, p_plan_id, p_data_prevista, p_observacao, p_registered_by)`
+  Grava data_encerramento_prevista + encerramento_observacao no plano e cancela os
+  `bookings` 'reservado' com start_time >= mês previsto (America/Sao_Paulo).
+  p_data_prevista = NULL limpa a previsão. Não altera o status do plano.
+
+### 18.3 Backend web (src/modules/mensalistas)
+
+- types/mensalista.types.ts — rows das tabelas + `MensalistaResumo` (agregado por
+  responsável), `MensalistaDetalhe`, `RecorrenciaResumo`, `RateioParticipanteInput`.
+- schemas/mensalista.schema.ts — zod (configureRateio, registrarPagamento, lancarCredito,
+  setEncerramento).
+- actions/mensalistaActions.ts (server actions, `assertArenaBackofficeAccess` +
+  `requireAuthenticatedDbUser`, `revalidatePath` de mensalistas/finance/relatórios):
+  - getMensalistasOverviewAction(arenaId, competencia) — chama a RPC de geração, lê
+    planos + mensalidades + cobranças + saldo de crédito, agrupa por athlete_id e
+    calcula KPIs. Também busca `mensalista_mensalidades` com `competencia <` 1º dia do
+    mês corrente e `status in ('aberto','parcial')` → por responsável, `atrasoValor`
+    (Σ restante das cobranças ativas) e `atrasoMeses`; totais `atrasoTotal` /
+    `atrasoMensalistas`.
+  - getMensalistaDetailAction(arenaId, athleteId, competencia) — inclui `atrasos`
+    (competências anteriores ao mês corrente, diferentes da visualizada, ainda
+    abertas), cada uma com quadra, valor devido/pago/restante e as cobranças, para
+    "Registrar pagamento" direto. Também retorna `fidelidade` = `{ moeda:
+    arenas.nome_moeda_virtual, saldo: athlete_loyalty_balance.balance }` para o
+    card de saldo do programa de fidelidade.
+  - configureRateioAction / registrarPagamentoAction / lancarCreditoAction /
+    retirarCreditoAction / setEncerramentoAction — parse zod + RPC correspondente.
+
+### 18.4 Rotas e UI
+
+- `/dashboard/arenas/{id}/mensalistas?competencia=YYYY-MM` —
+  `MensalistasOverviewClient` (lista por responsável, stepper de mês, 4 KPIs, filtros,
+  situação visual). Mantém `?tutorial=1` (client legado com mock).
+- `/dashboard/arenas/{id}/mensalistas/{athleteId}?competencia=YYYY-MM` —
+  `MensalistaDetailClient` (KPIs — a receber / recebido / restante / crédito e um 5º
+  card com o **saldo do programa de fidelidade** do atleta: nome da moeda da arena,
+  saldo `$` e legenda "(Saldo Programa Fidelidade)", ícone `Star` do menu —,
+  recorrências + mensalidade do mês, histórico de pagamentos paginado, extrato de
+  créditos). Por recorrência: toggle de rateio,
+  "Prever encerramento" e "Cancelar plano" (reusa `cancel_monthly_plan_atomic` via
+  `cancelPlanoMensalistaAction`). A **criação** de recorrência continua no calendário
+  do espaço (`BookingModal`/`MensalistaModal` → `create_monthly_plan_atomic`).
+- Modais: `RateioModal` (lista de atletas do rateio, toggle + valor + adicionar
+  participante/nome avulso, split igual ao vivo), `RegistrarPagamentoModal` (valor +
+  data + forma + aplicar crédito), `LancarCreditoModal`, `RetirarCreditoModal`
+  (retirada parcial do saldo do responsável, limitada ao saldo, registrada no extrato
+  de créditos), `EncerramentoModal`.
+- Util `src/lib/format.ts` — formatCurrency / formatCompetencia / formatDate / toCompetencia.
+- `FinanceDashboardClient`: o botão "Confirmar" do painel de mensalistas pendentes vira
+  link para o detalhe do mensalista.

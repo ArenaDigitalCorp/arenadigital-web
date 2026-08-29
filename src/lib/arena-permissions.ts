@@ -1,7 +1,7 @@
 export const ARENA_MEMBERSHIP_ROLES = ['Gestor', 'Atendente', 'Caixa'] as const
 
 export type ArenaMembershipRole = (typeof ARENA_MEMBERSHIP_ROLES)[number]
-export type ArenaAccessRole = 'Owner' | 'PlatformAdmin' | ArenaMembershipRole
+export type ArenaAccessRole = 'Owner' | ArenaMembershipRole
 
 export type ArenaPermissionSubject = {
   isOwner: boolean
@@ -19,7 +19,7 @@ export function canAccessArenaBackoffice(subject: ArenaPermissionSubject) {
 }
 
 export function canManageArena(subject: ArenaPermissionSubject) {
-  return subject.isOwner || subject.role === 'Gestor' || subject.role === 'PlatformAdmin'
+  return subject.isOwner || subject.role === 'Gestor'
 }
 
 export function canManageArenaSubscription(subject: ArenaPermissionSubject) {

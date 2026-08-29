@@ -17,7 +17,6 @@ import {
     Package,
     BarChart2,
     ClipboardPen,
-    ShieldCheck,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -44,7 +43,6 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
     // Perfis de acesso
     const isCashier = selectedArenaDetails?.role === "Caixa" && !selectedArenaDetails?.isOwner;
     const isAdmin = selectedArenaDetails ? canManageArena(selectedArenaDetails) : false;
-    const isPlatformAdmin = dbUser?.platform_access_level === "platform_admin";
     const canAccessSubscription = Boolean(isAdmin);
 
     const arenaHref = selectedArena ? `/dashboard/arenas/${selectedArena}` : "/dashboard/arenas";
@@ -169,10 +167,6 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
     const isEditingArena = !!pathname.match(/\/dashboard\/arenas\/[^\/]+\/edit$/);
     const isSettingsActive = (pathname.includes("/settings") && !pathname.startsWith("/dashboard/settings/products")) || isEditingArena;
     const isReportsActive = pathname.startsWith("/dashboard/reports/");
-    const isPlatformAdminActive =
-        pathname.startsWith("/dashboard/admin/platform") ||
-        pathname.startsWith("/dashboard/admin/mobile-content");
-
     const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(isSettingsActive);
     const [isReportsOpen, setIsReportsOpen] = useState<boolean>(isReportsActive);
     const shouldShowSettingsOpen = !isCollapsed && (isSettingsOpen || isSettingsActive);
@@ -261,45 +255,6 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                 </Button>
                             );
                         })}
-
-                        {isPlatformAdmin && (
-                            <Button
-                                variant="ghost"
-                                className={cn(
-                                    "transition-colors flex items-center rounded-md",
-                                    isCollapsed
-                                        ? cn(
-                                              "h-10 w-10 shrink-0 justify-center p-0",
-                                              isPlatformAdminActive
-                                                  ? cn(navActiveText, "bg-white/10 hover:bg-white/15")
-                                                  : "text-white hover:bg-white/10 hover:text-white",
-                                          )
-                                        : cn(
-                                              "w-full gap-1.5 justify-start text-white hover:bg-white/10 hover:text-white",
-                                              isPlatformAdminActive &&
-                                                  cn(navActiveText, "bg-white/5 hover:bg-white/10 hover:text-arena-accent"),
-                                          ),
-                                )}
-                                asChild
-                                onClick={() => {
-                                    trackNavigation("Admin Arena Digital", "/dashboard/admin/platform");
-                                    onNavItemClick?.();
-                                }}
-                            >
-                                <Link
-                                    href="/dashboard/admin/platform"
-                                    title={isCollapsed ? "Admin Arena Digital" : ""}
-                                    className={cn(isCollapsed && "flex size-full items-center justify-center")}
-                                >
-                                    <ShieldCheck className={cn(
-                                        "h-5 w-5 transition-all duration-300",
-                                        !isCollapsed && "mr-2",
-                                        isPlatformAdminActive && navActiveText
-                                    )} />
-                                    {!isCollapsed && <span className="font-medium text-sm">Admin Arena Digital</span>}
-                                </Link>
-                            </Button>
-                        )}
 
                         {!isCashier && isAdmin && (
                         <div>

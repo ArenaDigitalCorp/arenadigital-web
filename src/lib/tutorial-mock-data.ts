@@ -209,7 +209,12 @@ export function buildTutorialMonthlyPlans(arenaId: string): PlanoMensalistaComDe
     sessoes_por_mes: 4,
     data_inicio: TODAY,
     valor_mensal: Number(value),
+    creation_fingerprint: null,
     created_at: NOW,
+    data_encerramento_prevista: null,
+    data_encerramento_efetiva: null,
+    encerramento_observacao: null,
+    dia_vencimento: null,
     atleta: { id: `tutorial-athlete-${index + 1}`, nome_perfil: String(athlete), telefone: '(11) 98888-1020' },
     sports: { id: `tutorial-sport-${index + 1}`, name: String(sport) },
     court: { id: `tutorial-court-${index + 1}`, name: String(court) },
@@ -260,6 +265,8 @@ export function buildTutorialLoyalty(arenaId: string) {
     data_vencimento: null,
     created_at: NOW,
     created_by: null,
+    operation_id: null,
+    validity_code: null,
     atleta: { nome_perfil: athlete },
   })
   return {

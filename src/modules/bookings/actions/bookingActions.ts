@@ -38,8 +38,8 @@ export async function confirmarPagamentoAvulsoAction(
             p_arena_id: arenaId,
             p_booking_id: bookingId,
             p_registered_by: dbUserId,
-            p_amount: valorOverride !== undefined && valorOverride > 0 ? valorOverride : null,
-            p_modo_pagamento_id: modoPagamentoId ?? null,
+            p_amount: valorOverride !== undefined && valorOverride > 0 ? valorOverride : undefined,
+            p_modo_pagamento_id: modoPagamentoId ?? undefined,
         })
 
         if (error) throw new Error(error.message)
@@ -69,8 +69,8 @@ export async function confirmarPagamentoParticipanteAvulsoAction(
             p_booking_id: bookingId,
             p_participant_id: participantId,
             p_registered_by: dbUserId,
-            p_amount: valorOverride !== undefined && valorOverride > 0 ? valorOverride : null,
-            p_modo_pagamento_id: modoPagamentoId ?? null,
+            p_amount: valorOverride !== undefined && valorOverride > 0 ? valorOverride : undefined,
+            p_modo_pagamento_id: modoPagamentoId ?? undefined,
         })
 
         if (error) throw new Error(error.message)
@@ -401,15 +401,15 @@ export async function createBookingAction(
             p_start_time: input.start_time,
             p_end_time: input.end_time,
             p_status: input.status ?? 'confirmed',
-            p_athlete_id: input.athlete_id ?? null,
-            p_sport_id: input.sport_id ?? null,
+            p_athlete_id: input.athlete_id ?? undefined,
+            p_sport_id: input.sport_id ?? undefined,
             p_price: input.price ?? 0,
-            p_recurrence_id: input.recurrence_id ?? null,
+            p_recurrence_id: input.recurrence_id ?? undefined,
             p_booking_type: input.booking_type ?? 'avulso',
-            p_plano_mensalista_id: input.plano_mensalista_id ?? null,
+            p_plano_mensalista_id: input.plano_mensalista_id ?? undefined,
             p_cobranca_por_participante: input.cobranca_por_participante ?? false,
             p_registered_by: dbUserId,
-            p_modo_pagamento_id: null,
+            p_modo_pagamento_id: undefined,
         })
 
         if (error) throw new Error(error.message)
@@ -443,7 +443,7 @@ export async function createRecurringBookingsAction(
         const { data: rpcData, error } = await supabase.rpc('create_backoffice_bookings', {
             p_bookings: inputs,
             p_registered_by: dbUserId,
-            p_modo_pagamento_id: null,
+            p_modo_pagamento_id: undefined,
         })
 
         if (error) throw new Error(error.message)
