@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { BarChart3, Plus, AlertCircle, CheckCircle2, Loader2, Clock, MapPin, Users, Calendar } from "lucide-react";
 import React, { useCallback, useEffect, useState } from "react";
 import { getFinanceDashboardAction, getMensalistasComPendenciaAction, getAvulsosComPendenciaAction } from "@/modules/finance/actions/financeActions";
-import { confirmarMesMensalistaAction } from "@/modules/bookings/actions/mensalistaActions";
 import { confirmarPagamentoAvulsoAction, confirmarPagamentoParticipanteAvulsoAction } from "@/modules/bookings/actions/bookingActions";
 import { ConfirmarPagamentoDialog } from "@/modules/bookings/components/ConfirmarPagamentoDialog";
 import type { ArenaFinanceSummary, ArenaFinanceDailyRow, Transaction } from "@/modules/finance/types/finance.types";
@@ -67,7 +66,6 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
     const [isLoadingAvulsos, setIsLoadingAvulsos] = useState(false);
     const [confirmingId, setConfirmingId] = useState<string | null>(null);
     const [confirmDialog, setConfirmDialog] = useState<
-        | { tipo: "mensalista"; id: string; nome: string; mes: string; valor: number; expectedBookingStart: string }
         | { tipo: "avulso"; id: string; bookingId: string; participantId?: string; nome: string; mes: string; valor: number }
         | null
     >(null);
@@ -166,29 +164,19 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
         if (!confirmDialog) return;
         setConfirmingId(confirmDialog.id);
         try {
-            const res =
-                confirmDialog.tipo === "mensalista"
-                    ? await confirmarMesMensalistaAction(
-                        arenaId,
-                        confirmDialog.id,
-                        valor,
-                        confirmDialog.expectedBookingStart
-                    )
-                    : confirmDialog.participantId
-                        ? await confirmarPagamentoParticipanteAvulsoAction(
-                            arenaId,
-                            confirmDialog.bookingId,
-                            confirmDialog.participantId,
-                            valor
-                        )
-                        : await confirmarPagamentoAvulsoAction(arenaId, confirmDialog.bookingId, valor);
+            const res = confirmDialog.participantId
+                ? await confirmarPagamentoParticipanteAvulsoAction(
+                    arenaId,
+                    confirmDialog.bookingId,
+                    confirmDialog.participantId,
+                    valor
+                )
+                : await confirmarPagamentoAvulsoAction(arenaId, confirmDialog.bookingId, valor);
             if (!res.success) throw new Error(res.error);
             toast.success(
-                confirmDialog.tipo === "mensalista"
-                    ? "Pagamento confirmado! Próximo mês gerado."
-                    : confirmDialog.participantId
-                        ? "Pagamento do participante confirmado!"
-                        : "Pagamento confirmado! Reserva liberada no relatório."
+                confirmDialog.participantId
+                    ? "Pagamento do participante confirmado!"
+                    : "Pagamento confirmado! Reserva liberada no relatório."
             );
             setConfirmDialog(null);
             await Promise.all([loadPendingMensalistas(), loadPendingAvulsos(), loadData()]);
@@ -626,7 +614,7 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                 mesDevido={confirmDialog?.mes ?? ""}
                 valorPadrao={confirmDialog?.valor ?? 0}
                 isLoading={confirmingId !== null}
-                tipo={confirmDialog?.tipo === "avulso" ? "avulso" : "mensalista"}
+                tipo="avulso"
             />
 
             {/* Modals */}
