@@ -472,7 +472,6 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                             const mesDevido = plano.proximo_mes_reservado
                                 ? format(parseISO(plano.proximo_mes_reservado), "MMMM/yyyy", { locale: ptBR })
                                 : "—";
-                            const isConfirming = confirmingId === plano.id;
 
                             return (
                                 <div key={plano.id} className="flex items-center justify-between gap-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
@@ -496,25 +495,13 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                                         <p className="font-black text-arena-button text-base">
                                             {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(plano.valor_mensal)}
                                         </p>
-                                        <Button
-                                            size="sm"
-                                            onClick={() => setConfirmDialog({
-                                                tipo: "mensalista",
-                                                id: plano.id,
-                                                nome: nome,
-                                                mes: mesDevido,
-                                                valor: plano.valor_mensal,
-                                                expectedBookingStart: plano.proximo_mes_reservado,
-                                            })}
-                                            disabled={isConfirming}
-                                            className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold gap-1.5 rounded-xl h-9 px-4"
+                                        <Link
+                                            href={`/dashboard/arenas/${arenaId}/mensalistas/${plano.athlete_id}${plano.proximo_mes_reservado ? `?competencia=${format(parseISO(plano.proximo_mes_reservado), "yyyy-MM")}` : ""}`}
+                                            className="inline-flex items-center gap-1.5 rounded-xl h-9 px-4 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold"
                                         >
-                                            {isConfirming
-                                                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                                : <CheckCircle2 className="h-3.5 w-3.5" />
-                                            }
-                                            Confirmar
-                                        </Button>
+                                            <CheckCircle2 className="h-3.5 w-3.5" />
+                                            Registrar pagamento
+                                        </Link>
                                     </div>
                                 </div>
                             );

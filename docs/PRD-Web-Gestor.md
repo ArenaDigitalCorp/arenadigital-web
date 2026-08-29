@@ -315,6 +315,34 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
 
 ---
 
+### 5.12 Mensalistas — Gestão, Rateio, Crédito e Previsão de Encerramento
+- **Status:** Implementado (28/08/2026). Remodelagem da tela de Mensalistas.
+- **Objetivo:** dar ao gestor controle claro dos mensalistas — previsibilidade de recebimento por mês, quem já quitou e quem falta, controle de rateio da mensalidade entre várias pessoas, crédito manual em R$ e antecipação de encerramentos para revender o horário.
+- **Ponto focal = responsável.** A lista agrupa por **responsável pela reserva**, mesmo quando o atleta tem mais de uma recorrência (dias/horários/quadras diferentes). Cada responsável é uma linha só.
+- **Navegação por competência (mês).** Seletor `‹ Agosto 2026 ›` no topo (estado na URL `?competencia=YYYY-MM`). Todos os números da tela são do mês selecionado.
+- **Visão geral (lista):**
+  - KPIs do mês: **Total a receber**, **Total recebido**, **Restante**, **Encerrando em breve** (recorrências com encerramento previsto nos próximos 60 dias).
+  - Filtros: status do plano (Ativo / Encerrando / Cancelado) e situação de pagamento (Pendente / Parcial / Quitado); busca por nome.
+  - Colunas por responsável: status, nº de recorrências, início, encerramento previsto, valor do mês, recebido, restante, **atraso** (débito de meses anteriores), **situação** (🟢 Quitado / 🟡 Parcial / 🔴 Pendente, bem visual), **crédito** disponível (chip quando > 0).
+  - **Atraso (débito de meses anteriores):** independentemente do mês que o gestor está olhando, um **alerta vermelho** no topo mostra quantos mensalistas têm mensalidade de competência anterior ao mês corrente ainda em aberto e o total; clicar filtra a lista. Cada linha traz o valor em atraso e há quantos meses. No detalhe, um selo "Em atraso" ao lado do nome e uma seção **"Pendências de meses anteriores"** listando cada competência devedora com botão de "Registrar pagamento" direto (não precisa navegar até o mês).
+- **Detalhe do responsável** (`/dashboard/arenas/{id}/mensalistas/{athleteId}`):
+  - KPIs: a receber, recebido, restante, **crédito** (saldo) e **saldo do programa de fidelidade** do atleta (mostra o nome da moeda configurada na arena, o saldo e a legenda "(Saldo Programa Fidelidade)").
+  - **Recorrências:** quadra, dia, horário, valor/mês; toggle **Rateio** e ação **Encerrar** por recorrência. Quando há encerramento previsto, um destaque mostra o mês, a observação e o horário que ficará vago (para revenda).
+  - **Mensalidade do mês:** sem rateio → 1 linha (devido / pago / restante) com **Registrar pagamento**; com rateio → uma linha por participante (valor devido, pago, crédito aplicado, data, status) com **Registrar pagamento** por pessoa.
+  - **Histórico de pagamentos:** todos os pagamentos de todas as competências — data, competência, participante, valor em dinheiro, valor em crédito, observação (paginado).
+  - **Créditos:** extrato do crédito manual do atleta (data, tipo, valor com sinal, descrição) + saldo atual.
+- **Rateio da mensalidade:**
+  - O valor total é dividido **igualmente** entre os participantes **ativos**. Ligar/desligar um participante **redistribui** automaticamente entre os demais; o gestor pode **sobrescrever** o valor de uma pessoa.
+  - Participantes podem ser **atletas cadastrados** na arena ou **nomes avulsos** (texto livre, sem cadastro).
+  - Parcelas já pagas ficam **congeladas** (não entram na redistribuição). A soma das parcelas ativas tem de fechar com o valor total.
+- **Pagamento parcial:** com ou sem rateio, todo mês tem devido / pago / restante. O gestor pode registrar pagamentos parciais; o mês fica **Parcial** até quitar. Ao quitar o mês, as reservas daquele mês são confirmadas e a agenda "rola" um mês à frente (respeitando a previsão de encerramento).
+- **Crédito manual:** botão **Lançar crédito** registra um valor em R$ para um atleta (responsável ou participante do rateio). O saldo fica sempre visível para o gestor e pode ser **abatido** no registro de um pagamento futuro. Um lançamento de crédito **não** entra no caixa; só vira receita quando é usado.
+- **Retirada de crédito:** botão **Retirar crédito** desconta um valor do saldo do responsável, registrado como movimento "Retirada" no extrato de créditos. Não pode ultrapassar o saldo disponível e pode ser feita em **várias parcelas** até zerar o crédito (ex.: crédito de R$ 500 → retirada de R$ 200 num mês, R$ 200 no seguinte, R$ 100 depois). Cada retirada fica no histórico com data, valor e observação. Também não gera lançamento no caixa.
+- **Previsão de encerramento:** botão **Encerrar** grava o mês a partir do qual a recorrência vai acabar + uma observação. As reservas ainda não confirmadas a partir desse mês são canceladas, liberando o horário. O encerramento **definitivo** continua sendo o cancelamento do plano.
+- **Integração financeira:** cada pagamento em dinheiro gera uma entrada em `Financeiro` na categoria "Mensalidade" (aparece nos relatórios de pagamento). O painel "Cobranças Pendentes — Mensalistas" do Financeiro passa a levar ao detalhe do mensalista.
+
+---
+
 ## 6. Requisitos Não Funcionais
 
 - Interface simples e responsiva

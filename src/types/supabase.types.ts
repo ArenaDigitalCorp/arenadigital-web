@@ -2614,8 +2614,12 @@ export type Database = {
           athlete_name: string
           court_id: string
           created_at: string | null
+          data_encerramento_efetiva: string | null
+          data_encerramento_prevista: string | null
           data_inicio: string
           dia_semana: number
+          dia_vencimento: number | null
+          encerramento_observacao: string | null
           horario_fim: string
           horario_inicio: string
           id: string
@@ -2630,8 +2634,12 @@ export type Database = {
           athlete_name: string
           court_id: string
           created_at?: string | null
+          data_encerramento_efetiva?: string | null
+          data_encerramento_prevista?: string | null
           data_inicio: string
           dia_semana: number
+          dia_vencimento?: number | null
+          encerramento_observacao?: string | null
           horario_fim: string
           horario_inicio: string
           id?: string
@@ -2646,8 +2654,12 @@ export type Database = {
           athlete_name?: string
           court_id?: string
           created_at?: string | null
+          data_encerramento_efetiva?: string | null
+          data_encerramento_prevista?: string | null
           data_inicio?: string
           dia_semana?: number
+          dia_vencimento?: number | null
+          encerramento_observacao?: string | null
           horario_fim?: string
           horario_inicio?: string
           id?: string
@@ -2686,6 +2698,195 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      mensalista_mensalidades: {
+        Row: {
+          arena_id: string
+          athlete_id: string
+          competencia: string
+          created_at: string
+          id: string
+          plano_id: string
+          rateio: boolean
+          status: string
+          updated_at: string
+          valor_total: number
+          vencimento: string | null
+        }
+        Insert: {
+          arena_id: string
+          athlete_id: string
+          competencia: string
+          created_at?: string
+          id?: string
+          plano_id: string
+          rateio?: boolean
+          status?: string
+          updated_at?: string
+          valor_total: number
+          vencimento?: string | null
+        }
+        Update: {
+          arena_id?: string
+          athlete_id?: string
+          competencia?: string
+          created_at?: string
+          id?: string
+          plano_id?: string
+          rateio?: boolean
+          status?: string
+          updated_at?: string
+          valor_total?: number
+          vencimento?: string | null
+        }
+        Relationships: []
+      }
+      mensalista_cobrancas: {
+        Row: {
+          ativo: boolean
+          arena_id: string
+          atleta_id: string | null
+          created_at: string
+          credito_aplicado: number
+          id: string
+          mensalidade_id: string
+          modo_pagamento_id: string | null
+          nome: string
+          observacao: string | null
+          pago_em: string | null
+          updated_at: string
+          valor_devido: number
+          valor_pago: number
+        }
+        Insert: {
+          ativo?: boolean
+          arena_id: string
+          atleta_id?: string | null
+          created_at?: string
+          credito_aplicado?: number
+          id?: string
+          mensalidade_id: string
+          modo_pagamento_id?: string | null
+          nome: string
+          observacao?: string | null
+          pago_em?: string | null
+          updated_at?: string
+          valor_devido: number
+          valor_pago?: number
+        }
+        Update: {
+          ativo?: boolean
+          arena_id?: string
+          atleta_id?: string | null
+          created_at?: string
+          credito_aplicado?: number
+          id?: string
+          mensalidade_id?: string
+          modo_pagamento_id?: string | null
+          nome?: string
+          observacao?: string | null
+          pago_em?: string | null
+          updated_at?: string
+          valor_devido?: number
+          valor_pago?: number
+        }
+        Relationships: []
+      }
+      mensalista_pagamentos: {
+        Row: {
+          arena_id: string
+          cobranca_id: string
+          created_at: string
+          credito_aplicado: number
+          data_pagamento: string
+          id: string
+          modo_pagamento_id: string | null
+          observacao: string | null
+          registered_by: string | null
+          transaction_id: string | null
+          valor: number
+        }
+        Insert: {
+          arena_id: string
+          cobranca_id: string
+          created_at?: string
+          credito_aplicado?: number
+          data_pagamento: string
+          id?: string
+          modo_pagamento_id?: string | null
+          observacao?: string | null
+          registered_by?: string | null
+          transaction_id?: string | null
+          valor?: number
+        }
+        Update: {
+          arena_id?: string
+          cobranca_id?: string
+          created_at?: string
+          credito_aplicado?: number
+          data_pagamento?: string
+          id?: string
+          modo_pagamento_id?: string | null
+          observacao?: string | null
+          registered_by?: string | null
+          transaction_id?: string | null
+          valor?: number
+        }
+        Relationships: []
+      }
+      mensalista_creditos: {
+        Row: {
+          arena_id: string
+          atleta_id: string
+          cobranca_id: string | null
+          created_at: string
+          descricao: string | null
+          id: string
+          registered_by: string | null
+          tipo: string
+          valor: number
+        }
+        Insert: {
+          arena_id: string
+          atleta_id: string
+          cobranca_id?: string | null
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          registered_by?: string | null
+          tipo: string
+          valor: number
+        }
+        Update: {
+          arena_id?: string
+          atleta_id?: string
+          cobranca_id?: string | null
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          registered_by?: string | null
+          tipo?: string
+          valor?: number
+        }
+        Relationships: []
+      }
+      mensalista_credito_saldo: {
+        Row: {
+          arena_id: string | null
+          atleta_id: string | null
+          saldo: number | null
+        }
+        Insert: {
+          arena_id?: string | null
+          atleta_id?: string | null
+          saldo?: number | null
+        }
+        Update: {
+          arena_id?: string | null
+          atleta_id?: string | null
+          saldo?: number | null
+        }
+        Relationships: []
       }
       product_categories: {
         Row: {
