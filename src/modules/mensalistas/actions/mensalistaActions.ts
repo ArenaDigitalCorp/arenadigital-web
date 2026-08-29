@@ -37,25 +37,6 @@ function currentMonthStartISO(): string {
   return format(startOfMonth(new Date()), 'yyyy-MM-dd')
 }
 
-type RpcName =
-  | 'generate_mensalista_mensalidades_atomic'
-  | 'configure_mensalista_rateio_atomic'
-  | 'register_mensalista_payment_atomic'
-  | 'launch_mensalista_credit_atomic'
-  | 'withdraw_mensalista_credit_atomic'
-  | 'set_mensalista_termination_atomic'
-
-type RpcClient = {
-  rpc: (
-    name: RpcName,
-    args: Record<string, unknown>
-  ) => Promise<{ data: unknown; error: { message: string } | null }>
-}
-
-function asRpcClient(supabase: ReturnType<typeof getSupabaseAdmin>): RpcClient {
-  return supabase as unknown as RpcClient
-}
-
 const PLANO_SELECT =
   '*, atleta:athlete_id(id, nome_perfil, telefone), sports:sport_id(id, name), court:court_id(id, name)'
 
@@ -103,7 +84,7 @@ export async function getMensalistasOverviewAction(
 
     const supabase = getSupabaseAdmin()
 
-    const { error: genError } = await asRpcClient(supabase).rpc(
+    const { error: genError } = await supabase.rpc(
       'generate_mensalista_mensalidades_atomic',
       {
         p_arena_id: parsedArena,
@@ -316,7 +297,7 @@ export async function getMensalistaDetailAction(
 
     const supabase = getSupabaseAdmin()
 
-    const { error: genError } = await asRpcClient(supabase).rpc(
+    const { error: genError } = await supabase.rpc(
       'generate_mensalista_mensalidades_atomic',
       {
         p_arena_id: parsedArena,
@@ -588,7 +569,7 @@ export async function configureRateioAction(
     await assertArenaBackofficeAccess(parsed.arenaId)
     const { dbUserId } = await requireAuthenticatedDbUser()
 
-    const { error } = await asRpcClient(getSupabaseAdmin()).rpc(
+    const { error } = await getSupabaseAdmin().rpc(
       'configure_mensalista_rateio_atomic',
       {
         p_arena_id: parsed.arenaId,
@@ -617,7 +598,7 @@ export async function registrarPagamentoAction(
     await assertArenaBackofficeAccess(parsed.arenaId)
     const { dbUserId } = await requireAuthenticatedDbUser()
 
-    const { error } = await asRpcClient(getSupabaseAdmin()).rpc(
+    const { error } = await getSupabaseAdmin().rpc(
       'register_mensalista_payment_atomic',
       {
         p_operation_id: parsed.operationId,
@@ -650,7 +631,7 @@ export async function lancarCreditoAction(
     await assertArenaBackofficeAccess(parsed.arenaId)
     const { dbUserId } = await requireAuthenticatedDbUser()
 
-    const { error } = await asRpcClient(getSupabaseAdmin()).rpc(
+    const { error } = await getSupabaseAdmin().rpc(
       'launch_mensalista_credit_atomic',
       {
         p_operation_id: parsed.operationId,
@@ -680,7 +661,7 @@ export async function retirarCreditoAction(
     await assertArenaBackofficeAccess(parsed.arenaId)
     const { dbUserId } = await requireAuthenticatedDbUser()
 
-    const { error } = await asRpcClient(getSupabaseAdmin()).rpc(
+    const { error } = await getSupabaseAdmin().rpc(
       'withdraw_mensalista_credit_atomic',
       {
         p_operation_id: parsed.operationId,
@@ -710,7 +691,7 @@ export async function setEncerramentoAction(
     await assertArenaBackofficeAccess(parsed.arenaId)
     const { dbUserId } = await requireAuthenticatedDbUser()
 
-    const { error } = await asRpcClient(getSupabaseAdmin()).rpc(
+    const { error } = await getSupabaseAdmin().rpc(
       'set_mensalista_termination_atomic',
       {
         p_arena_id: parsed.arenaId,

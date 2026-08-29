@@ -17,6 +17,11 @@ const financeDashboardPath = new URL(
   import.meta.url
 )
 
+const billingActionPath = new URL(
+  '../src/modules/mensalistas/actions/mensalistaActions.ts',
+  import.meta.url
+)
+
 test('mensalista mutations route exclusively through the three atomic RPCs', async () => {
   const source = await readFile(actionPath, 'utf8')
 
@@ -81,4 +86,58 @@ test('monthly action input validation covers tenant identifiers and schedule bou
   assert.match(source, /assertMonthlyPlanAthletes/)
   assert.match(source, /sessoes_por_mes: z\.number\(\)\.int\(\)\.min\(1\)\.max\(8\)/)
   assert.match(source, /horario_fim > input\.horario_inicio/)
+})
+
+test('mensalista billing mutations use typed atomic RPCs behind server authorization', async () => {
+  const source = await readFile(billingActionPath, 'utf8')
+
+  for (const rpcName of [
+    'generate_mensalista_mensalidades_atomic',
+    'configure_mensalista_rateio_atomic',
+    'register_mensalista_payment_atomic',
+    'launch_mensalista_credit_atomic',
+    'withdraw_mensalista_credit_atomic',
+    'set_mensalista_termination_atomic',
+  ]) {
+    assert.match(source, new RegExp(`\\.rpc\\(\\s*['"]${rpcName}['"]`))
+  }
+
+  for (const schemaName of [
+    'configureRateioSchema',
+    'registrarPagamentoSchema',
+    'lancarCreditoSchema',
+    'retirarCreditoSchema',
+    'setEncerramentoSchema',
+  ]) {
+    assert.match(source, new RegExp(`${schemaName}\\.parse\\(input\\)`))
+  }
+
+  assert.equal(
+    source.match(/await assertArenaBackofficeAccess\(/g)?.length,
+    7
+  )
+  assert.equal(source.match(/await requireAuthenticatedDbUser\(\)/g)?.length, 7)
+  assert.doesNotMatch(source, /as unknown as RpcClient|type RpcClient/)
+
+  for (const table of [
+    'mensalista_mensalidades',
+    'mensalista_cobrancas',
+    'mensalista_pagamentos',
+    'mensalista_creditos',
+  ]) {
+    assert.doesNotMatch(
+      source,
+      new RegExp(`\\.from\\(['"]${table}['"]\\)[\\s\\S]{0,120}\\.(?:insert|update|delete)\\(`)
+    )
+  }
+})
+
+test('mensalista financial operation IDs are validated and forwarded unchanged', async () => {
+  const source = await readFile(billingActionPath, 'utf8')
+
+  assert.equal(
+    source.match(/p_operation_id:\s*parsed\.operationId/g)?.length,
+    3
+  )
+  assert.doesNotMatch(source, /p_operation_id:\s*(?:crypto\.randomUUID|randomUUID)/)
 })
