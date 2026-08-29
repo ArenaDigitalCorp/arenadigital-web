@@ -10,8 +10,12 @@ const actionPath = new URL(
 const componentPaths = [
   '../src/modules/bookings/components/MensalistasView.tsx',
   '../src/modules/bookings/components/MensalistasPageClient.tsx',
-  '../src/modules/finance/components/FinanceDashboardClient.tsx',
 ].map((path) => new URL(path, import.meta.url))
+
+const financeDashboardPath = new URL(
+  '../src/modules/finance/components/FinanceDashboardClient.tsx',
+  import.meta.url
+)
 
 test('mensalista mutations route exclusively through the three atomic RPCs', async () => {
   const source = await readFile(actionPath, 'utf8')
@@ -48,15 +52,25 @@ test('identity and confirmation price are not overposted to monthly RPCs', async
   assert.match(confirmCall, /p_expected_booking_start/)
 })
 
-test('every monthly confirmation caller sends the displayed pending booking', async () => {
+test('legacy monthly confirmation callers still send the displayed pending booking', async () => {
   const sources = await Promise.all(
     componentPaths.map((path) => readFile(path, 'utf8'))
   )
 
   assert.match(sources[0], /confirmDialog\.proximo_mes_reservado as string/)
   assert.match(sources[1], /plano\.proximo_mes_reservado as string/)
-  assert.match(sources[2], /confirmDialog\.expectedBookingStart/)
-  assert.match(sources[2], /expectedBookingStart: plano\.proximo_mes_reservado/)
+})
+
+test('finance dashboard routes mensalista pendencies to the mensalista detail, not an inline confirm', async () => {
+  const finance = await readFile(financeDashboardPath, 'utf8')
+
+  // The monthly payment flow now lives in the mensalistas module. The finance
+  // dashboard only links to the responsible's detail page.
+  assert.doesNotMatch(finance, /confirmarMesMensalistaAction/)
+  assert.match(
+    finance,
+    /href=\{`\/dashboard\/arenas\/\$\{arenaId\}\/mensalistas\/\$\{plano\.athlete_id\}/
+  )
 })
 
 test('monthly action input validation covers tenant identifiers and schedule bounds', async () => {
