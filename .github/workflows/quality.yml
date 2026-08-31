@@ -3,7 +3,7 @@ name: Web quality
 on:
   pull_request:
   push:
-    branches: [main, homolog]
+    branches: [main, homolog, production]
 
 permissions:
   contents: read
