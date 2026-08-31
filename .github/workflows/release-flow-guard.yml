@@ -1,0 +1,49 @@
+name: Release flow guard
+
+on:
+  pull_request:
+    branches: [main, homolog, production]
+
+permissions:
+  contents: read
+
+jobs:
+  validate-promotion-source:
+    name: Validate promotion source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    env:
+      BASE_REF: ${{ github.base_ref }}
+      HEAD_REF: ${{ github.head_ref }}
+    steps:
+      - name: Enforce main to homolog to production
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          case "$BASE_REF" in
+            main)
+              if [ "$HEAD_REF" = "homolog" ] || [ "$HEAD_REF" = "production" ]; then
+                echo "::error::main receives task branches, never an environment branch."
+                exit 1
+              fi
+              ;;
+            homolog)
+              if [ "$HEAD_REF" != "main" ]; then
+                echo "::error::homolog only accepts promotion pull requests from main."
+                exit 1
+              fi
+              ;;
+            production)
+              if [ "$HEAD_REF" != "homolog" ]; then
+                echo "::error::production only accepts promotion pull requests from homolog."
+                exit 1
+              fi
+              ;;
+            *)
+              echo "::error::unsupported protected base branch: $BASE_REF"
+              exit 1
+              ;;
+          esac
+
+          echo "Allowed release flow: $HEAD_REF -> $BASE_REF"

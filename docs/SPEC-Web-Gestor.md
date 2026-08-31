@@ -282,9 +282,9 @@ src/
 11. Deploy — Vercel
 Ambientes
 
-main → produção
+production → produção
 
-develop → staging
+homolog → staging
 
 Variáveis de Ambiente
 
