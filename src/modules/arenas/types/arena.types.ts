@@ -17,6 +17,7 @@ export interface Arena {
   phone?: string;
   email?: string;
   opening_hours?: Record<string, unknown>;
+  accepts_app_booking_requests?: boolean;
   description?: string;
   banner_url?: string;
   zip_code?: string;

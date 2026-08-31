@@ -91,6 +91,171 @@ export type Database = {
           },
         ]
       }
+      app_booking_request_participants: {
+        Row: {
+          athlete_id: string
+          created_at: string
+          id: string
+          request_id: string
+          role: string
+          team_id: string | null
+        }
+        Insert: {
+          athlete_id: string
+          created_at?: string
+          id?: string
+          request_id: string
+          role?: string
+          team_id?: string | null
+        }
+        Update: {
+          athlete_id?: string
+          created_at?: string
+          id?: string
+          request_id?: string
+          role?: string
+          team_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_booking_request_participants_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "atleta"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "app_booking_request_participants_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "app_booking_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "app_booking_request_participants_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "times"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      app_booking_requests: {
+        Row: {
+          accepted_booking_id: string | null
+          arena_id: string
+          athlete_id: string
+          court_id: string
+          created_at: string
+          duration_minutes: number
+          end_time: string
+          id: string
+          operation_id: string
+          quoted_rental_price: number
+          requested_participant_ids: string[]
+          rejection_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          sport_id: string
+          start_time: string
+          status: string
+          team_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          accepted_booking_id?: string | null
+          arena_id: string
+          athlete_id: string
+          court_id: string
+          created_at?: string
+          duration_minutes: number
+          end_time: string
+          id?: string
+          operation_id: string
+          quoted_rental_price?: number
+          requested_participant_ids?: string[]
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          sport_id: string
+          start_time: string
+          status?: string
+          team_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          accepted_booking_id?: string | null
+          arena_id?: string
+          athlete_id?: string
+          court_id?: string
+          created_at?: string
+          duration_minutes?: number
+          end_time?: string
+          id?: string
+          operation_id?: string
+          quoted_rental_price?: number
+          requested_participant_ids?: string[]
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          sport_id?: string
+          start_time?: string
+          status?: string
+          team_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_booking_requests_accepted_booking_id_fkey"
+            columns: ["accepted_booking_id"]
+            isOneToOne: true
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "app_booking_requests_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "app_booking_requests_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "atleta"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "app_booking_requests_court_id_fkey"
+            columns: ["court_id"]
+            isOneToOne: false
+            referencedRelation: "courts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "app_booking_requests_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "app_booking_requests_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "app_booking_requests_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "times"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       arena_ai_agents: {
         Row: {
           arena_id: string
@@ -648,6 +813,7 @@ export type Database = {
       }
       arenas: {
         Row: {
+          accepts_app_booking_requests: boolean
           address: Json | null
           app_discoverable: boolean
           banner_url: string | null
@@ -676,6 +842,7 @@ export type Database = {
           zip_code: string | null
         }
         Insert: {
+          accepts_app_booking_requests?: boolean
           address?: Json | null
           app_discoverable?: boolean
           banner_url?: string | null
@@ -704,6 +871,7 @@ export type Database = {
           zip_code?: string | null
         }
         Update: {
+          accepts_app_booking_requests?: boolean
           address?: Json | null
           app_discoverable?: boolean
           banner_url?: string | null
@@ -5649,6 +5817,10 @@ export type Database = {
         }
         Returns: Json
       }
+      can_access_app_booking_request: {
+        Args: { p_request_id: string }
+        Returns: boolean
+      }
       can_access_arena: { Args: { p_arena_id: string }; Returns: boolean }
       can_access_arena_backoffice: {
         Args: { p_arena_id: string }
@@ -5943,6 +6115,19 @@ export type Database = {
           remaining: number
           retry_after_seconds: number
         }[]
+      }
+      create_app_booking_request: {
+        Args: {
+          p_arena_id: string
+          p_court_id: string
+          p_end_time: string
+          p_operation_id: string
+          p_participant_ids?: string[]
+          p_sport_id: string
+          p_start_time: string
+          p_team_id?: string
+        }
+        Returns: string
       }
       create_backoffice_booking: {
         Args: {
@@ -6984,6 +7169,42 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "station_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      review_app_booking_request: {
+        Args: {
+          p_arena_id: string
+          p_decision: string
+          p_rejection_reason?: string
+          p_request_id: string
+          p_reviewer_id: string
+        }
+        Returns: {
+          accepted_booking_id: string | null
+          arena_id: string
+          athlete_id: string
+          court_id: string
+          created_at: string
+          duration_minutes: number
+          end_time: string
+          id: string
+          operation_id: string
+          quoted_rental_price: number
+          requested_participant_ids: string[]
+          rejection_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          sport_id: string
+          start_time: string
+          status: string
+          team_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "app_booking_requests"
           isOneToOne: true
           isSetofReturn: false
         }
