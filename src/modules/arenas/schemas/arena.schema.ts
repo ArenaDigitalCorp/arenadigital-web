@@ -33,6 +33,7 @@ export const arenaSchema = z.object({
             end: z.string(),
         })
     ).optional(),
+    accepts_app_booking_requests: z.boolean().optional(),
 })
 
 export type ArenaFormValues = z.infer<typeof arenaSchema>

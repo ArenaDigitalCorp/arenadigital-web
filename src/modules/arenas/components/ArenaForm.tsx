@@ -28,7 +28,7 @@ import { ImageUpload } from "@/components/ui/image-upload"
 import { getEstadosAction, getMunicipiosByEstadoAction, getMunicipioByIbgeAction, getComodidadesAction } from "@/modules/arenas/actions/arenaActions"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { Check, ChevronsUpDown, Copy, Loader2 } from "lucide-react"
+import { CalendarClock, Check, ChevronsUpDown, Copy, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { isValidCnpj, onlyDigits } from "@/lib/brasil-document"
 import { getSportsAction } from "@/modules/athletes/actions/athleteActions"
@@ -161,7 +161,8 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
             tiktok: initialData?.tiktok || "",
             opening_hours: (initialData?.opening_hours && !initialData.opening_hours.weekdays)
                 ? initialData.opening_hours
-                : DEFAULT_OPENING_HOURS
+                : DEFAULT_OPENING_HOURS,
+            accepts_app_booking_requests: initialData?.accepts_app_booking_requests ?? false,
         },
     })
 
@@ -791,6 +792,40 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
                         </div>
 
                         {/* Opening Hours */}
+                        <FormField
+                            control={form.control}
+                            name="accepts_app_booking_requests"
+                            render={({ field }) => (
+                                <FormItem className="overflow-hidden rounded-2xl border border-arena-navy-800/10 bg-[linear-gradient(135deg,#f8fbfc_0%,#fff8f1_100%)] shadow-sm">
+                                    <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+                                        <div className="flex items-start gap-4">
+                                            <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-arena-navy-800 text-white shadow-sm">
+                                                <CalendarClock className="size-5" />
+                                            </div>
+                                            <div>
+                                                <FormLabel className="text-sm font-black text-arena-navy-800">
+                                                    Aceitar pré-reservas pelo aplicativo
+                                                </FormLabel>
+                                                <FormDescription className="mt-1 max-w-xl text-xs leading-relaxed text-arena-navy-800/55">
+                                                    Atletas poderão enviar solicitações, mas o horário só será bloqueado depois que a arena aprovar.
+                                                </FormDescription>
+                                            </div>
+                                        </div>
+                                        <FormControl>
+                                            <Switch
+                                                checked={field.value ?? false}
+                                                onCheckedChange={field.onChange}
+                                                aria-label="Aceitar pré-reservas pelo aplicativo"
+                                            />
+                                        </FormControl>
+                                    </div>
+                                    <div className="border-t border-arena-navy-800/5 bg-white/70 px-5 py-3 text-[11px] font-semibold text-arena-navy-800/45">
+                                        Solicitações pendentes não ocupam a agenda e podem concorrer pelo mesmo horário.
+                                    </div>
+                                </FormItem>
+                            )}
+                        />
+
                         <div className="pt-4 border-t border-gray-100 mt-6">
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className="text-lg font-semibold text-arena-navy-800">Dias de funcionamento</h3>
