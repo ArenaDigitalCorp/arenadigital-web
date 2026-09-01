@@ -28,7 +28,7 @@ import { ImageUpload } from "@/components/ui/image-upload"
 import { getEstadosAction, getMunicipiosByEstadoAction, getMunicipioByIbgeAction, getComodidadesAction } from "@/modules/arenas/actions/arenaActions"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { CalendarClock, Check, ChevronsUpDown, Copy, Loader2 } from "lucide-react"
+import { Ban, CalendarClock, Check, ChevronsUpDown, Copy, CreditCard, Loader2, LockKeyhole } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { isValidCnpj, onlyDigits } from "@/lib/brasil-document"
 import { getSportsAction } from "@/modules/athletes/actions/athleteActions"
@@ -36,8 +36,35 @@ import { useEffect, useState } from "react"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { arenaSchema, type ArenaFormValues } from "@/modules/arenas/schemas/arena.schema"
+import { normalizeAppBookingMode, type AppBookingMode } from "@/modules/arenas/domain/app-booking-mode"
 
 const arenaFormSchema = arenaSchema
+
+const APP_BOOKING_MODE_OPTIONS: Array<{
+    value: AppBookingMode
+    title: string
+    description: string
+    icon: typeof CalendarClock
+}> = [
+    {
+        value: "disabled",
+        title: "Desativado",
+        description: "A Arena fica visível, mas combina reservas fora do aplicativo.",
+        icon: Ban,
+    },
+    {
+        value: "pre_booking",
+        title: "Pré-reserva",
+        description: "O atleta solicita, a Arena aprova e o pagamento acontece presencialmente.",
+        icon: CalendarClock,
+    },
+    {
+        value: "online_payment",
+        title: "Pagamento online",
+        description: "Reserva confirmada por Pix com split e política de cancelamento.",
+        icon: CreditCard,
+    },
+]
 
 export const DAYS_OF_WEEK = [
     { value: "0", label: "Domingo" },
@@ -57,6 +84,8 @@ export const DEFAULT_OPENING_HOURS = DAYS_OF_WEEK.reduce((acc, day) => {
 interface ArenaFormProps {
     initialData?: any
     ownerId: string
+    onlineBookingReady?: boolean
+    onlineBookingMissing?: string[]
 }
 
 const mapStatusFromDB = (status: string): "ativo" | "inativo" | "Em manutenção" => {
@@ -67,7 +96,12 @@ const mapStatusFromDB = (status: string): "ativo" | "inativo" | "Em manutenção
     return 'ativo'
 }
 
-export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
+export function ArenaForm({
+    initialData,
+    ownerId,
+    onlineBookingReady = false,
+    onlineBookingMissing = ["conta de recebimento aprovada", "política de cancelamento publicada"],
+}: ArenaFormProps) {
     const router = useRouter()
     const [sports, setSports] = useState<any[]>([])
     const [comodidades, setComodidades] = useState<any[]>([])
@@ -162,7 +196,10 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
             opening_hours: (initialData?.opening_hours && !initialData.opening_hours.weekdays)
                 ? initialData.opening_hours
                 : DEFAULT_OPENING_HOURS,
-            accepts_app_booking_requests: initialData?.accepts_app_booking_requests ?? false,
+            app_booking_mode: normalizeAppBookingMode(
+                initialData?.app_booking_mode,
+                initialData?.accepts_app_booking_requests ?? false,
+            ),
         },
     })
 
@@ -794,34 +831,99 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
                         {/* Opening Hours */}
                         <FormField
                             control={form.control}
-                            name="accepts_app_booking_requests"
+                            name="app_booking_mode"
                             render={({ field }) => (
                                 <FormItem className="overflow-hidden rounded-2xl border border-arena-navy-800/10 bg-[linear-gradient(135deg,#f8fbfc_0%,#fff8f1_100%)] shadow-sm">
-                                    <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+                                    <div className="border-b border-arena-navy-800/5 px-5 py-4">
                                         <div className="flex items-start gap-4">
                                             <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-arena-navy-800 text-white shadow-sm">
                                                 <CalendarClock className="size-5" />
                                             </div>
                                             <div>
                                                 <FormLabel className="text-sm font-black text-arena-navy-800">
-                                                    Aceitar pré-reservas pelo aplicativo
+                                                    Reservas pelo aplicativo
                                                 </FormLabel>
                                                 <FormDescription className="mt-1 max-w-xl text-xs leading-relaxed text-arena-navy-800/55">
-                                                    Atletas poderão enviar solicitações, mas o horário só será bloqueado depois que a arena aprovar.
+                                                    Escolha como os atletas poderão reservar esta Arena. Nenhuma modalidade é ativada automaticamente.
                                                 </FormDescription>
                                             </div>
                                         </div>
-                                        <FormControl>
-                                            <Switch
-                                                checked={field.value ?? false}
-                                                onCheckedChange={field.onChange}
-                                                aria-label="Aceitar pré-reservas pelo aplicativo"
-                                            />
-                                        </FormControl>
                                     </div>
+
+                                    <FormControl>
+                                        <div
+                                            className="grid gap-3 p-4 lg:grid-cols-3"
+                                            role="radiogroup"
+                                            aria-label="Modo de reservas pelo aplicativo"
+                                        >
+                                            {APP_BOOKING_MODE_OPTIONS.map((option) => {
+                                                const Icon = option.icon
+                                                const selected = field.value === option.value
+                                                const optionDisabled = option.value === "online_payment" && !onlineBookingReady
+                                                const optionBadge = option.value === "online_payment"
+                                                    ? onlineBookingReady ? "Pronto" : "Configure abaixo"
+                                                    : null
+                                                return (
+                                                    <button
+                                                        key={option.value}
+                                                        type="button"
+                                                        role="radio"
+                                                        aria-checked={selected}
+                                                        disabled={optionDisabled}
+                                                        onClick={() => field.onChange(option.value)}
+                                                        className={cn(
+                                                            "group relative min-h-36 rounded-2xl border p-4 text-left transition-all",
+                                                            selected
+                                                                ? "border-arena-button bg-white shadow-[0_12px_32px_-20px_rgba(240,125,42,0.9)] ring-2 ring-arena-button/15"
+                                                                : "border-arena-navy-800/8 bg-white/70 hover:-translate-y-0.5 hover:border-arena-navy-800/20 hover:bg-white",
+                                                            optionDisabled && "cursor-not-allowed bg-arena-navy-800/[0.035] opacity-65 hover:translate-y-0 hover:border-arena-navy-800/8",
+                                                        )}
+                                                    >
+                                                        <div className="flex items-start justify-between gap-3">
+                                                            <div className={cn(
+                                                                "flex size-9 items-center justify-center rounded-xl",
+                                                                selected ? "bg-arena-button text-white" : "bg-arena-navy-800/[0.06] text-arena-navy-800/65",
+                                                            )}>
+                                                                <Icon className="size-4.5" />
+                                                            </div>
+                                                            {optionBadge && (
+                                                                <span className={cn(
+                                                                    "inline-flex items-center gap-1 rounded-full px-2 py-1 text-[9px] font-black uppercase tracking-wider",
+                                                                    onlineBookingReady
+                                                                        ? "bg-emerald-50 text-emerald-700"
+                                                                        : "bg-arena-navy-800/[0.06] text-arena-navy-800/55",
+                                                                )}>
+                                                                    {onlineBookingReady
+                                                                        ? <Check className="size-3" />
+                                                                        : <LockKeyhole className="size-3" />}
+                                                                    {optionBadge}
+                                                                </span>
+                                                            )}
+                                                            {!optionBadge && selected && (
+                                                                <span className="flex size-6 items-center justify-center rounded-full bg-arena-button text-white">
+                                                                    <Check className="size-3.5" />
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <p className="mt-4 text-sm font-black text-arena-navy-800">{option.title}</p>
+                                                        <p className="mt-1 text-xs font-medium leading-relaxed text-arena-navy-800/50">
+                                                            {option.description}
+                                                        </p>
+                                                    </button>
+                                                )
+                                            })}
+                                        </div>
+                                    </FormControl>
+
                                     <div className="border-t border-arena-navy-800/5 bg-white/70 px-5 py-3 text-[11px] font-semibold text-arena-navy-800/45">
-                                        Solicitações pendentes não ocupam a agenda e podem concorrer pelo mesmo horário.
+                                        {onlineBookingReady
+                                            ? "Pagamento online disponível: o banco ainda revalida conta, política, preço e disponibilidade ao salvar."
+                                            : `Para liberar o pagamento online, conclua: ${onlineBookingMissing.join(" e ")}.`}
+                                        <span className="mt-1 block">
+                                            Na pré-reserva, solicitações pendentes não ocupam a agenda; o horário só é bloqueado após a aprovação.
+                                        </span>
                                     </div>
+                                    <FormMessage className="px-5 pb-4" />
                                 </FormItem>
                             )}
                         />

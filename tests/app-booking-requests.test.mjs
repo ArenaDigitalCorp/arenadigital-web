@@ -20,13 +20,20 @@ const sidebar = readFileSync(
 )
 
 test('arena setting is explicit and defaults off', () => {
-  assert.match(form, /name="accepts_app_booking_requests"/u)
-  assert.match(form, /initialData\?\.accepts_app_booking_requests \?\? false/u)
+  assert.match(form, /name="app_booking_mode"/u)
+  assert.match(form, /normalizeAppBookingMode/u)
+  assert.match(form, /value: "disabled"/u)
+  assert.match(form, /value: "pre_booking"/u)
+  assert.match(form, /value: "online_payment"/u)
+  assert.match(form, /onlineBookingReady/u)
+  assert.match(form, /Configure abaixo/u)
 })
 
 test('request queue is tenant-authorized and reviews only through the service RPC', () => {
   assert.match(action, /assertArenaBackofficeAccess\(arenaId\)/u)
   assert.match(action, /assertArenaBackofficeAccess\(parsed\.arenaId\)/u)
+  assert.match(action, /the previous DB during the[\s\S]*\.select\('\*'\)/u)
+  assert.match(action, /appBookingModeAcceptsPreBookings/u)
   assert.match(action, /rpc\([\s\S]*'review_app_booking_request'/u)
   assert.doesNotMatch(action, /\.from\('app_booking_requests'\)\s*\.update/u)
 })
