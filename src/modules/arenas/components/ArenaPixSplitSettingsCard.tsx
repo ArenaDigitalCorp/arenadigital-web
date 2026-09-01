@@ -51,6 +51,7 @@ interface Props {
         province: string
         postalCode: string
     }
+    accessMode?: "platform" | "arena"
 }
 
 type BusyOperation = "create" | "recover" | "sync" | "save" | null
@@ -112,6 +113,7 @@ export function ArenaPixSplitSettingsCard({
     arenaName,
     initialSettings,
     registration,
+    accessMode = "platform",
 }: Props) {
     const [settings, setSettings] = useState(initialSettings)
     const [operationalForm, setOperationalForm] = useState(initialSettings)
@@ -135,6 +137,7 @@ export function ArenaPixSplitSettingsCard({
         settings.onboardingStatus === "APPROVED" &&
         settings.webhookConfigured &&
         settings.paymentFlow === "arena_subaccount_split"
+    const isPlatform = accessMode === "platform"
 
     function updateSettings(next: ArenaPixSplitSettings) {
         setSettings(next)
@@ -226,8 +229,10 @@ export function ArenaPixSplitSettingsCard({
                         <h3 className="text-base font-bold text-slate-950">Conta de recebimento</h3>
                         <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
                             {settings.onboardingStarted
-                                ? "Subconta da arena, validação cadastral e divisão automática das reservas."
-                                : "Onboarding financeiro da arena e configuração da taxa da plataforma."}
+                                ? "Acompanhe a validação da conta que receberá as reservas pagas pelo aplicativo."
+                                : isPlatform
+                                    ? "Onboarding financeiro da arena e configuração da taxa da plataforma."
+                                    : "Cadastre a empresa que receberá automaticamente os pagamentos das reservas online."}
                         </p>
                     </div>
                 </div>
@@ -239,7 +244,9 @@ export function ArenaPixSplitSettingsCard({
                             : "border-slate-200 bg-slate-50 text-slate-600",
                     )}>
                         {settings.enabled ? <Check className="h-3.5 w-3.5" /> : <CircleDashed className="h-3.5 w-3.5" />}
-                        {settings.enabled ? "Split ativo" : "Split inativo"}
+                        {isPlatform
+                            ? settings.enabled ? "Split ativo" : "Split inativo"
+                            : settings.enabled ? "Recebimento ativo" : isApproved ? "Conta pronta" : "Em configuração"}
                     </Badge>
                     <Badge variant="outline" className={cn(
                         "h-7",
@@ -282,14 +289,29 @@ export function ArenaPixSplitSettingsCard({
                     <section aria-labelledby="asaas-account-title" className="lg:border-l lg:border-slate-200 lg:pl-7">
                         <h4 id="asaas-account-title" className="text-sm font-bold text-slate-950">Registro operacional</h4>
                         <dl className="mt-4 space-y-4 text-sm">
-                            <div>
-                                <dt className="text-xs text-slate-500">Conta Asaas</dt>
-                                <dd className="mt-1 break-all font-mono text-xs font-semibold text-slate-800">{settings.asaasAccountId || "Pendente"}</dd>
-                            </div>
-                            <div>
-                                <dt className="text-xs text-slate-500">Wallet</dt>
-                                <dd className="mt-1 break-all font-mono text-xs font-semibold text-slate-800">{settings.asaasWalletId || "Pendente"}</dd>
-                            </div>
+                            {isPlatform ? (
+                                <>
+                                    <div>
+                                        <dt className="text-xs text-slate-500">Conta Asaas</dt>
+                                        <dd className="mt-1 break-all font-mono text-xs font-semibold text-slate-800">{settings.asaasAccountId || "Pendente"}</dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-xs text-slate-500">Wallet</dt>
+                                        <dd className="mt-1 break-all font-mono text-xs font-semibold text-slate-800">{settings.asaasWalletId || "Pendente"}</dd>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <div>
+                                        <dt className="text-xs text-slate-500">Titular</dt>
+                                        <dd className="mt-1 text-xs font-semibold text-slate-800">{settings.holderName || "Em validação"}</dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-xs text-slate-500">CNPJ</dt>
+                                        <dd className="mt-1 text-xs font-semibold text-slate-800">{settings.holderDocument || "Em validação"}</dd>
+                                    </div>
+                                </>
+                            )}
                             <div className="flex items-center justify-between gap-4 border-t border-slate-100 pt-4">
                                 <dt className="text-xs text-slate-500">Webhook exclusivo</dt>
                                 <dd className={cn("flex items-center gap-1.5 text-xs font-bold", settings.webhookConfigured ? "text-emerald-700" : "text-rose-700")}>
@@ -311,10 +333,14 @@ export function ArenaPixSplitSettingsCard({
                             <p className="mt-1 text-xs leading-5 text-rose-800">A subconta já existe e nenhuma nova conta será criada.</p>
                         </div>
                     </div>
-                    <Button type="button" variant="outline" onClick={handleCredentialRecovery} disabled={busy !== null}>
-                        {busy === "recover" ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
-                        Proteger credencial
-                    </Button>
+                    {isPlatform ? (
+                        <Button type="button" variant="outline" onClick={handleCredentialRecovery} disabled={busy !== null}>
+                            {busy === "recover" ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
+                            Proteger credencial
+                        </Button>
+                    ) : (
+                        <p className="text-xs font-semibold text-rose-800">A equipe Arena Digital já foi avisada para concluir a proteção.</p>
+                    )}
                 </div>
             )}
 
@@ -385,7 +411,7 @@ export function ArenaPixSplitSettingsCard({
                 </form>
             )}
 
-            {isApproved && (
+            {isApproved && isPlatform && (
                 <form onSubmit={handleOperationalSave} className="mt-7 border-t border-slate-200 pt-6" aria-labelledby="split-operation-title">
                     <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
                         <div>
@@ -421,6 +447,18 @@ export function ArenaPixSplitSettingsCard({
                         </Button>
                     </div>
                 </form>
+            )}
+
+            {isApproved && !isPlatform && (
+                <div className="mt-7 grid gap-3 border-y border-emerald-200 bg-emerald-50/70 px-4 py-4 sm:grid-cols-[auto_1fr] sm:items-start">
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-700" aria-hidden="true" />
+                    <div>
+                        <p className="text-sm font-bold text-emerald-950">Conta de recebimento aprovada</p>
+                        <p className="mt-1 text-xs leading-5 text-emerald-800">
+                            A ativação das reservas online será liberada quando a política de cancelamento também estiver publicada e os testes financeiros da Arena estiverem concluídos.
+                        </p>
+                    </div>
+                </div>
             )}
 
             {settings.onboardingStarted && !isApproved && (

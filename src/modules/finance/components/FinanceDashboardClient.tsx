@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { BarChart3, Plus, AlertCircle, CheckCircle2, Loader2, Clock, MapPin, Users, Calendar } from "lucide-react";
 import React, { useCallback, useEffect, useState } from "react";
 import { getFinanceDashboardAction, getMensalistasComPendenciaAction, getAvulsosComPendenciaAction } from "@/modules/finance/actions/financeActions";
+import type { AvulsoPendenciaItem } from "@/modules/finance/actions/financeActions";
 import { confirmarPagamentoAvulsoAction, confirmarPagamentoParticipanteAvulsoAction } from "@/modules/bookings/actions/bookingActions";
 import { ConfirmarPagamentoDialog } from "@/modules/bookings/components/ConfirmarPagamentoDialog";
 import type { ArenaFinanceSummary, ArenaFinanceDailyRow, Transaction } from "@/modules/finance/types/finance.types";
@@ -27,7 +28,18 @@ interface Props {
     initialRecentEntradas: Transaction[];
     initialRecentSaidas: Transaction[];
     initialChartSeries: ArenaFinanceDailyRow[];
+    financialAccount?: React.ReactNode;
 }
+
+type MensalistaPendenciaItem = {
+    id: string;
+    athlete_id: string;
+    athlete_name: string;
+    valor_mensal: number;
+    proximo_mes_reservado: string | null;
+    atleta?: { nome_perfil: string } | null;
+    court?: { name: string } | null;
+};
 
 function computeTotals(summary: ArenaFinanceSummary) {
     return {
@@ -48,7 +60,7 @@ function computeComparison(summary: ArenaFinanceSummary) {
     };
 }
 
-export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentEntradas, initialRecentSaidas, initialChartSeries }: Props) {
+export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentEntradas, initialRecentSaidas, initialChartSeries, financialAccount }: Props) {
     const [totals, setTotals] = useState(() => computeTotals(initialSummary));
     const [recentEntradas, setRecentEntradas] = useState<Transaction[]>(initialRecentEntradas);
     const [recentSaidas, setRecentSaidas] = useState<Transaction[]>(initialRecentSaidas);
@@ -60,8 +72,8 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
     const [period, setPeriod] = useState<'7d' | '30d'>('7d');
     const [chartData, setChartData] = useState<{ label: string; value: number; percentage: number; isCurrentDay?: boolean }[]>([]);
     const [chartSeries, setChartSeries] = useState<ArenaFinanceDailyRow[]>(initialChartSeries);
-    const [pendingMensalistas, setPendingMensalistas] = useState<any[]>([]);
-    const [pendingAvulsos, setPendingAvulsos] = useState<any[]>([]);
+    const [pendingMensalistas, setPendingMensalistas] = useState<MensalistaPendenciaItem[]>([]);
+    const [pendingAvulsos, setPendingAvulsos] = useState<AvulsoPendenciaItem[]>([]);
     const [isLoadingPending, setIsLoadingPending] = useState(false);
     const [isLoadingAvulsos, setIsLoadingAvulsos] = useState(false);
     const [confirmingId, setConfirmingId] = useState<string | null>(null);
@@ -207,6 +219,8 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                 <h1 className="text-3xl font-black text-arena-navy-800 tracking-tight">Financeiro</h1>
                 <p className="text-arena-navy-800/60 font-medium">Controle suas entradas e saídas em um só lugar.</p>
             </div>
+
+            {financialAccount}
 
             <div className="grid gap-6 lg:grid-cols-2 items-stretch">
                 {/* Left Column: Totals */}

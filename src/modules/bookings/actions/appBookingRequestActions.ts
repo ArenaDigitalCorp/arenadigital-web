@@ -11,6 +11,10 @@ import type {
   AppBookingRequestStatus,
   AppBookingRequestView,
 } from '@/modules/bookings/types/app-booking-request.types'
+import {
+  appBookingModeAcceptsPreBookings,
+  normalizeAppBookingMode,
+} from '@/modules/arenas/domain/app-booking-mode'
 
 const uuidSchema = z.string().uuid()
 const reviewSchema = z.object({
@@ -76,7 +80,9 @@ export async function getAppBookingRequestsAction(arenaId: string): Promise<{
     const [{ data: arena, error: arenaError }, { data, error }] = await Promise.all([
       supabase
         .from('arenas')
-        .select('accepts_app_booking_requests')
+        // `*` keeps the new web compatible with the previous DB during the
+        // ordered rollout; the mode normalizer falls back to the legacy flag.
+        .select('*')
         .eq('id', parsedArenaId)
         .single(),
       supabase
@@ -173,10 +179,15 @@ export async function getAppBookingRequestsAction(arenaId: string): Promise<{
       }
     })
 
+    const appBookingMode = normalizeAppBookingMode(
+      'app_booking_mode' in arena ? arena.app_booking_mode : undefined,
+      arena.accepts_app_booking_requests ?? false,
+    )
+
     return {
       success: true,
       data: mapped,
-      acceptsRequests: arena.accepts_app_booking_requests ?? false,
+      acceptsRequests: appBookingModeAcceptsPreBookings(appBookingMode),
     }
   } catch (error) {
     return {
