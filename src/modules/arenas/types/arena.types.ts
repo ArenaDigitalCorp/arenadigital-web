@@ -1,3 +1,5 @@
+import type { AppBookingMode } from '@/modules/arenas/domain/app-booking-mode'
+
 export interface Sport {
   id: string;
   name: string;
@@ -17,6 +19,7 @@ export interface Arena {
   phone?: string;
   email?: string;
   opening_hours?: Record<string, unknown>;
+  app_booking_mode?: AppBookingMode;
   accepts_app_booking_requests?: boolean;
   description?: string;
   banner_url?: string;

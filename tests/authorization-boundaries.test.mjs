@@ -13,24 +13,37 @@ function exportedFunctionBody(contents, functionName) {
   return contents.slice(start, next === -1 ? contents.length : next)
 }
 
-test('destructive arena operations remain owner-only and Pix settings are super-admin only', async () => {
+test('destructive arena operations remain owner-only and Pix operational settings are super-admin only', async () => {
   const contents = await source('src/modules/arenas/actions/arenaActions.ts')
   assert.match(exportedFunctionBody(contents, 'deleteArenaAction'), /assertArenaOwnerAccess\(arenaId\)/)
   assert.match(exportedFunctionBody(contents, 'createArenaAction'), /arenaSchema\.parse\(input\)/)
   assert.match(exportedFunctionBody(contents, 'createArenaAction'), /owner_id: dbUserId/)
   assert.match(exportedFunctionBody(contents, 'updateArenaAction'), /arenaSchema\.partial\(\)\.parse\(input\)/)
 
-  for (const name of ['getArenaPixSplitSettingsAction', 'updateArenaPixSplitSettingsAction']) {
+  for (const name of ['updateArenaPixSplitSettingsAction', 'recoverArenaAsaasSubaccountCredentialAction']) {
     const body = exportedFunctionBody(contents, name)
     assert.match(body, /assertPlatformSuperAdminAccess\(\)/, `${name} must require super admin access`)
     assert.doesNotMatch(body, /assertArenaOwnerAccess\(arenaId\)/, `${name} must not be owner-managed`)
   }
+
+  for (const name of [
+    'getArenaPixSplitSettingsAction',
+    'createArenaAsaasSubaccountAction',
+    'syncArenaAsaasSubaccountStatusAction',
+  ]) {
+    assert.match(
+      exportedFunctionBody(contents, name),
+      /assertArenaFinancialOnboardingAccess\(arenaId\)/,
+      `${name} must allow the authorized arena onboarding flow`,
+    )
+  }
 })
 
-test('Pix split configuration lives only in the independent Super Admin backoffice', async () => {
+test('self-service onboarding is separated from Super Admin Pix operation controls', async () => {
   const editPage = await source('src/app/dashboard/arenas/[id]/edit/page.tsx')
-  assert.doesNotMatch(editPage, /ArenaPixSplitSettingsCard/)
-  assert.doesNotMatch(editPage, /getArenaPixSplitSettingsAction/)
+  assert.match(editPage, /ArenaPixSplitSettingsCard/)
+  assert.match(editPage, /getArenaPixSplitSettingsAction/)
+  assert.match(editPage, /accessMode="arena"/)
 
   const platformConsole = await source('src/modules/platform-admin/components/PlatformAdminConsole.tsx')
   assert.doesNotMatch(platformConsole, /ArenaPixSplitSettingsCard/)
@@ -48,6 +61,8 @@ test('Pix split configuration lives only in the independent Super Admin backoffi
 
   const pixCard = await source('src/modules/arenas/components/ArenaPixSplitSettingsCard.tsx')
   assert.match(pixCard, /platformFeeBasisPoints/)
+  assert.match(pixCard, /isApproved && isPlatform/)
+  assert.match(pixCard, /isApproved && !isPlatform/)
   const updatePix = exportedFunctionBody(await source('src/modules/arenas/actions/arenaActions.ts'), 'updateArenaPixSplitSettingsAction')
   assert.match(updatePix, /platform_fee_basis_points: platformFeeBasisPoints/)
   assert.doesNotMatch(updatePix, /platform_fee_basis_points: 200/)

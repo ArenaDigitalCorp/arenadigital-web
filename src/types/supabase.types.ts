@@ -815,6 +815,7 @@ export type Database = {
         Row: {
           accepts_app_booking_requests: boolean
           address: Json | null
+          app_booking_mode: string
           app_discoverable: boolean
           banner_url: string | null
           complement: string | null
@@ -844,6 +845,7 @@ export type Database = {
         Insert: {
           accepts_app_booking_requests?: boolean
           address?: Json | null
+          app_booking_mode?: string
           app_discoverable?: boolean
           banner_url?: string | null
           complement?: string | null
@@ -873,6 +875,7 @@ export type Database = {
         Update: {
           accepts_app_booking_requests?: boolean
           address?: Json | null
+          app_booking_mode?: string
           app_discoverable?: boolean
           banner_url?: string | null
           complement?: string | null
