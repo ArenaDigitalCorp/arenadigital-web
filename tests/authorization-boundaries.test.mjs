@@ -41,9 +41,12 @@ test('destructive arena operations remain owner-only and Pix operational setting
 
 test('self-service onboarding is separated from Super Admin Pix operation controls', async () => {
   const editPage = await source('src/app/dashboard/arenas/[id]/edit/page.tsx')
-  assert.match(editPage, /ArenaPixSplitSettingsCard/)
+  assert.match(editPage, /ArenaBookingOperationsPanel/)
   assert.match(editPage, /getArenaPixSplitSettingsAction/)
-  assert.match(editPage, /accessMode="arena"/)
+
+  const bookingOperations = await source('src/modules/arenas/components/ArenaBookingOperationsPanel.tsx')
+  assert.match(bookingOperations, /ArenaPixSplitSettingsCard/)
+  assert.match(bookingOperations, /accessMode="arena"/)
 
   const platformConsole = await source('src/modules/platform-admin/components/PlatformAdminConsole.tsx')
   assert.doesNotMatch(platformConsole, /ArenaPixSplitSettingsCard/)
@@ -62,7 +65,7 @@ test('self-service onboarding is separated from Super Admin Pix operation contro
   const pixCard = await source('src/modules/arenas/components/ArenaPixSplitSettingsCard.tsx')
   assert.match(pixCard, /platformFeeBasisPoints/)
   assert.match(pixCard, /isApproved && isPlatform/)
-  assert.match(pixCard, /isApproved && !isPlatform/)
+  assert.match(pixCard, /settings\.enabled && !isPlatform/)
   const updatePix = exportedFunctionBody(await source('src/modules/arenas/actions/arenaActions.ts'), 'updateArenaPixSplitSettingsAction')
   assert.match(updatePix, /platform_fee_basis_points: platformFeeBasisPoints/)
   assert.doesNotMatch(updatePix, /platform_fee_basis_points: 200/)
