@@ -14,6 +14,10 @@ const editPage = readFileSync(
   new URL('../src/app/dashboard/arenas/[id]/edit/page.tsx', import.meta.url),
   'utf8',
 )
+const operationsPanel = readFileSync(
+  new URL('../src/modules/arenas/components/ArenaBookingOperationsPanel.tsx', import.meta.url),
+  'utf8',
+)
 
 function exportedFunctionBody(name) {
   const start = actions.indexOf(`export async function ${name}`)
@@ -38,9 +42,10 @@ test('credential recovery and platform fee activation remain Super Admin operati
 
 test('arena edit exposes onboarding without exposing platform operational controls', () => {
   assert.match(editPage, /getArenaPixSplitSettingsAction\(id\)/u)
-  assert.match(editPage, /accessMode="arena"/u)
+  assert.match(editPage, /ArenaBookingOperationsPanel/u)
+  assert.match(operationsPanel, /accessMode="arena"/u)
   assert.match(card, /isApproved && isPlatform/u)
-  assert.match(card, /isApproved && !isPlatform/u)
+  assert.match(card, /settings\.enabled && !isPlatform/u)
   assert.match(card, /política de cancelamento/u)
   assert.match(actions, /settingsForFinancialOnboardingAccess/u)
   assert.match(actions, /asaasWalletId: ''/u)

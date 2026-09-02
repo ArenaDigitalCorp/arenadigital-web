@@ -2,8 +2,7 @@ import { requireAuthenticatedDbUser, assertArenaAdminAccess } from '@/lib/server
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { SupabaseArenaRepository } from '@/modules/arenas/repositories/SupabaseArenaRepository'
 import { ArenaForm } from '@/modules/arenas/components/ArenaForm'
-import { ArenaPixSplitSettingsCard } from '@/modules/arenas/components/ArenaPixSplitSettingsCard'
-import { ArenaCancellationPolicyCard } from '@/modules/arenas/components/ArenaCancellationPolicyCard'
+import { ArenaBookingOperationsPanel } from '@/modules/arenas/components/ArenaBookingOperationsPanel'
 import { getArenaPixSplitSettingsAction } from '@/modules/arenas/actions/arenaActions'
 import { getArenaCancellationPolicySettingsAction } from '@/modules/arenas/actions/cancellationPolicyActions'
 import { redirect } from 'next/navigation'
@@ -36,16 +35,6 @@ export default async function EditArenaPage({ params }: { params: Promise<{ id: 
 
     if (!arena) redirect('/dashboard/settings/arenas')
 
-    const onlineBookingMissing = [
-        ...(!paymentSettings.data.enabled || paymentSettings.data.credentialRecoveryRequired
-            ? ['a conta de recebimento aprovada e ativa']
-            : []),
-        ...(!cancellationPolicySettings.data.currentPolicy
-            ? ['uma política de cancelamento publicada']
-            : []),
-    ]
-    const onlineBookingReady = onlineBookingMissing.length === 0
-
     return (
         <div className="space-y-6">
             <div>
@@ -55,31 +44,25 @@ export default async function EditArenaPage({ params }: { params: Promise<{ id: 
             <ArenaForm
                 ownerId={dbUserId}
                 initialData={arena}
-                onlineBookingReady={onlineBookingReady}
-                onlineBookingMissing={onlineBookingMissing}
             />
-            <ArenaCancellationPolicyCard
+            <ArenaBookingOperationsPanel
                 arenaId={id}
-                initialSettings={cancellationPolicySettings.data}
+                arenaName={arena.name}
+                initialMode={arena.app_booking_mode}
+                legacyAcceptsRequests={arena.accepts_app_booking_requests}
+                paymentSettings={paymentSettings.data}
+                cancellationPolicySettings={cancellationPolicySettings.data}
+                registration={{
+                    email: arena.email ?? '',
+                    phone: arena.phone ?? '',
+                    document: arena.cpf_cnpj ?? '',
+                    address: addressStreet(arena.address),
+                    addressNumber: arena.number ?? '',
+                    complement: arena.complement ?? '',
+                    province: arena.neighborhood ?? '',
+                    postalCode: arena.zip_code ?? '',
+                }}
             />
-            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white px-5 pb-6 shadow-sm sm:px-6">
-                <ArenaPixSplitSettingsCard
-                    accessMode="arena"
-                    arenaId={id}
-                    arenaName={arena.name}
-                    initialSettings={paymentSettings.data}
-                    registration={{
-                        email: arena.email ?? '',
-                        phone: arena.phone ?? '',
-                        document: arena.cpf_cnpj ?? '',
-                        address: addressStreet(arena.address),
-                        addressNumber: arena.number ?? '',
-                        complement: arena.complement ?? '',
-                        province: arena.neighborhood ?? '',
-                        postalCode: arena.zip_code ?? '',
-                    }}
-                />
-            </section>
         </div>
     )
 }

@@ -46,6 +46,7 @@ type BusyOperation = "create" | "save" | "publish" | null
 type Props = {
     arenaId: string
     initialSettings: ArenaCancellationPolicySettings
+    onSettingsChange?: (settings: ArenaCancellationPolicySettings) => void
 }
 
 function editableTier(tier: ArenaCancellationPolicyTier | undefined, key: string): EditableTier {
@@ -109,7 +110,7 @@ function PolicyTiers({ tiers }: { tiers: ArenaCancellationPolicyTier[] }) {
                 .map((tier) => (
                     <div
                         key={tier.minimumHoursBeforeStart}
-                        className="rounded-xl border border-slate-200 bg-white px-4 py-3"
+                        className="rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3"
                     >
                         <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">
                             {tier.minimumHoursBeforeStart === 0
@@ -125,7 +126,7 @@ function PolicyTiers({ tiers }: { tiers: ArenaCancellationPolicyTier[] }) {
     )
 }
 
-export function ArenaCancellationPolicyCard({ arenaId, initialSettings }: Props) {
+export function ArenaCancellationPolicyCard({ arenaId, initialSettings, onSettingsChange }: Props) {
     const [settings, setSettings] = useState(initialSettings)
     const [rows, setRows] = useState<EditableTier[]>(() => rowsFromSettings(initialSettings))
     const [busy, setBusy] = useState<BusyOperation>(null)
@@ -139,6 +140,7 @@ export function ArenaCancellationPolicyCard({ arenaId, initialSettings }: Props)
     function applySettings(nextSettings: ArenaCancellationPolicySettings) {
         setSettings(nextSettings)
         setRows(rowsFromSettings(nextSettings))
+        onSettingsChange?.(nextSettings)
     }
 
     async function handleCreateDraft() {
@@ -199,23 +201,28 @@ export function ArenaCancellationPolicyCard({ arenaId, initialSettings }: Props)
     }
 
     return (
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-200 bg-slate-950 px-5 py-5 text-white sm:px-6">
+        <section className="px-5 py-7 sm:px-8" aria-labelledby="cancellation-policy-title">
+            <div>
                 <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
                     <div className="flex items-start gap-3">
-                        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-white/10">
+                        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-arena-navy-800 text-white shadow-sm">
                             <ShieldCheck className="h-5 w-5" aria-hidden="true" />
                         </div>
                         <div>
-                            <h3 className="text-base font-bold">Política de cancelamento</h3>
-                            <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-300">
+                            <p className="text-[11px] font-black uppercase tracking-[0.14em] text-arena-button">
+                                Configuração complementar
+                            </p>
+                            <h3 id="cancellation-policy-title" className="mt-1 text-base font-bold text-arena-navy-800">
+                                Política de cancelamento
+                            </h3>
+                            <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
                                 Defina quanto o atleta recebe de volta conforme a antecedência do cancelamento.
                             </p>
                         </div>
                     </div>
                     <Badge className={settings.currentPolicy
-                        ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-200"
-                        : "border-amber-400/30 bg-amber-400/10 text-amber-200"}
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                        : "border-amber-200 bg-amber-50 text-amber-800"}
                     >
                         {settings.currentPolicy ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Clock3 className="h-3.5 w-3.5" />}
                         {settings.currentPolicy ? `Versão ${settings.currentPolicy.version} publicada` : "Publicação pendente"}
@@ -223,7 +230,7 @@ export function ArenaCancellationPolicyCard({ arenaId, initialSettings }: Props)
                 </div>
             </div>
 
-            <div className="space-y-6 px-5 py-6 sm:px-6">
+            <div className="mt-6 space-y-6">
                 {settings.currentPolicy ? (
                     <div className="space-y-3">
                         <div className="flex flex-wrap items-end justify-between gap-3">
@@ -242,13 +249,13 @@ export function ArenaCancellationPolicyCard({ arenaId, initialSettings }: Props)
                         <PolicyTiers tiers={settings.currentPolicy.tiers} />
                     </div>
                 ) : (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-950">
+                    <div className="rounded-xl border border-amber-200/80 bg-amber-50/60 px-4 py-4 text-sm text-amber-950">
                         <div className="flex items-start gap-3">
                             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" aria-hidden="true" />
                             <div>
-                                <p className="font-bold">Reservas com pagamento online continuam desativadas</p>
+                                <p className="font-bold">Publicação necessária somente para pagamento online</p>
                                 <p className="mt-1 leading-6 text-amber-800">
-                                    Crie, revise e publique uma política. Nenhum valor sugerido será ativado automaticamente.
+                                    Pré-reservas continuam disponíveis sem esta etapa. Para cobrar no app, crie, revise e publique uma política. Nenhum valor sugerido será ativado automaticamente.
                                 </p>
                             </div>
                         </div>
@@ -265,13 +272,13 @@ export function ArenaCancellationPolicyCard({ arenaId, initialSettings }: Props)
                                 O rascunho não afeta reservas até que seja publicado.
                             </p>
                         </div>
-                        <Button onClick={() => void handleCreateDraft()} disabled={busy !== null}>
+                        <Button className="bg-arena-button text-white hover:bg-arena-button-hover" onClick={() => void handleCreateDraft()} disabled={busy !== null}>
                             {busy === "create" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FilePenLine className="h-4 w-4" />}
                             Criar rascunho
                         </Button>
                     </div>
                 ) : (
-                    <div className="space-y-5 rounded-xl border border-sky-200 bg-sky-50/40 p-4 sm:p-5">
+                    <div className="space-y-5 rounded-2xl border border-slate-200 bg-slate-50/55 p-4 sm:p-5">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                             <div>
                                 <p className="font-bold text-slate-950">Rascunho da versão {settings.draftPolicy.version}</p>
@@ -279,7 +286,7 @@ export function ArenaCancellationPolicyCard({ arenaId, initialSettings }: Props)
                                     A maior antecedência compatível será aplicada. A faixa de 0 hora é obrigatória.
                                 </p>
                             </div>
-                            <Badge variant="outline" className="border-sky-200 bg-white text-sky-800">
+                            <Badge variant="outline" className="border-slate-200 bg-white text-slate-700">
                                 {isDirty ? "Alterações não salvas" : "Rascunho salvo"}
                             </Badge>
                         </div>
@@ -354,6 +361,7 @@ export function ArenaCancellationPolicyCard({ arenaId, initialSettings }: Props)
                                 </Button>
                                 <Button
                                     type="button"
+                                    className="bg-arena-button text-white hover:bg-arena-button-hover"
                                     disabled={busy !== null || isDirty || settings.draftPolicy.tiers.length === 0}
                                     onClick={() => setPublishDialogOpen(true)}
                                 >
