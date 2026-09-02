@@ -67,7 +67,10 @@ const mapStatusFromDB = (status: string): "ativo" | "inativo" | "Em manutenção
     return 'ativo'
 }
 
-export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
+export function ArenaForm({
+    initialData,
+    ownerId,
+}: ArenaFormProps) {
     const router = useRouter()
     const [sports, setSports] = useState<any[]>([])
     const [comodidades, setComodidades] = useState<any[]>([])
@@ -161,7 +164,7 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
             tiktok: initialData?.tiktok || "",
             opening_hours: (initialData?.opening_hours && !initialData.opening_hours.weekdays)
                 ? initialData.opening_hours
-                : DEFAULT_OPENING_HOURS
+                : DEFAULT_OPENING_HOURS,
         },
     })
 
@@ -790,7 +793,6 @@ export function ArenaForm({ initialData, ownerId }: ArenaFormProps) {
                             </div>
                         </div>
 
-                        {/* Opening Hours */}
                         <div className="pt-4 border-t border-gray-100 mt-6">
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className="text-lg font-semibold text-arena-navy-800">Dias de funcionamento</h3>

@@ -5,6 +5,7 @@ import { SupabaseFinanceRepository } from '@/modules/finance/repositories/Supaba
 import { format } from 'date-fns'
 import { FinanceDashboardClient } from '@/modules/finance/components/FinanceDashboardClient'
 import { buildTutorialFinance } from '@/lib/tutorial-mock-data'
+import { ArenaFinancialAccountCard } from '@/modules/finance/components/ArenaFinancialAccountCard'
 
 export default async function FinanceDashboard({
     params,
@@ -56,6 +57,7 @@ export default async function FinanceDashboard({
             initialRecentEntradas={recentEntradas}
             initialRecentSaidas={recentSaidas}
             initialChartSeries={chartSeries}
+            financialAccount={<ArenaFinancialAccountCard arenaId={arenaId} />}
         />
     )
 }

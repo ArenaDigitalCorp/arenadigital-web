@@ -95,13 +95,19 @@ test('status sync uses subaccount runtime credentials and approval guards activa
     source('src/modules/arenas/services/asaas-baas.service.ts'),
     source('src/modules/arenas/actions/arenaActions.ts'),
   ])
+  const syncBody = actions.slice(
+    actions.indexOf('async function syncArenaAsaasSubaccount'),
+    actions.indexOf('function arenaPaymentAccountsTable'),
+  )
 
   assert.match(service, /get_arena_asaas_runtime_credentials/u)
   assert.match(service, /'\/v3\/myAccount\/status'/u)
   assert.match(service, /'\/v3\/myAccount\/documents'/u)
-  assert.match(actions, /snapshot\.status\.general === 'APPROVED' && Boolean\(existing\.webhook_token_hash\)/u)
-  assert.match(actions, /payment_flow:\s*approved \? 'arena_subaccount_split'/u)
-  assert.doesNotMatch(actions, /firstActivation/u)
+  assert.match(syncBody, /snapshot\.status\.general === 'APPROVED'[\s\S]*Boolean\(existing\.webhook_token_hash\)[\s\S]*Boolean\(existing\.asaas_account_id\)[\s\S]*Boolean\(existing\.asaas_wallet_id\)/u)
+  assert.match(syncBody, /apply_arena_asaas_manual_status_snapshot/u)
+  assert.match(syncBody, /p_snapshot_observed_at: snapshotObservedAt/u)
+  assert.match(syncBody, /existing\.activated_at === null[\s\S]*updated\.activated_at !== null[\s\S]*updated\.status === 'active'/u)
+  assert.doesNotMatch(syncBody, /updateArenaPaymentAccount\(/u)
   assert.match(actions, /activated_at:\s*parsed\.enabled/u)
   assert.match(actions, /Date\.parse\(existing\.updated_at\) \+ 15_000/u)
   assert.match(actions, /assertArenaAsaasRuntimeCredentials\(arenaId\)/u)

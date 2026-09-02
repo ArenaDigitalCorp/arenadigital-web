@@ -1,4 +1,5 @@
 import { isValidCpfOrCnpj } from '@/lib/brasil-document'
+import { APP_BOOKING_MODES } from '@/modules/arenas/domain/app-booking-mode'
 import * as z from 'zod'
 
 export const arenaSchema = z.object({
@@ -33,6 +34,8 @@ export const arenaSchema = z.object({
             end: z.string(),
         })
     ).optional(),
+    app_booking_mode: z.enum(APP_BOOKING_MODES).optional(),
+    accepts_app_booking_requests: z.boolean().optional(),
 })
 
 export type ArenaFormValues = z.infer<typeof arenaSchema>

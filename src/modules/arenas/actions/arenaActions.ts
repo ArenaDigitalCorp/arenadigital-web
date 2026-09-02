@@ -4,6 +4,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID }
 import { revalidatePath } from 'next/cache'
 import { getLocationPointFromAddress } from '@/lib/geocoding'
 import {
+    AuthorizationError,
     assertArenaAdminAccess,
     assertArenaBackofficeAccess,
     assertArenaCreationAccess,
@@ -28,6 +29,11 @@ import {
     recoverAsaasSubaccountCredential,
 } from '@/modules/arenas/services/asaas-baas.service'
 import { arenaSchema } from '@/modules/arenas/schemas/arena.schema'
+import {
+    appBookingModeAcceptsPreBookings,
+    normalizeAppBookingMode,
+} from '@/modules/arenas/domain/app-booking-mode'
+import type { AppBookingMode } from '@/modules/arenas/domain/app-booking-mode'
 import type { AsaasSubaccountCreation } from '@/modules/arenas/services/asaas-baas.service'
 import type { CreateArenaDTO, UpdateArenaDTO } from '@/modules/arenas/types/arena.types'
 import type {
@@ -112,9 +118,15 @@ export async function createArenaAction(input: CreateArenaDTO) {
         const { dbUserId } = await assertArenaCreationAccess()
         const parsed = arenaSchema.parse(input)
         const location = (await resolveArenaLocation(parsed as unknown as Partial<CreateArenaDTO>)) ?? undefined
+        const appBookingMode = normalizeAppBookingMode(
+            parsed.app_booking_mode,
+            parsed.accepts_app_booking_requests,
+        )
         const payload = {
             ...parsed,
             ...(location ? { location } : {}),
+            app_booking_mode: appBookingMode,
+            accepts_app_booking_requests: appBookingModeAcceptsPreBookings(appBookingMode),
             owner_id: dbUserId,
         } as unknown as CreateArenaDTO
         const arena = await new SupabaseArenaRepository(getSupabaseAdmin()).create(payload)
@@ -177,9 +189,21 @@ export async function updateArenaAction(arenaId: string, input: UpdateArenaDTO) 
         await assertArenaAdminAccess(arenaId)
         const safeInput = arenaSchema.partial().parse(input)
         const location = (await resolveArenaLocation(safeInput as unknown as Partial<CreateArenaDTO>)) ?? undefined
+        const hasAppBookingModeUpdate = safeInput.app_booking_mode !== undefined
+            || safeInput.accepts_app_booking_requests !== undefined
+        const appBookingMode = hasAppBookingModeUpdate
+            ? normalizeAppBookingMode(
+                safeInput.app_booking_mode,
+                safeInput.accepts_app_booking_requests,
+            )
+            : undefined
         const payload = {
             ...safeInput,
             ...(location ? { location } : {}),
+            ...(appBookingMode ? {
+                app_booking_mode: appBookingMode,
+                accepts_app_booking_requests: appBookingModeAcceptsPreBookings(appBookingMode),
+            } : {}),
         } as unknown as UpdateArenaDTO
         const arena = await new SupabaseArenaRepository(getSupabaseAdmin()).update(arenaId, payload)
         revalidatePath(`/dashboard/arenas/${arenaId}/edit`)
@@ -189,6 +213,13 @@ export async function updateArenaAction(arenaId: string, input: UpdateArenaDTO) 
         const message = err instanceof Error ? err.message : 'Erro ao atualizar arena'
         return { success: false, error: message, data: null }
     }
+}
+
+export async function updateArenaAppBookingModeAction(
+    arenaId: string,
+    appBookingMode: AppBookingMode,
+) {
+    return updateArenaAction(arenaId, { app_booking_mode: appBookingMode })
 }
 
 function defaultPixSplitSettings(): ArenaPixSplitSettings {
@@ -275,6 +306,25 @@ type ClaimSubaccountProvisioningRpc = {
         name: 'claim_arena_asaas_subaccount_provisioning',
         args: { p_arena_id: string; p_request_id: string },
     ): Promise<{ data: boolean | null; error: { message: string } | null }>
+}
+
+type ApplyManualAsaasStatusSnapshotRpc = {
+    rpc(
+        name: 'apply_arena_asaas_manual_status_snapshot',
+        args: {
+            p_arena_id: string
+            p_asaas_account_id: string
+            p_commercial_info_status: ArenaAsaasOnboardingStatus
+            p_bank_account_info_status: ArenaAsaasOnboardingStatus
+            p_documentation_status: ArenaAsaasOnboardingStatus
+            p_general_status: ArenaAsaasOnboardingStatus
+            p_snapshot_observed_at: string
+            p_onboarding_url: string | null
+            p_pix_key: string | null
+            p_commercial_info_expiration_status: null
+            p_commercial_info_expiration_scheduled_date: null
+        },
+    ): Promise<{ data: unknown; error: SupabaseErrorLike | null }>
 }
 
 type SubaccountRecoveryRpc = {
@@ -373,6 +423,7 @@ async function recordPaymentAudit(input: {
     action: string
     newValue: Record<string, unknown>
     metadata?: Record<string, unknown>
+    source?: 'arena_self_service' | 'super_admin_backoffice'
 }): Promise<void> {
     const { error } = await getSupabaseAdmin().from('audit_logs').insert({
         entity_type: 'arena_payment_account',
@@ -381,9 +432,38 @@ async function recordPaymentAudit(input: {
         actor_id: input.actorId,
         actor_type: 'user',
         new_value: input.newValue as Json,
-        metadata: { provider: 'asaas', source: 'super_admin_backoffice', ...input.metadata },
+        metadata: {
+            provider: 'asaas',
+            source: input.source ?? 'super_admin_backoffice',
+            ...input.metadata,
+        },
     })
     if (error) console.error(`[${input.action}] Failed to record audit event`, error.message)
+}
+
+type ArenaFinancialOnboardingAccess = {
+    dbUserId: string
+    source: 'arena_self_service' | 'super_admin_backoffice'
+}
+
+async function assertArenaFinancialOnboardingAccess(
+    arenaId: string,
+): Promise<ArenaFinancialOnboardingAccess> {
+    let arenaAccessError: unknown
+    try {
+        const profile = await assertArenaAdminAccess(arenaId)
+        return { dbUserId: profile.dbUserId, source: 'arena_self_service' }
+    } catch (error) {
+        if (!(error instanceof AuthorizationError) || error.status !== 403) throw error
+        arenaAccessError = error
+    }
+
+    try {
+        const profile = await assertPlatformSuperAdminAccess()
+        return { dbUserId: profile.dbUserId, source: 'super_admin_backoffice' }
+    } catch {
+        throw arenaAccessError
+    }
 }
 
 function safeOnboardingUrl(value: string | null): string | null {
@@ -530,6 +610,7 @@ type PixSplitActionResult = {
 async function syncArenaAsaasSubaccount(
     arenaId: string,
     actorId: string,
+    source: ArenaFinancialOnboardingAccess['source'],
 ): Promise<ArenaPixSplitSettings> {
     const existing = await loadArenaPaymentAccount(arenaId)
     if (
@@ -548,32 +629,39 @@ async function syncArenaAsaasSubaccount(
     }
 
     const snapshot = await getArenaAsaasOnboardingSnapshot(arenaId)
-    const now = new Date().toISOString()
-    const approved = snapshot.status.general === 'APPROVED' && Boolean(existing.webhook_token_hash)
+    const snapshotObservedAt = new Date().toISOString()
+    const approved =
+        snapshot.status.general === 'APPROVED' &&
+        Boolean(existing.webhook_token_hash) &&
+        Boolean(existing.asaas_account_id) &&
+        Boolean(existing.asaas_wallet_id)
+    if (approved) await assertArenaAsaasRuntimeCredentials(arenaId)
     const pixKey = approved ? await ensureArenaAsaasPixKey(arenaId) : existing.pix_key
-    const firstApproval = approved && existing.payment_flow !== 'arena_subaccount_split'
     const onboardingUrl = snapshot.documents
         .find((document) => document.status !== 'APPROVED' && safeOnboardingUrl(document.onboardingUrl))
         ?.onboardingUrl ?? snapshot.documents.find((document) => safeOnboardingUrl(document.onboardingUrl))?.onboardingUrl ?? null
-    const nextStatus: ArenaPixSplitStatus = snapshot.status.general === 'REJECTED'
-        ? 'rejected'
-        : approved
-            ? existing.status === 'active' ? 'active' : 'disabled'
-            : 'pending'
-
-    const updated = await updateArenaPaymentAccount(arenaId, {
-        onboarding_status: snapshot.status.general,
-        commercial_info_status: snapshot.status.commercialInfo,
-        bank_account_info_status: snapshot.status.bankAccountInfo,
-        documentation_status: snapshot.status.documentation,
-        pix_key: pixKey,
-        onboarding_url: safeOnboardingUrl(onboardingUrl),
-        last_status_checked_at: now,
-        activated_at: existing.activated_at,
-        payment_flow: approved ? 'arena_subaccount_split' : existing.payment_flow,
-        status: nextStatus,
-        updated_at: now,
+    const snapshotRpc = getSupabaseAdmin() as unknown as ApplyManualAsaasStatusSnapshotRpc
+    const { error: snapshotError } = await snapshotRpc.rpc('apply_arena_asaas_manual_status_snapshot', {
+        p_arena_id: arenaId,
+        p_asaas_account_id: existing.asaas_account_id,
+        p_commercial_info_status: snapshot.status.commercialInfo,
+        p_bank_account_info_status: snapshot.status.bankAccountInfo,
+        p_documentation_status: snapshot.status.documentation,
+        p_general_status: snapshot.status.general,
+        p_snapshot_observed_at: snapshotObservedAt,
+        p_onboarding_url: safeOnboardingUrl(onboardingUrl),
+        p_pix_key: pixKey,
+        p_commercial_info_expiration_status: null,
+        p_commercial_info_expiration_scheduled_date: null,
     })
+    if (snapshotError) throw new Error(snapshotError.message)
+
+    const updated = await loadArenaPaymentAccount(arenaId)
+    if (!updated) throw new Error('A conta Asaas não foi encontrada depois da sincronização transacional.')
+    const firstApproval =
+        existing.activated_at === null &&
+        updated.activated_at !== null &&
+        updated.status === 'active'
 
     await recordPaymentAudit({
         arenaId,
@@ -589,6 +677,7 @@ async function syncArenaAsaasSubaccount(
             status: updated.status,
         },
         metadata: { webhook_configured: Boolean(updated.webhook_token_hash) },
+        source,
     })
     return mapPixSplitSettings(updated)
 }
@@ -645,13 +734,31 @@ function mapPixSplitSettings(row: ArenaPaymentAccountRow | null): ArenaPixSplitS
     }
 }
 
+function settingsForFinancialOnboardingAccess(
+    settings: ArenaPixSplitSettings,
+    source: ArenaFinancialOnboardingAccess['source'],
+): ArenaPixSplitSettings {
+    if (source === 'super_admin_backoffice') return settings
+
+    return {
+        ...settings,
+        asaasWalletId: '',
+        asaasAccountId: '',
+        pixKey: '',
+        platformFeeBasisPoints: 0,
+    }
+}
+
 export async function getArenaPixSplitSettingsAction(
     arenaId: string
 ): Promise<{ success: boolean; data: ArenaPixSplitSettings; error?: string }> {
     try {
-        await assertPlatformSuperAdminAccess()
+        const access = await assertArenaFinancialOnboardingAccess(arenaId)
         const data = await loadArenaPaymentAccount(arenaId)
-        return { success: true, data: mapPixSplitSettings(data) }
+        return {
+            success: true,
+            data: settingsForFinancialOnboardingAccess(mapPixSplitSettings(data), access.source),
+        }
     } catch (err) {
         const message = err instanceof Error ? err.message : 'Erro ao carregar configuração Pix da arena'
         return { success: false, data: defaultPixSplitSettings(), error: message }
@@ -719,7 +826,7 @@ export async function createArenaAsaasSubaccountAction(
     input: CreateArenaAsaasSubaccountInput,
 ): Promise<PixSplitActionResult> {
     try {
-        const profile = await assertPlatformSuperAdminAccess()
+        const profile = await assertArenaFinancialOnboardingAccess(arenaId)
         const parsedArenaId = typeof arenaId === 'string' ? arenaId.trim() : ''
         if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(parsedArenaId)) {
             throw new Error('Arena inválida para o onboarding Asaas.')
@@ -820,11 +927,15 @@ export async function createArenaAsaasSubaccountAction(
                 action: 'asaas_subaccount_credential_recovery_required',
                 newValue: { asaas_account_id: subaccount.id, status: 'pending' },
                 metadata: { reason: error instanceof Error ? error.message : 'vault_write_failed' },
+                source: profile.source,
             })
             revalidatePixSplitPaths(parsedArenaId)
             return {
                 success: false,
-                data: mapPixSplitSettings(recoveryBaseline),
+                data: settingsForFinancialOnboardingAccess(
+                    mapPixSplitSettings(recoveryBaseline),
+                    profile.source,
+                ),
                 error: 'A subconta foi criada, mas o cofre não confirmou a credencial. Use a recuperação segura antes de sincronizar.',
             }
         }
@@ -857,12 +968,13 @@ export async function createArenaAsaasSubaccountAction(
                 status: 'pending',
             },
             metadata: { webhook_configured: true },
+            source: profile.source,
         })
 
         revalidatePixSplitPaths(parsedArenaId)
         return {
             success: true,
-            data: mapPixSplitSettings(baseline),
+            data: settingsForFinancialOnboardingAccess(mapPixSplitSettings(baseline), profile.source),
             warning: 'Subconta criada. Aguarde ao menos 15 segundos antes de sincronizar o status e os documentos.',
         }
     } catch (err) {
@@ -949,10 +1061,13 @@ export async function syncArenaAsaasSubaccountStatusAction(
     arenaId: string,
 ): Promise<PixSplitActionResult> {
     try {
-        const profile = await assertPlatformSuperAdminAccess()
-        const data = await syncArenaAsaasSubaccount(arenaId, profile.dbUserId)
+        const profile = await assertArenaFinancialOnboardingAccess(arenaId)
+        const data = await syncArenaAsaasSubaccount(arenaId, profile.dbUserId, profile.source)
         revalidatePixSplitPaths(arenaId)
-        return { success: true, data }
+        return {
+            success: true,
+            data: settingsForFinancialOnboardingAccess(data, profile.source),
+        }
     } catch (err) {
         const message = err instanceof Error ? err.message : 'Erro ao sincronizar o onboarding Asaas'
         return { success: false, data: defaultPixSplitSettings(), error: message }

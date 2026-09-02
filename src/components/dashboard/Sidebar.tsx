@@ -17,6 +17,7 @@ import {
     Package,
     BarChart2,
     ClipboardPen,
+    ClipboardClock,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -53,6 +54,7 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
     const rotativoHref = selectedArena ? `/dashboard/rotativo/${selectedArena}` : "/dashboard/rotativo";
     const athletesHref = selectedArena ? `/dashboard/athletes/${selectedArena}` : "/dashboard/athletes";
     const mensalistasHref = selectedArena ? `/dashboard/arenas/${selectedArena}/mensalistas` : "/dashboard/arenas";
+    const preReservasHref = selectedArena ? `/dashboard/arenas/${selectedArena}/pre-reservas` : "/dashboard/arenas";
 
     // Caixa com estação atribuída → apenas "Minha Estação"
     const cashierWithStation = isCashier && selectedArenaDetails?.assignedStationId ? [
@@ -83,6 +85,7 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
         p.startsWith("/dashboard/arenas/") &&
         !p.includes("/stations") &&
         !p.includes("/mensalistas") &&
+        !p.includes("/pre-reservas") &&
         !p.endsWith("/edit");
 
     const mensalistasActive = (p: string) => p.includes("/mensalistas");
@@ -105,6 +108,13 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                 href: arenaHref,
                 isActive: espacosActive,
                 requiresAdmin: true,
+            },
+            {
+                icon: ClipboardClock,
+                label: "Pré-reservas",
+                tutorialKey: "booking-requests",
+                href: preReservasHref,
+                isActive: (p: string) => p.includes("/pre-reservas"),
             },
             {
                 icon: Medal,

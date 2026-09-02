@@ -106,6 +106,7 @@ Receita do mês (e variação % vs. mês anterior), reservas confirmadas hoje, q
 | Editar / excluir | Menu **⋮** no card ou tabela | Exclusão permanente |
 | Ver agenda | Card ou ícone de calendário | Calendário Dia/Semana |
 | Cadastrar reserva | Horário vazio ou **Cadastrar reserva** | Reserva no calendário |
+| Analisar pré-reserva | **Pré-reservas** → selecionar solicitação | Aprovar e bloquear o horário, ou recusar |
 | Gerenciar reserva | Clique na reserva → Detalhes | Editar, serviços, cancelar |
 | Operação do dia | **Ver operação do dia**, **Horários disponíveis** | Identificar horários livres |
 
@@ -118,6 +119,15 @@ Receita do mês (e variação % vs. mês anterior), reservas confirmadas hoje, q
 - Esportes vinculados opcionalmente; ao editar, substitui todos os vínculos.
 - **Criar espaço** exige assinatura ativa + limite do plano não atingido.
 - Endereço da arena alimenta geolocalização no mapa (geocodificação automática).
+
+### Pré-reservas do aplicativo
+
+- O recebimento é ativado por arena em **Configurações → Perfil da Arena → Aceitar pré-reservas pelo aplicativo**.
+- Uma solicitação **Em análise** não ocupa a agenda. Mais de um atleta pode pedir o mesmo horário.
+- Dono, Gestor e Atendente podem analisar a fila em **Pré-reservas**.
+- Ao aprovar, o sistema revalida a disponibilidade e cria uma reserva **Ag. Confirmação**, que passa a bloquear a quadra.
+- Se outra reserva já ocupar o período, a aprovação é bloqueada; a solicitação pode ser recusada.
+- Recusar não cria reserva. Nesta etapa, aprovação e recusa não geram pagamento nem lançamento financeiro.
 
 ### Regras de negócio — Reservas avulsas
 
@@ -456,6 +466,7 @@ Pagamentos processados via **Asaas** — checkout hospedado externo. Após pagam
 | Editar dados | Nome, endereço, comodidades, esportes, telefone, e-mail. Endereço → mapa. |
 | Busca por CNPJ | Preenche razão social e dados cadastrais (Receita Federal). |
 | Imagem | Upload no formulário. |
+| Pré-reservas pelo aplicativo | Ativa ou desativa novas solicitações; a fila existente continua acessível. |
 | Excluir arena | Permanente — remove arena e quadras associadas. |
 
 ---
@@ -464,6 +475,7 @@ Pagamentos processados via **Asaas** — checkout hospedado externo. Após pagam
 
 ```
 Atleta ──┬── Reserva (Espaços) ──────────► Financeiro
+         ├── Pré-reserva do App ─────────► Reserva após aprovação
          ├── Mensalista ─────────────────► Reservas + Financeiro
          ├── Comanda (Estação) ──────────► Financeiro + Estoque
          ├── Rotativo ───────────────────► Financeiro (ou crédito)

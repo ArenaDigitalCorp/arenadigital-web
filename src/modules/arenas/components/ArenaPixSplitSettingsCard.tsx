@@ -1,7 +1,7 @@
 "use client"
 
 import type { FormEvent } from "react"
-import { useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import {
     AlertTriangle,
     Building2,
@@ -26,6 +26,7 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import {
     createArenaAsaasSubaccountAction,
+    getArenaPixSplitSettingsAction,
     recoverArenaAsaasSubaccountCredentialAction,
     syncArenaAsaasSubaccountStatusAction,
     updateArenaPixSplitSettingsAction,
@@ -51,9 +52,15 @@ interface Props {
         province: string
         postalCode: string
     }
+    accessMode?: "platform" | "arena"
+    onSettingsChange?: (settings: ArenaPixSplitSettings) => void
 }
 
 type BusyOperation = "create" | "recover" | "sync" | "save" | null
+
+const AUTOMATIC_INITIAL_SYNC_DELAY_MS = 15_000
+const AUTOMATIC_LOCAL_REFRESH_MS = 10_000
+const AUTOMATIC_PROVIDER_RECONCILIATION_MS = 5 * 60_000
 
 const STATUS_META: Record<ArenaAsaasOnboardingStatus, {
     label: string
@@ -80,6 +87,20 @@ function formatDate(value: string | null): string {
         dateStyle: "short",
         timeStyle: "short",
     }).format(new Date(value))
+}
+
+function automaticProviderDelay(
+    lastStatusCheckedAt: string | null,
+    updatedAt: string | null,
+): number {
+    const reference = lastStatusCheckedAt ?? updatedAt
+    const interval = lastStatusCheckedAt
+        ? AUTOMATIC_PROVIDER_RECONCILIATION_MS
+        : AUTOMATIC_INITIAL_SYNC_DELAY_MS
+    if (!reference) return interval
+    const elapsed = Date.now() - Date.parse(reference)
+    if (!Number.isFinite(elapsed)) return interval
+    return Math.max(1_000, interval - Math.max(0, elapsed))
 }
 
 function StatusLine({
@@ -112,16 +133,20 @@ export function ArenaPixSplitSettingsCard({
     arenaName,
     initialSettings,
     registration,
+    accessMode = "platform",
+    onSettingsChange,
 }: Props) {
     const [settings, setSettings] = useState(initialSettings)
     const [operationalForm, setOperationalForm] = useState(initialSettings)
     const [busy, setBusy] = useState<BusyOperation>(null)
+    const [automaticUpdateError, setAutomaticUpdateError] = useState<string | null>(null)
+    const automaticRefreshInFlightRef = useRef(false)
     const [showOnboarding, setShowOnboarding] = useState(!initialSettings.onboardingStarted)
     const [onboardingForm, setOnboardingForm] = useState({
         name: initialSettings.holderName || arenaName,
         email: registration.email,
         cpfCnpj: initialSettings.holderDocument || registration.document,
-        companyType: "LIMITED" as AsaasCompanyType,
+        companyType: "" as AsaasCompanyType | "",
         mobilePhone: registration.phone,
         incomeValue: "",
         address: registration.address,
@@ -135,18 +160,88 @@ export function ArenaPixSplitSettingsCard({
         settings.onboardingStatus === "APPROVED" &&
         settings.webhookConfigured &&
         settings.paymentFlow === "arena_subaccount_split"
+    const isRejected = settings.onboardingStatus === "REJECTED"
+    const isPlatform = accessMode === "platform"
 
-    function updateSettings(next: ArenaPixSplitSettings) {
+    const updateSettings = useCallback((next: ArenaPixSplitSettings) => {
         setSettings(next)
         setOperationalForm(next)
-    }
+        onSettingsChange?.(next)
+    }, [onSettingsChange])
+
+    useEffect(() => {
+        if (
+            !settings.onboardingStarted ||
+            settings.enabled ||
+            settings.credentialRecoveryRequired
+        ) {
+            return
+        }
+
+        let active = true
+
+        async function refresh(source: "local" | "provider") {
+            if (automaticRefreshInFlightRef.current) return
+            automaticRefreshInFlightRef.current = true
+            try {
+                const result = source === "provider"
+                    ? await syncArenaAsaasSubaccountStatusAction(arenaId)
+                    : await getArenaPixSplitSettingsAction(arenaId)
+                if (!active) return
+                if (!result.success) {
+                    setAutomaticUpdateError(result.error ?? "Não foi possível atualizar o cadastro automaticamente.")
+                    return
+                }
+                updateSettings(result.data)
+                setAutomaticUpdateError(null)
+            } catch {
+                if (active) setAutomaticUpdateError("A atualização automática está temporariamente indisponível.")
+            } finally {
+                automaticRefreshInFlightRef.current = false
+            }
+        }
+
+        const providerTimer = window.setTimeout(
+            () => void refresh("provider"),
+            automaticProviderDelay(settings.lastStatusCheckedAt, settings.updatedAt),
+        )
+        const localRefreshTimer = window.setInterval(
+            () => void refresh("local"),
+            AUTOMATIC_LOCAL_REFRESH_MS,
+        )
+        const providerReconciliationTimer = window.setInterval(
+            () => void refresh("provider"),
+            AUTOMATIC_PROVIDER_RECONCILIATION_MS,
+        )
+
+        return () => {
+            active = false
+            window.clearTimeout(providerTimer)
+            window.clearInterval(localRefreshTimer)
+            window.clearInterval(providerReconciliationTimer)
+        }
+    }, [
+        arenaId,
+        settings.credentialRecoveryRequired,
+        settings.enabled,
+        settings.lastStatusCheckedAt,
+        settings.onboardingStarted,
+        settings.updatedAt,
+        updateSettings,
+    ])
 
     async function handleCreateSubaccount(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()
+        const companyType = onboardingForm.companyType
+        if (!companyType) {
+            toast.error("Selecione a natureza jurídica da empresa.")
+            return
+        }
         setBusy("create")
         try {
             const result = await createArenaAsaasSubaccountAction(arenaId, {
                 ...onboardingForm,
+                companyType,
                 incomeValue: Number(onboardingForm.incomeValue),
             })
             if (!result.success) {
@@ -155,8 +250,9 @@ export function ArenaPixSplitSettingsCard({
             }
             updateSettings(result.data)
             setShowOnboarding(false)
-            if (result.warning) toast.warning(result.warning)
-            else toast.success("Subconta criada. Sincronize o status após alguns segundos.")
+            setAutomaticUpdateError(null)
+            toast.success("Cadastro financeiro iniciado. A aprovação será acompanhada automaticamente.")
+            if (result.warning) toast.info(result.warning)
         } catch (error) {
             toast.error(error instanceof Error ? error.message : "Não foi possível criar a subconta Asaas.")
         } finally {
@@ -184,7 +280,8 @@ export function ArenaPixSplitSettingsCard({
             const result = await syncArenaAsaasSubaccountStatusAction(arenaId)
             if (!result.success) throw new Error(result.error)
             updateSettings(result.data)
-            toast.success(result.data.enabled ? "Status atualizado; o split continua ativo." : "Status cadastral atualizado.")
+            setAutomaticUpdateError(null)
+            toast.success(result.data.enabled ? "Recebimento online atualizado e ativo." : "Cadastro atualizado.")
         } catch (error) {
             toast.error(error instanceof Error ? error.message : "Não foi possível sincronizar o status.")
         } finally {
@@ -216,18 +313,23 @@ export function ArenaPixSplitSettingsCard({
     }
 
     return (
-        <div className="border-t border-slate-200 pt-6">
+        <section className="px-5 py-7 sm:px-8" aria-labelledby="receiving-account-title">
             <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
                 <div className="flex items-start gap-3">
                     <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-slate-950 text-white">
                         <WalletCards className="h-5 w-5" aria-hidden="true" />
                     </div>
                     <div>
-                        <h3 className="text-base font-bold text-slate-950">Conta de recebimento</h3>
+                        <p className="text-[11px] font-black uppercase tracking-[0.14em] text-arena-button">
+                            Recebimento das reservas
+                        </p>
+                        <h3 id="receiving-account-title" className="mt-1 text-base font-bold text-arena-navy-800">Conta de recebimento</h3>
                         <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
                             {settings.onboardingStarted
-                                ? "Subconta da arena, validação cadastral e divisão automática das reservas."
-                                : "Onboarding financeiro da arena e configuração da taxa da plataforma."}
+                                ? "A validação é acompanhada automaticamente. Você só precisa agir se o Asaas solicitar algum documento."
+                                : isPlatform
+                                    ? "Onboarding financeiro da arena e configuração da taxa da plataforma."
+                                    : "Confirme os dados da empresa para ativar o recebimento das reservas online."}
                         </p>
                     </div>
                 </div>
@@ -236,16 +338,26 @@ export function ArenaPixSplitSettingsCard({
                         "h-7",
                         settings.enabled
                             ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                            : "border-slate-200 bg-slate-50 text-slate-600",
+                            : isRejected
+                                ? "border-rose-200 bg-rose-50 text-rose-800"
+                                : "border-slate-200 bg-slate-50 text-slate-600",
                     )}>
-                        {settings.enabled ? <Check className="h-3.5 w-3.5" /> : <CircleDashed className="h-3.5 w-3.5" />}
-                        {settings.enabled ? "Split ativo" : "Split inativo"}
+                        {settings.enabled
+                            ? <Check className="h-3.5 w-3.5" />
+                            : isRejected
+                                ? <XCircle className="h-3.5 w-3.5" />
+                                : <CircleDashed className="h-3.5 w-3.5" />}
+                        {isPlatform
+                            ? settings.enabled ? "Split ativo" : "Split inativo"
+                            : settings.enabled ? "Recebimento ativo" : isRejected ? "Cadastro recusado" : isApproved ? "Conta aprovada" : settings.onboardingStarted ? "Em análise" : "Aguardando ativação"}
                     </Badge>
                     <Badge variant="outline" className={cn(
                         "h-7",
                         "border-sky-200 bg-sky-50 text-sky-800",
                     )}>
-                        {settings.onboardingStarted ? "Subconta BaaS" : "Não configurado"}
+                        {isPlatform
+                            ? settings.onboardingStarted ? "Subconta BaaS" : "Não configurado"
+                            : settings.onboardingStarted ? "Cadastro iniciado" : "Não iniciado"}
                     </Badge>
                 </div>
             </div>
@@ -255,25 +367,30 @@ export function ArenaPixSplitSettingsCard({
                     <section aria-labelledby="asaas-validation-title">
                         <div className="flex items-start justify-between gap-4">
                             <div>
-                                <h4 id="asaas-validation-title" className="text-sm font-bold text-slate-950">Validação cadastral</h4>
-                                <p className="mt-1 text-xs text-slate-500">Última consulta: {formatDate(settings.lastStatusCheckedAt)}</p>
+                                <h4 id="asaas-validation-title" className="text-sm font-bold text-slate-950">Acompanhamento automático</h4>
+                                <p className="mt-1 text-xs text-slate-500">Última atualização do Asaas: {formatDate(settings.lastStatusCheckedAt)}</p>
                             </div>
                             <Button type="button" variant="outline" size="sm" onClick={handleSync} disabled={busy !== null}>
                                 {busy === "sync" ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-                                Sincronizar
+                                Atualizar agora
                             </Button>
                         </div>
                         <div className="mt-4 border-y border-slate-200">
-                            <StatusLine label="Aprovação geral" status={settings.onboardingStatus} icon={ShieldCheck} />
-                            <StatusLine label="Dados comerciais" status={settings.commercialInfoStatus} icon={Building2} />
+                            <StatusLine label="Aprovação final" status={settings.onboardingStatus} icon={ShieldCheck} />
+                            <StatusLine label="Cadastro empresarial" status={settings.commercialInfoStatus} icon={Building2} />
                             <StatusLine label="Conta bancária" status={settings.bankAccountInfoStatus} icon={Landmark} />
-                            <StatusLine label="Documentação" status={settings.documentationStatus} icon={FileCheck2} />
+                            <StatusLine label="Documentos do responsável" status={settings.documentationStatus} icon={FileCheck2} />
                         </div>
+                        {automaticUpdateError && (
+                            <p className="mt-4 text-xs font-semibold text-amber-800" role="status">
+                                {automaticUpdateError} Você pode usar “Atualizar agora” sem reiniciar o cadastro.
+                            </p>
+                        )}
                         {settings.onboardingUrl && (
                             <Button asChild variant="outline" className="mt-4 w-full sm:w-auto">
                                 <a href={settings.onboardingUrl} target="_blank" rel="noreferrer">
                                     <ExternalLink className="h-4 w-4" />
-                                    Abrir envio de documentos
+                                    Enviar documentos solicitados
                                 </a>
                             </Button>
                         )}
@@ -282,14 +399,29 @@ export function ArenaPixSplitSettingsCard({
                     <section aria-labelledby="asaas-account-title" className="lg:border-l lg:border-slate-200 lg:pl-7">
                         <h4 id="asaas-account-title" className="text-sm font-bold text-slate-950">Registro operacional</h4>
                         <dl className="mt-4 space-y-4 text-sm">
-                            <div>
-                                <dt className="text-xs text-slate-500">Conta Asaas</dt>
-                                <dd className="mt-1 break-all font-mono text-xs font-semibold text-slate-800">{settings.asaasAccountId || "Pendente"}</dd>
-                            </div>
-                            <div>
-                                <dt className="text-xs text-slate-500">Wallet</dt>
-                                <dd className="mt-1 break-all font-mono text-xs font-semibold text-slate-800">{settings.asaasWalletId || "Pendente"}</dd>
-                            </div>
+                            {isPlatform ? (
+                                <>
+                                    <div>
+                                        <dt className="text-xs text-slate-500">Conta Asaas</dt>
+                                        <dd className="mt-1 break-all font-mono text-xs font-semibold text-slate-800">{settings.asaasAccountId || "Pendente"}</dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-xs text-slate-500">Wallet</dt>
+                                        <dd className="mt-1 break-all font-mono text-xs font-semibold text-slate-800">{settings.asaasWalletId || "Pendente"}</dd>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <div>
+                                        <dt className="text-xs text-slate-500">Titular</dt>
+                                        <dd className="mt-1 text-xs font-semibold text-slate-800">{settings.holderName || "Em validação"}</dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-xs text-slate-500">CNPJ</dt>
+                                        <dd className="mt-1 text-xs font-semibold text-slate-800">{settings.holderDocument || "Em validação"}</dd>
+                                    </div>
+                                </>
+                            )}
                             <div className="flex items-center justify-between gap-4 border-t border-slate-100 pt-4">
                                 <dt className="text-xs text-slate-500">Webhook exclusivo</dt>
                                 <dd className={cn("flex items-center gap-1.5 text-xs font-bold", settings.webhookConfigured ? "text-emerald-700" : "text-rose-700")}>
@@ -311,10 +443,14 @@ export function ArenaPixSplitSettingsCard({
                             <p className="mt-1 text-xs leading-5 text-rose-800">A subconta já existe e nenhuma nova conta será criada.</p>
                         </div>
                     </div>
-                    <Button type="button" variant="outline" onClick={handleCredentialRecovery} disabled={busy !== null}>
-                        {busy === "recover" ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
-                        Proteger credencial
-                    </Button>
+                    {isPlatform ? (
+                        <Button type="button" variant="outline" onClick={handleCredentialRecovery} disabled={busy !== null}>
+                            {busy === "recover" ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
+                            Proteger credencial
+                        </Button>
+                    ) : (
+                        <p className="text-xs font-semibold text-rose-800">A equipe Arena Digital já foi avisada para concluir a proteção.</p>
+                    )}
                 </div>
             )}
 
@@ -322,10 +458,10 @@ export function ArenaPixSplitSettingsCard({
                 <form onSubmit={handleCreateSubaccount} className="mt-7" aria-labelledby="asaas-onboarding-title">
                     <div className="border-b border-slate-200 pb-4">
                         <h4 id="asaas-onboarding-title" className="text-sm font-bold text-slate-950">
-                            Criar subconta Asaas
+                            Ativar recebimentos online
                         </h4>
                         <p className="mt-1 text-xs leading-5 text-slate-500">
-                            Os dados serão submetidos à validação cadastral do Asaas. A credencial gerada será armazenada no cofre do backend.
+                            Somente ao confirmar estes dados criaremos a conta de pagamento no Asaas. Depois disso, a Arena Digital acompanhará a aprovação automaticamente.
                         </p>
                     </div>
                     <div className="mt-5 grid gap-x-4 gap-y-5 md:grid-cols-2 xl:grid-cols-3">
@@ -339,7 +475,8 @@ export function ArenaPixSplitSettingsCard({
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="baas-company-type">Natureza jurídica</Label>
-                            <select id="baas-company-type" value={onboardingForm.companyType} onChange={(event) => setOnboardingForm((form) => ({ ...form, companyType: event.target.value as AsaasCompanyType }))} className="h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" required>
+                            <select id="baas-company-type" value={onboardingForm.companyType} onChange={(event) => setOnboardingForm((form) => ({ ...form, companyType: event.target.value as AsaasCompanyType | "" }))} className="h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" required>
+                                <option value="" disabled>Selecione</option>
                                 {COMPANY_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
                             </select>
                         </div>
@@ -379,13 +516,13 @@ export function ArenaPixSplitSettingsCard({
                     <div className="mt-6 flex justify-end border-t border-slate-200 pt-5">
                         <Button type="submit" disabled={busy !== null} className="bg-slate-950 text-white hover:bg-slate-800">
                             {busy === "create" ? <Loader2 className="animate-spin" /> : <Building2 />}
-                            Criar subconta
+                            Confirmar e iniciar ativação
                         </Button>
                     </div>
                 </form>
             )}
 
-            {isApproved && (
+            {isApproved && isPlatform && (
                 <form onSubmit={handleOperationalSave} className="mt-7 border-t border-slate-200 pt-6" aria-labelledby="split-operation-title">
                     <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
                         <div>
@@ -423,11 +560,27 @@ export function ArenaPixSplitSettingsCard({
                 </form>
             )}
 
-            {settings.onboardingStarted && !isApproved && (
-                <div className="mt-7 border-t border-slate-200 pt-5 text-sm text-slate-500">
-                    O split permanece bloqueado até a aprovação geral e a confirmação do webhook exclusivo da subconta.
+            {settings.enabled && !isPlatform && (
+                <div className="mt-7 grid gap-3 border-y border-emerald-200 bg-emerald-50/70 px-4 py-4 sm:grid-cols-[auto_1fr] sm:items-start">
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-700" aria-hidden="true" />
+                    <div>
+                        <p className="text-sm font-bold text-emerald-950">Conta de recebimento aprovada</p>
+                        <p className="mt-1 text-xs leading-5 text-emerald-800">
+                            O recebimento foi ativado automaticamente. Para oferecer reservas online, publique também a política de cancelamento da Arena.
+                        </p>
+                    </div>
                 </div>
             )}
-        </div>
+
+            {settings.onboardingStarted && !settings.enabled && (
+                <div className="mt-7 border-t border-slate-200 pt-5 text-sm text-slate-500">
+                    {isApproved
+                        ? "A conta foi aprovada, mas o recebimento está desativado. Fale com o suporte da Arena Digital para revisar a operação."
+                        : isRejected
+                            ? "O cadastro foi recusado pelo Asaas e o recebimento permanece bloqueado. Revise os status acima e siga a ação solicitada antes de tentar novamente."
+                            : "O recebimento permanece bloqueado enquanto o Asaas analisa o cadastro. Se houver uma pendência, a ação necessária aparecerá acima."}
+                </div>
+            )}
+        </section>
     )
 }
