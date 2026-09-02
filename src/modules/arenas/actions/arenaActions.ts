@@ -33,6 +33,7 @@ import {
     appBookingModeAcceptsPreBookings,
     normalizeAppBookingMode,
 } from '@/modules/arenas/domain/app-booking-mode'
+import type { AppBookingMode } from '@/modules/arenas/domain/app-booking-mode'
 import type { AsaasSubaccountCreation } from '@/modules/arenas/services/asaas-baas.service'
 import type { CreateArenaDTO, UpdateArenaDTO } from '@/modules/arenas/types/arena.types'
 import type {
@@ -214,6 +215,13 @@ export async function updateArenaAction(arenaId: string, input: UpdateArenaDTO) 
     }
 }
 
+export async function updateArenaAppBookingModeAction(
+    arenaId: string,
+    appBookingMode: AppBookingMode,
+) {
+    return updateArenaAction(arenaId, { app_booking_mode: appBookingMode })
+}
+
 function defaultPixSplitSettings(): ArenaPixSplitSettings {
     return {
         enabled: false,
@@ -298,6 +306,25 @@ type ClaimSubaccountProvisioningRpc = {
         name: 'claim_arena_asaas_subaccount_provisioning',
         args: { p_arena_id: string; p_request_id: string },
     ): Promise<{ data: boolean | null; error: { message: string } | null }>
+}
+
+type ApplyManualAsaasStatusSnapshotRpc = {
+    rpc(
+        name: 'apply_arena_asaas_manual_status_snapshot',
+        args: {
+            p_arena_id: string
+            p_asaas_account_id: string
+            p_commercial_info_status: ArenaAsaasOnboardingStatus
+            p_bank_account_info_status: ArenaAsaasOnboardingStatus
+            p_documentation_status: ArenaAsaasOnboardingStatus
+            p_general_status: ArenaAsaasOnboardingStatus
+            p_snapshot_observed_at: string
+            p_onboarding_url: string | null
+            p_pix_key: string | null
+            p_commercial_info_expiration_status: null
+            p_commercial_info_expiration_scheduled_date: null
+        },
+    ): Promise<{ data: unknown; error: SupabaseErrorLike | null }>
 }
 
 type SubaccountRecoveryRpc = {
@@ -602,32 +629,39 @@ async function syncArenaAsaasSubaccount(
     }
 
     const snapshot = await getArenaAsaasOnboardingSnapshot(arenaId)
-    const now = new Date().toISOString()
-    const approved = snapshot.status.general === 'APPROVED' && Boolean(existing.webhook_token_hash)
+    const snapshotObservedAt = new Date().toISOString()
+    const approved =
+        snapshot.status.general === 'APPROVED' &&
+        Boolean(existing.webhook_token_hash) &&
+        Boolean(existing.asaas_account_id) &&
+        Boolean(existing.asaas_wallet_id)
+    if (approved) await assertArenaAsaasRuntimeCredentials(arenaId)
     const pixKey = approved ? await ensureArenaAsaasPixKey(arenaId) : existing.pix_key
-    const firstApproval = approved && existing.payment_flow !== 'arena_subaccount_split'
     const onboardingUrl = snapshot.documents
         .find((document) => document.status !== 'APPROVED' && safeOnboardingUrl(document.onboardingUrl))
         ?.onboardingUrl ?? snapshot.documents.find((document) => safeOnboardingUrl(document.onboardingUrl))?.onboardingUrl ?? null
-    const nextStatus: ArenaPixSplitStatus = snapshot.status.general === 'REJECTED'
-        ? 'rejected'
-        : approved
-            ? existing.status === 'active' ? 'active' : 'disabled'
-            : 'pending'
-
-    const updated = await updateArenaPaymentAccount(arenaId, {
-        onboarding_status: snapshot.status.general,
-        commercial_info_status: snapshot.status.commercialInfo,
-        bank_account_info_status: snapshot.status.bankAccountInfo,
-        documentation_status: snapshot.status.documentation,
-        pix_key: pixKey,
-        onboarding_url: safeOnboardingUrl(onboardingUrl),
-        last_status_checked_at: now,
-        activated_at: existing.activated_at,
-        payment_flow: approved ? 'arena_subaccount_split' : existing.payment_flow,
-        status: nextStatus,
-        updated_at: now,
+    const snapshotRpc = getSupabaseAdmin() as unknown as ApplyManualAsaasStatusSnapshotRpc
+    const { error: snapshotError } = await snapshotRpc.rpc('apply_arena_asaas_manual_status_snapshot', {
+        p_arena_id: arenaId,
+        p_asaas_account_id: existing.asaas_account_id,
+        p_commercial_info_status: snapshot.status.commercialInfo,
+        p_bank_account_info_status: snapshot.status.bankAccountInfo,
+        p_documentation_status: snapshot.status.documentation,
+        p_general_status: snapshot.status.general,
+        p_snapshot_observed_at: snapshotObservedAt,
+        p_onboarding_url: safeOnboardingUrl(onboardingUrl),
+        p_pix_key: pixKey,
+        p_commercial_info_expiration_status: null,
+        p_commercial_info_expiration_scheduled_date: null,
     })
+    if (snapshotError) throw new Error(snapshotError.message)
+
+    const updated = await loadArenaPaymentAccount(arenaId)
+    if (!updated) throw new Error('A conta Asaas não foi encontrada depois da sincronização transacional.')
+    const firstApproval =
+        existing.activated_at === null &&
+        updated.activated_at !== null &&
+        updated.status === 'active'
 
     await recordPaymentAudit({
         arenaId,

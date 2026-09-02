@@ -3,7 +3,7 @@ import 'server-only'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import type { CreateArenaAsaasSubaccountInput } from '@/modules/arenas/types/pix-split.types'
 
-const BOOKING_WEBHOOK_EVENTS = [
+const ASAAS_WEBHOOK_EVENTS = [
   'PAYMENT_CREATED',
   'PAYMENT_UPDATED',
   'PAYMENT_CONFIRMED',
@@ -17,6 +17,24 @@ const BOOKING_WEBHOOK_EVENTS = [
   'PAYMENT_SPLIT_CANCELLED',
   'PAYMENT_SPLIT_DIVERGENCE_BLOCK',
   'PAYMENT_SPLIT_DIVERGENCE_BLOCK_FINISHED',
+  'ACCOUNT_STATUS_BANK_ACCOUNT_INFO_APPROVED',
+  'ACCOUNT_STATUS_BANK_ACCOUNT_INFO_AWAITING_APPROVAL',
+  'ACCOUNT_STATUS_BANK_ACCOUNT_INFO_PENDING',
+  'ACCOUNT_STATUS_BANK_ACCOUNT_INFO_REJECTED',
+  'ACCOUNT_STATUS_COMMERCIAL_INFO_APPROVED',
+  'ACCOUNT_STATUS_COMMERCIAL_INFO_AWAITING_APPROVAL',
+  'ACCOUNT_STATUS_COMMERCIAL_INFO_PENDING',
+  'ACCOUNT_STATUS_COMMERCIAL_INFO_REJECTED',
+  'ACCOUNT_STATUS_DOCUMENT_APPROVED',
+  'ACCOUNT_STATUS_DOCUMENT_AWAITING_APPROVAL',
+  'ACCOUNT_STATUS_DOCUMENT_PENDING',
+  'ACCOUNT_STATUS_DOCUMENT_REJECTED',
+  'ACCOUNT_STATUS_GENERAL_APPROVAL_APPROVED',
+  'ACCOUNT_STATUS_GENERAL_APPROVAL_AWAITING_APPROVAL',
+  'ACCOUNT_STATUS_GENERAL_APPROVAL_PENDING',
+  'ACCOUNT_STATUS_GENERAL_APPROVAL_REJECTED',
+  'ACCOUNT_STATUS_COMMERCIAL_INFO_EXPIRING_SOON',
+  'ACCOUNT_STATUS_COMMERCIAL_INFO_EXPIRED',
 ] as const
 
 export type AsaasRegistrationStatus = 'PENDING' | 'AWAITING_APPROVAL' | 'APPROVED' | 'REJECTED'
@@ -166,7 +184,7 @@ function webhookConfiguration(email: string, webhookToken: string) {
   if (!url) throw new Error('A URL do webhook de reservas não está configurada para o onboarding BaaS.')
 
   return [{
-    name: 'Arena Digital - reservas',
+    name: 'Arena Digital - pagamentos e cadastro',
     url,
     email,
     enabled: true,
@@ -174,7 +192,7 @@ function webhookConfiguration(email: string, webhookToken: string) {
     apiVersion: 3,
     authToken: webhookToken,
     sendType: 'SEQUENTIALLY',
-    events: BOOKING_WEBHOOK_EVENTS,
+    events: ASAAS_WEBHOOK_EVENTS,
   }]
 }
 

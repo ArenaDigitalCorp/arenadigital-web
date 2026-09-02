@@ -10,8 +10,8 @@ const page = readFileSync(
   new URL('../src/modules/bookings/components/AppBookingRequestsPageClient.tsx', import.meta.url),
   'utf8',
 )
-const form = readFileSync(
-  new URL('../src/modules/arenas/components/ArenaForm.tsx', import.meta.url),
+const bookingSettings = readFileSync(
+  new URL('../src/modules/arenas/components/ArenaAppBookingSettingsCard.tsx', import.meta.url),
   'utf8',
 )
 const sidebar = readFileSync(
@@ -20,13 +20,12 @@ const sidebar = readFileSync(
 )
 
 test('arena setting is explicit and defaults off', () => {
-  assert.match(form, /name="app_booking_mode"/u)
-  assert.match(form, /normalizeAppBookingMode/u)
-  assert.match(form, /value: "disabled"/u)
-  assert.match(form, /value: "pre_booking"/u)
-  assert.match(form, /value: "online_payment"/u)
-  assert.match(form, /onlineBookingReady/u)
-  assert.match(form, /Configure abaixo/u)
+  assert.match(bookingSettings, /normalizeAppBookingMode/u)
+  assert.match(bookingSettings, /value: "disabled"/u)
+  assert.match(bookingSettings, /value: "pre_booking"/u)
+  assert.match(bookingSettings, /value: "online_payment"/u)
+  assert.match(bookingSettings, /onlineBookingReady/u)
+  assert.match(bookingSettings, /Concluir configuração abaixo/u)
 })
 
 test('request queue is tenant-authorized and reviews only through the service RPC', () => {

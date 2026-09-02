@@ -2,16 +2,18 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
-const [actions, schema, component, editPage] = await Promise.all([
+const [actions, schema, component, editPage, operationsPanel] = await Promise.all([
   readFile(new URL('../src/modules/arenas/actions/cancellationPolicyActions.ts', import.meta.url), 'utf8'),
   readFile(new URL('../src/modules/arenas/schemas/cancellation-policy.schema.ts', import.meta.url), 'utf8'),
   readFile(new URL('../src/modules/arenas/components/ArenaCancellationPolicyCard.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../src/app/dashboard/arenas/[id]/edit/page.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../src/modules/arenas/components/ArenaBookingOperationsPanel.tsx', import.meta.url), 'utf8'),
 ])
 
 test('cancellation policy configuration is available in the Arena-owned settings journey', () => {
   assert.match(editPage, /assertArenaAdminAccess\(id\)/u)
-  assert.match(editPage, /ArenaCancellationPolicyCard/u)
+  assert.match(editPage, /ArenaBookingOperationsPanel/u)
+  assert.match(operationsPanel, /ArenaCancellationPolicyCard/u)
   assert.match(actions, /assertArenaAdminAccess\(arenaId\)/gu)
   assert.match(actions, /createSupabaseServerClient/u)
   assert.doesNotMatch(actions, /assertPlatformSuperAdminAccess/u)
