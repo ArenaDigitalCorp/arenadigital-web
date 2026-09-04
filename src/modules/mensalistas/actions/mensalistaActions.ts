@@ -13,6 +13,7 @@ import {
   lancarCreditoSchema,
   retirarCreditoSchema,
   setEncerramentoSchema,
+  reajustarValorSchema,
   competenciaSchema,
   uuidSchema,
 } from '@/modules/mensalistas/schemas/mensalista.schema'
@@ -27,6 +28,7 @@ import type {
   PagamentoComContexto,
   PagamentoRow,
   PlanoMensalistaComDetalhes,
+  ReajusteRow,
   RecorrenciaResumo,
   SituacaoPagamento,
   StatusPlano,
@@ -474,6 +476,20 @@ export async function getMensalistaDetailAction(
         .filter((a) => a.restante > 0.01)
     }
 
+    const { data: reajustesData, error: reajustesErr } = await supabase
+      .from('planos_mensalista_reajustes')
+      .select('*')
+      .eq('arena_id', parsedArena)
+      .in('plano_id', planos.map((p) => p.id))
+      .order('created_at', { ascending: false })
+    if (reajustesErr) throw new Error(reajustesErr.message)
+    const reajustesByPlano = new Map<string, ReajusteRow[]>()
+    for (const r of (reajustesData ?? []) as unknown as ReajusteRow[]) {
+      const list = reajustesByPlano.get(r.plano_id) ?? []
+      list.push(r)
+      reajustesByPlano.set(r.plano_id, list)
+    }
+
     const recorrencias: RecorrenciaResumo[] = planos.map((plano) => {
       const mensalidade = mensalidadeByPlano.get(plano.id) ?? null
       return {
@@ -482,6 +498,7 @@ export async function getMensalistaDetailAction(
         cobrancas: mensalidade
           ? cobrancasByMensalidade.get(mensalidade.id) ?? []
           : [],
+        reajustes: reajustesByPlano.get(plano.id) ?? [],
       }
     })
 
@@ -590,15 +607,22 @@ export async function configureRateioAction(
   }
 }
 
+export interface RegistrarPagamentoResult {
+  excedente: number
+  creditoExcedenteLancado: boolean
+  status: string
+  creditoSaldo: number | null
+}
+
 export async function registrarPagamentoAction(
   input: unknown
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; data?: RegistrarPagamentoResult; error?: string }> {
   try {
     const parsed = registrarPagamentoSchema.parse(input)
     await assertArenaBackofficeAccess(parsed.arenaId)
     const { dbUserId } = await requireAuthenticatedDbUser()
 
-    const { error } = await getSupabaseAdmin().rpc(
+    const { data, error } = await getSupabaseAdmin().rpc(
       'register_mensalista_payment_atomic',
       {
         p_operation_id: parsed.operationId,
@@ -610,12 +634,23 @@ export async function registrarPagamentoAction(
         p_modo_pagamento_id: parsed.modoPagamentoId,
         p_observacao: parsed.observacao,
         p_registered_by: dbUserId,
+        p_lancar_excedente_credito: parsed.lancarExcedenteCredito,
       }
     )
     if (error) throw new Error(error.message)
 
+    const row = (data ?? {}) as Record<string, unknown>
     revalidateMensalistaPaths(parsed.arenaId)
-    return { success: true }
+    return {
+      success: true,
+      data: {
+        excedente: Number(row.excedente ?? 0),
+        creditoExcedenteLancado: Boolean(row.credito_excedente_lancado ?? false),
+        status: String(row.status ?? ''),
+        creditoSaldo:
+          row.credito_saldo == null ? null : Number(row.credito_saldo),
+      },
+    }
   } catch (err) {
     const message =
       err instanceof Error ? err.message : 'Erro ao registrar pagamento'
@@ -708,6 +743,59 @@ export async function setEncerramentoAction(
   } catch (err) {
     const message =
       err instanceof Error ? err.message : 'Erro ao registrar encerramento'
+    return { success: false, error: message }
+  }
+}
+
+export interface ReajustarValorResult {
+  competenciaVigencia: string
+  valorAnterior: number
+  valorNovo: number
+  mensalidadesAtualizadas: number
+  ignoradasRateio: number
+  ignoradasPagamento: number
+  idempotent: boolean
+}
+
+export async function reajustarValorPlanoAction(
+  input: unknown
+): Promise<{ success: boolean; data?: ReajustarValorResult; error?: string }> {
+  try {
+    const parsed = reajustarValorSchema.parse(input)
+    await assertArenaBackofficeAccess(parsed.arenaId)
+    const { dbUserId } = await requireAuthenticatedDbUser()
+
+    const { data, error } = await getSupabaseAdmin().rpc(
+      'reajustar_plano_mensalista_atomic',
+      {
+        p_operation_id: parsed.operationId,
+        p_arena_id: parsed.arenaId,
+        p_plano_id: parsed.planoId,
+        p_novo_valor: parsed.novoValor,
+        p_escopo: parsed.escopo,
+        p_observacao: parsed.observacao,
+        p_registered_by: dbUserId,
+      }
+    )
+    if (error) throw new Error(error.message)
+
+    const row = (data ?? {}) as Record<string, unknown>
+    revalidateMensalistaPaths(parsed.arenaId)
+    return {
+      success: true,
+      data: {
+        competenciaVigencia: String(row.competencia_vigencia ?? ''),
+        valorAnterior: Number(row.valor_anterior ?? 0),
+        valorNovo: Number(row.valor_novo ?? parsed.novoValor),
+        mensalidadesAtualizadas: Number(row.mensalidades_atualizadas ?? 0),
+        ignoradasRateio: Number(row.mensalidades_com_rateio_ignoradas ?? 0),
+        ignoradasPagamento: Number(row.mensalidades_com_pagamento_ignoradas ?? 0),
+        idempotent: Boolean(row.idempotent ?? false),
+      },
+    }
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : 'Erro ao reajustar o valor do plano'
     return { success: false, error: message }
   }
 }

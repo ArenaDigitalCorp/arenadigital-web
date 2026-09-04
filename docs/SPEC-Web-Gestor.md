@@ -627,10 +627,18 @@ mês passa pelo fluxo de pagamento abaixo.
 - data_encerramento_efetiva date — preenchida quando o plano realmente encerra
 - dia_vencimento smallint check (1..28)
 
+`planos_mensalista_reajustes` — auditoria de reajuste de valor mensal (migração `20260904150000_mensalista_reajuste_valor`)
+- id uuid pk (= p_operation_id, idempotência) / arena_id fk arenas / plano_id fk planos_mensalista on delete cascade
+- valor_anterior / valor_novo numeric(10,2) check >= 0
+- escopo text check ('mes_atual' | 'mes_seguinte') / competencia_vigencia date (dia 1)
+- observacao text / registered_by fk users / created_at
+- RLS: select `can_access_arena_backoffice(arena_id)`; escrita só via RPC (service_role)
+
 `mensalista_mensalidades` — cobrança mensal de uma recorrência numa competência
 - id uuid pk / arena_id fk arenas / plano_id fk planos_mensalista on delete cascade
 - athlete_id uuid fk atleta — responsável (desnormalizado para agrupar/consultar)
-- competencia date not null (dia 1 do mês) / valor_total numeric(10,2) — snapshot de valor_mensal
+- competencia date not null (dia 1 do mês) / valor_total numeric(10,2) — snapshot de valor_mensal;
+  na **competência de início do plano** é pró-rateado: `round(valor_mensal/sessoes_por_mes, 2) × sessões que ainda cabem no mês a partir de data_inicio` (mês cheio ⇒ valor_mensal; 0 sessões ⇒ não gera mensalidade)
 - rateio boolean default false
 - status text check ('aberto' | 'parcial' | 'quitado' | 'cancelado')
 - vencimento date / created_at / updated_at
@@ -674,6 +682,12 @@ Backfill: cada `public.transactions` com source_type='monthly_plan_month' vira u
   status <> 'cancelado', antes de data_encerramento_efetiva), garante 1 mensalidade
   (unique plano_id+competencia) + 1 cobrança default do responsável. Idempotente
   (advisory lock por arena+competencia). Chamada a cada load da tela.
+  Na competência em que `date_trunc('month', data_inicio) = competencia`, `valor_total`
+  é pró-rateado por `private.mensalista_first_month_sessions(dia_semana, data_inicio,
+  sessoes_por_mes)` — nº de ocorrências semanais do dia da recorrência de data_inicio
+  até o fim do mês, limitado a sessoes_por_mes. 0 ocorrências ⇒ a mensalidade não é
+  criada (a cobrança começa na competência seguinte). Migração
+  `20260904140000_mensalista_prorata_first_month`.
 
 - `configure_mensalista_rateio_atomic(p_arena_id, p_mensalidade_id, p_rateio, p_participantes jsonb, p_registered_by)`
   p_participantes = [{ atleta_id?, nome, ativo, valor }]. Congela as parcelas já pagas,
@@ -681,11 +695,18 @@ Backfill: cada `public.transactions` com source_type='monthly_plan_month' vira u
   responsável. Valida Σ(ativas) + Σ(travadas) = valor_total (tolerância 0,01) e que os
   atleta_id pertencem à arena. Recalcula o status da mensalidade.
 
-- `register_mensalista_payment_atomic(p_operation_id, p_arena_id, p_cobranca_id, p_valor, p_credito_aplicado, p_data, p_modo_pagamento_id, p_observacao, p_registered_by)`
-  Idempotente (p_operation_id = id do pagamento). Rejeita overpay. Crédito exige
+- `register_mensalista_payment_atomic(p_operation_id, p_arena_id, p_cobranca_id, p_valor, p_credito_aplicado, p_data, p_modo_pagamento_id, p_observacao, p_registered_by, p_lancar_excedente_credito default false)`
+  Idempotente (p_operation_id = id do pagamento). **O dinheiro pode exceder o devido**
+  (migração `20260904160000`): `p_lancar_excedente_credito=false` grava o excedente na
+  cobrança (`valor_pago > valor_devido`); `=true` quita a cobrança no valor exato e lança
+  o excedente como `mensalista_creditos` tipo='lancamento' — vinculado ao `atleta_id` da
+  cobrança ou, se for parcela de **avulso**, ao **responsável da recorrência**
+  (`planos_mensalista.athlete_id`); retorna `credito_atleta_id`. O **crédito aplicado**
+  (`p_credito_aplicado`) nunca pode exceder o devido. Crédito aplicado exige
   cobrança com atleta_id e saldo suficiente (grava `mensalista_creditos` tipo='uso',
-  valor negativo). Insere `mensalista_pagamentos`; atualiza a cobrança (valor_pago,
-  credito_aplicado, pago_em). Só a parte em dinheiro vai para `public.transactions`
+  valor negativo). Insere `mensalista_pagamentos` (valor = dinheiro total recebido);
+  atualiza a cobrança (valor_pago, credito_aplicado, pago_em). Só a parte em dinheiro
+  vai para `public.transactions`
   (type='entrada', category='Mensalidade', source_type='mensalista_pagamento',
   source_id=pagamento.id, ON CONFLICT DO UPDATE). Recalcula o status. Ao transicionar
   para 'quitado' (plano ativo): confirma os `bookings` 'reservado' da competência
@@ -710,12 +731,23 @@ Backfill: cada `public.transactions` com source_type='monthly_plan_month' vira u
   `bookings` 'reservado' com start_time >= mês previsto (America/Sao_Paulo).
   p_data_prevista = NULL limpa a previsão. Não altera o status do plano.
 
+- `reajustar_plano_mensalista_atomic(p_operation_id, p_arena_id, p_plano_id, p_novo_valor, p_escopo, p_observacao, p_registered_by)`
+  (`20260904150000`). `p_escopo` ∈ {'mes_atual','mes_seguinte'}. Idempotente
+  (p_operation_id = id do reajuste). Exige plano `status='ativo'` (senão `55000`).
+  Materializa a competência corrente ao valor **antigo** primeiro (para 'mes_seguinte'
+  nunca vazar no mês atual), registra em `planos_mensalista_reajustes`, faz
+  `UPDATE planos_mensalista.valor_mensal = novo`, e reescreve `valor_total` +
+  `valor_devido` das mensalidades `competencia >= vigência` que estejam **abertas/parciais
+  sem rateio e sem pagamento/crédito**; as com rateio ou pagamento são contadas em
+  `mensalidades_com_rateio_ignoradas` / `mensalidades_com_pagamento_ignoradas` no retorno.
+
 ### 18.3 Backend web (src/modules/mensalistas)
 
 - types/mensalista.types.ts — rows das tabelas + `MensalistaResumo` (agregado por
-  responsável), `MensalistaDetalhe`, `RecorrenciaResumo`, `RateioParticipanteInput`.
+  responsável), `MensalistaDetalhe`, `RecorrenciaResumo` (com `reajustes: ReajusteRow[]`),
+  `RateioParticipanteInput`.
 - schemas/mensalista.schema.ts — zod (configureRateio, registrarPagamento, lancarCredito,
-  setEncerramento).
+  setEncerramento, reajustarValor).
 - actions/mensalistaActions.ts (server actions, `assertArenaBackofficeAccess` +
   `requireAuthenticatedDbUser`, `revalidatePath` de mensalistas/finance/relatórios):
   - getMensalistasOverviewAction(arenaId, competencia) — chama a RPC de geração, lê
@@ -744,14 +776,114 @@ Backfill: cada `public.transactions` com source_type='monthly_plan_month' vira u
   saldo `$` e legenda "(Saldo Programa Fidelidade)", ícone `Star` do menu —,
   recorrências + mensalidade do mês, histórico de pagamentos paginado, extrato de
   créditos). Por recorrência: toggle de rateio,
-  "Prever encerramento" e "Cancelar plano" (reusa `cancel_monthly_plan_atomic` via
-  `cancelPlanoMensalistaAction`). A **criação** de recorrência continua no calendário
-  do espaço (`BookingModal`/`MensalistaModal` → `create_monthly_plan_atomic`).
+  "Prever encerramento", **"Reajustar valor"**, "Cancelar plano" (reusa
+  `cancel_monthly_plan_atomic` via `cancelPlanoMensalistaAction`) e um
+  **Histórico de reajustes** (`RecorrenciaResumo.reajustes`). A **criação** de
+  recorrência continua no calendário do espaço (`BookingModal` → `create_monthly_plan_atomic`),
+  que agora mostra as recorrências que ainda cabem no mês e a 1ª mensalidade proporcional.
 - Modais: `RateioModal` (lista de atletas do rateio, toggle + valor + adicionar
   participante/nome avulso, split igual ao vivo), `RegistrarPagamentoModal` (valor +
-  data + forma + aplicar crédito), `LancarCreditoModal`, `RetirarCreditoModal`
+  data + forma + aplicar crédito; **permite pagar acima do devido** e pergunta se o
+  excedente vira crédito), `ReajustarValorModal` (novo valor + vigência mês atual/seguinte
+  + observação), `LancarCreditoModal`, `RetirarCreditoModal`
   (retirada parcial do saldo do responsável, limitada ao saldo, registrada no extrato
   de créditos), `EncerramentoModal`.
 - Util `src/lib/format.ts` — formatCurrency / formatCompetencia / formatDate / toCompetencia.
 - `FinanceDashboardClient`: o botão "Confirmar" do painel de mensalistas pendentes vira
   link para o detalhe do mensalista.
+
+---
+
+## 19. Tabelas de preço de espaços
+
+Contrato completo do banco: `arenadigital-db/docs/court-price-tables.md`.
+Plano de produto: `docs/PLANO-Tabelas-de-Preco-Espacos.md`.
+
+### 19.1 Modelo de dados (migração `20260904120000_court_price_tables` + `_acl`)
+
+`court_price_tables` — grade nomeada de preços de um espaço
+- id / court_id fk courts on delete cascade / arena_id fk arenas (desnormalizado p/ RLS)
+- nome text / tipo text check ('padrao'|'mensalista'|'professor'|'custom')
+- is_default boolean — exatamente 1 por espaço (índice único parcial); é a tabela do avulso e do app
+- aplica_a text[] — dica de pré-seleção no modal de reserva
+- ativo boolean / ordem int / created_at / updated_at
+- Guards por trigger: **máx. 5 tabelas por espaço** (BEFORE INSERT) e `tipo` imutável nas 3 fixas (BEFORE UPDATE)
+
+`court_price_table_days` — um dia da semana dentro de uma tabela
+- price_table_id fk on delete cascade / arena_id / dia_semana smallint 0..6 (**0=domingo**)
+- habilitado boolean / hora_inicio / hora_fim time (`fim <= inicio` cruza a meia-noite)
+- slot_shift_time time null / preco_base numeric(10,2) — valor padrão do dia
+- unique (price_table_id, dia_semana). **Sem linha = dia não oferecido** por essa tabela
+
+`court_price_table_bands` — **só as faixas de exceção** (equivale ao `day_config.customPrices`)
+- price_table_day_id fk on delete cascade / arena_id / hora_inicio / hora_fim / preco / ordem
+
+Colunas de snapshot (nullable): `bookings.price_table_id`, `planos_mensalista.price_table_id`,
+`app_booking_requests.price_table_id`, `app_online_booking_operations.price_table_id`.
+
+RLS: select para `authenticated` via `can_access_arena_backoffice(arena_id)` nas 3 tabelas;
+escrita só `service_role` / funções `SECURITY DEFINER`.
+
+### 19.2 Resolver canônico
+
+`public.resolve_court_price(p_court_id, p_price_table_id, p_start, p_end) → numeric`
+(STABLE, SECURITY DEFINER, `search_path=''`, EXECUTE só `service_role`). Devolve a
+**sugestão**: casa a janela do dia no fuso America/Sao_Paulo (testando ontem e hoje, para
+funcionamento que cruza a meia-noite) e então:
+- `courts.booking_type='hourly'` → **soma** o preço de cada hora (faixa que cobre o instante,
+  senão `preco_base`), rateando a última hora parcial;
+- `booking_type='unique'` → **valor fixo** da faixa que cobre o início, sem multiplicar pela duração;
+- nenhum dia habilitado cobre o intervalo → **0**;
+- `p_price_table_id` NULL → usa a tabela `is_default`; de outro espaço → erro `22023`.
+
+O backoffice **sempre pode sobrescrever** o valor sugerido na reserva; o app usa o retorno direto.
+
+### 19.3 Backend web (src/modules/courts)
+
+- `types/price-table.types.ts` — `CourtPriceTable` / `CourtPriceDay` / `CourtPriceBand`,
+  `MAX_PRICE_TABLES_PER_COURT = 5`, `RESERVED_PRICE_TABLE_KINDS`.
+- `schemas/price-table.schema.ts` — zod (`upsertPriceTableSchema`, `createPriceTableSchema`).
+- `lib/price-table-editor.ts` — adaptadores `CourtPriceDay ↔ DayConfig`, `toEditorDays` (7 dias
+  na ordem segunda→domingo), `copyDaysFrom`, `dayConfigFromPriceDays`, `draftPriceTables`,
+  `priceTableFromLegacyDayConfig` (aceita o mesmo que `getSlotPrice` aceita — inclusive hora
+  sem zero à esquerda — e descarta o que ele descarta, para grade e tabela não divergirem).
+- `lib/court-price-resolver.ts` — porta em TS de `resolve_court_price`: `resolveSlotPrice`
+  (preço de um slot da grade, `null` fora da janela), `resolveCourtPriceSuggestion`
+  (`hourly` soma / `unique` fixo), `matchPriceDay`/`priceAtInstant`. Coberto por teste de
+  **paridade slot a slot** com o `getSlotPrice` legado.
+- `actions/priceTableActions.ts` (todas com `assertArenaAdminAccess` + `assertCourtAccess`,
+  exceto as de leitura do modal, que usam `assertArenaBackofficeAccess`):
+  - `listCourtPriceTablesAction(arenaId, courtId)` — tabelas + dias + faixas montados.
+  - `listCourtPriceTableOptionsAction(arenaId, courtId)` — lista enxuta para o `BookingModal`.
+  - `quoteCourtPriceAction(arenaId, courtId, priceTableId|null, startISO, endISO)` → `resolve_court_price`.
+  - `createCourtPriceTableAction` / `deleteCourtPriceTableAction` (só `custom`) /
+    `setDefaultCourtPriceTableAction`.
+  - `upsertCourtPriceTableAction(arenaId, input)` — reescreve cabeçalho + dias + faixas;
+    quando `tipo='padrao'`, **espelha** `courts.day_config` / `price` / `available_days`
+    (transição até o trigger de espelho do banco). Ainda não é atômico.
+  - `saveDraftPriceTablesAction(arenaId, courtId, drafts)` — persiste as 3 tabelas fixas logo
+    após criar o espaço (o trigger do banco já as semeou a partir do `day_config`).
+
+Enquanto `supabase.types.ts` não é regenerado, essas actions acessam as tabelas via cliente
+destipado (`/* eslint-disable @typescript-eslint/no-explicit-any */`, mesmo padrão de
+`mobileContentActions`).
+
+### 19.4 UI
+
+- `components/PriceTablesConfig.tsx` — editor multi-tabela com dois modos:
+  - **persistido** (`courtId`): carrega do servidor, cada aba salva sozinha ("Salvar tabela"),
+    permite `+ Nova tabela`, `Definir como padrão` e `Excluir` (só personalizadas).
+  - **rascunho** (`draftTables` + `onDraftChange`): o pai é dono do estado, nada vai ao servidor
+    até o espaço ser criado. Só as 3 fixas, sem criar/excluir/salvar por aba.
+  - Comum aos dois: abas com selo de dias configurados (`Nd` / `vazia`), reuso do
+    `DayScheduleConfig` por dia (faixas, faixa padrão, `Replicar`, `+1 dia`),
+    **Copiar faixas da tabela Padrão** e **Limpar tabela** nas não-padrão.
+- `components/CourtForm.tsx` — **cadastro** renderiza o editor em modo rascunho (Padrão
+  obrigatória: ao menos um dia habilitado, senão bloqueia o submit); no submit monta
+  `day_config`/`available_days`/`price` a partir da Padrão, cria o espaço e chama
+  `saveDraftPriceTablesAction`. **Edição** renderiza o modo persistido e o submit do
+  formulário não toca mais em `day_config`.
+- `BookingModal` — seletor **Tabela de preço** nas abas Avulso (default = `is_default`) e
+  Mensal (default = `tipo='mensalista'`), exibido quando há mais de uma tabela. Ao trocar
+  tabela/horário chama `quoteCourtPriceAction` e pré-preenche o valor, que **continua editável**
+  ("Sugerido pela tabela: R$ X" + "usar sugerido").
