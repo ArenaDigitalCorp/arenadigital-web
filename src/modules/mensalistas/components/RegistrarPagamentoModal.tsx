@@ -33,6 +33,8 @@ interface Props {
   cobranca: CobrancaRow | null
   creditoSaldo: number
   modosPagamento: { id: string; nome: string }[]
+  /** Nome do responsável pela recorrência — recebe o crédito quando a parcela é de um avulso. */
+  responsavelNome?: string
 }
 
 export function RegistrarPagamentoModal({
@@ -43,6 +45,7 @@ export function RegistrarPagamentoModal({
   cobranca,
   creditoSaldo,
   modosPagamento,
+  responsavelNome,
 }: Props) {
   const restante = cobranca
     ? Math.max(
@@ -62,6 +65,7 @@ export function RegistrarPagamentoModal({
   const [data, setData] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [modoId, setModoId] = useState<string>('')
   const [observacao, setObservacao] = useState('')
+  const [lancarCredito, setLancarCredito] = useState(false)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -71,6 +75,7 @@ export function RegistrarPagamentoModal({
       setData(format(new Date(), 'yyyy-MM-dd'))
       setModoId('')
       setObservacao('')
+      setLancarCredito(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, cobranca?.id])
@@ -79,17 +84,16 @@ export function RegistrarPagamentoModal({
   const creditoNum = Number(credito.replace(',', '.')) || 0
   const total = useMemo(() => valorNum + creditoNum, [valorNum, creditoNum])
 
-  const excede = total > restante + 0.01
+  // O excedente vem sempre do dinheiro (o crédito aplicado é limitado ao restante).
+  const excedente = Math.max(0, Math.round((total - restante) * 100) / 100)
+  // O crédito é sempre possível: se a parcela for de um avulso, vai para o responsável.
+  const isAvulso = !cobranca?.atleta_id
   const creditoExcede = creditoNum > creditoDisponivel + 0.01
 
   const handleSave = async () => {
     if (!cobranca) return
     if (total <= 0) {
       toast.error('Informe um valor a pagar.')
-      return
-    }
-    if (excede) {
-      toast.error('O valor excede o restante desta cobrança.')
       return
     }
     if (creditoExcede) {
@@ -107,9 +111,21 @@ export function RegistrarPagamentoModal({
         data,
         modoPagamentoId: modoId || null,
         observacao: observacao.trim() || null,
+        lancarExcedenteCredito: excedente > 0.005 && lancarCredito,
       })
       if (res.success) {
-        toast.success('Pagamento registrado.')
+        const d = res.data
+        if (d?.creditoExcedenteLancado) {
+          toast.success(
+            `Pagamento registrado. ${formatCurrency(d.excedente)} lançado como crédito do mensalista.`
+          )
+        } else if (d && d.excedente > 0.005) {
+          toast.success(
+            `Pagamento registrado (${formatCurrency(d.excedente)} acima do valor devido).`
+          )
+        } else {
+          toast.success('Pagamento registrado.')
+        }
         onSuccess()
         onClose()
       } else {
@@ -218,14 +234,38 @@ export function RegistrarPagamentoModal({
 
             <p className="text-sm text-arena-navy-800/70">
               Total do lançamento:{' '}
-              <span
-                className={
-                  excede ? 'font-bold text-red-600' : 'font-bold text-arena-navy-800'
-                }
-              >
+              <span className="font-bold text-arena-navy-800">
                 {formatCurrency(total)}
               </span>
             </p>
+
+            {excedente > 0.005 && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
+                <p className="text-sm font-semibold text-amber-800">
+                  O pagamento excede o valor devido em {formatCurrency(excedente)}.
+                </p>
+                <label className="flex items-start gap-2.5 text-sm text-amber-900 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={lancarCredito}
+                    onChange={(e) => setLancarCredito(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 accent-arena-button"
+                  />
+                  <span>
+                    Lançar {formatCurrency(excedente)} como <b>crédito</b> para{' '}
+                    {isAvulso
+                      ? `o responsável pela reserva${responsavelNome ? ` (${responsavelNome})` : ''}`
+                      : cobranca?.nome}
+                    . A cobrança fica quitada no valor exato e o excedente vira saldo
+                    de crédito.
+                  </span>
+                </label>
+                <p className="text-[11px] text-amber-800/70">
+                  O valor total em dinheiro ({formatCurrency(valorNum)}) entra no
+                  Financeiro da arena de qualquer forma.
+                </p>
+              </div>
+            )}
           </div>
         )}
 

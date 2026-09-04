@@ -28,9 +28,17 @@ import { Textarea } from "@/components/ui/textarea"
 import { useEffect, useState, useRef } from "react"
 import { UploadCloud, X, Image as ImageIcon, Loader2 } from "lucide-react"
 import Image from "next/image"
-import { DayScheduleConfig, DayConfig } from "./DayScheduleConfig"
+import { PriceTablesConfig } from "./PriceTablesConfig"
 import { courtSchema, type CourtFormValues } from "@/modules/courts/schemas/court.schema"
 import { arenaDashboardPath, type ArenaDashboardTab } from "@/lib/arena-dashboard-navigation"
+import { saveDraftPriceTablesAction } from "@/modules/courts/actions/priceTableActions"
+import {
+    EDITOR_DAY_ORDER,
+    dayConfigFromPriceDays,
+    draftPriceTables,
+    toEditorDays,
+} from "@/modules/courts/lib/price-table-editor"
+import type { CourtPriceTable } from "@/modules/courts/types/price-table.types"
 
 const courtFormSchema = courtSchema
 
@@ -42,15 +50,21 @@ interface CourtFormProps {
     returnTab?: ArenaDashboardTab
 }
 
-const DAYS_OF_WEEK = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"]
-
-const DEFAULT_DAY_CONFIG: DayConfig = {
-    day: "",
-    enabled: false,
-    startTime: "06:00",
-    endTime: "23:00",
-    price: 0,
-    customPrices: []
+/** Dias do editor (7, na ordem segunda→domingo) para o payload das actions. */
+function draftDaysPayload(table: CourtPriceTable) {
+    const days = toEditorDays(table.days)
+    return EDITOR_DAY_ORDER.map((dow) => {
+        const d = days.find((x) => x.diaSemana === dow)!
+        return {
+            diaSemana: dow,
+            enabled: d.enabled,
+            startTime: d.startTime,
+            endTime: d.endTime,
+            slotShiftTime: d.slotShiftTime,
+            basePrice: d.basePrice,
+            bands: d.bands.map((b) => ({ start: b.start, end: b.end, price: b.price })),
+        }
+    })
 }
 
 export function CourtForm({ initialData, arenaId, onSuccess, returnTab = "espacos" }: CourtFormProps) {
@@ -63,17 +77,11 @@ export function CourtForm({ initialData, arenaId, onSuccess, returnTab = "espaco
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [isUploading, setIsUploading] = useState(false)
 
-    // Initialize day configs
-    const [dayConfigs, setDayConfigs] = useState<DayConfig[]>(() => {
-        if (initialData?.day_config && Array.isArray(initialData.day_config) && initialData.day_config.length > 0) {
-            // Merge with default days to ensure all days are present
-            return DAYS_OF_WEEK.map(day => {
-                const existing = initialData.day_config.find((d: any) => d.day === day)
-                return { ...DEFAULT_DAY_CONFIG, ...existing, day }
-            })
-        }
-        return DAYS_OF_WEEK.map(day => ({ ...DEFAULT_DAY_CONFIG, day }))
-    })
+    // Cadastro: as 3 tabelas fixas já são preenchidas aqui e persistidas logo
+    // após criar o espaço. Edição usa o PriceTablesConfig persistido.
+    const [draftTables, setDraftTables] = useState<CourtPriceTable[]>(() =>
+        draftPriceTables(arenaId)
+    )
 
     useEffect(() => {
         async function loadSports() {
@@ -137,48 +145,30 @@ export function CourtForm({ initialData, arenaId, onSuccess, returnTab = "espaco
         }
     }
 
-    const handleDayConfigChange = (index: number, newConfig: DayConfig) => {
-        const newConfigs = [...dayConfigs]
-        newConfigs[index] = newConfig
-        setDayConfigs(newConfigs)
-    }
-
-    const handleReplicateDayConfig = (sourceIndex: number) => {
-        const sourceConfig = dayConfigs[sourceIndex]
-        const newConfigs = dayConfigs.map((config, index) => {
-            if (index === sourceIndex) return config
-            return {
-                ...config,
-                enabled: true,
-                startTime: sourceConfig.startTime,
-                endTime: sourceConfig.endTime,
-                price: sourceConfig.price,
-                customPrices: sourceConfig.customPrices.map((cp) => ({ ...cp })),
-                defaultTierId: sourceConfig.defaultTierId,
-                slotShiftTime: sourceConfig.slotShiftTime ?? null
-            }
-        })
-        setDayConfigs(newConfigs)
-        toast.success(`Configuração de ${sourceConfig.day} replicada para todos os dias!`)
-    }
-
     async function onSubmit(data: any) {
         try {
-            // Validate that at least one day is enabled
-            const enabledDays = dayConfigs.filter(d => d.enabled)
-            if (enabledDays.length === 0) {
-                toast.error("Selecione pelo menos um dia disponível de funcionamento.")
+            // Na criação, a tabela Padrão do rascunho vira o day_config do espaço
+            // (obrigatória); na edição os horários/preços são geridos pelo bloco
+            // de Tabelas de preço, que salva sozinho.
+            const padraoDraft = draftTables.find((t) => t.tipo === 'padrao')
+            const padraoDayConfig = padraoDraft
+                ? dayConfigFromPriceDays(toEditorDays(padraoDraft.days))
+                : []
+
+            if (!initialData && padraoDayConfig.length === 0) {
+                toast.error("Habilite pelo menos um dia na tabela Padrão.")
                 return
             }
 
             setIsUploading(true)
 
             const { sportIds, ...input } = data
-            const available_days = enabledDays.map(d => d.day)
-            const price = enabledDays[0]?.price || 0
+            const available_days = padraoDayConfig.map((d) => d.day)
+            const price = padraoDayConfig[0]?.price || 0
 
             if (initialData) {
-                // Editing: spaceId already exists — upload image first, then update
+                // Editing: spaceId already exists — upload image first, then update.
+                // day_config/available_days/price ficam a cargo de PriceTablesConfig.
                 let imageUrl = data.image_url
                 if (imageFile) {
                     try {
@@ -197,16 +187,36 @@ export function CourtForm({ initialData, arenaId, onSuccess, returnTab = "espaco
                         return
                     }
                 }
-                const finalInput = { ...input, image_url: imageUrl, day_config: dayConfigs, available_days, price }
+                const finalInput = { ...input, image_url: imageUrl }
                 const res = await updateCourtAction(arenaId, initialData.id, { ...finalInput }, sportIds)
                 if (!res.success) throw new Error(res.error)
                 toast.success("Espaço atualizado com sucesso!")
             } else {
                 // Creating: create space first to get the ID, then upload image and update
-                const finalInput = { ...input, image_url: data.image_url || "", day_config: dayConfigs, available_days, price }
+                const finalInput = { ...input, image_url: data.image_url || "", day_config: padraoDayConfig, available_days, price }
                 const createRes = await createCourtAction(arenaId, { ...finalInput }, sportIds)
                 if (!createRes.success) throw new Error(createRes.error)
                 const newCourt = createRes.data
+
+                // O trigger do banco já semeou Padrão/Mensalista/Professor; aqui
+                // gravamos exatamente o que o gestor preencheu nas 3 abas.
+                if (newCourt?.id) {
+                    const tablesRes = await saveDraftPriceTablesAction(
+                        arenaId,
+                        newCourt.id,
+                        draftTables.map((t) => ({
+                            tipo: t.tipo,
+                            nome: t.nome,
+                            days: draftDaysPayload(t),
+                        }))
+                    )
+                    if (!tablesRes.success) {
+                        toast.error(
+                            tablesRes.error ??
+                                "Espaço criado, mas houve erro ao salvar as tabelas de preço."
+                        )
+                    }
+                }
 
                 if (imageFile && newCourt?.id) {
                     try {
@@ -466,18 +476,27 @@ export function CourtForm({ initialData, arenaId, onSuccess, returnTab = "espaco
                 </div>
 
                 <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-arena-navy-800">Configuração de Horários e Preços</h3>
-                    <div className="grid grid-cols-1 gap-4">
-                        {dayConfigs.map((config, index) => (
-                            <DayScheduleConfig
-                                key={config.day}
-                                day={config.day}
-                                config={config}
-                                onChange={(newConfig) => handleDayConfigChange(index, newConfig)}
-                                onReplicate={() => handleReplicateDayConfig(index)}
-                            />
-                        ))}
+                    <div>
+                        <h3 className="text-lg font-semibold text-arena-navy-800">Tabelas de preço</h3>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                            {initialData
+                                ? "Padrão (reserva avulsa e app), Mensalista, Professor e personalizadas. Cada tabela tem faixas de horário/preço por dia."
+                                : "Configure já as 3 tabelas: Padrão (obrigatória, usada na reserva avulsa e no app), Mensalista e Professor (opcionais). Outras tabelas podem ser criadas depois de salvar."}
+                        </p>
                     </div>
+                    {initialData ? (
+                        <PriceTablesConfig
+                            arenaId={arenaId}
+                            courtId={initialData.id}
+                            fallbackDayConfig={initialData.day_config}
+                        />
+                    ) : (
+                        <PriceTablesConfig
+                            arenaId={arenaId}
+                            draftTables={draftTables}
+                            onDraftChange={setDraftTables}
+                        />
+                    )}
                 </div>
 
                 <FormField

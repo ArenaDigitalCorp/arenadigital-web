@@ -2717,6 +2717,60 @@ export type Database = {
           },
         ]
       }
+      planos_mensalista_reajustes: {
+        Row: {
+          arena_id: string
+          competencia_vigencia: string
+          created_at: string
+          escopo: string
+          id: string
+          observacao: string | null
+          plano_id: string
+          registered_by: string | null
+          valor_anterior: number
+          valor_novo: number
+        }
+        Insert: {
+          arena_id: string
+          competencia_vigencia: string
+          created_at?: string
+          escopo: string
+          id?: string
+          observacao?: string | null
+          plano_id: string
+          registered_by?: string | null
+          valor_anterior: number
+          valor_novo: number
+        }
+        Update: {
+          arena_id?: string
+          competencia_vigencia?: string
+          created_at?: string
+          escopo?: string
+          id?: string
+          observacao?: string | null
+          plano_id?: string
+          registered_by?: string | null
+          valor_anterior?: number
+          valor_novo?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planos_mensalista_reajustes_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planos_mensalista_reajustes_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "planos_mensalista"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mensalista_pagamentos: {
         Row: {
           arena_id: string
@@ -6978,6 +7032,7 @@ export type Database = {
           p_cobranca_id: string
           p_credito_aplicado: number
           p_data: string
+          p_lancar_excedente_credito?: boolean
           p_modo_pagamento_id: string
           p_observacao: string
           p_operation_id: string
@@ -7329,6 +7384,18 @@ export type Database = {
       set_internal_test_plan_for_arena: {
         Args: { enabled?: boolean; target_arena_id: string }
         Returns: undefined
+      }
+      reajustar_plano_mensalista_atomic: {
+        Args: {
+          p_arena_id: string
+          p_escopo: string
+          p_novo_valor: number
+          p_observacao: string | null
+          p_operation_id: string
+          p_plano_id: string
+          p_registered_by: string
+        }
+        Returns: Json
       }
       set_mensalista_termination_atomic: {
         Args: {
