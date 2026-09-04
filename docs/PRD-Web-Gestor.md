@@ -105,7 +105,12 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
 - Capacidade
 - Status (Ativa / Inativa / Em manutenção)
 - Associação com arena
-- Preço da quadra atribuido a dia e horario
+- **Tabelas de preço** (substitui o preço único por dia/horário):
+  - Todo espaço tem 3 tabelas fixas — **Padrão** (usada na reserva avulsa e no app), **Mensalista** e **Professor** — e a arena pode criar até 2 personalizadas (limite de 5 por espaço).
+  - Cada tabela tem faixas de horário/preço por dia da semana, com a mesma mecânica de faixas de sempre (faixa padrão + exceções, replicar entre dias, funcionamento que cruza a meia-noite).
+  - **No cadastro do espaço as 3 tabelas já podem ser preenchidas**, sem precisar salvar e voltar para editar. A **Padrão é obrigatória** (pelo menos um dia habilitado); Mensalista e Professor são **opcionais** e podem ficar vazias. Cada aba mostra um selo com quantos dias estão configurados (`Nd` / `vazia`).
+  - Facilidades de preenchimento: **Copiar faixas da tabela Padrão** (traz horários, faixas e valores para a tabela aberta, restando só ajustar o que muda), **Replicar** um dia para os demais e **Limpar tabela**.
+  - Tabelas personalizadas, definir outra tabela como padrão e excluir só ficam disponíveis na edição do espaço.
 - Atributos da quadra
   - Coberta
   - Descoberta
@@ -327,8 +332,10 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
   - **Atraso (débito de meses anteriores):** independentemente do mês que o gestor está olhando, um **alerta vermelho** no topo mostra quantos mensalistas têm mensalidade de competência anterior ao mês corrente ainda em aberto e o total; clicar filtra a lista. Cada linha traz o valor em atraso e há quantos meses. No detalhe, um selo "Em atraso" ao lado do nome e uma seção **"Pendências de meses anteriores"** listando cada competência devedora com botão de "Registrar pagamento" direto (não precisa navegar até o mês).
 - **Detalhe do responsável** (`/dashboard/arenas/{id}/mensalistas/{athleteId}`):
   - KPIs: a receber, recebido, restante, **crédito** (saldo) e **saldo do programa de fidelidade** do atleta (mostra o nome da moeda configurada na arena, o saldo e a legenda "(Saldo Programa Fidelidade)").
-  - **Recorrências:** quadra, dia, horário, valor/mês; toggle **Rateio** e ação **Encerrar** por recorrência. Quando há encerramento previsto, um destaque mostra o mês, a observação e o horário que ficará vago (para revenda).
+  - **Recorrências:** quadra, dia, horário, valor/mês; toggle **Rateio**, botão **Reajustar valor** e ação **Encerrar** por recorrência. Quando há encerramento previsto, um destaque mostra o mês, a observação e o horário que ficará vago (para revenda).
+  - **Reajustar valor:** o gestor define o novo valor mensal e escolhe a vigência — **mês atual** (a cobrança deste mês passa a ser o novo valor) ou **mês seguinte** (o mês atual fica como está). O sistema assume o novo valor como o valor do plano a partir da vigência, reescreve as cobranças abertas já geradas (meses com rateio ou pagamento registrado são preservados e o gestor é avisado) e registra tudo num **Histórico de reajustes** (valor anterior → novo, vigência, observação, data) visível na própria recorrência.
   - **Mensalidade do mês:** sem rateio → 1 linha (devido / pago / restante) com **Registrar pagamento**; com rateio → uma linha por participante (valor devido, pago, crédito aplicado, data, status) com **Registrar pagamento** por pessoa.
+  - **Registrar pagamento acima do devido:** o valor em dinheiro pode passar do valor da cobrança. Quando isso acontece, o modal pergunta se o gestor quer que o excedente vire **crédito**: **sim** → a cobrança fica quitada no valor exato e o excedente entra como saldo de crédito; **não** → o pagamento é registrado como está (acima do devido). Se a parcela for de um **participante avulso** (sem cadastro), o crédito é lançado para o **responsável pela recorrência**. O dinheiro total recebido entra no **Financeiro** da arena nos dois casos; o crédito lançado não gera lançamento de caixa (só é receita quando aplicado).
   - **Histórico de pagamentos:** todos os pagamentos de todas as competências — data, competência, participante, valor em dinheiro, valor em crédito, observação (paginado).
   - **Créditos:** extrato do crédito manual do atleta (data, tipo, valor com sinal, descrição) + saldo atual.
 - **Rateio da mensalidade:**
@@ -340,6 +347,10 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
 - **Retirada de crédito:** botão **Retirar crédito** desconta um valor do saldo do responsável, registrado como movimento "Retirada" no extrato de créditos. Não pode ultrapassar o saldo disponível e pode ser feita em **várias parcelas** até zerar o crédito (ex.: crédito de R$ 500 → retirada de R$ 200 num mês, R$ 200 no seguinte, R$ 100 depois). Cada retirada fica no histórico com data, valor e observação. Também não gera lançamento no caixa.
 - **Previsão de encerramento:** botão **Encerrar** grava o mês a partir do qual a recorrência vai acabar + uma observação. As reservas ainda não confirmadas a partir desse mês são canceladas, liberando o horário. O encerramento **definitivo** continua sendo o cancelamento do plano.
 - **Integração financeira:** cada pagamento em dinheiro gera uma entrada em `Financeiro` na categoria "Mensalidade" (aparece nos relatórios de pagamento). O painel "Cobranças Pendentes — Mensalistas" do Financeiro passa a levar ao detalhe do mensalista.
+- **Cadastro assistido (BookingModal → aba Mensal):**
+  - O modal mostra, sem exigir cálculo do gestor, **quantas recorrências ainda cabem no mês corrente** a partir de hoje (data + intervalo) e as reservas que serão criadas neste mês (confirmadas) vs. a cadência dos próximos 2 meses (reservado).
+  - Quando há tabela de preço além da Padrão, um seletor **Tabela de preço** (default = Mensalista) alimenta a **sugestão** de `valor/sessão` e de `valor mensal` — sempre editável.
+  - **Primeira mensalidade proporcional:** se o mensalista começa no meio do mês, a `mensalidade` da competência de início é `valor/sessão × sessões restantes` (mês cheio ⇒ valor mensal). Reflete direto na tela de Mensalistas (valor do mês / restante) e nas Cobranças.
 
 ---
 
