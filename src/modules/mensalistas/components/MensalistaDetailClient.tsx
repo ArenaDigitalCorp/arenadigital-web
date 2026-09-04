@@ -38,6 +38,7 @@ import { RegistrarPagamentoModal } from './RegistrarPagamentoModal'
 import { LancarCreditoModal } from './LancarCreditoModal'
 import { RetirarCreditoModal } from './RetirarCreditoModal'
 import { EncerramentoModal } from './EncerramentoModal'
+import { ReajustarValorModal } from './ReajustarValorModal'
 import type {
   CobrancaRow,
   MensalidadeRow,
@@ -138,6 +139,12 @@ export function MensalistaDetailClient({
     label: string
     dataPrevista: string | null
     obs: string | null
+  } | null>(null)
+  const [reajusteTarget, setReajusteTarget] = useState<{
+    planoId: string
+    label: string
+    valorAtual: number
+    valorMesAtual: number | null
   } | null>(null)
   const [creditoOpen, setCreditoOpen] = useState(false)
   const [retiradaOpen, setRetiradaOpen] = useState(false)
@@ -393,6 +400,22 @@ export function MensalistaDetailClient({
                   <Button
                     size="sm"
                     variant="ghost"
+                    className="text-arena-navy-800/60 hover:text-arena-button hover:bg-orange-50 text-xs font-bold"
+                    disabled={p.status !== 'ativo'}
+                    onClick={() =>
+                      setReajusteTarget({
+                        planoId: p.id,
+                        label: `${(p.court as { name?: string } | null)?.name ?? ''} · ${DIAS[p.dia_semana]} ${horario}`,
+                        valorAtual: Number(p.valor_mensal) || 0,
+                        valorMesAtual: m ? Number(m.valor_total) : null,
+                      })
+                    }
+                  >
+                    Reajustar valor
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
                     className="text-arena-navy-800/50 hover:text-red-600 hover:bg-red-50 text-xs font-bold"
                     disabled={p.status !== 'ativo' || cancelingId === p.id}
                     onClick={() =>
@@ -501,6 +524,32 @@ export function MensalistaDetailClient({
                     </tbody>
                   </table>
                 </div>
+              )}
+
+              {rec.reajustes.length > 0 && (
+                <details className="rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 text-sm">
+                  <summary className="cursor-pointer select-none font-bold text-arena-navy-800/70">
+                    Histórico de reajustes ({rec.reajustes.length})
+                  </summary>
+                  <ul className="mt-2 space-y-1.5">
+                    {rec.reajustes.map((r) => (
+                      <li key={r.id} className="flex flex-wrap items-baseline gap-x-2 text-[13px]">
+                        <span className="text-arena-navy-800/50">
+                          {formatDate(r.created_at)}
+                        </span>
+                        <span className="font-semibold text-arena-navy-800">
+                          {formatCurrency(r.valor_anterior)} → {formatCurrency(r.valor_novo)}
+                        </span>
+                        <span className="text-arena-navy-800/50">
+                          a partir de {formatCompetenciaShort(r.competencia_vigencia)}
+                        </span>
+                        {r.observacao && (
+                          <span className="text-arena-navy-800/45">— {r.observacao}</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
               )}
             </Card>
           )
@@ -784,6 +833,7 @@ export function MensalistaDetailClient({
         cobranca={pagamentoTarget}
         creditoSaldo={creditoSaldo}
         modosPagamento={modosPagamento}
+        responsavelNome={resumo.nome}
       />
       <LancarCreditoModal
         open={creditoOpen}
@@ -811,6 +861,16 @@ export function MensalistaDetailClient({
         planoLabel={encerramentoTarget?.label ?? ''}
         currentDataPrevista={encerramentoTarget?.dataPrevista ?? null}
         currentObs={encerramentoTarget?.obs ?? null}
+      />
+      <ReajustarValorModal
+        open={!!reajusteTarget}
+        onClose={() => setReajusteTarget(null)}
+        onSuccess={refresh}
+        arenaId={arenaId}
+        planoId={reajusteTarget?.planoId ?? ''}
+        planoLabel={reajusteTarget?.label ?? ''}
+        valorAtual={reajusteTarget?.valorAtual ?? 0}
+        valorMesAtual={reajusteTarget?.valorMesAtual ?? null}
       />
     </div>
   )

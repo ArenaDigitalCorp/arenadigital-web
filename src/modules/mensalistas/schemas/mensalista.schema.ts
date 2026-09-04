@@ -27,6 +27,8 @@ export const registrarPagamentoSchema = z
     data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     modoPagamentoId: uuidSchema.nullable(),
     observacao: z.string().trim().max(400).nullable(),
+    /** Converte o excedente do pagamento em dinheiro em crédito do mensalista. */
+    lancarExcedenteCredito: z.boolean().default(false),
   })
   .refine((v) => v.valor + v.creditoAplicado > 0, {
     message: 'Informe um valor a pagar',
@@ -53,5 +55,14 @@ export const setEncerramentoSchema = z.object({
   arenaId: uuidSchema,
   planoId: uuidSchema,
   dataPrevista: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+  observacao: z.string().trim().max(400).nullable(),
+})
+
+export const reajustarValorSchema = z.object({
+  arenaId: uuidSchema,
+  planoId: uuidSchema,
+  operationId: uuidSchema,
+  novoValor: z.number().finite().min(0).max(100_000_000),
+  escopo: z.enum(['mes_atual', 'mes_seguinte']),
   observacao: z.string().trim().max(400).nullable(),
 })
