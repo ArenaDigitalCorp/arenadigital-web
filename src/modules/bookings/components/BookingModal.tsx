@@ -33,6 +33,11 @@ import {
 import { searchAthletesAction } from '@/modules/loyalty/actions/loyaltyActions';
 import { getCourtByIdAction } from '@/modules/courts/actions/courtActions';
 import {
+  listCourtPriceTableOptionsAction,
+  quoteCourtPriceAction,
+  type BookingPriceTableOption,
+} from '@/modules/courts/actions/priceTableActions';
+import {
   checkBookingConflictsAction,
   saveBackofficeBookingBundleAction,
 } from '@/modules/bookings/actions/bookingActions';
@@ -239,6 +244,13 @@ export function BookingModal({
   const [isSearching, setIsSearching] = useState(false);
   const [courtSports, setCourtSports] = useState<Sport[]>([]);
   const [courtDayConfig, setCourtDayConfig] = useState<any[] | null>(null);
+  const [priceTables, setPriceTables] = useState<BookingPriceTableOption[]>([]);
+  const [avulsoPriceTableId, setAvulsoPriceTableId] = useState<string>('');
+  const [mensalPriceTableId, setMensalPriceTableId] = useState<string>('');
+  const [avulsoSuggested, setAvulsoSuggested] = useState<number | null>(null);
+  const [mensalSessionSuggested, setMensalSessionSuggested] = useState<number | null>(null);
+  const lastAutoCourtPrice = useRef<string | null>(null);
+  const lastAutoValorMensal = useRef<string | null>(null);
   const [selectedSport, setSelectedSport] = useState<string>('');
   const [isLoadingSports, setIsLoadingSports] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -306,6 +318,17 @@ export function BookingModal({
       } else {
         setSelectedSport('');
       }
+
+      const tablesRes = await listCourtPriceTableOptionsAction(arenaId, courtId);
+      const tables = tablesRes.success ? tablesRes.data : [];
+      setPriceTables(tables);
+      const defaultTable = tables.find((t) => t.isDefault) ?? tables[0];
+      const mensalTable =
+        tables.find((t) => t.tipo === 'mensalista') ??
+        tables.find((t) => t.aplicaA.includes('mensalista')) ??
+        defaultTable;
+      setAvulsoPriceTableId(defaultTable?.id ?? '');
+      setMensalPriceTableId(mensalTable?.id ?? '');
     } finally {
       setIsLoadingSports(false);
     }
@@ -361,6 +384,11 @@ export function BookingModal({
           telefone: p.atleta?.telefone ?? '',
         }));
       setAdditionalParticipants(extra);
+      // Não deixa o auto-quote sobrescrever o valor carregado da reserva.
+      lastAutoCourtPrice.current = null;
+      lastAutoValorMensal.current = null;
+      setAvulsoSuggested(null);
+      setMensalSessionSuggested(null);
       return;
     }
 
@@ -375,6 +403,10 @@ export function BookingModal({
     setHorarioInicio(startStr);
     setHorarioFim(endStr);
     setCourtPrice(defaultPrice.toString());
+    lastAutoCourtPrice.current = defaultPrice.toString();
+    lastAutoValorMensal.current = null;
+    setAvulsoSuggested(null);
+    setMensalSessionSuggested(null);
     setServiceLines([]);
     setIncludeServices(false);
     setAdditionalParticipants([]);
@@ -504,6 +536,97 @@ export function BookingModal({
     }
     return null;
   })();
+
+  // ── Sugestão de valor pela tabela de preço (server: resolve_court_price) ──
+  // Sempre editável: só preenche quando o campo está vazio ou ainda mostra a
+  // última sugestão automática — o gestor pode sobrescrever à vontade.
+  const buildLocalIso = (base: Date, time: string, addDay = false) => {
+    const [h, m] = time.split(':').map(Number);
+    const d = new Date(base);
+    if (addDay) d.setDate(d.getDate() + 1);
+    d.setHours(h || 0, m || 0, 0, 0);
+    return d.toISOString();
+  };
+
+  useEffect(() => {
+    if (!isOpen || bookingType !== 'avulso') return;
+    if (!avulsoPriceTableId || !startTime || !endTime || avulsoEndTimeError) return;
+    const [sH, sM] = startTime.split(':').map(Number);
+    const [eH, eM] = endTime.split(':').map(Number);
+    if ([sH, eH].some((n) => Number.isNaN(n))) return;
+    const overnight = eH * 60 + (eM || 0) <= sH * 60 + (sM || 0);
+    const startISO = buildLocalIso(selectedDate, startTime);
+    const endISO = buildLocalIso(selectedDate, endTime, overnight);
+    let cancelled = false;
+    quoteCourtPriceAction(arenaId, courtId, avulsoPriceTableId, startISO, endISO).then(
+      (res) => {
+        if (cancelled || !res.success) return;
+        setAvulsoSuggested(res.value);
+        setCourtPrice((prev) =>
+          prev === '' || prev === lastAutoCourtPrice.current ? String(res.value) : prev
+        );
+        lastAutoCourtPrice.current = String(res.value);
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isOpen,
+    bookingType,
+    avulsoPriceTableId,
+    startTime,
+    endTime,
+    selectedDate,
+    avulsoEndTimeError,
+    arenaId,
+    courtId,
+  ]);
+
+  useEffect(() => {
+    if (!isOpen || bookingType !== 'mensal') return;
+    if (!mensalPriceTableId || !horarioInicio || !horarioFim) return;
+    const dow = Number(diaSemana);
+    if (Number.isNaN(dow)) return;
+    const [sH, sM] = horarioInicio.split(':').map(Number);
+    const [eH, eM] = horarioFim.split(':').map(Number);
+    if (
+      [sH, eH].some((n) => Number.isNaN(n)) ||
+      eH * 60 + (eM || 0) <= sH * 60 + (sM || 0)
+    )
+      return;
+    const base = new Date();
+    base.setHours(0, 0, 0, 0);
+    while (base.getDay() !== dow) base.setDate(base.getDate() + 1);
+    const startISO = buildLocalIso(base, horarioInicio);
+    const endISO = buildLocalIso(base, horarioFim);
+    let cancelled = false;
+    quoteCourtPriceAction(arenaId, courtId, mensalPriceTableId, startISO, endISO).then(
+      (res) => {
+        if (cancelled || !res.success) return;
+        setMensalSessionSuggested(res.value);
+        const total = res.value * (Number(sessoesPorMes) || 0);
+        if (!total) return;
+        setValorMensal((prev) =>
+          prev === '' || prev === lastAutoValorMensal.current ? String(total) : prev
+        );
+        lastAutoValorMensal.current = String(total);
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isOpen,
+    bookingType,
+    mensalPriceTableId,
+    horarioInicio,
+    horarioFim,
+    diaSemana,
+    sessoesPorMes,
+    arenaId,
+    courtId,
+  ]);
 
   const handleSaveAvulso = async () => {
     if (!selectedAthlete && !search) {
@@ -697,6 +820,13 @@ export function BookingModal({
     setIncludeServices(false);
     setAdditionalParticipants([]);
     setSplitBillingPerParticipant(false);
+    setPriceTables([]);
+    setAvulsoPriceTableId('');
+    setMensalPriceTableId('');
+    setAvulsoSuggested(null);
+    setMensalSessionSuggested(null);
+    lastAutoCourtPrice.current = null;
+    lastAutoValorMensal.current = null;
   };
 
   // ── Helpers para gerar slots a verificar ────────────────────────────────
@@ -822,6 +952,39 @@ export function BookingModal({
     valorMensal && sessoesPorMes && Number(sessoesPorMes) > 0
       ? (Number(valorMensal) / Number(sessoesPorMes)).toFixed(2)
       : null;
+
+  // Recorrências que ainda cabem no mês corrente a partir de hoje (o plano
+  // começa hoje). Mesma contagem que o banco usa para pró-ratear a 1ª mensalidade.
+  const firstMonthPlan = useMemo(() => {
+    const dow = Number(diaSemana);
+    const cap = Math.max(1, Math.min(8, Number(sessoesPorMes) || 4));
+    if (Number.isNaN(dow)) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const monthEnd = endOfMonth(today);
+    const cur = new Date(today);
+    while (cur.getDay() !== dow) cur.setDate(cur.getDate() + 1);
+    let sessions = 0;
+    let firstDate: Date | null = null;
+    while (cur <= monthEnd && sessions < cap) {
+      if (!firstDate) firstDate = new Date(cur);
+      sessions += 1;
+      cur.setDate(cur.getDate() + 7);
+    }
+    const perSession =
+      mensalSessionSuggested ??
+      (valorMensal && Number(sessoesPorMes) > 0
+        ? Number(valorMensal) / Number(sessoesPorMes)
+        : null);
+    const isFull = sessions >= cap;
+    const value =
+      perSession == null
+        ? null
+        : isFull && valorMensal
+          ? Number(valorMensal)
+          : Math.round(perSession * sessions * 100) / 100;
+    return { sessions, isFull, value, firstDate, monthEnd };
+  }, [diaSemana, sessoesPorMes, valorMensal, mensalSessionSuggested]);
 
   const handleAthleteRegistered = async () => {
     setIsAthleteModalOpen(false);
@@ -1118,7 +1281,39 @@ export function BookingModal({
                         </p>
                       )}
                     </div>
-                    <div className="space-y-2 lg:col-span-6">
+                    {priceTables.length > 1 && (
+                      <div className="space-y-2 lg:col-span-3">
+                        <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">
+                          Tabela de preço
+                        </Label>
+                        <Select
+                          value={avulsoPriceTableId || undefined}
+                          onValueChange={setAvulsoPriceTableId}
+                        >
+                          <SelectTrigger className="h-14 rounded-xl border-arena-navy-800/10 font-bold text-arena-navy-800 focus:border-arena-button focus:ring-arena-button">
+                            <SelectValue placeholder="Selecione" />
+                          </SelectTrigger>
+                          <SelectContent className="rounded-2xl border-arena-navy-800/10 p-2">
+                            {priceTables.map((t) => (
+                              <SelectItem
+                                key={t.id}
+                                value={t.id}
+                                className="rounded-xl py-3 font-bold text-arena-navy-800"
+                              >
+                                {t.nome}
+                                {t.isDefault ? ' · padrão' : ''}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    <div
+                      className={cn(
+                        'space-y-2',
+                        priceTables.length > 1 ? 'lg:col-span-3' : 'lg:col-span-6'
+                      )}
+                    >
                       <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">
                         {splitBillingPerParticipant
                           ? 'Valor por participante'
@@ -1135,6 +1330,23 @@ export function BookingModal({
                           className="h-14 rounded-xl border-arena-navy-800/10 pl-12 font-bold text-arena-navy-800 focus:border-arena-button focus:ring-arena-button"
                         />
                       </div>
+                      {avulsoSuggested !== null && (
+                        <p className="text-[11px] font-medium text-arena-navy-800/45">
+                          Sugerido pela tabela: {fmtBrl(avulsoSuggested)}
+                          {String(avulsoSuggested) !== courtPrice.trim() && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCourtPrice(String(avulsoSuggested));
+                                lastAutoCourtPrice.current = String(avulsoSuggested);
+                              }}
+                              className="ml-2 font-bold text-arena-button underline underline-offset-2"
+                            >
+                              usar sugerido
+                            </button>
+                          )}
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -1418,6 +1630,35 @@ export function BookingModal({
                     </Select>
                   </div>
 
+                  {/* Tabela de preço */}
+                  {priceTables.length > 1 && (
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">
+                        Tabela de preço
+                      </Label>
+                      <Select
+                        value={mensalPriceTableId || undefined}
+                        onValueChange={setMensalPriceTableId}
+                      >
+                        <SelectTrigger className="h-14 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-xl font-bold text-arena-navy-800">
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-2xl border-arena-navy-800/10 p-2">
+                          {priceTables.map((t) => (
+                            <SelectItem
+                              key={t.id}
+                              value={t.id}
+                              className="rounded-xl py-3 font-bold text-arena-navy-800"
+                            >
+                              {t.nome}
+                              {t.isDefault ? ' · padrão' : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
                   {/* Sessões e valor */}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
@@ -1449,14 +1690,69 @@ export function BookingModal({
                           className="pl-10 h-14 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-xl font-bold text-arena-navy-800"
                         />
                       </div>
+                      {mensalSessionSuggested !== null && (
+                        <p className="text-[11px] font-medium text-arena-navy-800/45">
+                          Tabela: {fmtBrl(mensalSessionSuggested)}/sessão
+                          {sessoesPorMes && Number(sessoesPorMes) > 0 && (
+                            <> &middot; sugestão {fmtBrl(mensalSessionSuggested * Number(sessoesPorMes))}/mês</>
+                          )}
+                        </p>
+                      )}
                     </div>
                   </div>
+
+                  {/* Primeiro mês (proporcional ao início) */}
+                  {firstMonthPlan && (
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 space-y-1.5">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-arena-navy-800/60">
+                        Este mês
+                      </p>
+                      {firstMonthPlan.sessions > 0 ? (
+                        <>
+                          <p className="text-sm font-bold text-arena-navy-800">
+                            {firstMonthPlan.sessions}{' '}
+                            {firstMonthPlan.sessions === 1 ? 'recorrência' : 'recorrências'}
+                            {firstMonthPlan.firstDate && (
+                              <>
+                                {' '}
+                                &middot; {format(firstMonthPlan.firstDate, "dd/MM", { locale: ptBR })}
+                                {'–'}
+                                {format(firstMonthPlan.monthEnd, "dd/MM", { locale: ptBR })}
+                              </>
+                            )}
+                          </p>
+                          {firstMonthPlan.value != null && (
+                            <p className="text-sm font-semibold text-arena-button">
+                              1ª mensalidade: {fmtBrl(firstMonthPlan.value)}
+                              {!firstMonthPlan.isFull && (
+                                <span className="ml-1 text-[11px] font-medium text-arena-navy-800/45">
+                                  (proporcional · mês cheio {fmtBrl(Number(valorMensal) || 0)})
+                                </span>
+                              )}
+                            </p>
+                          )}
+                          <p className="text-[11px] text-arena-navy-800/50">
+                            Serão criadas {firstMonthPlan.sessions}{' '}
+                            {firstMonthPlan.sessions === 1 ? 'reserva' : 'reservas'} neste mês
+                            (confirmadas) e {sessoesPorMes}/mês nos próximos 2 meses (reservado).
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-[11px] text-arena-navy-800/60">
+                          Nenhuma sessão de{' '}
+                          {DIAS_SEMANA.find((d) => d.value === Number(diaSemana))?.label}{' '}
+                          cabe até o fim do mês. As reservas e a cobrança começam no
+                          próximo mês.
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   {/* Resumo */}
                   {valorPorSessao && (
                     <div className="rounded-2xl border border-arena-button/10 bg-[#FFF5EF] p-4 space-y-1">
                       <p className="text-xs font-semibold uppercase tracking-wide text-arena-button/80">
-                        Resumo do plano
+                        A partir do próximo mês
                       </p>
                       <p className="text-sm font-bold text-arena-navy-800">
                         {sessoesPorMes}x por mês &middot; R$ {valorPorSessao}

@@ -12,6 +12,21 @@ export type PagamentoRow =
 export type CreditoRow =
   Database['public']['Tables']['mensalista_creditos']['Row']
 
+/** Uma linha do histórico de reajustes de valor de uma recorrência.
+ *  Tipo manual: `planos_mensalista_reajustes` ainda não está nos tipos gerados. */
+export interface ReajusteRow {
+  id: string
+  arena_id: string
+  plano_id: string
+  valor_anterior: number
+  valor_novo: number
+  escopo: 'mes_atual' | 'mes_seguinte'
+  competencia_vigencia: string
+  observacao: string | null
+  registered_by: string | null
+  created_at: string
+}
+
 export type StatusPlano = 'ativo' | 'encerrando' | 'cancelado'
 export type SituacaoPagamento = 'quitado' | 'parcial' | 'pendente'
 export type MensalidadeStatus = 'aberto' | 'parcial' | 'quitado' | 'cancelado'
@@ -21,6 +36,8 @@ export interface RecorrenciaResumo {
   plano: PlanoMensalistaComDetalhes
   mensalidade: MensalidadeRow | null
   cobrancas: CobrancaRow[]
+  /** Histórico de reajustes de valor desta recorrência (mais recente primeiro). */
+  reajustes: ReajusteRow[]
 }
 
 /** Aggregated view of one responsible athlete for a competência. */

@@ -38,6 +38,20 @@ test('payment requires a positive cash or credit amount and a UUID operation ID'
       .success,
     false
   )
+  // lancarExcedenteCredito defaults to false and accepts an explicit boolean
+  assert.equal(
+    registrarPagamentoSchema.safeParse({ ...base, valor: 10 }).data
+      .lancarExcedenteCredito,
+    false
+  )
+  assert.equal(
+    registrarPagamentoSchema.safeParse({
+      ...base,
+      valor: 10,
+      lancarExcedenteCredito: true,
+    }).data.lancarExcedenteCredito,
+    true
+  )
 })
 
 test('credit and withdrawal schemas reject unsafe monetary inputs', () => {
