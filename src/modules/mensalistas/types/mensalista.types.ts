@@ -38,6 +38,9 @@ export interface RecorrenciaResumo {
   cobrancas: CobrancaRow[]
   /** Histórico de reajustes de valor desta recorrência (mais recente primeiro). */
   reajustes: ReajusteRow[]
+  /** Participantes adicionais vinculados à reserva na criação do plano — sugeridos
+   *  como participantes do rateio quando ele ainda não foi configurado. */
+  participantesSugeridos: { id: string; nome: string }[]
 }
 
 /** Aggregated view of one responsible athlete for a competência. */
