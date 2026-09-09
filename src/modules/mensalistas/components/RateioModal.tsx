@@ -29,6 +29,9 @@ interface Props {
   arenaId: string
   mensalidade: MensalidadeRow | null
   cobrancas: CobrancaRow[]
+  /** Participantes adicionais vinculados à reserva na criação do plano — pré-
+   *  adicionados como sugestão quando o rateio ainda não foi configurado. */
+  participantesSugeridos?: { id: string; nome: string }[]
 }
 
 interface Row {
@@ -71,6 +74,7 @@ export function RateioModal({
   arenaId,
   mensalidade,
   cobrancas,
+  participantesSugeridos = [],
 }: Props) {
   const valorTotal = Number(mensalidade?.valor_total ?? 0)
 
@@ -117,6 +121,35 @@ export function RateioModal({
         manual: false,
       }
     })
+    // Rateio ainda não configurado: pré-adiciona os participantes vinculados
+    // à reserva na criação do plano como sugestão, já divididos igualmente.
+    if (!mensalidade.rateio && participantesSugeridos.length > 0) {
+      const existingIds = new Set(
+        initial.map((r) => r.atletaId).filter((id): id is string => !!id)
+      )
+      const suggested: Row[] = participantesSugeridos
+        .filter((p) => !existingIds.has(p.id))
+        .map((p) => ({
+          key: `suggested-${p.id}`,
+          atletaId: p.id,
+          nome: p.nome,
+          ativo: true,
+          locked: false,
+          valor: 0,
+          manual: false,
+        }))
+      if (suggested.length > 0) {
+        const withSuggested = [...initial, ...suggested]
+        const ls = round2(
+          withSuggested.filter((r) => r.locked).reduce((s, r) => s + r.valor, 0)
+        )
+        setRows(redistribute(withSuggested, round2(valorTotal - ls)))
+        setAdding(false)
+        setQuery('')
+        setResults([])
+        return
+      }
+    }
     // Single non-locked participant covering the whole remainder: treat as the
     // "no rateio" base so it stays balanced.
     setRows(initial)
@@ -237,6 +270,13 @@ export function RateioModal({
             para redistribuir entre os demais, ou edite um valor manualmente.
           </p>
 
+          {rows.some((r) => r.key.startsWith('suggested-')) && (
+            <p className="text-xs text-arena-button font-medium -mt-2">
+              Sugerimos os participantes adicionados na reserva deste
+              mensalista. Remova quem não deve entrar no rateio.
+            </p>
+          )}
+
           <div className="space-y-2 max-h-[46vh] overflow-y-auto pr-1">
             {rows.map((r) => (
               <div
@@ -252,6 +292,11 @@ export function RateioModal({
                     {!r.atletaId && (
                       <span className="ml-1.5 text-[10px] font-medium text-arena-navy-800/40">
                         avulso
+                      </span>
+                    )}
+                    {r.key.startsWith('suggested-') && (
+                      <span className="ml-1.5 text-[10px] font-medium text-arena-button">
+                        sugerido
                       </span>
                     )}
                   </p>
@@ -281,7 +326,8 @@ export function RateioModal({
                     onCheckedChange={() => toggle(r.key)}
                   />
                 )}
-                {!r.locked && r.key.startsWith('new-') && (
+                {!r.locked &&
+                  (r.key.startsWith('new-') || r.key.startsWith('suggested-')) && (
                   <button
                     onClick={() => removeRow(r.key)}
                     className="text-arena-navy-800/30 hover:text-red-500"
