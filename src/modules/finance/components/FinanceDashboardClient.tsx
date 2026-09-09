@@ -2,9 +2,9 @@
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { BarChart3, Plus, AlertCircle, CheckCircle2, Loader2, Clock, MapPin, Users, Calendar } from "lucide-react";
+import { BarChart3, Plus, AlertCircle, CheckCircle2, Loader2, Clock, MapPin, Calendar } from "lucide-react";
 import React, { useCallback, useEffect, useState } from "react";
-import { getFinanceDashboardAction, getMensalistasComPendenciaAction, getAvulsosComPendenciaAction } from "@/modules/finance/actions/financeActions";
+import { getFinanceDashboardAction, getAvulsosComPendenciaAction } from "@/modules/finance/actions/financeActions";
 import type { AvulsoPendenciaItem } from "@/modules/finance/actions/financeActions";
 import { confirmarPagamentoAvulsoAction, confirmarPagamentoParticipanteAvulsoAction } from "@/modules/bookings/actions/bookingActions";
 import { ConfirmarPagamentoDialog } from "@/modules/bookings/components/ConfirmarPagamentoDialog";
@@ -30,16 +30,6 @@ interface Props {
     initialChartSeries: ArenaFinanceDailyRow[];
     financialAccount?: React.ReactNode;
 }
-
-type MensalistaPendenciaItem = {
-    id: string;
-    athlete_id: string;
-    athlete_name: string;
-    valor_mensal: number;
-    proximo_mes_reservado: string | null;
-    atleta?: { nome_perfil: string } | null;
-    court?: { name: string } | null;
-};
 
 function computeTotals(summary: ArenaFinanceSummary) {
     return {
@@ -72,9 +62,7 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
     const [period, setPeriod] = useState<'7d' | '30d'>('7d');
     const [chartData, setChartData] = useState<{ label: string; value: number; percentage: number; isCurrentDay?: boolean }[]>([]);
     const [chartSeries, setChartSeries] = useState<ArenaFinanceDailyRow[]>(initialChartSeries);
-    const [pendingMensalistas, setPendingMensalistas] = useState<MensalistaPendenciaItem[]>([]);
     const [pendingAvulsos, setPendingAvulsos] = useState<AvulsoPendenciaItem[]>([]);
-    const [isLoadingPending, setIsLoadingPending] = useState(false);
     const [isLoadingAvulsos, setIsLoadingAvulsos] = useState(false);
     const [confirmingId, setConfirmingId] = useState<string | null>(null);
     const [confirmDialog, setConfirmDialog] = useState<
@@ -129,16 +117,6 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
         []
     );
 
-    const loadPendingMensalistas = useCallback(async () => {
-        setIsLoadingPending(true);
-        try {
-            const res = await getMensalistasComPendenciaAction(arenaId);
-            if (res.success) setPendingMensalistas(res.data ?? []);
-        } finally {
-            setIsLoadingPending(false);
-        }
-    }, [arenaId]);
-
     const loadPendingAvulsos = useCallback(async () => {
         setIsLoadingAvulsos(true);
         try {
@@ -191,7 +169,7 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                     : "Pagamento confirmado! Reserva liberada no relatório."
             );
             setConfirmDialog(null);
-            await Promise.all([loadPendingMensalistas(), loadPendingAvulsos(), loadData()]);
+            await Promise.all([loadPendingAvulsos(), loadData()]);
         } catch (err) {
             toast.error(err instanceof Error ? err.message : "Erro ao confirmar pagamento");
         } finally {
@@ -200,9 +178,8 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
     };
 
     useEffect(() => {
-        loadPendingMensalistas();
         loadPendingAvulsos();
-    }, [loadPendingMensalistas, loadPendingAvulsos]);
+    }, [loadPendingAvulsos]);
 
     useEffect(() => {
         if (isLoading) return;
@@ -426,91 +403,6 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                     </Link>
                 </Card>
             </div>
-
-            {/* Pendências de Mensalistas */}
-            <Card className="p-8 border-none shadow-lg rounded-2xl bg-white">
-                <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-3">
-                        <div className={cn(
-                            "p-2 rounded-lg",
-                            pendingMensalistas.length > 0 ? "bg-amber-100" : "bg-emerald-50"
-                        )}>
-                            {pendingMensalistas.length > 0
-                                ? <AlertCircle className="h-5 w-5 text-amber-600" />
-                                : <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                            }
-                        </div>
-                        <div>
-                            <h3 className="text-lg font-bold text-arena-navy-800">Cobranças Pendentes — Mensalistas</h3>
-                            {pendingMensalistas.length > 0 && (
-                                <p className="text-xs text-amber-600 font-bold">
-                                    {pendingMensalistas.length} pagamento{pendingMensalistas.length !== 1 ? "s" : ""} aguardando confirmação
-                                </p>
-                            )}
-                        </div>
-                    </div>
-                    <Link
-                        href={`/dashboard/arenas/${arenaId}/mensalistas`}
-                        className="text-sm font-bold text-arena-navy-800/50 hover:text-arena-navy-800 underline"
-                    >
-                        Ver todos mensalistas
-                    </Link>
-                </div>
-
-                {isLoadingPending ? (
-                    <div className="flex items-center justify-center py-8">
-                        <Loader2 className="h-6 w-6 animate-spin text-amber-500" />
-                    </div>
-                ) : pendingMensalistas.length === 0 ? (
-                    <div className="flex items-center gap-3 py-6 px-4 bg-emerald-50 rounded-xl">
-                        <CheckCircle2 className="h-5 w-5 text-emerald-500 flex-shrink-0" />
-                        <p className="text-sm font-bold text-emerald-700">Todos os mensalistas estão em dia!</p>
-                    </div>
-                ) : (
-                    <div className="space-y-3">
-                        {pendingMensalistas.map((plano) => {
-                            const nome = plano.atleta?.nome_perfil ?? plano.athlete_name;
-                            const courtName = plano.court?.name ?? "—";
-                            const mesDevido = plano.proximo_mes_reservado
-                                ? format(parseISO(plano.proximo_mes_reservado), "MMMM/yyyy", { locale: ptBR })
-                                : "—";
-
-                            return (
-                                <div key={plano.id} className="flex items-center justify-between gap-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                                        <div className="h-10 w-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
-                                            <Users className="h-5 w-5 text-amber-600" />
-                                        </div>
-                                        <div className="min-w-0">
-                                            <p className="font-bold text-arena-navy-800 text-sm truncate">{nome}</p>
-                                            <div className="flex items-center gap-3 mt-0.5">
-                                                <span className="flex items-center gap-1 text-[11px] text-arena-navy-800/50">
-                                                    <MapPin className="h-3 w-3" />{courtName}
-                                                </span>
-                                                <span className="flex items-center gap-1 text-[11px] text-amber-600 font-bold capitalize">
-                                                    <Clock className="h-3 w-3" />{mesDevido}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-4 flex-shrink-0">
-                                        <p className="font-black text-arena-button text-base">
-                                            {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(plano.valor_mensal)}
-                                        </p>
-                                        <Link
-                                            href={`/dashboard/arenas/${arenaId}/mensalistas/${plano.athlete_id}${plano.proximo_mes_reservado ? `?competencia=${format(parseISO(plano.proximo_mes_reservado), "yyyy-MM")}` : ""}`}
-                                            className="inline-flex items-center gap-1.5 rounded-xl h-9 px-4 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold"
-                                        >
-                                            <CheckCircle2 className="h-3.5 w-3.5" />
-                                            Registrar pagamento
-                                        </Link>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
-            </Card>
 
             {/* Cobranças Avulsas */}
             <Card className="p-8 border-none shadow-lg rounded-2xl bg-white">
