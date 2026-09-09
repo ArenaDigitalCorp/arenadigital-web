@@ -490,6 +490,39 @@ export async function getMensalistaDetailAction(
       reajustesByPlano.set(r.plano_id, list)
     }
 
+    // Convidados vinculados às reservas do plano na criação: sugestão de
+    // participantes do rateio enquanto ele ainda não foi configurado.
+    const { data: guestsData, error: guestsErr } = await supabase
+      .from('booking_participants')
+      .select(
+        'atleta_id, atleta:atleta_id(nome_perfil), booking:bookings!inner(plano_mensalista_id)'
+      )
+      .eq('funcao', 'convidado')
+      .in(
+        'booking.plano_mensalista_id',
+        planos.map((p) => p.id)
+      )
+    if (guestsErr) throw new Error(guestsErr.message)
+
+    type GuestRow = {
+      atleta_id: string
+      atleta: { nome_perfil: string } | null
+      booking: { plano_mensalista_id: string | null } | null
+    }
+    const participantesSugeridosByPlano = new Map<
+      string,
+      { id: string; nome: string }[]
+    >()
+    for (const row of (guestsData ?? []) as unknown as GuestRow[]) {
+      const planoId = row.booking?.plano_mensalista_id
+      if (!planoId || !row.atleta?.nome_perfil) continue
+      const list = participantesSugeridosByPlano.get(planoId) ?? []
+      if (!list.some((p) => p.id === row.atleta_id)) {
+        list.push({ id: row.atleta_id, nome: row.atleta.nome_perfil })
+      }
+      participantesSugeridosByPlano.set(planoId, list)
+    }
+
     const recorrencias: RecorrenciaResumo[] = planos.map((plano) => {
       const mensalidade = mensalidadeByPlano.get(plano.id) ?? null
       return {
@@ -499,6 +532,7 @@ export async function getMensalistaDetailAction(
           ? cobrancasByMensalidade.get(mensalidade.id) ?? []
           : [],
         reajustes: reajustesByPlano.get(plano.id) ?? [],
+        participantesSugeridos: participantesSugeridosByPlano.get(plano.id) ?? [],
       }
     })
 
