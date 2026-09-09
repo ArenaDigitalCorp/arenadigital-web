@@ -424,6 +424,9 @@ export function MensalistaDetailClient({
           const horario = `${p.horario_inicio.slice(0, 5)} às ${p.horario_fim.slice(0, 5)}`
           const m = rec.mensalidade
           const isOpen = expandedPlanoIds.has(p.id)
+          const valorMesAtual = m ? Number(m.valor_total) : Number(p.valor_mensal)
+          const isProporcional =
+            !!m && Math.abs(valorMesAtual - Number(p.valor_mensal)) > 0.01
           return (
             <Card key={p.id} className="border-none shadow-sm bg-white overflow-hidden">
               <div
@@ -459,8 +462,19 @@ export function MensalistaDetailClient({
                     {horario}
                   </span>
                   <span className="font-bold text-arena-button">
-                    {formatCurrency(p.valor_mensal)}/mês
+                    {formatCurrency(valorMesAtual)}
+                    {isProporcional ? ' este mês' : '/mês'}
                   </span>
+                  {isProporcional && (
+                    <>
+                      <Badge className="bg-amber-100 text-amber-700 border-none font-bold text-[10px] uppercase">
+                        Proporcional
+                      </Badge>
+                      <span className="text-arena-navy-800/40 text-xs font-medium">
+                        mês cheio: {formatCurrency(p.valor_mensal)}/mês
+                      </span>
+                    </>
+                  )}
                   {status && (
                     <Badge
                       className={cn(
