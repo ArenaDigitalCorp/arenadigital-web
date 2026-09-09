@@ -178,6 +178,7 @@ export function MensalistaDetailClient({
   const [rateioTarget, setRateioTarget] = useState<{
     mensalidade: MensalidadeRow
     cobrancas: CobrancaRow[]
+    participantesSugeridos: { id: string; nome: string }[]
   } | null>(null)
   const [pagamentoTarget, setPagamentoTarget] = useState<CobrancaRow | null>(null)
   const [encerramentoTarget, setEncerramentoTarget] = useState<{
@@ -487,7 +488,11 @@ export function MensalistaDetailClient({
                       <Switch
                         checked={m.rateio}
                         onCheckedChange={() =>
-                          setRateioTarget({ mensalidade: m, cobrancas: rec.cobrancas })
+                          setRateioTarget({
+                            mensalidade: m,
+                            cobrancas: rec.cobrancas,
+                            participantesSugeridos: rec.participantesSugeridos,
+                          })
                         }
                       />
                     </label>
@@ -1002,6 +1007,7 @@ export function MensalistaDetailClient({
         arenaId={arenaId}
         mensalidade={rateioTarget?.mensalidade ?? null}
         cobrancas={rateioTarget?.cobrancas ?? []}
+        participantesSugeridos={rateioTarget?.participantesSugeridos ?? []}
       />
       <RegistrarPagamentoModal
         open={!!pagamentoTarget}
