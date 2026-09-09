@@ -66,16 +66,14 @@ test('legacy monthly confirmation callers still send the displayed pending booki
   assert.match(sources[1], /plano\.proximo_mes_reservado as string/)
 })
 
-test('finance dashboard routes mensalista pendencies to the mensalista detail, not an inline confirm', async () => {
+test('finance dashboard no longer surfaces mensalista pendencies (fully owned by the mensalistas module)', async () => {
   const finance = await readFile(financeDashboardPath, 'utf8')
 
-  // The monthly payment flow now lives in the mensalistas module. The finance
-  // dashboard only links to the responsible's detail page.
+  // Monthly billing lives entirely in the mensalistas module now. The finance
+  // dashboard must not duplicate or link into mensalista payment confirmation.
   assert.doesNotMatch(finance, /confirmarMesMensalistaAction/)
-  assert.match(
-    finance,
-    /href=\{`\/dashboard\/arenas\/\$\{arenaId\}\/mensalistas\/\$\{plano\.athlete_id\}/
-  )
+  assert.doesNotMatch(finance, /getMensalistasComPendenciaAction/)
+  assert.doesNotMatch(finance, /pendingMensalistas/)
 })
 
 test('monthly action input validation covers tenant identifiers and schedule bounds', async () => {
