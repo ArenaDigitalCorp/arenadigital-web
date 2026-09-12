@@ -1407,3 +1407,65 @@ num mês ainda não gerado.
 Testes: `tests/mensalista-reajuste.test.mjs` (11) e
 `tests/mensalista-reajuste-schema.test.mjs` (competência obrigatória no dia 1º,
 novo escopo).
+
+---
+
+## 24. Exclusão e desativação de espaço
+
+Implementado em 12/09/2026. Antes havia só "Excluir", que falhava com erro cru de
+FK em alguns espaços e destruía histórico em outros.
+
+### 24.1 O mapa de FKs que motivou o desenho
+
+| tabela | `ON DELETE` | efeito ao excluir o espaço |
+|---|---|---|
+| `bookings` | **CASCADE** | apaga todas as reservas — e por cascata `booking_participants`, `booking_services` e afins |
+| `court_sports` | CASCADE | ok |
+| `court_price_tables` | CASCADE | ok |
+| `rotativo_courts` | CASCADE | ok |
+| `planos_mensalista` | NO ACTION | **bloqueia** com erro de FK |
+| `planos_mensalista_blocos` | NO ACTION | **bloqueia** (migração de blocos) |
+| `app_booking_requests` | **RESTRICT** | **bloqueia** |
+| `transactions` | *sem FK* | **não** é apagada — fica sem a reserva que a originou |
+
+A última linha é a que decide o desenho: o dinheiro permanece no caixa, mas perde
+a rastreabilidade. Remover os bloqueios sem mais nada transformaria "Excluir
+espaço" numa funcionalidade de perda de dados.
+
+### 24.2 Backend (`courtActions.ts`)
+
+- `getCourtDeletionImpactAction(arenaId, courtId)` → `CourtDeletionImpact`:
+  contagens de reservas (total / futuras / confirmadas), recorrências,
+  solicitações do app e tabelas de preço, mais `podeExcluir` e `bloqueios[]`
+  já redigidos na linguagem do gestor. Reserva `cancelled` não conta como
+  histórico. As contagens usam um helper tolerante: tabela inexistente no
+  ambiente (migração pendente) conta **zero** em vez de derrubar o levantamento.
+- `setCourtActiveAction(arenaId, courtId, ativo)` grava
+  `status = 'ativo' | 'inativo'` **e** `is_active`. O `status` é o campo que as
+  RPCs atômicas do banco já checam (`atomic_backoffice_booking_bundle`,
+  `atomic_monthly_plan_create/confirm`, `create_monthly_plan_blocks_atomic` e as
+  do app), então desativar bloqueia novas reservas de verdade, na camada certa.
+- `deleteCourtAction` **refaz o levantamento no servidor** antes de apagar e
+  recusa com mensagem específica quando há histórico — a tela não é fronteira de
+  segurança.
+
+### 24.3 UI (`ExcluirEspacoDialog.tsx`)
+
+Um diálogo só, com as duas ações. Ao abrir, carrega o levantamento e mostra a
+lista do que está vinculado. Depois:
+
+- **sem histórico** → aviso vermelho do que será removido, botão "Excluir
+  permanentemente" habilitado;
+- **com histórico** → aviso âmbar com o motivo e os números, botão de excluir
+  **desabilitado** (com o motivo no `title`), e a orientação de desativar;
+- **espaço já inativo** → o mesmo diálogo oferece "Reativar espaço".
+
+O item do menu passou de "Excluir" para "Desativar ou excluir" (ou "Reativar ou
+excluir"), para o gestor saber que há uma saída reversível antes de abrir.
+
+O `ConfirmActionDialog` genérico saiu deste fluxo: o aviso dependia de números
+que só o servidor conhece.
+
+Testes: `tests/court-exclusao.test.mjs` (15 — inclui a asserção do `ON DELETE
+CASCADE` de `bookings` e da ausência de FK em `transactions`, que são as razões
+de existir a guarda).
