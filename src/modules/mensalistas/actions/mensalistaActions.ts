@@ -40,7 +40,7 @@ function currentMonthStartISO(): string {
 }
 
 const PLANO_SELECT =
-  '*, atleta:athlete_id(id, nome_perfil, telefone), sports:sport_id(id, name), court:court_id(id, name)'
+  '*, atleta:athlete_id(id, nome_perfil, telefone), sports:sport_id(id, name), court:court_id(id, name), blocos:planos_mensalista_blocos(id, court_id, dia_semana, horario_inicio, horario_fim, court:court_id(id, name))'
 
 function revalidateMensalistaPaths(arenaId: string, athleteId?: string) {
   revalidatePath(`/dashboard/arenas/${arenaId}/mensalistas`)
@@ -782,6 +782,8 @@ export async function setEncerramentoAction(
 }
 
 export interface ReajustarValorResult {
+  /** Escopo efetivamente aplicado, para a tela poder narrar o que aconteceu. */
+  escopo: string
   competenciaVigencia: string
   valorAnterior: number
   valorNovo: number
@@ -807,6 +809,7 @@ export async function reajustarValorPlanoAction(
         p_plano_id: parsed.planoId,
         p_novo_valor: parsed.novoValor,
         p_escopo: parsed.escopo,
+        p_competencia: parsed.competencia,
         p_observacao: parsed.observacao,
         p_registered_by: dbUserId,
       }
@@ -818,6 +821,7 @@ export async function reajustarValorPlanoAction(
     return {
       success: true,
       data: {
+        escopo: String(row.escopo ?? parsed.escopo),
         competenciaVigencia: String(row.competencia_vigencia ?? ''),
         valorAnterior: Number(row.valor_anterior ?? 0),
         valorNovo: Number(row.valor_novo ?? parsed.novoValor),

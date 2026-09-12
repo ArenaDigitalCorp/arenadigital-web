@@ -252,6 +252,61 @@ export async function quoteCourtPriceAction(
   }
 }
 
+export type MonthlyBlockQuoteInput = {
+  courtId: string
+  priceTableId: string | null
+  startISO: string
+  endISO: string
+}
+
+/**
+ * Preço de uma ocorrência de cada bloco de um plano mensalista.
+ *
+ * A tela precisa somar N faixas para mostrar o subtotal enquanto o gestor
+ * clica na grade, e cada espaço tem suas próprias tabelas. Resolver tudo numa
+ * chamada evita uma ida ao servidor por bloco a cada clique. O total mensal é
+ * o cliente que compõe, multiplicando cada valor pelas ocorrências do mês.
+ */
+export async function quoteMonthlyBlocksAction(
+  arenaId: string,
+  blocks: MonthlyBlockQuoteInput[],
+): Promise<{ success: boolean; values: number[]; error?: string }> {
+  try {
+    await assertArenaBackofficeAccess(arenaId)
+    if (blocks.length === 0) return { success: true, values: [] }
+    if (blocks.length > 40) throw new Error('Limite de 40 blocos por plano.')
+
+    const courtIds = Array.from(new Set(blocks.map((b) => b.courtId)))
+    for (const courtId of courtIds) {
+      await assertCourtAccess(courtId, arenaId)
+    }
+
+    const supabase = loose()
+    const values = await Promise.all(
+      blocks.map(async (block) => {
+        const start = new Date(block.startISO)
+        const end = new Date(block.endISO)
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+          throw new Error('Intervalo inválido')
+        }
+        const { data, error } = await supabase.rpc('resolve_court_price', {
+          p_court_id: block.courtId,
+          p_price_table_id: block.priceTableId ?? null,
+          p_start: start.toISOString(),
+          p_end: end.toISOString(),
+        })
+        if (error) throw new Error(error.message)
+        return Number(data) || 0
+      }),
+    )
+
+    return { success: true, values }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Erro ao calcular o valor sugerido'
+    return { success: false, values: [], error: message }
+  }
+}
+
 export async function createCourtPriceTableAction(
   arenaId: string,
   input: { courtId: string; nome: string },
@@ -484,8 +539,11 @@ export async function saveDraftPriceTablesAction(
       const tableId = byTipo.get(draft.tipo)
       if (!tableId) continue
 
+      // O cadastro só monta as 3 fixas, cujo nome o trigger de seed já definiu e
+      // que não são renomeáveis. A guarda existe para o dia em que o rascunho
+      // passar a aceitar tabelas personalizadas.
       const nome = draft.nome.trim()
-      if (nome) {
+      if (nome && !isReservedPriceTableKind(draft.tipo)) {
         const { error: nameError } = await supabase
           .from('court_price_tables')
           .update({ nome })
@@ -538,11 +596,14 @@ export async function upsertCourtPriceTableAction(
       .single()
     if (currentError) throw new Error(currentError.message)
 
-    // Cabeçalho: `tipo` e `is_default` nunca mudam por aqui.
+    // Cabeçalho: `tipo` e `is_default` nunca mudam por aqui. O `nome` das três
+    // tabelas fixas também não: elas são identificadas por `tipo` (é assim que o
+    // perfil do cliente vai apontar para a tabela certa), e um nome livre daria a
+    // impressão de que dá para trocar o papel da tabela renomeando-a.
     const { error: headerError } = await supabase
       .from('court_price_tables')
       .update({
-        nome: parsed.nome,
+        ...(isReservedPriceTableKind(current.tipo) ? {} : { nome: parsed.nome }),
         aplica_a: parsed.aplicaA,
         ativo: parsed.ativo,
         ordem: parsed.ordem,

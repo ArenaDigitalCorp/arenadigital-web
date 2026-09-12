@@ -43,14 +43,11 @@ import { cn } from '@/lib/utils';
 import { arenaDataTable } from '@/lib/arena-data-table';
 import { GradientMediaCard } from '@/components/dashboard/GradientMediaCard';
 import { DashboardTabs } from '@/components/dashboard/DashboardTabs';
-import { ConfirmActionDialog } from '@/components/dashboard/ConfirmActionDialog';
 import { DayOperationModal } from '@/modules/bookings/components/DayOperationModal';
 import { DayOperationBoard } from '@/modules/bookings/components/DayOperationBoard';
 import { AvailableTimesModal } from '@/modules/bookings/components/AvailableTimesModal';
-import {
-  deleteCourtAction,
-  duplicateCourtAction,
-} from '@/modules/courts/actions/courtActions';
+import { duplicateCourtAction } from '@/modules/courts/actions/courtActions';
+import { ExcluirEspacoDialog } from '@/modules/courts/components/ExcluirEspacoDialog';
 import type { Booking } from '@/modules/bookings/types/booking.types';
 import {
   arenaDashboardPath,
@@ -123,7 +120,6 @@ export function ArenaDetailPageClient({
   const [bookings] = useState<Booking[]>(initialBookings);
   const [selectedSpace, setSelectedSpace] = useState<any>(null);
   const [spaceToDelete, setSpaceToDelete] = useState<any>(null);
-  const [isDeletingSpace, setIsDeletingSpace] = useState(false);
   const [spaceToCopy, setSpaceToCopy] = useState<any>(null);
   const [copyName, setCopyName] = useState('');
   const [isCopyingSpace, setIsCopyingSpace] = useState(false);
@@ -138,21 +134,6 @@ export function ArenaDetailPageClient({
     setActiveTab(canManage ? initialTab : 'operacao');
   }, [canManage, initialTab]);
 
-  const handleDeleteCourt = async () => {
-    if (!spaceToDelete) return;
-
-    setIsDeletingSpace(true);
-    const res = await deleteCourtAction(arenaId, spaceToDelete.id);
-    setIsDeletingSpace(false);
-
-    if (res.success) {
-      setCourts((prev) => prev.filter((c) => c.id !== spaceToDelete.id));
-      toast.success('Espaço excluído!');
-      setSpaceToDelete(null);
-    } else {
-      toast.error(res.error ?? 'Erro ao excluir espaço.');
-    }
-  };
 
   const openCopyDialog = (court: any) => {
     setSpaceToCopy(court);
@@ -174,7 +155,8 @@ export function ArenaDetailPageClient({
 
     if (res.success && res.data) {
       setCourts((prev) => [res.data, ...prev]);
-      toast.success('Espaço copiado!');
+      if (res.warning) toast.warning(res.warning);
+      else toast.success('Espaço copiado!');
       setSpaceToCopy(null);
       setCopyName('');
     } else {
@@ -362,7 +344,10 @@ export function ArenaDetailPageClient({
                                 className="text-destructive"
                                 onClick={() => setSpaceToDelete(court)}
                               >
-                                <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                {court.status === 'inativo'
+                                  ? 'Reativar ou excluir'
+                                  : 'Desativar ou excluir'}
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -759,18 +744,24 @@ export function ArenaDetailPageClient({
           </DialogContent>
         </Dialog>}
 
-        {canManage && <ConfirmActionDialog
-          open={!!spaceToDelete}
-          onOpenChange={(open) => {
-            if (!open && !isDeletingSpace) setSpaceToDelete(null);
-          }}
-          title="Excluir espaço"
-          description="Tem certeza que deseja excluir este espaço? A exclusão é permanente e todos os seus dados serão removidos. Essa ação não pode ser desfeita."
-          confirmLabel="Excluir"
-          loadingLabel="Excluindo..."
-          loading={isDeletingSpace}
-          onConfirm={handleDeleteCourt}
-        />}
+        {canManage && (
+          <ExcluirEspacoDialog
+            open={!!spaceToDelete}
+            onClose={() => setSpaceToDelete(null)}
+            arenaId={arenaId}
+            court={spaceToDelete}
+            onDeleted={(courtId: string) =>
+              setCourts((prev) => prev.filter((c) => c.id !== courtId))
+            }
+            onStatusChanged={(atualizado: unknown) =>
+              setCourts((prev) =>
+                prev.map((c) =>
+                  c.id === (atualizado as { id: string }).id ? atualizado : c
+                )
+              )
+            }
+          />
+        )}
 
         <DayOperationModal
           isOpen={isDayOperationOpen}

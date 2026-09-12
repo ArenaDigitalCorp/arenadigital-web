@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Calendar as CalendarIcon, Clock, Trash2, Loader2, CheckCircle2 } from "lucide-react"
+import { Calendar as CalendarIcon, Clock, Trash2, Loader2, CheckCircle2, CalendarX2 } from "lucide-react"
 import {
     Dialog,
     DialogContent,
@@ -19,6 +19,7 @@ import {
     updateBookingStatusAction,
 } from "@/modules/bookings/actions/bookingActions"
 import { ConfirmarPagamentoDialog } from "@/modules/bookings/components/ConfirmarPagamentoDialog"
+import { CancelarSessaoMensalistaModal } from "@/modules/bookings/components/CancelarSessaoMensalistaModal"
 import { toast } from "sonner"
 import { trackAction } from "@/lib/telemetry/client"
 
@@ -49,6 +50,7 @@ function statusPresentation(status: string | null | undefined) {
 
 export function BookingDetailsModal({ isOpen, onClose, onSuccess, onEdit, booking, court }: BookingDetailsModalProps) {
     const [isCancelling, setIsCancelling] = useState(false)
+    const [showCancelSessao, setShowCancelSessao] = useState(false)
     const [showConfirmPayment, setShowConfirmPayment] = useState(false)
     const [confirmingParticipantId, setConfirmingParticipantId] = useState<string | null>(null)
     const [isConfirmingPayment, setIsConfirmingPayment] = useState(false)
@@ -69,6 +71,9 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, onEdit, bookin
     const mensalistaReservadoBlock = isMensalista && booking.status === "reservado"
     const avulsoReservado = !isMensalista && booking.status === "reservado"
     const canCancel = avulsoReservado
+    // Uma sessão do plano pode ser cancelada mesmo já confirmada (o mês pode
+    // estar pago — é justamente o caso em que o mensalista recebe crédito).
+    const canCancelSessaoMensalista = isMensalista && booking.status !== "cancelled"
 
     const handleCancel = async () => {
         if (!confirm("Tem certeza que deseja cancelar esta reserva?")) return
@@ -507,8 +512,37 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, onEdit, bookin
                             <Trash2 className="h-4 w-4" />
                         </Button>
                     ) : null}
+                    {canCancelSessaoMensalista && (
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setShowCancelSessao(true)}
+                            className="h-11 w-full shrink-0 gap-2 rounded-xl border-red-200 bg-red-50 font-semibold text-red-600 hover:bg-red-100 hover:text-red-700 sm:w-auto"
+                            title="Cancela apenas o jogo deste dia, sem mexer na recorrência"
+                        >
+                            <CalendarX2 className="h-4 w-4" />
+                            Cancelar este dia
+                        </Button>
+                    )}
                 </div>
             </DialogContent>
+
+            {canCancelSessaoMensalista && (
+                <CancelarSessaoMensalistaModal
+                    open={showCancelSessao}
+                    onClose={() => setShowCancelSessao(false)}
+                    onSuccess={() => {
+                        onSuccess()
+                        onClose()
+                    }}
+                    arenaId={booking.arena_id}
+                    bookingId={booking.id}
+                    startTime={booking.start_time}
+                    endTime={booking.end_time}
+                    responsavelNome={booking.athlete_name ?? "Mensalista"}
+                    espacoNome={court.name ?? "—"}
+                />
+            )}
 
             <ConfirmarPagamentoDialog
                 isOpen={showConfirmPayment}
