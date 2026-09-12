@@ -58,6 +58,8 @@ import {
   sumBookingServiceLines,
   type BookingServiceLineLocal,
 } from '@/modules/bookings/components/BookingServicesSection';
+import { getPerfilAtletaAction } from '@/modules/athletes/actions/perfilActions';
+import type { PerfilAtleta } from '@/modules/athletes/types/perfil.types';
 import {
   createPlanoMensalistaBlocosAction,
 } from '@/modules/bookings/actions/mensalistaActions';
@@ -298,10 +300,49 @@ export function BookingModal({
   // diferentes). A grade é a fonte da agenda; os campos legados acima ficam
   // apenas para a aba avulsa e para a checagem de conflito do fluxo antigo.
   const [blocoSlots, setBlocoSlots] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!isOpen || !selectedAthlete?.id || bookingType !== 'mensal') {
+      setPerfilAtleta(null);
+      return;
+    }
+    let cancelled = false;
+    void getPerfilAtletaAction(arenaId, selectedAthlete.id).then((res) => {
+      if (cancelled) return;
+      // Sem perfil legível, segue a heurística antiga — não é motivo para
+      // travar a criação do plano.
+      const proximo = res.success && res.data ? res.data.perfilEfetivo : null;
+      setPerfilAtleta((anterior) => {
+        if (anterior !== proximo && tabelasAutomaticas.current.size > 0) {
+          setPriceTableByCourt((prev) => {
+            const next = { ...prev };
+            for (const courtId of tabelasAutomaticas.current) delete next[courtId];
+            return next;
+          });
+          tabelasAutomaticas.current = new Set();
+        }
+        return proximo;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, selectedAthlete?.id, bookingType, arenaId]);
   const [activeCourtId, setActiveCourtId] = useState<string>(courtId);
   const [arenaCourts, setArenaCourts] = useState<CourtLike[]>([]);
   const [horizonteBookings, setHorizonteBookings] = useState<BookingLike[]>([]);
   const [isLoadingAgenda, setIsLoadingAgenda] = useState(false);
+  /**
+   * Perfil do atleta na arena. Professor cai na tabela Professor do espaço;
+   * os demais, na Mensalista. O perfil só sugere — o seletor segue na tela.
+   */
+  const [perfilAtleta, setPerfilAtleta] = useState<PerfilAtleta | null>(null);
+  /**
+   * Espaços cuja tabela foi escolhida pelo sistema (não pelo gestor). O perfil
+   * costuma chegar depois das tabelas; sem isso, um professor ficaria com a
+   * tabela Mensalista escolhida antes de o perfil ser conhecido.
+   */
+  const tabelasAutomaticas = useRef<Set<string>>(new Set());
   const [priceTableByCourt, setPriceTableByCourt] = useState<
     Record<string, string>
   >({});
@@ -668,12 +709,20 @@ export function BookingModal({
         const next = { ...prev };
         for (const { id, tables } of results) {
           if (next[id]) continue;
+          // Professor tem tabela própria; sem perfil (ou perfil comum) vale a
+          // Mensalista, como antes.
+          const papel: 'professor' | 'mensalista' =
+            perfilAtleta === 'professor' ? 'professor' : 'mensalista';
           const preferida =
+            tables.find((t) => t.tipo === papel) ??
+            tables.find((t) => t.aplicaA.includes(papel)) ??
             tables.find((t) => t.tipo === 'mensalista') ??
-            tables.find((t) => t.aplicaA.includes('mensalista')) ??
             tables.find((t) => t.isDefault) ??
             tables[0];
-          if (preferida) next[id] = preferida.id;
+          if (preferida) {
+            next[id] = preferida.id;
+            tabelasAutomaticas.current.add(id);
+          }
         }
         return next;
       });
@@ -682,7 +731,7 @@ export function BookingModal({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, bookingType, blocoSlots, priceTablesByCourt, arenaId]);
+  }, [isOpen, bookingType, blocoSlots, priceTablesByCourt, arenaId, perfilAtleta]);
 
   // ── Subtotal ao vivo ─────────────────────────────────────────────────────
   // O preço de cada bloco vem de `resolve_court_price`, para respeitar as
@@ -945,6 +994,9 @@ export function BookingModal({
         })),
         valor_mensal: Number(valorMensal),
         additional_athlete_ids: additionalParticipants.map((p) => p.id),
+        // A tabela do primeiro bloco, mesmo critério que o plano usa para
+        // court_id e horário. É o que identifica um plano de professor depois.
+        price_table_id: priceTableByCourt[blocosSelecionados[0].courtId] ?? null,
       });
 
       if (!result.success) {
@@ -1770,12 +1822,14 @@ export function BookingModal({
                               </span>
                               <Select
                                 value={priceTableByCourt[cid] || undefined}
-                                onValueChange={(value) =>
+                                onValueChange={(value) => {
+                                  // Escolha do gestor: o perfil não sobrescreve mais.
+                                  tabelasAutomaticas.current.delete(cid);
                                   setPriceTableByCourt((prev) => ({
                                     ...prev,
                                     [cid]: value,
-                                  }))
-                                }
+                                  }));
+                                }}
                               >
                                 <SelectTrigger className="ml-auto h-11 w-full max-w-[260px] rounded-xl border-arena-navy-800/10 font-bold text-arena-navy-800 focus:border-arena-button focus:ring-arena-button">
                                   <SelectValue placeholder="Selecione" />

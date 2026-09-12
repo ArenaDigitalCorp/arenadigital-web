@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { cn } from "@/lib/utils"
 import { arenaDataTable } from "@/lib/arena-data-table"
 import { getAthleteDetailsAction, type AthleteDetailData } from "@/modules/athletes/actions/athleteDetailsActions"
+import { PerfilAtletaCard } from "@/modules/athletes/components/PerfilAtletaCard"
 
 // ─────────────────────────────────────────────
 // Helpers
@@ -499,6 +500,9 @@ export default function AthleteDetailPage({
                         icon={<RefreshCw className="h-5 w-5" />} 
                     />
                 </div>
+
+                {/* ── PERFIL NA ARENA ── */}
+                <PerfilAtletaCard arenaId={arenaId} atletaId={athleteId} />
 
                 {/* ── TABLE SECTIONS ── */}
                 <SectionCard

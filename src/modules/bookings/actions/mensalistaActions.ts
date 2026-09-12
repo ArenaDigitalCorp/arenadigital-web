@@ -37,6 +37,8 @@ export interface CreatePlanoMensalistaBlocosInput {
   blocos: PlanoMensalistaBlocoInput[];
   valor_mensal: number;
   additional_athlete_ids?: string[];
+  /** Tabela de preço do primeiro bloco — identifica um plano de professor. */
+  price_table_id?: string | null;
 }
 
 const uuidSchema = z.string().uuid();
@@ -60,6 +62,13 @@ const createPlanoBlocosSchema = z.object({
   blocos: z.array(blocoSchema).min(1).max(40),
   valor_mensal: z.number().finite().min(0).max(100_000_000),
   additional_athlete_ids: z.array(uuidSchema).max(50).optional(),
+  /**
+   * Tabela de preço que originou o valor mensal (a do primeiro bloco). É o que
+   * permite dizer depois que este plano é de professor, e não de mensalista
+   * comum — o perfil do atleta é derivado do `tipo` dela. Sem persistir, a
+   * escolha do gestor se perde no salvar.
+   */
+  price_table_id: uuidSchema.nullable().optional(),
 });
 
 const createPlanoSchema = z
@@ -231,6 +240,7 @@ export async function createPlanoMensalistaBlocosAction(
         p_valor_mensal: parsed.valor_mensal,
         p_additional_athlete_ids: additionalAthleteIds,
         p_registered_by: dbUserId,
+        p_price_table_id: parsed.price_table_id ?? null,
       }
     );
 

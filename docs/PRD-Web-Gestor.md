@@ -413,6 +413,29 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
 
 ---
 
+### 5.15 Perfil do atleta na arena
+
+- **Status:** Implementado (12/09/2026).
+- **Problema:** não havia como saber, olhando o atleta, se ele é mensalista, professor ou cliente avulso — nem como fazer o sistema cotar automaticamente pela tabela certa.
+
+**Os três perfis**, em ordem de precedência:
+- **Professor** — é responsável por uma recorrência ativa cotada pela tabela Professor. Acumula com Mensalista (ele é as duas coisas), mas o que vale para preço é Professor.
+- **Mensalista** — é responsável por uma recorrência mensal ativa. Participante do rateio não conta: o perfil segue quem responde pela mensalidade.
+- **Cliente padrão** — só reservas avulsas, ou só participou de jogos de outros. É também o ponto de partida de quem acabou de se cadastrar.
+
+**Sugerido, nunca imposto.** Na tela do atleta, um cartão "Perfil na arena" mostra os papéis que o sistema detectou, marca o sugerido e deixa o gestor escolher outro. Quando ele escolhe, a tela passa a dizer o que o sistema sugeriria **e por quê** ("tem recorrência ativa cotada pela tabela Professor"), com um botão para voltar ao sugerido.
+
+**O perfil é por arena**, não do atleta: o mesmo atleta pode ser professor numa arena e avulso em outra.
+
+**Onde ele vale:** na criação de plano mensal, o seletor de tabela de preço já vem no papel do atleta — professor cai na tabela Professor do espaço. **Reserva avulsa não é afetada.** Em qualquer caso o seletor continua na tela e o valor segue editável.
+
+**Sobre os planos que já existem:** eles não registram qual tabela os originou, então nenhum é classificado como professor automaticamente — todos os responsáveis por plano ativo aparecem como Mensalista, e o gestor marca os professores à mão. Planos criados a partir de agora guardam a tabela escolhida e são classificados sozinhos.
+
+**Perfis futuros** (Conveniado, Cliente Fidelidade e outros que a arena queira criar) entram como novos papéis com tabela de preço própria.
+
+
+---
+
 ## 6. Requisitos Não Funcionais
 
 - Interface simples e responsiva

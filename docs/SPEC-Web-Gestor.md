@@ -1469,3 +1469,73 @@ que só o servidor conhece.
 Testes: `tests/court-exclusao.test.mjs` (15 — inclui a asserção do `ON DELETE
 CASCADE` de `bookings` e da ausência de FK em `transactions`, que são as razões
 de existir a guarda).
+
+---
+
+## 25. Perfil do atleta na arena
+
+Implementado em 12/09/2026. Migração `20260912120000_atleta_perfil_arena.sql`.
+
+### 25.1 O dado que faltava
+
+`planos_mensalista.price_table_id` existia como coluna desde `20260904120000`, mas
+**nada nunca a escrevia**: o gestor escolhia a tabela no seletor do `BookingModal`,
+ela era usada para cotar e descartada no salvar — o campo não existia no schema da
+action nem nas RPCs de criação. Sem ela, não há como distinguir um plano de
+professor de um de mensalista comum.
+
+`create_monthly_plan_blocks_atomic` ganhou `p_price_table_id` (a tabela do
+**primeiro bloco**, mesmo critério já usado para `court_id` e horário do plano) e
+valida que ela pertence ao espaço desse bloco. O caminho legado
+(`create_monthly_plan_atomic`, sem seletor na tela) não recebeu o parâmetro.
+
+Efeito colateral corrigido: o crédito de jogo cancelado (§21) lia esse campo e caía
+sempre no fallback da tabela Mensalista — um professor recebia crédito a preço de
+mensalista.
+
+### 25.2 Modelo
+
+Em `arenas_atleta` (já única por `id_arena, id_atleta`) — o perfil é **por arena**:
+
+- `perfil text` — o que o gestor definiu. `NULL` = usar o sugerido.
+- `perfil_definido_por uuid` + `perfil_definido_em timestamptz` — autoria, limpas ao voltar ao sugerido.
+- `CHECK (perfil IS NULL OR perfil IN ('padrao','mensalista','professor'))`.
+
+O perfil guarda o **papel**, nunca um `price_table_id`: as tabelas são por espaço e
+cada espaço resolve a sua por `(court_id, tipo)` (§19.8). Um perfil preso a uma
+tabela quebraria no segundo espaço.
+
+Guardar sugerido e definido separadamente evita os dois erros clássicos: perder a
+escolha do gestor quando o plano muda, e congelar um perfil que deveria acompanhar
+a situação.
+
+### 25.3 RPCs
+
+- `private.atleta_papeis_derivados(arena, atleta) → text[]` — papéis em ordem de
+  precedência. Professor exige `JOIN court_price_tables ON id = plano.price_table_id`
+  com `tipo='professor'`, então plano legado (sem a coluna) nunca entra. Mensalista
+  exige ser `planos_mensalista.athlete_id` de plano ativo — participante do rateio
+  não conta. Sem nenhum, `['padrao']`.
+- `public.get_atleta_perfil(arena, atleta) → jsonb` — `papeis_detectados`,
+  `perfil_sugerido` (= `v_papeis[1]`), `perfil_definido`, `perfil_efetivo`
+  (`COALESCE(definido, sugerido)`).
+- `public.set_atleta_perfil_atomic(arena, atleta, perfil, registered_by)` —
+  `perfil = NULL` volta ao sugerido. Devolve o estado resultante.
+
+Todas server-only; a derivação é `private` e não é concedida nem ao `service_role`.
+
+### 25.4 Web
+
+- `modules/athletes/actions/perfilActions.ts` — `getPerfilAtletaAction` /
+  `setPerfilAtletaAction`, com os rótulos e descrições dos perfis.
+- `modules/athletes/components/PerfilAtletaCard.tsx` — selos dos papéis detectados,
+  seletor com o sugerido marcado, e o motivo da sugestão em texto.
+- `BookingModal` aba **Mensal**: a heurística fixa (`tipo='mensalista'`) deu lugar ao
+  papel do atleta. A aba Avulso **não** foi alterada.
+
+**Corrida resolvida:** o perfil e as tabelas dos espaços carregam em paralelo. Um
+`useRef<Set<string>>` marca quais escolhas foram automáticas; quando o perfil chega
+depois, essas voltam para recálculo, e a escolha manual do gestor é removida do
+conjunto para nunca ser sobrescrita.
+
+Testes: `tests/atleta-perfil.test.mjs` (19).
