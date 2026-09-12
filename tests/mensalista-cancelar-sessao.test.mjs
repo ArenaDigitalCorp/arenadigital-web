@@ -1,3 +1,12 @@
+// `cancelamento-sessao.ts` usa `date-fns` puro (sem `date-fns-tz`), que formata
+// no fuso LOCAL do runtime — mesma convenção do resto do código de cliente deste
+// projeto (ver comentário em mensalista-blocos.ts: "o horário vai no fuso do
+// navegador do gestor"). Fixa o fuso do processo ANTES de qualquer import que
+// use Date/date-fns, para o teste não depender do fuso de quem o executa: sem
+// isso ele passava na minha máquina (America/Sao_Paulo) e falhava na CI (UTC),
+// porque `-03:00` embutido na fixture só "bate" quando o fuso local já é esse.
+process.env.TZ = 'America/Sao_Paulo'
+
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import test from 'node:test'
