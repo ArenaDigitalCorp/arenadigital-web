@@ -174,7 +174,8 @@ export function ArenaDetailPageClient({
 
     if (res.success && res.data) {
       setCourts((prev) => [res.data, ...prev]);
-      toast.success('Espaço copiado!');
+      if (res.warning) toast.warning(res.warning);
+      else toast.success('Espaço copiado!');
       setSpaceToCopy(null);
       setCopyName('');
     } else {

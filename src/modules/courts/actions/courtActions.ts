@@ -8,6 +8,7 @@ import {
     normalizeCourtSports,
     type CourtWithSportRelations,
 } from '@/modules/courts/utils/normalize-court-sports'
+import { clonePriceTablesToCourt } from '@/modules/courts/lib/clone-price-tables'
 import { revalidatePath } from 'next/cache'
 
 type CourtInsert = Database['public']['Tables']['courts']['Insert']
@@ -164,6 +165,19 @@ export async function duplicateCourtAction(arenaId: string, courtId: string, new
                 .insert(sportIds.map((id) => ({ court_id: court.id, sport_id: id })))
         }
 
+        // O trigger do banco semeia o novo espaço com Padrão (de `day_config`) e
+        // Mensalista/Professor vazias. A cópia tem que trazer as tabelas da
+        // origem inteiras. Falhar aqui não desfaz o espaço já criado — o gestor
+        // é avisado para revisar as tabelas em vez de copiar de novo.
+        let warning: string | undefined
+        try {
+            await clonePriceTablesToCourt(supabase, arenaId, courtId, court.id)
+        } catch (cloneError) {
+            const detail = cloneError instanceof Error ? cloneError.message : String(cloneError)
+            console.error('[duplicateCourtAction] falha ao copiar tabelas de preço', detail)
+            warning = 'Espaço copiado, mas as tabelas de preço não vieram junto. Revise-as no novo espaço.'
+        }
+
         const { data: full } = await supabase
             .from('courts')
             .select(`*, sports:court_sports(sport:sports(*))`)
@@ -171,10 +185,14 @@ export async function duplicateCourtAction(arenaId: string, courtId: string, new
             .single()
 
         revalidatePath(`/dashboard/arenas/${arenaId}`)
-        return { success: true, data: normalizeCourtSports((full ?? court) as CourtRowWithSports) }
+        return {
+            success: true,
+            data: normalizeCourtSports((full ?? court) as CourtRowWithSports),
+            warning,
+        }
     } catch (err) {
         const message = err instanceof Error ? err.message : 'Erro ao copiar espaço'
-        return { success: false, error: message, data: null }
+        return { success: false, error: message, data: null, warning: undefined }
     }
 }
 

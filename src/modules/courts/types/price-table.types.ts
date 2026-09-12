@@ -77,6 +77,6 @@ export function defaultPriceTableName(tipo: CourtPriceTableKind): string {
     case 'professor':
       return 'Professor'
     default:
-      return 'Nova tabela'
+      return 'Nova tabela de preços'
   }
 }

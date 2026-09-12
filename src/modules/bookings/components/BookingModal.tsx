@@ -31,14 +31,19 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { searchAthletesAction } from '@/modules/loyalty/actions/loyaltyActions';
-import { getCourtByIdAction } from '@/modules/courts/actions/courtActions';
+import {
+  getCourtByIdAction,
+  getCourtsByArenaAction,
+} from '@/modules/courts/actions/courtActions';
 import {
   listCourtPriceTableOptionsAction,
   quoteCourtPriceAction,
+  quoteMonthlyBlocksAction,
   type BookingPriceTableOption,
 } from '@/modules/courts/actions/priceTableActions';
 import {
   checkBookingConflictsAction,
+  getBookingsByArenaAction,
   saveBackofficeBookingBundleAction,
 } from '@/modules/bookings/actions/bookingActions';
 import type { BookingConflict } from '@/modules/bookings/actions/bookingActions';
@@ -53,7 +58,22 @@ import {
   sumBookingServiceLines,
   type BookingServiceLineLocal,
 } from '@/modules/bookings/components/BookingServicesSection';
-import { createPlanoMensalistaAction } from '@/modules/bookings/actions/mensalistaActions';
+import {
+  createPlanoMensalistaBlocosAction,
+} from '@/modules/bookings/actions/mensalistaActions';
+import { MensalistaBlocosPicker } from '@/modules/bookings/components/MensalistaBlocosPicker';
+import {
+  agruparBlocos,
+  fimDoHorizonte,
+  fimDoMes,
+  fracaoPrimeiroMes,
+  intervaloDeCotacao,
+  resumirPlano,
+  slotKey,
+  type Bloco,
+  type BookingLike,
+  type CourtLike,
+} from '@/modules/bookings/lib/mensalista-blocos';
 import {
   BookingParticipantsField,
   type BookingAthleteOption,
@@ -72,16 +92,6 @@ import {
 import { ptBR } from 'date-fns/locale';
 import { cn, normalizeString } from '@/lib/utils';
 import { track, trackAction } from '@/lib/telemetry/client';
-
-const DIAS_SEMANA = [
-  { value: 0, label: 'Domingo' },
-  { value: 1, label: 'Segunda-feira' },
-  { value: 2, label: 'Terça-feira' },
-  { value: 3, label: 'Quarta-feira' },
-  { value: 4, label: 'Quinta-feira' },
-  { value: 5, label: 'Sexta-feira' },
-  { value: 6, label: 'Sábado' },
-];
 
 interface Athlete {
   id: string;
@@ -246,11 +256,8 @@ export function BookingModal({
   const [courtDayConfig, setCourtDayConfig] = useState<any[] | null>(null);
   const [priceTables, setPriceTables] = useState<BookingPriceTableOption[]>([]);
   const [avulsoPriceTableId, setAvulsoPriceTableId] = useState<string>('');
-  const [mensalPriceTableId, setMensalPriceTableId] = useState<string>('');
   const [avulsoSuggested, setAvulsoSuggested] = useState<number | null>(null);
-  const [mensalSessionSuggested, setMensalSessionSuggested] = useState<number | null>(null);
   const lastAutoCourtPrice = useRef<string | null>(null);
-  const lastAutoValorMensal = useRef<string | null>(null);
   const [selectedSport, setSelectedSport] = useState<string>('');
   const [isLoadingSports, setIsLoadingSports] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -286,6 +293,24 @@ export function BookingModal({
   const [horarioFim, setHorarioFim] = useState('20:00');
   const [sessoesPorMes, setSessoesPorMes] = useState('4');
   const [valorMensal, setValorMensal] = useState('');
+
+  // Mensal — recorrência por blocos (N dias/horários, possivelmente em espaços
+  // diferentes). A grade é a fonte da agenda; os campos legados acima ficam
+  // apenas para a aba avulsa e para a checagem de conflito do fluxo antigo.
+  const [blocoSlots, setBlocoSlots] = useState<Set<string>>(new Set());
+  const [activeCourtId, setActiveCourtId] = useState<string>(courtId);
+  const [arenaCourts, setArenaCourts] = useState<CourtLike[]>([]);
+  const [horizonteBookings, setHorizonteBookings] = useState<BookingLike[]>([]);
+  const [isLoadingAgenda, setIsLoadingAgenda] = useState(false);
+  const [priceTableByCourt, setPriceTableByCourt] = useState<
+    Record<string, string>
+  >({});
+  const [priceTablesByCourt, setPriceTablesByCourt] = useState<
+    Record<string, BookingPriceTableOption[]>
+  >({});
+  const [blocoValores, setBlocoValores] = useState<number[]>([]);
+  const [isQuotingBlocos, setIsQuotingBlocos] = useState(false);
+  const lastAutoValorBlocos = useRef<string | null>(null);
 
   const searchTimeout = useRef<NodeJS.Timeout | null>(null);
   const bookingOperationId = useRef<string | null>(null);
@@ -323,12 +348,7 @@ export function BookingModal({
       const tables = tablesRes.success ? tablesRes.data : [];
       setPriceTables(tables);
       const defaultTable = tables.find((t) => t.isDefault) ?? tables[0];
-      const mensalTable =
-        tables.find((t) => t.tipo === 'mensalista') ??
-        tables.find((t) => t.aplicaA.includes('mensalista')) ??
-        defaultTable;
       setAvulsoPriceTableId(defaultTable?.id ?? '');
-      setMensalPriceTableId(mensalTable?.id ?? '');
     } finally {
       setIsLoadingSports(false);
     }
@@ -386,9 +406,8 @@ export function BookingModal({
       setAdditionalParticipants(extra);
       // Não deixa o auto-quote sobrescrever o valor carregado da reserva.
       lastAutoCourtPrice.current = null;
-      lastAutoValorMensal.current = null;
+      lastAutoValorBlocos.current = null;
       setAvulsoSuggested(null);
-      setMensalSessionSuggested(null);
       return;
     }
 
@@ -404,9 +423,8 @@ export function BookingModal({
     setHorarioFim(endStr);
     setCourtPrice(defaultPrice.toString());
     lastAutoCourtPrice.current = defaultPrice.toString();
-    lastAutoValorMensal.current = null;
+    lastAutoValorBlocos.current = null;
     setAvulsoSuggested(null);
-    setMensalSessionSuggested(null);
     setServiceLines([]);
     setIncludeServices(false);
     setAdditionalParticipants([]);
@@ -583,50 +601,209 @@ export function BookingModal({
     courtId,
   ]);
 
+  // ── Agenda da recorrência: espaços e reservas dos 3 meses gerados ────────
+  // Uma consulta só ao abrir a aba. A grade precisa do horizonte inteiro (e não
+  // apenas da semana) porque um horário livre hoje pode colidir numa ocorrência
+  // de daqui a dois meses — e nesse caso o bloco é bloqueado.
   useEffect(() => {
-    if (!isOpen || bookingType !== 'mensal') return;
-    if (!mensalPriceTableId || !horarioInicio || !horarioFim) return;
-    const dow = Number(diaSemana);
-    if (Number.isNaN(dow)) return;
-    const [sH, sM] = horarioInicio.split(':').map(Number);
-    const [eH, eM] = horarioFim.split(':').map(Number);
-    if (
-      [sH, eH].some((n) => Number.isNaN(n)) ||
-      eH * 60 + (eM || 0) <= sH * 60 + (sM || 0)
-    )
-      return;
-    const base = new Date();
-    base.setHours(0, 0, 0, 0);
-    while (base.getDay() !== dow) base.setDate(base.getDate() + 1);
-    const startISO = buildLocalIso(base, horarioInicio);
-    const endISO = buildLocalIso(base, horarioFim);
+    if (!isOpen || bookingType !== 'mensal' || existingBooking) return;
     let cancelled = false;
-    quoteCourtPriceAction(arenaId, courtId, mensalPriceTableId, startISO, endISO).then(
-      (res) => {
-        if (cancelled || !res.success) return;
-        setMensalSessionSuggested(res.value);
-        const total = res.value * (Number(sessoesPorMes) || 0);
-        if (!total) return;
-        setValorMensal((prev) =>
-          prev === '' || prev === lastAutoValorMensal.current ? String(total) : prev
+    setIsLoadingAgenda(true);
+
+    const inicio = new Date();
+    inicio.setHours(0, 0, 0, 0);
+    const fim = fimDoHorizonte(inicio);
+    fim.setHours(23, 59, 59, 999);
+
+    Promise.all([
+      getCourtsByArenaAction(arenaId),
+      getBookingsByArenaAction(arenaId, inicio.toISOString(), fim.toISOString()),
+    ])
+      .then(([courtsRes, bookingsRes]) => {
+        if (cancelled) return;
+        const courts = ((courtsRes.data ?? []) as CourtLike[]).filter(
+          (court) => (court as { status?: string }).status !== 'inativo'
         );
-        lastAutoValorMensal.current = String(total);
-      }
-    );
+        setArenaCourts(courts);
+        setHorizonteBookings((bookingsRes.data ?? []) as BookingLike[]);
+        if (!courts.some((court) => court.id === activeCourtId)) {
+          setActiveCourtId(courts[0]?.id ?? courtId);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingAgenda(false);
+      });
+
     return () => {
       cancelled = true;
+    };
+    // activeCourtId fora das deps de propósito: trocar de espaço não recarrega.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, bookingType, existingBooking, arenaId, courtId]);
+
+  // Tabelas de preço de cada espaço que entrou na recorrência. São por quadra,
+  // então um plano que usa dois espaços escolhe duas tabelas.
+  useEffect(() => {
+    if (!isOpen || bookingType !== 'mensal') return;
+    const courtIds = Array.from(
+      new Set([...blocoSlots].map((key) => key.split('|')[0]))
+    );
+    const faltando = courtIds.filter((id) => !priceTablesByCourt[id]);
+    if (faltando.length === 0) return;
+
+    let cancelled = false;
+    Promise.all(
+      faltando.map(async (id) => ({
+        id,
+        tables: (await listCourtPriceTableOptionsAction(arenaId, id)).data ?? [],
+      }))
+    ).then((results) => {
+      if (cancelled) return;
+      setPriceTablesByCourt((prev) => {
+        const next = { ...prev };
+        for (const { id, tables } of results) next[id] = tables;
+        return next;
+      });
+      setPriceTableByCourt((prev) => {
+        const next = { ...prev };
+        for (const { id, tables } of results) {
+          if (next[id]) continue;
+          const preferida =
+            tables.find((t) => t.tipo === 'mensalista') ??
+            tables.find((t) => t.aplicaA.includes('mensalista')) ??
+            tables.find((t) => t.isDefault) ??
+            tables[0];
+          if (preferida) next[id] = preferida.id;
+        }
+        return next;
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, bookingType, blocoSlots, priceTablesByCourt, arenaId]);
+
+  // ── Subtotal ao vivo ─────────────────────────────────────────────────────
+  // O preço de cada bloco vem de `resolve_court_price`, para respeitar as
+  // faixas de horário da tabela. O total mensal é composto aqui multiplicando
+  // pelas ocorrências reais de cada dia no mês.
+  const blocosSelecionados = useMemo(
+    () => agruparBlocos(blocoSlots),
+    [blocoSlots]
+  );
+
+  const inicioVigencia = useMemo(() => {
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    return hoje;
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen || bookingType !== 'mensal') return;
+    if (blocosSelecionados.length === 0) {
+      setBlocoValores([]);
+      setIsQuotingBlocos(false);
+      return;
+    }
+    const semTabela = blocosSelecionados.some(
+      (bloco) => !priceTableByCourt[bloco.courtId]
+    );
+    if (semTabela) return;
+
+    let cancelled = false;
+    setIsQuotingBlocos(true);
+    const timer = setTimeout(() => {
+      const payload = blocosSelecionados.map((bloco) => {
+        const { startISO, endISO } = intervaloDeCotacao(bloco, inicioVigencia);
+        return {
+          courtId: bloco.courtId,
+          priceTableId: priceTableByCourt[bloco.courtId] ?? null,
+          startISO,
+          endISO,
+        };
+      });
+
+      quoteMonthlyBlocksAction(arenaId, payload)
+        .then((res) => {
+          if (cancelled || !res.success) return;
+          setBlocoValores(res.values);
+        })
+        .finally(() => {
+          if (!cancelled) setIsQuotingBlocos(false);
+        });
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
     };
   }, [
     isOpen,
     bookingType,
-    mensalPriceTableId,
-    horarioInicio,
-    horarioFim,
-    diaSemana,
-    sessoesPorMes,
+    blocosSelecionados,
+    priceTableByCourt,
+    inicioVigencia,
     arenaId,
-    courtId,
   ]);
+
+  const resumoBlocos = useMemo(
+    () => resumirPlano(blocosSelecionados, blocoValores, inicioVigencia),
+    [blocosSelecionados, blocoValores, inicioVigencia]
+  );
+
+  // O valor sugerido preenche o campo, mas o gestor manda: uma vez editado à
+  // mão, deixamos de sobrescrever (desconto ou acréscimo negociado).
+  useEffect(() => {
+    if (!isOpen || bookingType !== 'mensal') return;
+    const sugerido = resumoBlocos.valorMesCheio;
+    if (!sugerido) return;
+    const texto = sugerido.toFixed(2);
+    setValorMensal((prev) =>
+      prev === '' || prev === lastAutoValorBlocos.current ? texto : prev
+    );
+    lastAutoValorBlocos.current = texto;
+  }, [isOpen, bookingType, resumoBlocos.valorMesCheio]);
+
+  /** Espaços que entraram na recorrência, na ordem em que aparecem. */
+  const blocosCourtIds = useMemo(() => {
+    const vistos: string[] = [];
+    for (const bloco of blocosSelecionados) {
+      if (!vistos.includes(bloco.courtId)) vistos.push(bloco.courtId);
+    }
+    return vistos;
+  }, [blocosSelecionados]);
+
+  const valorMensalEditadoManualmente =
+    valorMensal !== '' && valorMensal !== lastAutoValorBlocos.current;
+
+  /** Pró-rata aplicado sobre o valor que o gestor realmente vai cobrar. */
+  const primeiraMensalidade = useMemo(() => {
+    const cobrado = Number(valorMensal) || 0;
+    return (
+      Math.round(cobrado * fracaoPrimeiroMes(blocosSelecionados, inicioVigencia) * 100) /
+      100
+    );
+  }, [valorMensal, blocosSelecionados, inicioVigencia]);
+
+  const handleToggleSlot = (key: string) => {
+    setBlocoSlots((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const handleRemoveBloco = (bloco: Bloco) => {
+    setBlocoSlots((prev) => {
+      const next = new Set(prev);
+      for (const hora of bloco.hours) {
+        next.delete(slotKey(bloco.courtId, bloco.diaSemana, hora));
+      }
+      return next;
+    });
+  };
 
   const handleSaveAvulso = async () => {
     if (!selectedAthlete && !search) {
@@ -750,22 +927,22 @@ export function BookingModal({
       toast.error('Informe o valor mensal');
       return;
     }
-    if (!horarioInicio || !horarioFim) {
-      toast.error('Informe o horário de início e fim');
+    if (blocosSelecionados.length === 0) {
+      toast.error('Marque ao menos um horário na grade');
       return;
     }
 
     setIsSaving(true);
     try {
-      const result = await createPlanoMensalistaAction(arenaId, {
-        court_id: courtId,
+      const result = await createPlanoMensalistaBlocosAction(arenaId, {
         athlete_id: selectedAthlete.id,
-        athlete_name: selectedAthlete.nome_perfil,
         sport_id: selectedSport || undefined,
-        dia_semana: Number(diaSemana),
-        horario_inicio: horarioInicio,
-        horario_fim: horarioFim,
-        sessoes_por_mes: Number(sessoesPorMes),
+        blocos: blocosSelecionados.map((bloco) => ({
+          court_id: bloco.courtId,
+          dia_semana: bloco.diaSemana,
+          horario_inicio: `${String(bloco.from).padStart(2, '0')}:00`,
+          horario_fim: `${String(bloco.to).padStart(2, '0')}:00`,
+        })),
         valor_mensal: Number(valorMensal),
         additional_athlete_ids: additionalParticipants.map((p) => p.id),
       });
@@ -813,6 +990,12 @@ export function BookingModal({
     setHorarioFim('20:00');
     setSessoesPorMes('4');
     setValorMensal('');
+    setBlocoSlots(new Set());
+    setBlocoValores([]);
+    setPriceTableByCourt({});
+    setPriceTablesByCourt({});
+    setActiveCourtId(courtId);
+    lastAutoValorBlocos.current = null;
     setBookingType('avulso');
     setConflicts([]);
     setCourtPrice(defaultPrice.toString());
@@ -822,11 +1005,9 @@ export function BookingModal({
     setSplitBillingPerParticipant(false);
     setPriceTables([]);
     setAvulsoPriceTableId('');
-    setMensalPriceTableId('');
     setAvulsoSuggested(null);
-    setMensalSessionSuggested(null);
     lastAutoCourtPrice.current = null;
-    lastAutoValorMensal.current = null;
+    lastAutoValorBlocos.current = null;
   };
 
   // ── Helpers para gerar slots a verificar ────────────────────────────────
@@ -947,44 +1128,6 @@ export function BookingModal({
       setIsCheckingConflicts(false);
     }
   }
-
-  const valorPorSessao =
-    valorMensal && sessoesPorMes && Number(sessoesPorMes) > 0
-      ? (Number(valorMensal) / Number(sessoesPorMes)).toFixed(2)
-      : null;
-
-  // Recorrências que ainda cabem no mês corrente a partir de hoje (o plano
-  // começa hoje). Mesma contagem que o banco usa para pró-ratear a 1ª mensalidade.
-  const firstMonthPlan = useMemo(() => {
-    const dow = Number(diaSemana);
-    const cap = Math.max(1, Math.min(8, Number(sessoesPorMes) || 4));
-    if (Number.isNaN(dow)) return null;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const monthEnd = endOfMonth(today);
-    const cur = new Date(today);
-    while (cur.getDay() !== dow) cur.setDate(cur.getDate() + 1);
-    let sessions = 0;
-    let firstDate: Date | null = null;
-    while (cur <= monthEnd && sessions < cap) {
-      if (!firstDate) firstDate = new Date(cur);
-      sessions += 1;
-      cur.setDate(cur.getDate() + 7);
-    }
-    const perSession =
-      mensalSessionSuggested ??
-      (valorMensal && Number(sessoesPorMes) > 0
-        ? Number(valorMensal) / Number(sessoesPorMes)
-        : null);
-    const isFull = sessions >= cap;
-    const value =
-      perSession == null
-        ? null
-        : isFull && valorMensal
-          ? Number(valorMensal)
-          : Math.round(perSession * sessions * 100) / 100;
-    return { sessions, isFull, value, firstDate, monthEnd };
-  }, [diaSemana, sessoesPorMes, valorMensal, mensalSessionSuggested]);
 
   const handleAthleteRegistered = async () => {
     setIsAthleteModalOpen(false);
@@ -1543,53 +1686,30 @@ export function BookingModal({
                     disabled={isSaving}
                   />
 
-                  {/* Dia da semana */}
+                  {/* Grade de disponibilidade — a agenda da recorrência */}
                   <div className="space-y-2">
-                    <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">
-                      Dia da semana
-                    </Label>
-                    <Select value={diaSemana} onValueChange={setDiaSemana}>
-                      <SelectTrigger className="h-14 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-xl font-bold text-arena-navy-800">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-2xl border-arena-navy-800/10 p-2">
-                        {DIAS_SEMANA.map((d) => (
-                          <SelectItem
-                            key={d.value}
-                            value={String(d.value)}
-                            className="rounded-xl py-3 font-bold text-arena-navy-800"
-                          >
-                            {d.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Horários */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">
-                        Horário início
+                        Onde e quando
                       </Label>
-                      <Input
-                        type="time"
-                        value={horarioInicio}
-                        onChange={(e) => setHorarioInicio(e.target.value)}
-                        className="h-14 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-xl font-bold text-arena-navy-800"
-                      />
+                      <span className="ml-auto text-[11.5px] font-medium text-arena-navy-800/40">
+                        Clique nos horários livres. Horas seguidas viram um bloco só.
+                      </span>
                     </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">
-                        Horário fim
-                      </Label>
-                      <Input
-                        type="time"
-                        value={horarioFim}
-                        onChange={(e) => setHorarioFim(e.target.value)}
-                        className="h-14 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-xl font-bold text-arena-navy-800"
-                      />
-                    </div>
+                    <MensalistaBlocosPicker
+                      courts={arenaCourts}
+                      bookings={horizonteBookings}
+                      isLoading={isLoadingAgenda}
+                      selected={blocoSlots}
+                      onToggleSlot={handleToggleSlot}
+                      onRemoveBloco={handleRemoveBloco}
+                      inicioVigencia={inicioVigencia}
+                      activeCourtId={activeCourtId}
+                      onActiveCourtChange={setActiveCourtId}
+                      resumo={resumoBlocos}
+                      isQuoting={isQuotingBlocos}
+                      disabled={isSaving}
+                    />
                   </div>
 
                   {/* Esporte */}
@@ -1630,53 +1750,115 @@ export function BookingModal({
                     </Select>
                   </div>
 
-                  {/* Tabela de preço */}
-                  {priceTables.length > 1 && (
+                  {/* Tabela de preço — uma por espaço usado na recorrência */}
+                  {blocosCourtIds.length > 0 && (
                     <div className="space-y-2">
                       <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">
                         Tabela de preço
                       </Label>
-                      <Select
-                        value={mensalPriceTableId || undefined}
-                        onValueChange={setMensalPriceTableId}
-                      >
-                        <SelectTrigger className="h-14 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-xl font-bold text-arena-navy-800">
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-2xl border-arena-navy-800/10 p-2">
-                          {priceTables.map((t) => (
-                            <SelectItem
-                              key={t.id}
-                              value={t.id}
-                              className="rounded-xl py-3 font-bold text-arena-navy-800"
+                      <div className="space-y-2">
+                        {blocosCourtIds.map((cid) => {
+                          const court = arenaCourts.find((c) => c.id === cid);
+                          const tables = priceTablesByCourt[cid] ?? [];
+                          return (
+                            <div
+                              key={cid}
+                              className="flex flex-wrap items-center gap-3 rounded-xl border border-arena-navy-800/10 bg-white px-3 py-2"
                             >
-                              {t.nome}
-                              {t.isDefault ? ' · padrão' : ''}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                              <span className="min-w-[120px] text-[13px] font-bold text-arena-navy-800">
+                                {court?.name ?? 'Espaço'}
+                              </span>
+                              <Select
+                                value={priceTableByCourt[cid] || undefined}
+                                onValueChange={(value) =>
+                                  setPriceTableByCourt((prev) => ({
+                                    ...prev,
+                                    [cid]: value,
+                                  }))
+                                }
+                              >
+                                <SelectTrigger className="ml-auto h-11 w-full max-w-[260px] rounded-xl border-arena-navy-800/10 font-bold text-arena-navy-800 focus:border-arena-button focus:ring-arena-button">
+                                  <SelectValue placeholder="Selecione" />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-2xl border-arena-navy-800/10 p-2">
+                                  {tables.map((t) => (
+                                    <SelectItem
+                                      key={t.id}
+                                      value={t.id}
+                                      className="rounded-xl py-3 font-bold text-arena-navy-800"
+                                    >
+                                      {t.nome}
+                                      {t.isDefault ? ' · padrão' : ''}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p className="text-[11px] font-medium text-arena-navy-800/45">
+                        O valor de cada bloco respeita as faixas de horário da tabela
+                        escolhida para o espaço.
+                      </p>
                     </div>
                   )}
 
-                  {/* Sessões e valor */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">
-                        Sessões/mês
-                      </Label>
-                      <Input
-                        type="number"
-                        min={1}
-                        max={8}
-                        value={sessoesPorMes}
-                        onChange={(e) => setSessoesPorMes(e.target.value)}
-                        className="h-14 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-xl font-bold text-arena-navy-800"
-                      />
+                  {/* Subtotal e valor cobrado */}
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-1.5 rounded-2xl border border-arena-navy-800/10 bg-slate-50/80 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-arena-navy-800/60">
+                        Subtotal pela tabela
+                      </p>
+                      <div className="space-y-1 text-[12.5px]">
+                        <div className="flex items-baseline justify-between gap-3">
+                          <span className="font-semibold text-arena-navy-800/50">
+                            Horas por semana
+                          </span>
+                          <span className="font-mono font-semibold tabular-nums text-arena-navy-800">
+                            {resumoBlocos.horasSemana}h
+                          </span>
+                        </div>
+                        <div className="flex items-baseline justify-between gap-3">
+                          <span className="font-semibold text-arena-navy-800/50">
+                            Valor por semana
+                          </span>
+                          <span className="font-mono font-semibold tabular-nums text-arena-navy-800">
+                            {fmtBrl(resumoBlocos.valorSemana)}
+                          </span>
+                        </div>
+                        <div className="flex items-baseline justify-between gap-3">
+                          <span className="font-semibold text-arena-navy-800/50">
+                            Reservas no mês de referência
+                          </span>
+                          <span className="font-mono font-semibold tabular-nums text-arena-navy-800">
+                            {resumoBlocos.ocorrenciasMesCheio}x
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3 border-t border-arena-navy-800/10 pt-2">
+                          <span className="text-[13px] font-black text-arena-navy-800">
+                            Mensalidade
+                          </span>
+                          <span className="text-xl font-black text-arena-button">
+                            {fmtBrl(resumoBlocos.valorMesCheio)}
+                          </span>
+                        </div>
+                        {resumoBlocos.variacaoMensal.length > 1 && (
+                          <p className="text-[11px] leading-snug text-arena-navy-800/45">
+                            O preço da hora é fixo, então a fatura acompanha o
+                            calendário:{' '}
+                            {resumoBlocos.variacaoMensal
+                              .map((v) => `${fmtBrl(v.valor)} em meses com ${v.ocorrencias} reservas`)
+                              .join(' · ')}
+                            .
+                          </p>
+                        )}
+                      </div>
                     </div>
+
                     <div className="space-y-2">
                       <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">
-                        Valor mensal (R$)
+                        Valor mensal cobrado (R$)
                       </Label>
                       <div className="relative">
                         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-arena-navy-800/40 font-bold text-sm">
@@ -1690,80 +1872,37 @@ export function BookingModal({
                           className="pl-10 h-14 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-xl font-bold text-arena-navy-800"
                         />
                       </div>
-                      {mensalSessionSuggested !== null && (
-                        <p className="text-[11px] font-medium text-arena-navy-800/45">
-                          Tabela: {fmtBrl(mensalSessionSuggested)}/sessão
-                          {sessoesPorMes && Number(sessoesPorMes) > 0 && (
-                            <> &middot; sugestão {fmtBrl(mensalSessionSuggested * Number(sessoesPorMes))}/mês</>
+                      <p className="text-[11px] font-medium text-arena-navy-800/45">
+                        {valorMensalEditadoManualmente
+                          ? `Ajustado à mão — a tabela sugeria ${fmtBrl(resumoBlocos.valorMesCheio)}.`
+                          : 'Preenchido pela tabela. Edite para aplicar desconto ou acréscimo.'}
+                        {resumoBlocos.variacaoMensal.length > 1 &&
+                          ' É o valor de um mês de referência; meses com menos reservas são cobrados proporcionalmente.'}
+                      </p>
+
+                      {resumoBlocos.horasSemana > 0 && (
+                        <div className="rounded-xl border border-arena-amber/40 bg-arena-inactive-pill-bg px-3 py-2 text-[11.5px] font-semibold text-arena-inactive-pill-fg">
+                          {resumoBlocos.ocorrenciasPrimeiroMes > 0 ? (
+                            <>
+                              1ª mensalidade proporcional (
+                              {format(inicioVigencia, 'dd/MM', { locale: ptBR })}–
+                              {format(fimDoMes(inicioVigencia), 'dd/MM', { locale: ptBR })}
+                              ):{' '}
+                              <span className="font-mono">
+                                {fmtBrl(primeiraMensalidade)}
+                              </span>{' '}
+                              · {resumoBlocos.ocorrenciasPrimeiroMes} reservas
+                            </>
+                          ) : (
+                            <>
+                              Nenhuma ocorrência cabe até o fim do mês. As reservas e a
+                              cobrança começam no mês que vem.
+                            </>
                           )}
-                        </p>
+                        </div>
                       )}
                     </div>
                   </div>
-
-                  {/* Primeiro mês (proporcional ao início) */}
-                  {firstMonthPlan && (
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 space-y-1.5">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-arena-navy-800/60">
-                        Este mês
-                      </p>
-                      {firstMonthPlan.sessions > 0 ? (
-                        <>
-                          <p className="text-sm font-bold text-arena-navy-800">
-                            {firstMonthPlan.sessions}{' '}
-                            {firstMonthPlan.sessions === 1 ? 'recorrência' : 'recorrências'}
-                            {firstMonthPlan.firstDate && (
-                              <>
-                                {' '}
-                                &middot; {format(firstMonthPlan.firstDate, "dd/MM", { locale: ptBR })}
-                                {'–'}
-                                {format(firstMonthPlan.monthEnd, "dd/MM", { locale: ptBR })}
-                              </>
-                            )}
-                          </p>
-                          {firstMonthPlan.value != null && (
-                            <p className="text-sm font-semibold text-arena-button">
-                              1ª mensalidade: {fmtBrl(firstMonthPlan.value)}
-                              {!firstMonthPlan.isFull && (
-                                <span className="ml-1 text-[11px] font-medium text-arena-navy-800/45">
-                                  (proporcional · mês cheio {fmtBrl(Number(valorMensal) || 0)})
-                                </span>
-                              )}
-                            </p>
-                          )}
-                          <p className="text-[11px] text-arena-navy-800/50">
-                            Serão criadas {firstMonthPlan.sessions}{' '}
-                            {firstMonthPlan.sessions === 1 ? 'reserva' : 'reservas'} neste mês
-                            (confirmadas) e {sessoesPorMes}/mês nos próximos 2 meses (reservado).
-                          </p>
-                        </>
-                      ) : (
-                        <p className="text-[11px] text-arena-navy-800/60">
-                          Nenhuma sessão de{' '}
-                          {DIAS_SEMANA.find((d) => d.value === Number(diaSemana))?.label}{' '}
-                          cabe até o fim do mês. As reservas e a cobrança começam no
-                          próximo mês.
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Resumo */}
-                  {valorPorSessao && (
-                    <div className="rounded-2xl border border-arena-button/10 bg-[#FFF5EF] p-4 space-y-1">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-arena-button/80">
-                        A partir do próximo mês
-                      </p>
-                      <p className="text-sm font-bold text-arena-navy-800">
-                        {sessoesPorMes}x por mês &middot; R$ {valorPorSessao}
-                        /sessão &middot; R$ {Number(valorMensal).toFixed(2)}/mês
-                      </p>
-                      <p className="text-[11px] text-arena-navy-800/50">
-                        Reservas geradas para o mês atual (confirmado) e os
-                        próximos 2 meses (reservado)
-                      </p>
-                    </div>
-                  )}
                 </>
               )}
 
