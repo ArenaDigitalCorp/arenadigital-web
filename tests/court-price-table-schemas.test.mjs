@@ -92,5 +92,5 @@ test('reserved price table helpers', () => {
   assert.equal(isReservedPriceTableKind('padrao'), true)
   assert.equal(isReservedPriceTableKind('custom'), false)
   assert.equal(defaultPriceTableName('professor'), 'Professor')
-  assert.equal(defaultPriceTableName('custom'), 'Nova tabela')
+  assert.equal(defaultPriceTableName('custom'), 'Nova tabela de preços')
 })

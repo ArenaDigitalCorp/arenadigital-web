@@ -28,7 +28,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { useEffect, useState, useRef } from "react"
 import { UploadCloud, X, Image as ImageIcon, Loader2 } from "lucide-react"
 import Image from "next/image"
-import { PriceTablesConfig } from "./PriceTablesConfig"
+import { PriceTablesConfig, type PriceTablesHandle } from "./PriceTablesConfig"
 import { courtSchema, type CourtFormValues } from "@/modules/courts/schemas/court.schema"
 import { arenaDashboardPath, type ArenaDashboardTab } from "@/lib/arena-dashboard-navigation"
 import { saveDraftPriceTablesAction } from "@/modules/courts/actions/priceTableActions"
@@ -78,10 +78,12 @@ export function CourtForm({ initialData, arenaId, onSuccess, returnTab = "espaco
     const [isUploading, setIsUploading] = useState(false)
 
     // Cadastro: as 3 tabelas fixas já são preenchidas aqui e persistidas logo
-    // após criar o espaço. Edição usa o PriceTablesConfig persistido.
+    // após criar o espaço. Edição usa o PriceTablesConfig persistido, que este
+    // formulário grava pelo `ref` — o espaço tem um único botão de salvar.
     const [draftTables, setDraftTables] = useState<CourtPriceTable[]>(() =>
         draftPriceTables(arenaId)
     )
+    const priceTablesRef = useRef<PriceTablesHandle>(null)
 
     useEffect(() => {
         async function loadSports() {
@@ -190,6 +192,16 @@ export function CourtForm({ initialData, arenaId, onSuccess, returnTab = "espaco
                 const finalInput = { ...input, image_url: imageUrl }
                 const res = await updateCourtAction(arenaId, initialData.id, { ...finalInput }, sportIds)
                 if (!res.success) throw new Error(res.error)
+
+                // As tabelas de preço fazem parte do mesmo "Salvar Alterações".
+                // Se a gravação falhar, o gestor fica na tela para tentar de novo
+                // (o update do espaço acima é idempotente).
+                const tablesSaved = await priceTablesRef.current?.saveAll()
+                if (tablesSaved === false) {
+                    setIsUploading(false)
+                    return
+                }
+
                 toast.success("Espaço atualizado com sucesso!")
             } else {
                 // Creating: create space first to get the ID, then upload image and update
@@ -486,6 +498,7 @@ export function CourtForm({ initialData, arenaId, onSuccess, returnTab = "espaco
                     </div>
                     {initialData ? (
                         <PriceTablesConfig
+                            ref={priceTablesRef}
                             arenaId={arenaId}
                             courtId={initialData.id}
                             fallbackDayConfig={initialData.day_config}

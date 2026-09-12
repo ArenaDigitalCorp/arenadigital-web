@@ -111,6 +111,15 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
   - **No cadastro do espaço as 3 tabelas já podem ser preenchidas**, sem precisar salvar e voltar para editar. A **Padrão é obrigatória** (pelo menos um dia habilitado); Mensalista e Professor são **opcionais** e podem ficar vazias. Cada aba mostra um selo com quantos dias estão configurados (`Nd` / `vazia`).
   - Facilidades de preenchimento: **Copiar faixas da tabela Padrão** (traz horários, faixas e valores para a tabela aberta, restando só ajustar o que muda), **Replicar** um dia para os demais e **Limpar tabela**.
   - Tabelas personalizadas, definir outra tabela como padrão e excluir só ficam disponíveis na edição do espaço.
+  - **Padrão, Mensalista e Professor têm nome fixo** (10/09/2026). Elas não são nomes, são **papéis**: o perfil do cliente aponta para a tabela do espaço pelo papel, e renomear daria a impressão de que o papel mudou junto. Na tela o nome delas aparece como rótulo com cadeado, explicando que só as tabelas criadas pelo gestor podem ser renomeadas. Espaços cujas reservadas tenham sido renomeadas antes disso são **normalizados** de volta para Padrão / Mensalista / Professor, para que o mesmo papel tenha o mesmo rótulo em toda a plataforma. Se o nome canônico estiver em uso por uma tabela personalizada daquele espaço, ela recebe o sufixo "(personalizada)" para liberá-lo.
+  - **Semana em cards** (10/09/2026): os sete dias deixaram de ficar abertos e empilhados. Uma tira de sete cards mostra a semana inteira de relance — cada card traz o interruptor de abrir/fechar, o horário, quantas faixas e a variação de preço, além de uma barrinha em que cada segmento é proporcional à duração da faixa e o tom acompanha o preço. Clicando num card, o painel abaixo edita aquele dia em duas colunas (funcionamento à esquerda, faixas de preço à direita). Em **Editar vários dias**, o gestor marca quantos cards quiser e configura todos de uma vez — o que o "Replicar para todos os dias" (mantido) não cobria, por ser tudo ou nada. Abrir e fechar um dia continua sendo só pelo interruptor: editar preço nunca abre um dia fechado. A altura da seção cai de cerca de 2.600px para ~520px, sem perder nenhuma das 13 funções do editor de dias nem das 11 de gerenciar tabelas.
+  - **Um único botão salva tudo** (10/09/2026): tanto no cadastro quanto na edição, o botão do fim do formulário grava os dados do espaço **e** as tabelas de preço. O "Salvar tabela" por aba saiu — havia dois botões na edição e o do fim não gravava as tabelas, o que fazia o gestor perder o que tinha ajustado. As abas com alteração pendente ficam marcadas e um aviso lembra que elas vão junto no Salvar.
+- **Desativar ou excluir espaço** (12/09/2026): o menu do espaço abre um diálogo que primeiro **mostra o que está vinculado a ele** — reservas no histórico, reservas futuras, recorrências de mensalista, solicitações do app e tabelas de preço — e só então oferece os dois caminhos:
+  - **Desativar** (reversível, sempre disponível): o espaço para de aceitar novas reservas, novas recorrências e pedidos pelo app. As reservas já marcadas continuam valendo e o histórico fica intacto. Reativar é pelo mesmo diálogo.
+  - **Excluir permanentemente**: só fica habilitado para espaço **sem histórico nenhum** — aquele criado por engano ou que nunca foi usado. Leva junto as tabelas de preço e os esportes vinculados.
+
+  Espaço com histórico **não é excluído**, e o diálogo diz o motivo com os números na tela. A razão é concreta: apagar o espaço apagaria em cascata todas as suas reservas, e os lançamentos de caixa — que não são apagados — ficariam sem a reserva que os originou. Antes desta mudança o "Excluir" simplesmente falhava com erro de banco quando havia mensalista ou pedido do app, e funcionava destruindo o histórico quando não havia.
+- **Copiar espaço:** cria um espaço novo com toda a configuração do original — esportes, atributos, funcionamento e **as tabelas de preço inteiras** (as 3 fixas, as personalizadas, os nomes renomeados, quais dias e faixas cada uma tem e qual delas é a padrão). Antes da correção de 10/09/2026 a cópia nascia só com a tabela Padrão preenchida e Mensalista/Professor vazias, o que fazia o espaço copiado cotar R$ 0 para mensalista e professor. Se as tabelas não puderem ser copiadas, o espaço ainda é criado e o gestor recebe um aviso para revisá-las (em vez de o "Copiar" falhar e tentar criar um segundo espaço).
 - Atributos da quadra
   - Coberta
   - Descoberta
@@ -333,7 +342,14 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
 - **Detalhe do responsável** (`/dashboard/arenas/{id}/mensalistas/{athleteId}`):
   - KPIs: a receber, recebido, restante, **crédito** (saldo) e **saldo do programa de fidelidade** do atleta (mostra o nome da moeda configurada na arena, o saldo e a legenda "(Saldo Programa Fidelidade)").
   - **Recorrências:** quadra, dia, horário, valor/mês; toggle **Rateio**, botão **Reajustar valor** e ação **Encerrar** por recorrência. Quando há encerramento previsto, um destaque mostra o mês, a observação e o horário que ficará vago (para revenda).
-  - **Reajustar valor:** o gestor define o novo valor mensal e escolhe a vigência — **mês atual** (a cobrança deste mês passa a ser o novo valor) ou **mês seguinte** (o mês atual fica como está). O sistema assume o novo valor como o valor do plano a partir da vigência, reescreve as cobranças abertas já geradas (meses com rateio ou pagamento registrado são preservados e o gestor é avisado) e registra tudo num **Histórico de reajustes** (valor anterior → novo, vigência, observação, data) visível na própria recorrência.
+  - **Reajustar valor:** o gestor define o novo valor e escolhe entre **três vigências**, cada uma nomeando o mês de que se trata (corrigido em 11/09/2026):
+    - **Somente [mês]** — ajuste pontual, para um desconto combinado num mês específico. Muda só a cobrança daquele mês; **o valor do plano não é alterado** e os demais meses seguem como estavam.
+    - **De [mês] em diante** — novo valor do plano, já valendo para a cobrança do mês visualizado.
+    - **De [mês seguinte] em diante** — novo valor do plano; a cobrança do mês visualizado fica como está.
+
+    A vigência é ancorada no **mês que o gestor está vendo na tela**. Antes, "mês atual" significava o mês corrente do calendário: olhando outubro em setembro, o reajuste caía sobre setembro. Os rótulos passaram a nomear o mês justamente para não haver dúvida.
+
+    Nos dois escopos que mudam o plano, as cobranças abertas já geradas são reescritas da vigência em diante — respeitando a regra de cobrança do plano, de modo que uma recorrência por blocos continua custando menos em meses com menos jogos. Meses com rateio ou pagamento registrado são preservados e o gestor é avisado. Tudo fica no **Histórico de reajustes** (valor anterior → novo, escopo, vigência, observação, data) visível na própria recorrência.
   - **Mensalidade do mês:** sem rateio → 1 linha (devido / pago / restante) com **Registrar pagamento**; com rateio → uma linha por participante (valor devido, pago, crédito aplicado, data, status) com **Registrar pagamento** por pessoa.
   - **Registrar pagamento acima do devido:** o valor em dinheiro pode passar do valor da cobrança. Quando isso acontece, o modal pergunta se o gestor quer que o excedente vire **crédito**: **sim** → a cobrança fica quitada no valor exato e o excedente entra como saldo de crédito; **não** → o pagamento é registrado como está (acima do devido). Se a parcela for de um **participante avulso** (sem cadastro), o crédito é lançado para o **responsável pela recorrência**. O dinheiro total recebido entra no **Financeiro** da arena nos dois casos; o crédito lançado não gera lançamento de caixa (só é receita quando aplicado).
   - **Histórico de pagamentos:** todos os pagamentos de todas as competências — data, competência, participante, valor em dinheiro, valor em crédito, observação (paginado).
@@ -351,6 +367,72 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
   - O modal mostra, sem exigir cálculo do gestor, **quantas recorrências ainda cabem no mês corrente** a partir de hoje (data + intervalo) e as reservas que serão criadas neste mês (confirmadas) vs. a cadência dos próximos 2 meses (reservado).
   - Quando há tabela de preço além da Padrão, um seletor **Tabela de preço** (default = Mensalista) alimenta a **sugestão** de `valor/sessão` e de `valor mensal` — sempre editável.
   - **Primeira mensalidade proporcional:** se o mensalista começa no meio do mês, a `mensalidade` da competência de início é `valor/sessão × sessões restantes` (mês cheio ⇒ valor mensal). Reflete direto na tela de Mensalistas (valor do mês / restante) e nas Cobranças.
+
+### 5.13 Recorrência de mensalista com vários blocos (professor)
+
+- **Status:** Implementado (09/09/2026).
+- **Problema:** o cadastro pedia **um** dia da semana e **um** intervalo, em **um** espaço. Um professor que aluga terça 19h–21h, quinta 19h–21h e sábado 9h–11h precisava de três cadastros — e recebia três mensalidades separadas, o que quebra a gestão e a cobrança.
+- **Objetivo:** montar toda a agenda do professor em um cadastro só, com uma única mensalidade, vendo a disponibilidade real e o valor fechando em tempo real.
+
+**Como funciona (BookingModal → aba Mensal):**
+- **Grade de disponibilidade no lugar dos campos soltos.** A aba mostra a semana do espaço (dias × horas). O gestor clica nos horários livres; **horas seguidas viram um bloco só** ("Terça 19:00–21:00"). Pode marcar quantos dias e horários quiser, **inclusive em espaços diferentes**, no mesmo plano.
+- **Só é possível marcar horário livre.** Ocupado e fora do funcionamento vêm desabilitados, com o nome de quem ocupa na própria célula.
+- **Conflito numa ocorrência futura bloqueia o horário.** Como o plano gera reservas por 3 meses, um horário livre nesta semana pode colidir daqui a seis semanas. A grade sinaliza isso (faixa âmbar) e **não deixa selecionar** — a decisão é bloquear o bloco, não criar pela metade.
+- **Encontrar horas em outros espaços.** Cada espaço mostra quantas horas livres tem na semana. Ao passar por um horário, uma faixa lista **os outros espaços livres naquele mesmo horário**; um clique troca de espaço e já marca.
+- **Subtotal ao vivo.** O valor de cada bloco vem do servidor pela tabela de preço do espaço (respeitando faixas de horário — a hora das 20h pode custar mais que a das 9h). A tela soma horas/semana, valor/semana, reservas em mês cheio e a **mensalidade** sugerida.
+- **Tabela de preço por espaço, escolhida pelo gestor.** Como as tabelas são por espaço, o plano que usa dois espaços mostra dois seletores (default = Mensalista, quando existe). Não há desconto automático de professor nesta fase: o gestor escolhe a tabela.
+- **Valor sempre editável.** O campo "Valor mensal cobrado" vem preenchido pela soma da tabela e pode ser alterado para aplicar **desconto ou acréscimo** negociado. Uma vez editado à mão, a sugestão deixa de sobrescrever e a tela passa a mostrar quanto a tabela sugeria.
+- **A mensalidade acompanha o calendário (corrigido em 11/09/2026).** O preço da hora é fixo — é o da tabela de preço. O que varia é quantas vezes o dia da semana cai no mês. Um plano de quinta a R$ 100/h custa **R$ 500 num mês de 5 quintas e R$ 400 num de 4**, e o mês de estreia é proporcional ao que ainda cabe nele. Assim toda reserva do plano vale exatamente o preço de tabela, e o ano fecha em sessões × preço da hora, sem sobra nem falta. A tela mostra os dois valores que a fatura vai assumir antes de o gestor fechar o plano.
+- **O campo "Valor mensal cobrado" é o valor de um mês de referência** (o primeiro mês em que o plano roda inteiro). Editá-lo para aplicar desconto ou acréscimo reajusta todos os meses na mesma proporção.
+- **Primeira mensalidade proporcional por duração.** Com blocos de tamanhos diferentes, o pró-rata conta **minutos**, não sessões: perder um sábado de 2h pesa o dobro de perder uma terça de 1h.
+
+**Reflexo na tela de Mensalistas (5.12):**
+- Um plano com várias faixas passa a ser resumido no card como **"N horários · Xh por semana"**, em vez de mostrar apenas a primeira faixa (o que exibia 2h para um plano de 6h e fazia o valor parecer desproporcional).
+- Abrindo o card, aparece a seção **"Horários da recorrência"** com espaço, dia e faixa de cada bloco.
+- O aviso de encerramento passa a listar **todos** os horários liberados para revenda; antes anunciava só um.
+- Plano de uma faixa só (todos os atuais) continua exibido exatamente como antes.
+
+---
+
+### 5.14 Cancelar um jogo do mensalista (sem cancelar a recorrência)
+
+- **Status:** Implementado (11/09/2026).
+- **Problema:** o mensalista que avisava com antecedência que não ia a uma das sessões não tinha tratamento. A tela de detalhes da reserva recusava cancelar qualquer reserva de mensalista ("Gerencie via Mensalistas"), e cancelar pelo módulo de Mensalistas encerrava a recorrência inteira. Na prática o gestor ficava sem registro: ou deixava o horário ocupado, ou combinava o crédito por fora.
+- **Caso coberto:** ele comprou 4 quartas do mês, faltou à terceira e avisou antes. Quer remarcar em outro dia ou receber crédito.
+
+**Como funciona (Detalhes da reserva → "Cancelar este dia"):**
+- O botão aparece em reserva de mensalista que ainda não esteja cancelada — **inclusive já confirmada/paga**, que é justamente o caso em que o crédito faz sentido.
+- A confirmação diz, em destaque, que o cancelamento vale **somente para aquele jogo**: a recorrência segue ativa e a **mensalidade do mês não muda**. Mostra dia por extenso, faixa de horário, mensalista e espaço, para o gestor conferir antes de confirmar.
+- **Lançar crédito é opcional**, marcado por padrão. Desmarcado, apenas libera o horário.
+- **O valor vem pronto**, equivalente à hora reservada segundo a tabela de preço que vale para a mensalidade dele — e a tela diz qual tabela usou. Continua editável para um acerto negociado. Se o plano não tiver tabela de mensalista e a sugestão cair na tabela padrão do espaço, a tela avisa para o gestor conferir.
+- **A descrição já vem escrita:** "Crédito lançado referente a jogo não realizado do dia DD/MM/AAAA".
+
+**Reflexo em Mensalistas (5.12):**
+- O crédito entra no extrato do mensalista com um selo **"Jogo cancelado"**, ficando claro a que se refere mesmo meses depois, e passa a somar no saldo usado para abater mensalidades.
+- Um jogo cancelado gera **no máximo um** crédito — duplo clique ou reenvio não credita duas vezes.
+
+---
+
+### 5.15 Perfil do atleta na arena
+
+- **Status:** Implementado (12/09/2026).
+- **Problema:** não havia como saber, olhando o atleta, se ele é mensalista, professor ou cliente avulso — nem como fazer o sistema cotar automaticamente pela tabela certa.
+
+**Os três perfis**, em ordem de precedência:
+- **Professor** — é responsável por uma recorrência ativa cotada pela tabela Professor. Acumula com Mensalista (ele é as duas coisas), mas o que vale para preço é Professor.
+- **Mensalista** — é responsável por uma recorrência mensal ativa. Participante do rateio não conta: o perfil segue quem responde pela mensalidade.
+- **Cliente padrão** — só reservas avulsas, ou só participou de jogos de outros. É também o ponto de partida de quem acabou de se cadastrar.
+
+**Sugerido, nunca imposto.** Na tela do atleta, um cartão "Perfil na arena" mostra os papéis que o sistema detectou, marca o sugerido e deixa o gestor escolher outro. Quando ele escolhe, a tela passa a dizer o que o sistema sugeriria **e por quê** ("tem recorrência ativa cotada pela tabela Professor"), com um botão para voltar ao sugerido.
+
+**O perfil é por arena**, não do atleta: o mesmo atleta pode ser professor numa arena e avulso em outra.
+
+**Onde ele vale:** na criação de plano mensal, o seletor de tabela de preço já vem no papel do atleta — professor cai na tabela Professor do espaço. **Reserva avulsa não é afetada.** Em qualquer caso o seletor continua na tela e o valor segue editável.
+
+**Sobre os planos que já existem:** eles não registram qual tabela os originou, então nenhum é classificado como professor automaticamente — todos os responsáveis por plano ativo aparecem como Mensalista, e o gestor marca os professores à mão. Planos criados a partir de agora guardam a tabela escolhida e são classificados sozinhos.
+
+**Perfis futuros** (Conveniado, Cliente Fidelidade e outros que a arena queira criar) entram como novos papéis com tabela de preço própria.
+
 
 ---
 

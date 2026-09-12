@@ -1,4 +1,4 @@
-import type { DayConfig } from '@/modules/courts/components/DayScheduleConfig'
+import type { DayConfig } from '@/modules/courts/lib/day-schedule'
 import type {
   CourtPriceDay,
   CourtPriceTable,
@@ -14,6 +14,9 @@ export const DAY_NAMES = [
   'Sexta-feira',
   'Sábado',
 ]
+
+/** Rótulo curto para o card do dia na tira da semana. */
+export const DAY_SHORT_NAMES = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 
 /** Ordem de exibição no editor (segunda → domingo), como no `CourtForm`. */
 export const EDITOR_DAY_ORDER = [1, 2, 3, 4, 5, 6, 0]
