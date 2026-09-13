@@ -92,6 +92,7 @@ test('mensalista billing mutations use typed atomic RPCs behind server authoriza
   for (const rpcName of [
     'generate_mensalista_mensalidades_atomic',
     'configure_mensalista_rateio_atomic',
+    'remove_mensalista_rateio_participante_atomic',
     'register_mensalista_payment_atomic',
     'launch_mensalista_credit_atomic',
     'withdraw_mensalista_credit_atomic',
@@ -102,6 +103,7 @@ test('mensalista billing mutations use typed atomic RPCs behind server authoriza
 
   for (const schemaName of [
     'configureRateioSchema',
+    'removerParticipanteRateioSchema',
     'registrarPagamentoSchema',
     'lancarCreditoSchema',
     'retirarCreditoSchema',
@@ -115,9 +117,9 @@ test('mensalista billing mutations use typed atomic RPCs behind server authoriza
 
   assert.equal(
     source.match(/await assertArenaBackofficeAccess\(/g)?.length,
-    8
+    9
   )
-  assert.equal(source.match(/await requireAuthenticatedDbUser\(\)/g)?.length, 8)
+  assert.equal(source.match(/await requireAuthenticatedDbUser\(\)/g)?.length, 9)
   assert.doesNotMatch(source, /as unknown as RpcClient|type RpcClient/)
 
   for (const table of [

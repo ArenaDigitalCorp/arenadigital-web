@@ -835,6 +835,19 @@ export function BookingModal({
     );
   }, [valorMensal, blocosSelecionados, inicioVigencia]);
 
+  /** Só vale destacar "cobrado agora" quando esse valor realmente difere do
+   * mensal cheio — senão é ruído repetindo o mesmo número duas vezes. */
+  const mesAtualDivergeDoRecorrente =
+    resumoBlocos.ocorrenciasPrimeiroMes > 0 &&
+    Math.round(primeiraMensalidade * 100) !== Math.round((Number(valorMensal) || 0) * 100);
+
+  const proximoMesNome = useMemo(() => {
+    const nome = format(startOfMonth(addMonths(inicioVigencia, 1)), 'MMMM', {
+      locale: ptBR,
+    });
+    return nome.charAt(0).toUpperCase() + nome.slice(1);
+  }, [inicioVigencia]);
+
   const handleToggleSlot = (key: string) => {
     setBlocoSlots((prev) => {
       const next = new Set(prev);
@@ -1911,8 +1924,34 @@ export function BookingModal({
                     </div>
 
                     <div className="space-y-2">
+                      {resumoBlocos.horasSemana > 0 && resumoBlocos.ocorrenciasPrimeiroMes === 0 && (
+                        <div className="rounded-xl border border-arena-amber/40 bg-arena-inactive-pill-bg px-3 py-2 text-[11.5px] font-semibold text-arena-inactive-pill-fg">
+                          Nenhuma ocorrência cabe até o fim do mês. As reservas e a
+                          cobrança começam no mês que vem.
+                        </div>
+                      )}
+
+                      {mesAtualDivergeDoRecorrente && (
+                        <div className="space-y-0.5 rounded-2xl border-2 border-arena-button/50 bg-arena-button/5 p-4">
+                          <p className="text-[11px] font-bold uppercase tracking-wide text-arena-button">
+                            Cobrado agora · {format(inicioVigencia, 'dd/MM', { locale: ptBR })}–
+                            {format(fimDoMes(inicioVigencia), 'dd/MM', { locale: ptBR })}
+                          </p>
+                          <p className="text-2xl font-black text-arena-button">
+                            {fmtBrl(primeiraMensalidade)}
+                          </p>
+                          <p className="text-[11px] font-medium text-arena-navy-800/50">
+                            {resumoBlocos.ocorrenciasPrimeiroMes} reserva
+                            {resumoBlocos.ocorrenciasPrimeiroMes > 1 ? 's' : ''} neste mês ·
+                            valor proporcional ao mensal cheio
+                          </p>
+                        </div>
+                      )}
+
                       <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">
-                        Valor mensal cobrado (R$)
+                        {mesAtualDivergeDoRecorrente
+                          ? `A partir de ${proximoMesNome} (R$)`
+                          : 'Valor mensal cobrado (R$)'}
                       </Label>
                       <div className="relative">
                         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-arena-navy-800/40 font-bold text-sm">
@@ -1923,38 +1962,21 @@ export function BookingModal({
                           min={0}
                           value={valorMensal}
                           onChange={(e) => setValorMensal(e.target.value)}
-                          className="pl-10 h-14 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-xl font-bold text-arena-navy-800"
+                          className={cn(
+                            'pl-10 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-xl font-bold text-arena-navy-800',
+                            mesAtualDivergeDoRecorrente ? 'h-11' : 'h-14'
+                          )}
                         />
                       </div>
                       <p className="text-[11px] font-medium text-arena-navy-800/45">
                         {valorMensalEditadoManualmente
                           ? `Ajustado à mão — a tabela sugeria ${fmtBrl(resumoBlocos.valorMesCheio)}.`
                           : 'Preenchido pela tabela. Edite para aplicar desconto ou acréscimo.'}
-                        {resumoBlocos.variacaoMensal.length > 1 &&
-                          ' É o valor de um mês de referência; meses com menos reservas são cobrados proporcionalmente.'}
+                        {mesAtualDivergeDoRecorrente
+                          ? ' Valor dos meses seguintes; meses com menos reservas são cobrados proporcionalmente.'
+                          : resumoBlocos.variacaoMensal.length > 1 &&
+                            ' É o valor de um mês de referência; meses com menos reservas são cobrados proporcionalmente.'}
                       </p>
-
-                      {resumoBlocos.horasSemana > 0 && (
-                        <div className="rounded-xl border border-arena-amber/40 bg-arena-inactive-pill-bg px-3 py-2 text-[11.5px] font-semibold text-arena-inactive-pill-fg">
-                          {resumoBlocos.ocorrenciasPrimeiroMes > 0 ? (
-                            <>
-                              1ª mensalidade proporcional (
-                              {format(inicioVigencia, 'dd/MM', { locale: ptBR })}–
-                              {format(fimDoMes(inicioVigencia), 'dd/MM', { locale: ptBR })}
-                              ):{' '}
-                              <span className="font-mono">
-                                {fmtBrl(primeiraMensalidade)}
-                              </span>{' '}
-                              · {resumoBlocos.ocorrenciasPrimeiroMes} reservas
-                            </>
-                          ) : (
-                            <>
-                              Nenhuma ocorrência cabe até o fim do mês. As reservas e a
-                              cobrança começam no mês que vem.
-                            </>
-                          )}
-                        </div>
-                      )}
                     </div>
                   </div>
                 </>
