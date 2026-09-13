@@ -63,6 +63,11 @@ export const reajustarValorSchema = z.object({
   planoId: uuidSchema,
   operationId: uuidSchema,
   novoValor: z.number().finite().min(0).max(100_000_000),
-  escopo: z.enum(['mes_atual', 'mes_seguinte']),
+  escopo: z.enum(['mes_atual', 'mes_seguinte', 'somente_mes']),
+  /**
+   * Competência que o gestor está vendo na tela (YYYY-MM-01). É a âncora da
+   * vigência: "mês atual" significa ESTE mês, não o mês do relógio do servidor.
+   */
+  competencia: z.string().regex(/^\d{4}-\d{2}-01$/),
   observacao: z.string().trim().max(400).nullable(),
 })

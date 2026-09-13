@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { addMonths, format, parseISO } from 'date-fns'
+import { ptBR } from 'date-fns/locale'
 import { Loader2 } from 'lucide-react'
 import {
   Dialog,
@@ -27,9 +29,11 @@ interface Props {
   valorAtual: number
   /** Valor total da mensalidade do mês visualizado (se já gerada). */
   valorMesAtual: number | null
+  /** Mês que a tela está exibindo, em YYYY-MM-01. Âncora da vigência. */
+  competencia: string
 }
 
-type Escopo = 'mes_atual' | 'mes_seguinte'
+type Escopo = 'somente_mes' | 'mes_atual' | 'mes_seguinte'
 
 export function ReajustarValorModal({
   open,
@@ -40,6 +44,7 @@ export function ReajustarValorModal({
   planoLabel,
   valorAtual,
   valorMesAtual,
+  competencia,
 }: Props) {
   const [valor, setValor] = useState(String(valorAtual || ''))
   const [escopo, setEscopo] = useState<Escopo>('mes_seguinte')
@@ -53,6 +58,14 @@ export function ReajustarValorModal({
       setObs('')
     }
   }, [open, valorAtual])
+
+  // Os rótulos nomeiam o mês. "Mês atual" era lido como "o mês que estou vendo"
+  // e o servidor entendia "o mês do calendário" — olhando outubro em setembro,
+  // o reajuste caía em setembro. Com o nome na tela não há como confundir.
+  const ancoraDate = parseISO(competencia || '1970-01-01')
+  const nomeMes = (d: Date) => format(d, "MMMM 'de' yyyy", { locale: ptBR })
+  const mesAncora = nomeMes(ancoraDate)
+  const mesSeguinte = nomeMes(addMonths(ancoraDate, 1))
 
   const novo = Number(valor.replace(',', '.'))
   const invalido = !Number.isFinite(novo) || novo < 0
@@ -71,6 +84,7 @@ export function ReajustarValorModal({
         operationId: crypto.randomUUID(),
         novoValor: Math.round(novo * 100) / 100,
         escopo,
+        competencia,
         observacao: obs.trim() || null,
       })
       if (!res.success || !res.data) {
@@ -80,7 +94,11 @@ export function ReajustarValorModal({
       const d = res.data
       const ignoradas = d.ignoradasRateio + d.ignoradasPagamento
       toast.success(
-        `Valor reajustado para ${formatCurrency(d.valorNovo)} a partir de ${d.competenciaVigencia}.` +
+        (d.escopo === 'somente_mes'
+          ? `Cobrança de ${mesAncora} ajustada para ${formatCurrency(d.valorNovo)}. O plano segue em ${formatCurrency(valorAtual)}/mês.`
+          : `Plano reajustado para ${formatCurrency(d.valorNovo)}/mês, de ${
+              d.escopo === 'mes_seguinte' ? mesSeguinte : mesAncora
+            } em diante.`) +
           (ignoradas > 0
             ? ` ${ignoradas} ${ignoradas === 1 ? 'mês' : 'meses'} com rateio/pagamento não ${ignoradas === 1 ? 'foi ajustado' : 'foram ajustados'} automaticamente.`
             : '')
@@ -123,7 +141,7 @@ export function ReajustarValorModal({
 
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-arena-navy-800/60 uppercase">
-              Novo valor mensal
+              {escopo === 'somente_mes' ? `Valor da cobrança de ${mesAncora}` : 'Novo valor mensal'}
             </label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-arena-navy-800/40">
@@ -147,32 +165,66 @@ export function ReajustarValorModal({
             <label className="text-xs font-bold text-arena-navy-800/60 uppercase">
               Vigência
             </label>
-            <div className="flex gap-1 rounded-xl bg-slate-100 p-1">
+            <div className="grid gap-1.5">
               {(
                 [
-                  ['mes_atual', 'Mês atual'],
-                  ['mes_seguinte', 'Mês seguinte'],
-                ] as [Escopo, string][]
-              ).map(([value, label]) => (
+                  [
+                    'somente_mes',
+                    `Somente ${mesAncora}`,
+                    'Ajuste pontual: muda só a cobrança deste mês. O valor do plano continua o mesmo nos outros meses.',
+                  ],
+                  [
+                    'mes_atual',
+                    `De ${mesAncora} em diante`,
+                    'Novo valor do plano, já valendo para a cobrança deste mês.',
+                  ],
+                  [
+                    'mes_seguinte',
+                    `De ${mesSeguinte} em diante`,
+                    `Novo valor do plano. A cobrança de ${mesAncora} fica como está.`,
+                  ],
+                ] as [Escopo, string, string][]
+              ).map(([value, label, ajuda]) => (
                 <button
                   key={value}
                   type="button"
                   onClick={() => setEscopo(value)}
+                  aria-pressed={escopo === value}
                   className={cn(
-                    'flex-1 rounded-lg py-2 text-sm font-bold transition-colors',
+                    'flex items-start gap-2.5 rounded-xl border p-2.5 text-left transition-colors',
                     escopo === value
-                      ? 'bg-white text-arena-button shadow-sm'
-                      : 'text-arena-navy-800/50 hover:text-arena-navy-800'
+                      ? 'border-arena-button bg-arena-button/[0.07]'
+                      : 'border-slate-200 hover:border-arena-navy-800/25'
                   )}
                 >
-                  {label}
+                  <span
+                    className={cn(
+                      'mt-0.5 flex h-4 w-4 flex-none items-center justify-center rounded-full border-2',
+                      escopo === value ? 'border-arena-button' : 'border-slate-300'
+                    )}
+                  >
+                    {escopo === value && (
+                      <span className="h-1.5 w-1.5 rounded-full bg-arena-button" />
+                    )}
+                  </span>
+                  <span className="min-w-0">
+                    <span
+                      className={cn(
+                        'block text-[13px] font-bold capitalize',
+                        escopo === value ? 'text-arena-button' : 'text-arena-navy-800'
+                      )}
+                    >
+                      {label}
+                    </span>
+                    <span className="block text-[11px] leading-snug text-arena-navy-800/50">
+                      {ajuda}
+                    </span>
+                  </span>
                 </button>
               ))}
             </div>
             <p className="text-[11px] text-arena-navy-800/45">
-              {escopo === 'mes_atual'
-                ? 'A cobrança deste mês passa a ser o novo valor. Meses com rateio ou pagamento já registrado não são alterados.'
-                : 'A cobrança deste mês fica como está; o novo valor vale do próximo mês em diante.'}
+              Meses com rateio ou pagamento já registrado não são alterados.
             </p>
           </div>
 

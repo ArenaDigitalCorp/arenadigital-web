@@ -9,6 +9,7 @@ const base = {
   operationId: '33333333-3333-4333-8333-333333333333',
   novoValor: 260,
   escopo: 'mes_seguinte',
+  competencia: '2026-10-01',
   observacao: null,
 }
 
@@ -19,6 +20,21 @@ test('reajustarValorSchema accepts a valid payload', () => {
       .data.observacao,
     'ajuste'
   )
+})
+
+test('reajustarValorSchema aceita o ajuste pontual de um mês', () => {
+  assert.equal(
+    reajustarValorSchema.safeParse({ ...base, escopo: 'somente_mes' }).success,
+    true
+  )
+})
+
+test('a competência é obrigatória e tem que ser o dia 1º', () => {
+  // É a âncora da vigência: sem ela o servidor voltaria a decidir pelo relógio.
+  const { competencia: _omitida, ...semCompetencia } = base
+  assert.equal(reajustarValorSchema.safeParse(semCompetencia).success, false)
+  assert.equal(reajustarValorSchema.safeParse({ ...base, competencia: '2026-10' }).success, false)
+  assert.equal(reajustarValorSchema.safeParse({ ...base, competencia: '2026-10-15' }).success, false)
 })
 
 test('reajustarValorSchema rejects bad escopo, negative value and non-uuid ids', () => {

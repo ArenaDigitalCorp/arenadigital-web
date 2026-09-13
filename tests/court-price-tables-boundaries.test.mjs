@@ -10,6 +10,8 @@ const priceTableActions = read('../src/modules/courts/actions/priceTableActions.
 const bookingModal = read('../src/modules/bookings/components/BookingModal.tsx')
 const courtForm = read('../src/modules/courts/components/CourtForm.tsx')
 const priceTablesConfig = read('../src/modules/courts/components/PriceTablesConfig.tsx')
+const dayCard = read('../src/modules/courts/components/DayCard.tsx')
+const dayPanel = read('../src/modules/courts/components/DaySchedulePanel.tsx')
 
 // O repo do banco é irmão; em CI do web ele pode não estar presente.
 const DB_ROOT = fileURLToPath(new URL('../../../arenadigital-db/', import.meta.url))
@@ -31,6 +33,7 @@ test('toda server action de tabela de preço passa por autorização de arena', 
       'listCourtPriceTableOptionsAction',
       'listCourtPriceTablesAction',
       'quoteCourtPriceAction',
+      'quoteMonthlyBlocksAction',
       'saveDraftPriceTablesAction',
       'setDefaultCourtPriceTableAction',
       'upsertCourtPriceTableAction',
@@ -44,9 +47,11 @@ test('toda server action de tabela de preço passa por autorização de arena', 
   assert.equal(asserts, exported.length, 'uma checagem de arena por action')
 
   // Toda action que recebe courtId também valida que ele pertence à arena.
+  // quoteMonthlyBlocksAction recebe blocos de vários espaços e valida cada um
+  // deles em laço — daí a nona ocorrência.
   assert.equal(
     priceTableActions.match(/await assertCourtAccess\(/g)?.length,
-    8,
+    9,
     'assertCourtAccess em todas as actions com courtId'
   )
 })
@@ -126,9 +131,12 @@ test('o BookingModal só sugere: o valor segue editável e há "usar sugerido"',
 })
 
 test('o valor mensal sugerido também não sobrescreve edição do gestor', () => {
+  // A recorrência passou a ser N blocos, então a sugestão vem do somatório da
+  // grade — mas a garantia é a mesma: só preenche campo vazio ou a própria
+  // sugestão anterior, nunca um valor que o gestor digitou.
   assert.match(
     bookingModal,
-    /prev === '' \|\| prev === lastAutoValorMensal\.current/
+    /prev === '' \|\| prev === lastAutoValorBlocos\.current/
   )
   assert.match(bookingModal, /valor_mensal: Number\(valorMensal\)/)
 })
@@ -151,12 +159,20 @@ test('o cadastro exige ao menos um dia na tabela Padrão', () => {
   assert.match(courtForm, /draftTables\.map\(\(t\) => \(\{/)
 })
 
+/**
+ * Ramo `if (initialData) { … }` do `onSubmit`. O `} else {` tem que ser buscado
+ * a partir do início do ramo: há outro antes dele no arquivo, e ancorar no
+ * primeiro devolvia string vazia (asserção que passava sem testar nada).
+ */
+function editBranch({ stripComments = false } = {}) {
+  const start = courtForm.indexOf('if (initialData) {')
+  const branch = courtForm.slice(start, courtForm.indexOf('} else {', start))
+  assert.ok(branch.includes('updateCourtAction'), 'o ramo de edição foi localizado')
+  return stripComments ? branch.replace(/^\s*\/\/.*$/gm, '') : branch
+}
+
 test('a edição não regrava day_config pelo formulário do espaço', () => {
-  const editBranch = courtForm.slice(
-    courtForm.indexOf('if (initialData) {'),
-    courtForm.indexOf('} else {')
-  )
-  assert.doesNotMatch(editBranch, /day_config/)
+  assert.doesNotMatch(editBranch({ stripComments: true }), /day_config/)
   assert.match(courtForm, /const finalInput = \{ \.\.\.input, image_url: imageUrl \}/)
 })
 
@@ -169,10 +185,44 @@ test('o editor em rascunho não fala com o servidor', () => {
   for (const guard of draftGuards) assert.match(priceTablesConfig, guard)
 })
 
+// ── Um único botão de salvar no formulário do espaço ──────────────────────
+
+test('o editor persistido não tem botão próprio de salvar', () => {
+  assert.doesNotMatch(priceTablesConfig, /Salvar tabela/)
+  // O único submit do formulário continua sendo o do próprio form.
+  const submits = courtForm.match(/type="submit"/g) ?? []
+  assert.equal(submits.length, 1, 'cadastro e edição salvam por um botão só')
+})
+
+test('o submit da edição grava as tabelas de preço junto com o espaço', () => {
+  assert.match(priceTablesConfig, /export type PriceTablesHandle/)
+  assert.match(priceTablesConfig, /saveAll: \(\) => saveDirtyTables\(\)/)
+  assert.match(courtForm, /ref=\{priceTablesRef\}/)
+
+  const branch = editBranch()
+  assert.match(branch, /priceTablesRef\.current\?\.saveAll\(\)/)
+  assert.match(branch, /tablesSaved === false/, 'falha na gravação não navega para fora')
+})
+
+test('operação estrutural grava as pendências antes de recarregar do servidor', () => {
+  // handleCreate/handleSetDefault/handleDelete chamam load(), que substitui o
+  // estado pelo do servidor — sem gravar antes, a edição na tela some.
+  const guards = priceTablesConfig.match(/if \(!\(await saveDirtyTables\((active\.id)?\)\)\) return/g) ?? []
+  assert.equal(guards.length, 3, 'criar, definir padrão e excluir preservam o que está na tela')
+  assert.match(priceTablesConfig, /saveDirtyTables\(active\.id\)/, 'a tabela excluída não é gravada antes')
+})
+
+test('o gestor vê quais tabelas têm alteração pendente', () => {
+  assert.match(priceTablesConfig, /const dirtyCount = tables\.filter\(\(t\) => t\.dirty\)\.length/)
+  assert.match(priceTablesConfig, /ainda não salvas/)
+  assert.match(priceTablesConfig, /Salvar Alterações<\/strong>/)
+})
+
 test('as facilidades de preenchimento continuam disponíveis', () => {
   assert.match(priceTablesConfig, /Copiar faixas da tabela Padrão/)
   assert.match(priceTablesConfig, /Limpar tabela/)
-  assert.match(priceTablesConfig, /onReplicate=\{\(\) => handleReplicate\(day\.diaSemana\)\}/)
+  assert.match(priceTablesConfig, /Replicar para todos os dias/)
+  assert.match(priceTablesConfig, /onClick=\{handleReplicate\}/)
   assert.match(priceTablesConfig, /days > 0 \? `\$\{days\}d` : 'vazia'/)
 })
 
@@ -184,6 +234,7 @@ const MIGRATIONS = [
   '20260904140000_mensalista_prorata_first_month.sql',
   '20260904150000_mensalista_reajuste_valor.sql',
   '20260904160000_mensalista_payment_overpay_credit.sql',
+  '20260910120000_court_price_tables_reserved_names.sql',
 ]
 
 test('o repositório web não carrega migrations', { skip: false }, () => {
@@ -338,3 +389,229 @@ test(
     assert.match(overpay, /SET status = 'confirmed',/)
   }
 )
+
+// ── Semana em cards: card + painel, edição em lote, rótulos ───────────────
+
+test('o dia vira card de resumo e o editor vira painel separado', () => {
+  // A matemática saiu inteira para a lib — o componente não recalcula nada.
+  assert.match(dayCard, /summarizeDay/)
+  assert.doesNotMatch(dayCard, /parseHHMM|customPrices/, 'o card não faz conta própria')
+  assert.match(dayPanel, /from "@\/modules\/courts\/lib\/day-schedule"/)
+
+  // O card carrega o que antes exigia abrir o dia.
+  for (const info of [/slots/, /tierCount/, /minPrice/, /overnight/, /segments/]) {
+    assert.match(dayCard, info)
+  }
+  assert.match(dayCard, /onToggle/, 'liga/desliga sem abrir o painel')
+})
+
+test('a tira mostra os 7 dias, de segunda a domingo', () => {
+  assert.match(priceTablesConfig, /EDITOR_DAY_ORDER\.map\(\(dow\) => \{/)
+  assert.match(priceTablesConfig, /<DayCard/)
+  assert.match(priceTablesConfig, /lg:grid-cols-7/)
+})
+
+test('o interruptor do card não dispara a seleção do card', () => {
+  assert.match(
+    dayCard,
+    /onClick=\{\(e\) => e\.stopPropagation\(\)\}/,
+    'clicar no switch não pode também trocar o dia em edição'
+  )
+  // card com controle interativo dentro: div[role=button], nunca <button>
+  assert.match(dayCard, /role="button"/)
+  assert.doesNotMatch(dayCard, /<button/, 'botão dentro de botão é HTML inválido')
+})
+
+test('o card responde ao teclado', () => {
+  assert.match(dayCard, /onKeyDown/)
+  assert.match(dayCard, /e\.key === 'Enter' \|\| e\.key === ' '/)
+  assert.match(dayCard, /tabIndex=\{0\}/)
+  assert.match(dayCard, /aria-label=/)
+})
+
+test('a seleção nunca fica vazia', () => {
+  // desmarcar o último dia selecionado mantém a seleção anterior
+  assert.match(
+    priceTablesConfig,
+    /return next\.length > 0 \? next : prev/,
+    'sem isso o painel ficaria sem dia para editar'
+  )
+})
+
+test('editar em lote não abre nem fecha dia por conta própria', () => {
+  assert.match(
+    priceTablesConfig,
+    /dayConfigToCourtPriceDay\(d\.diaSemana, nextConfig\), enabled: d\.enabled/,
+    'quem abre e fecha o dia é o interruptor, não a edição de preço'
+  )
+  assert.match(dayPanel, /batchDays/)
+  assert.match(dayPanel, /Estas configurações valem também para/)
+})
+
+test('Replicar não fica disponível quando não faz sentido', () => {
+  assert.match(
+    priceTablesConfig,
+    /disabled=\{!canEditActive \|\| batchMode \|\| !leadDay\?\.enabled\}/,
+    'replicar dia fechado ou em lote copiaria o que o gestor não vê'
+  )
+})
+
+test('o painel abre num dia que aquela tabela realmente usa', () => {
+  assert.match(priceTablesConfig, /const firstOpen = EDITOR_DAY_ORDER\.find\(\(dow\) => dayOf\(dow\)\?\.enabled\)/)
+  // re-escolhe ao trocar de tabela, mas só quando o dia atual está fechado nela
+  assert.match(priceTablesConfig, /autoPickedFor !== activeTableKey/)
+  assert.match(priceTablesConfig, /if \(!dayOf\(selectedDows\[0\]\)\?\.enabled\)/)
+})
+
+test('o rascunho de horário digitado não é apagado por re-render do pai', () => {
+  // A config chega como objeto novo a cada render; comparar por valor evita
+  // limpar o input enquanto o gestor digita.
+  assert.match(dayPanel, /const configSignature = \[/)
+  assert.match(dayPanel, /lastSignature !== configSignature/)
+  assert.doesNotMatch(dayPanel, /useEffect/, 'setState em efeito foi trocado por ajuste no render')
+})
+
+test('os rótulos dizem a que se referem', () => {
+  assert.match(priceTablesConfig, /Nova tabela de Preços/)
+  assert.match(priceTablesConfig, /nome: 'Nova tabela de preços'/)
+  assert.match(priceTablesConfig, /placeholder="Nome da tabela de preços"/)
+  assert.match(priceTablesConfig, /Usar como tabela padrão/)
+  assert.match(priceTablesConfig, /Excluir tabela/)
+  assert.match(priceTablesConfig, /Limite de \$\{MAX_PRICE_TABLES_PER_COURT\} tabelas de preços por espaço/)
+  assert.match(dayPanel, /Adicionar faixa de horário/)
+  assert.match(dayPanel, /Faixas de preço por horário/)
+  assert.match(dayPanel, /Valor por hora/)
+  // horários com rótulo explícito em vez de "Início"/"Fim" soltos
+  assert.match(dayPanel, /Abre às/)
+  assert.match(dayPanel, /Fecha às/)
+  assert.match(dayPanel, /Começa às/)
+  assert.match(dayPanel, /Termina às/)
+})
+
+test('todo controle de tabela vive no cabeçalho da tabela ativa', () => {
+  const header = priceTablesConfig.slice(
+    priceTablesConfig.indexOf('Cabeçalho da tabela ativa'),
+    priceTablesConfig.indexOf('Tira da semana')
+  )
+  assert.ok(header.length > 0, 'cabeçalho localizado')
+  for (const control of [
+    /Nome da tabela de preços/,
+    /Usar como tabela padrão/,
+    /Copiar faixas da tabela Padrão/,
+    /Limpar tabela/,
+    /Excluir tabela/,
+  ]) {
+    assert.match(header, control)
+  }
+})
+
+test('as travas de quem pode fazer o quê seguem as de antes', () => {
+  // criar/definir padrão/excluir: só no modo persistido, com id
+  assert.match(priceTablesConfig, /\{!isDraft && active\.id && !active\.isDefault && \(/)
+  assert.match(
+    priceTablesConfig,
+    /!isDraft && active\.id && !isReservedPriceTableKind\(active\.tipo\) && !active\.isDefault/,
+    'Padrão, Mensalista e Professor continuam sem excluir'
+  )
+  assert.match(priceTablesConfig, /disabled=\{!persisted \|\| busy \|\| tables\.length >= MAX_PRICE_TABLES_PER_COURT\}/)
+})
+
+test('toda tabela entra no editor por toEditor (garante os 7 dias do payload)', () => {
+  // `saveDirtyTables` faz `EDITOR_DAY_ORDER.map(dow => editorDays.find(...)!)`.
+  // O `!` só é seguro porque toda origem passa por toEditor → toEditorDays.
+  assert.match(priceTablesConfig, /function toEditor\(table: CourtPriceTable\): EditorTable \{\s*\n\s*return \{ \.\.\.table, editorDays: toEditorDays\(table\.days\)/)
+  assert.match(priceTablesConfig, /setLoaded\(\[toEditor\(fallback\)\]\)/, 'o fallback legado também')
+  assert.match(priceTablesConfig, /const editors = res\.data\.map\(toEditor\)/)
+  assert.match(priceTablesConfig, /\(draftTables \?\? \[\]\)\.map\(toEditor\)/, 'e o rascunho do cadastro')
+})
+
+// ── Padrão/Mensalista/Professor: papel fixo, nome fixo ────────────────────
+
+test('o nome das 3 reservadas não é editável na tela', () => {
+  const header = priceTablesConfig.slice(
+    priceTablesConfig.indexOf('Cabeçalho da tabela ativa'),
+    priceTablesConfig.indexOf('Tira da semana')
+  )
+  assert.match(header, /isReservedPriceTableKind\(active\.tipo\) \? \(/, 'reservada não recebe input')
+  assert.match(header, /<Lock className/, 'o cadeado explica por que não dá para editar')
+  assert.match(header, /nome fixo/, 'e o title diz o motivo')
+  // o input de nome continua existindo, só que no ramo das personalizadas
+  assert.match(header, /placeholder="Nome da tabela de preços"/)
+})
+
+test('o servidor ignora rename de reservada, não confia na tela', () => {
+  assert.match(
+    priceTableActions,
+    /\.\.\.\(isReservedPriceTableKind\(current\.tipo\) \? \{\} : \{ nome: parsed\.nome \}\)/,
+    'upsert não pode gravar nome de tabela reservada'
+  )
+  assert.match(
+    priceTableActions,
+    /if \(nome && !isReservedPriceTableKind\(draft\.tipo\)\)/,
+    'o cadastro em rascunho também'
+  )
+  // criar tabela nova só produz custom — nunca um papel reservado
+  assert.match(priceTableActions, /tipo: 'custom',/)
+})
+
+test('`tipo` é a chave de identificação do papel, não o nome', () => {
+  const types = read('../src/modules/courts/types/price-table.types.ts')
+  assert.match(types, /RESERVED_PRICE_TABLE_KINDS[\s\S]{0,120}'padrao',\s*\n\s*'mensalista',\s*\n\s*'professor',/)
+  assert.match(types, /export function isReservedPriceTableKind/)
+})
+
+test('o banco recusa o rename mesmo se o web tentar', { skip: !hasDbRepo }, () => {
+  const sql = readMigration('20260910120000_court_price_tables_reserved_names.sql')
+
+  assert.match(
+    sql,
+    /OLD\.tipo <> 'custom' AND NEW\.nome IS DISTINCT FROM OLD\.nome[\s\S]{0,160}RAISE EXCEPTION/,
+    'guard de nome ausente'
+  )
+  // as regras que já existiam continuam no guard recriado
+  assert.match(sql, /nao mudam de tipo/)
+  assert.match(sql, /nao pode virar tipo reservado/)
+  assert.match(sql, /Limite de 5 tabelas de preco por espaco/)
+
+  // o índice de lookup por perfil está documentado no schema
+  assert.match(sql, /COMMENT ON COLUMN public\.court_price_tables\.tipo IS/)
+  assert.match(sql, /COMMENT ON INDEX public\.court_price_tables_one_reserved_type_per_court IS/)
+  assert.match(sql, /WHERE court_id = \$1 AND tipo = \$2/, 'documenta como resolver pelo perfil')
+
+  // ── Normalização dos nomes existentes ──────────────────────────────────
+  // As três reservadas passam a ter o nome canônico.
+  for (const [tipo, nome] of [
+    ['padrao', 'Padrão'],
+    ['mensalista', 'Mensalista'],
+    ['professor', 'Professor'],
+  ]) {
+    assert.match(
+      sql,
+      new RegExp(`SET nome = '${nome}'\\s*\\n\\s*WHERE tipo = '${tipo}' AND nome IS DISTINCT FROM '${nome}'`),
+      `normalização de ${tipo} ausente`
+    )
+  }
+
+  // O nome canônico preso numa personalizada é liberado antes, senão o UPDATE
+  // colide com o índice único (court_id, lower(nome)).
+  assert.match(sql, /lower\(btrim\(t\.nome\)\) IN \('padrão', 'mensalista', 'professor'\)/)
+  assert.match(sql, /\(personalizada\)/)
+  assert.match(sql, /WHILE EXISTS \(/, 'e o nome liberado também precisa ser único')
+})
+
+test('a normalização roda antes do guard que a proibiria', { skip: !hasDbRepo }, () => {
+  const sql = readMigration('20260910120000_court_price_tables_reserved_names.sql')
+
+  const dropTrigger = sql.indexOf('DROP TRIGGER IF EXISTS court_price_tables_guard')
+  const update = sql.indexOf("SET nome = 'Padrão'")
+  const guardRule = sql.indexOf('NEW.nome IS DISTINCT FROM OLD.nome')
+  const createTrigger = sql.indexOf('CREATE TRIGGER court_price_tables_guard')
+
+  assert.ok(dropTrigger !== -1 && update !== -1 && guardRule !== -1 && createTrigger !== -1)
+  assert.ok(
+    dropTrigger < update,
+    'o trigger antigo tem que sair antes do UPDATE, senão a regra nova barra a própria normalização'
+  )
+  assert.ok(update < guardRule, 'a regra de nome entra depois de os dados já estarem normalizados')
+  assert.ok(guardRule < createTrigger, 'e o trigger só volta com a função já substituída')
+})

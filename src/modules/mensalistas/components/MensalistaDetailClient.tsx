@@ -19,6 +19,7 @@ import {
   Star,
   TrendingUp,
   Wallet,
+  CalendarX2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -50,12 +51,21 @@ import { EncerramentoModal } from './EncerramentoModal'
 import { ReajustarValorModal } from './ReajustarValorModal'
 import type {
   CobrancaRow,
+  CreditoRow,
   MensalidadeRow,
   MensalistaDetalhe,
   RecorrenciaResumo,
 } from '@/modules/mensalistas/types/mensalista.types'
 
 const DIAS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+
+/**
+ * `booking_id` (reserva cancelada que gerou o crédito) é aditivo e ainda não
+ * está em `supabase.types.ts` — regenerado no fim da Fase 2.
+ */
+function creditoBookingId(credito: CreditoRow): string | null {
+  return (credito as CreditoRow & { booking_id?: string | null }).booking_id ?? null
+}
 
 const CREDITO_TIPO_LABEL: Record<string, string> = {
   lancamento: 'Lançamento',
@@ -422,6 +432,16 @@ export function MensalistaDetailClient({
         {recorrenciasOrdenadas.map(({ rec, status }) => {
           const p = rec.plano
           const horario = `${p.horario_inicio.slice(0, 5)} às ${p.horario_fim.slice(0, 5)}`
+          const blocos = [...(p.blocos ?? [])].sort(
+            (a, b) =>
+              a.dia_semana - b.dia_semana ||
+              a.horario_inicio.localeCompare(b.horario_inicio)
+          )
+          const horasSemana = blocos.reduce((total, bloco) => {
+            const [hi] = bloco.horario_inicio.split(':').map(Number)
+            const [hf] = bloco.horario_fim.split(':').map(Number)
+            return total + Math.max(0, hf - hi)
+          }, 0)
           const m = rec.mensalidade
           const isOpen = expandedPlanoIds.has(p.id)
           const valorMesAtual = m ? Number(m.valor_total) : Number(p.valor_mensal)
@@ -449,18 +469,30 @@ export function MensalistaDetailClient({
                       isOpen && 'rotate-180'
                     )}
                   />
-                  <span className="flex items-center gap-1.5 font-bold text-arena-navy-800">
-                    <MapPin className="h-4 w-4 text-arena-navy-800/30" />
-                    {(p.court as { name?: string } | null)?.name ?? '—'}
-                  </span>
-                  <span className="flex items-center gap-1.5 text-arena-navy-800/70">
-                    <Calendar className="h-4 w-4 text-arena-navy-800/30" />
-                    {DIAS[p.dia_semana]}
-                  </span>
-                  <span className="flex items-center gap-1.5 text-arena-navy-800/70">
-                    <Clock className="h-4 w-4 text-arena-navy-800/30" />
-                    {horario}
-                  </span>
+                  {blocos.length > 1 ? (
+                    /* Recorrência com várias faixas: o cabeçalho resume, e as
+                       faixas aparecem uma a uma logo abaixo. Mostrar só
+                       `p.dia_semana` esconderia o resto da agenda. */
+                    <span className="flex items-center gap-1.5 font-bold text-arena-navy-800">
+                      <Calendar className="h-4 w-4 text-arena-navy-800/30" />
+                      {blocos.length} horários · {horasSemana}h por semana
+                    </span>
+                  ) : (
+                    <>
+                      <span className="flex items-center gap-1.5 font-bold text-arena-navy-800">
+                        <MapPin className="h-4 w-4 text-arena-navy-800/30" />
+                        {(p.court as { name?: string } | null)?.name ?? '—'}
+                      </span>
+                      <span className="flex items-center gap-1.5 text-arena-navy-800/70">
+                        <Calendar className="h-4 w-4 text-arena-navy-800/30" />
+                        {DIAS[p.dia_semana]}
+                      </span>
+                      <span className="flex items-center gap-1.5 text-arena-navy-800/70">
+                        <Clock className="h-4 w-4 text-arena-navy-800/30" />
+                        {horario}
+                      </span>
+                    </>
+                  )}
                   <span className="font-bold text-arena-button">
                     {formatCurrency(valorMesAtual)}
                     {isProporcional ? ' este mês' : '/mês'}
@@ -570,13 +602,56 @@ export function MensalistaDetailClient({
 
               {isOpen && (
                 <div className="px-5 pb-5 space-y-4 border-t border-arena-navy-800/5 pt-4">
+                  {blocos.length > 1 && (
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-bold uppercase tracking-wider text-arena-navy-800/40">
+                        Horários da recorrência
+                      </p>
+                      {blocos.map((bloco) => (
+                        <div
+                          key={bloco.id}
+                          className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-arena-navy-800/10 bg-white px-3 py-2 text-sm"
+                        >
+                          <span className="flex items-center gap-1.5 font-bold text-arena-navy-800">
+                            <MapPin className="h-4 w-4 text-arena-navy-800/30" />
+                            {bloco.court?.name ?? '—'}
+                          </span>
+                          <span className="flex items-center gap-1.5 text-arena-navy-800/70">
+                            <Calendar className="h-4 w-4 text-arena-navy-800/30" />
+                            {DIAS[bloco.dia_semana]}
+                          </span>
+                          <span className="flex items-center gap-1.5 text-arena-navy-800/70">
+                            <Clock className="h-4 w-4 text-arena-navy-800/30" />
+                            {bloco.horario_inicio.slice(0, 5)} às{' '}
+                            {bloco.horario_fim.slice(0, 5)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   {p.data_encerramento_prevista && (
                     <div className="rounded-xl bg-orange-50 border border-orange-100 p-3 text-sm text-orange-700">
                       Encerra a partir de{' '}
                       <b>{formatCompetenciaShort(p.data_encerramento_prevista)}</b>
                       {p.encerramento_observacao ? ` — ${p.encerramento_observacao}` : ''}
-                      . Horário liberado para revenda:{' '}
-                      {DIAS[p.dia_semana]} {horario}.
+                      .{' '}
+                      {blocos.length > 1 ? (
+                        <>
+                          Horários liberados para revenda:{' '}
+                          {blocos
+                            .map(
+                              (bloco) =>
+                                `${bloco.court?.name ?? ''} ${DIAS[bloco.dia_semana]} ${bloco.horario_inicio.slice(0, 5)}–${bloco.horario_fim.slice(0, 5)}`
+                            )
+                            .join(' · ')}
+                          .
+                        </>
+                      ) : (
+                        <>
+                          Horário liberado para revenda: {DIAS[p.dia_semana]} {horario}.
+                        </>
+                      )}
                     </div>
                   )}
 
@@ -1003,7 +1078,18 @@ export function MensalistaDetailClient({
                         {formatCurrency(c.valor)}
                       </td>
                       <td className={cn(arenaDataTable.td, 'text-arena-navy-800/60')}>
-                        {c.descricao ?? '—'}
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {creditoBookingId(c) && (
+                            <span
+                              className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700"
+                              title="Crédito gerado pelo cancelamento de um jogo da recorrência"
+                            >
+                              <CalendarX2 className="h-3 w-3" />
+                              Jogo cancelado
+                            </span>
+                          )}
+                          <span>{c.descricao ?? '—'}</span>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -1069,6 +1155,7 @@ export function MensalistaDetailClient({
         planoLabel={reajusteTarget?.label ?? ''}
         valorAtual={reajusteTarget?.valorAtual ?? 0}
         valorMesAtual={reajusteTarget?.valorMesAtual ?? null}
+        competencia={`${competencia}-01`}
       />
     </div>
   )
