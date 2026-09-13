@@ -17,6 +17,11 @@ export const configureRateioSchema = z.object({
   participantes: z.array(rateioParticipanteSchema).max(50),
 })
 
+export const removerParticipanteRateioSchema = z.object({
+  arenaId: uuidSchema,
+  cobrancaId: uuidSchema,
+})
+
 export const registrarPagamentoSchema = z
   .object({
     arenaId: uuidSchema,

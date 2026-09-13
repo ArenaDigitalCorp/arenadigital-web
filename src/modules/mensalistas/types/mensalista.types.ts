@@ -84,9 +84,15 @@ export interface AtrasoCompetencia {
   mensalidadeId: string
   planoId: string
   quadra: string | null
+  /** Sempre o valor_total da mensalidade — nunca a soma de valor_devido das
+   *  cobranças, que deixou de ser garantidamente igual ao total com o
+   *  rateio incremental. */
   valorDevido: number
   valorPago: number
   restante: number
+  /** Se true, `cobrancas` são fatias de um rateio: o valor_devido individual
+   *  de cada uma não é significativo (a UI deve olhar só o valor pago). */
+  rateio: boolean
   cobrancas: CobrancaRow[]
 }
 
