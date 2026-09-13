@@ -9,6 +9,7 @@ import { revalidatePath } from 'next/cache'
 import { differenceInCalendarDays, format, parseISO, startOfMonth } from 'date-fns'
 import {
   configureRateioSchema,
+  removerParticipanteRateioSchema,
   registrarPagamentoSchema,
   lancarCreditoSchema,
   retirarCreditoSchema,
@@ -179,20 +180,16 @@ export async function getMensalistasOverviewAction(
     // Past-due (competências anteriores ao mês corrente ainda em aberto/parcial).
     const atrasoByAthlete = new Map<string, { valor: number; meses: number }>()
     for (const m of atrasoMensalidades) {
+      // O restante e sempre em relacao ao valor_total da mensalidade, nunca a
+      // soma de valor_devido das cobrancas: com rateio incremental essa soma
+      // deixou de ser garantidamente igual ao total (participantes podem
+      // entrar sem um valor pre-declarado).
       const cbs = (cobrancasByMensalidade.get(m.id) ?? []).filter((c) => c.ativo)
-      const restante = round2(
-        cbs.reduce(
-          (s, c) =>
-            s +
-            Math.max(
-              0,
-              Number(c.valor_devido) -
-                Number(c.valor_pago) -
-                Number(c.credito_aplicado)
-            ),
-          0
-        )
+      const pago = cbs.reduce(
+        (s, c) => s + Number(c.valor_pago) + Number(c.credito_aplicado),
+        0
       )
+      const restante = round2(Math.max(0, Number(m.valor_total) - pago))
       if (restante <= 0.01) continue
       const cur = atrasoByAthlete.get(m.athlete_id) ?? { valor: 0, meses: 0 }
       atrasoByAthlete.set(m.athlete_id, {
@@ -450,10 +447,11 @@ export async function getMensalistaDetailAction(
 
       atrasos = atrasoMensalidades
         .map((m) => {
+          // Mesmo criterio do resumo: devido/restante em relacao ao
+          // valor_total da mensalidade, nao a soma de valor_devido das
+          // cobrancas (nao mais garantidamente igual ao total).
           const cbs = (atrasoCobrByMens.get(m.id) ?? []).filter((c) => c.ativo)
-          const valorDevido = round2(
-            cbs.reduce((s, c) => s + Number(c.valor_devido), 0)
-          )
+          const valorDevido = round2(Number(m.valor_total))
           const valorPago = round2(
             cbs.reduce(
               (s, c) => s + Number(c.valor_pago) + Number(c.credito_aplicado),
@@ -470,6 +468,7 @@ export async function getMensalistaDetailAction(
             valorDevido,
             valorPago,
             restante: round2(Math.max(0, valorDevido - valorPago)),
+            rateio: m.rateio,
             cobrancas: cbs,
           } satisfies AtrasoCompetencia
         })
@@ -614,29 +613,83 @@ export async function getMensalistaDetailAction(
 
 export async function configureRateioAction(
   input: unknown
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; data?: { cobrancas: CobrancaRow[] }; error?: string }> {
   try {
     const parsed = configureRateioSchema.parse(input)
     await assertArenaBackofficeAccess(parsed.arenaId)
     const { dbUserId } = await requireAuthenticatedDbUser()
 
-    const { error } = await getSupabaseAdmin().rpc(
-      'configure_mensalista_rateio_atomic',
+    const supabase = getSupabaseAdmin()
+    const { error } = await supabase.rpc('configure_mensalista_rateio_atomic', {
+      p_arena_id: parsed.arenaId,
+      p_mensalidade_id: parsed.mensalidadeId,
+      p_rateio: parsed.rateio,
+      p_participantes: parsed.participantes,
+      p_registered_by: dbUserId,
+    })
+    if (error) throw new Error(error.message)
+
+    // Participantes podem entrar 1 a 1 ao longo do mes (rateio incremental):
+    // devolve a lista atualizada para a UI seguir trabalhando sem precisar
+    // de um refresh de pagina inteiro a cada adicao.
+    const { data: cobrancas, error: cobrancasErr } = await supabase
+      .from('mensalista_cobrancas')
+      .select('*')
+      .eq('mensalidade_id', parsed.mensalidadeId)
+      .order('created_at', { ascending: true })
+    if (cobrancasErr) throw new Error(cobrancasErr.message)
+
+    revalidateMensalistaPaths(parsed.arenaId)
+    return { success: true, data: { cobrancas: (cobrancas ?? []) as CobrancaRow[] } }
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : 'Erro ao configurar rateio'
+    return { success: false, error: message }
+  }
+}
+
+export interface RemoverParticipanteRateioResult {
+  valorRevertido: number
+  creditoRevertido: number
+  status: string
+  cobrancas: CobrancaRow[]
+}
+
+/** Tira um participante do rateio revertendo tudo o que havia sido lançado
+ *  para ele: dinheiro (some do caixa da arena) e crédito (consumido ou
+ *  excedente lançado). Bloqueado quando a mensalidade já está quitada. */
+export async function removerParticipanteRateioAction(
+  input: unknown
+): Promise<{ success: boolean; data?: RemoverParticipanteRateioResult; error?: string }> {
+  try {
+    const parsed = removerParticipanteRateioSchema.parse(input)
+    await assertArenaBackofficeAccess(parsed.arenaId)
+    const { dbUserId } = await requireAuthenticatedDbUser()
+
+    const { data, error } = await getSupabaseAdmin().rpc(
+      'remove_mensalista_rateio_participante_atomic',
       {
         p_arena_id: parsed.arenaId,
-        p_mensalidade_id: parsed.mensalidadeId,
-        p_rateio: parsed.rateio,
-        p_participantes: parsed.participantes,
+        p_cobranca_id: parsed.cobrancaId,
         p_registered_by: dbUserId,
       }
     )
     if (error) throw new Error(error.message)
 
+    const row = (data ?? {}) as Record<string, unknown>
     revalidateMensalistaPaths(parsed.arenaId)
-    return { success: true }
+    return {
+      success: true,
+      data: {
+        valorRevertido: Number(row.valor_revertido ?? 0),
+        creditoRevertido: Number(row.credito_revertido ?? 0),
+        status: String(row.status ?? ''),
+        cobrancas: (row.cobrancas as CobrancaRow[] | undefined) ?? [],
+      },
+    }
   } catch (err) {
     const message =
-      err instanceof Error ? err.message : 'Erro ao configurar rateio'
+      err instanceof Error ? err.message : 'Erro ao remover participante do rateio'
     return { success: false, error: message }
   }
 }

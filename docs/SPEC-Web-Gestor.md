@@ -618,6 +618,12 @@ Migrações (repositório arenadigital-db, fonte única do schema):
 - `20260828120040_mensalista_launch_credit.sql`
 - `20260828120050_mensalista_set_termination.sql`
 - `20260828120100_mensalista_billing_acl.sql` — REVOKE/GRANT EXECUTE (service_role) das 5 RPCs.
+- `20260913160000_mensalista_rateio_flexivel.sql` — rateio incremental (ver §18.2):
+  `configure_mensalista_rateio_atomic` não exige mais participante(s) nem soma batendo;
+  `register_mensalista_payment_atomic` passa a limitar crédito aplicado/excedente pelo
+  que falta da **mensalidade inteira**, não da fatia.
+- `20260913170000_mensalista_rateio_remover_participante.sql` — nova RPC
+  `remove_mensalista_rateio_participante_atomic` (ver §18.2).
 
 As RPCs atômicas antigas (`create_/cancel_/confirm_monthly_plan_month_atomic`) continuam
 no banco; a nova UI não chama mais `confirm_monthly_plan_month_atomic` — a confirmação do
@@ -651,8 +657,13 @@ mês passa pelo fluxo de pagamento abaixo.
 `mensalista_cobrancas` — parcela por pessoa (1 linha quando não há rateio)
 - id uuid pk / arena_id / mensalidade_id fk on delete cascade
 - atleta_id uuid fk atleta on delete set null — NULL = participante avulso (só nome)
-- nome text not null / valor_devido / valor_pago / credito_aplicado numeric(10,2)
-- pago_em timestamptz — preenchido quando valor_pago + credito_aplicado >= valor_devido
+- nome text not null / valor_devido / valor_pago / credito_aplicado numeric(10,2) —
+  com rateio ativo, valor_devido de uma fatia não é mais garantidamente significativo
+  (participantes podem ser adicionados sem um valor pré-declarado; ver §18.2); o que
+  vale sempre é `mensalista_mensalidades.valor_total` menos a soma paga pelas fatias
+  ativas
+- pago_em timestamptz — desde `20260913160000`, preenchido no primeiro pagamento
+  registrado contra a fatia (não depende mais de valor_devido)
 - modo_pagamento_id fk modo_pagamento / ativo boolean default true (toggle do rateio)
 - observacao text / created_at / updated_at
 
@@ -696,20 +707,32 @@ Backfill: cada `public.transactions` com source_type='monthly_plan_month' vira u
 - `configure_mensalista_rateio_atomic(p_arena_id, p_mensalidade_id, p_rateio, p_participantes jsonb, p_registered_by)`
   p_participantes = [{ atleta_id?, nome, ativo, valor }]. Congela as parcelas já pagas,
   apaga as não pagas e recria a partir da lista. rateio=false colapsa numa parcela do
-  responsável. Valida Σ(ativas) + Σ(travadas) = valor_total (tolerância 0,01) e que os
-  atleta_id pertencem à arena. Recalcula o status da mensalidade.
+  responsável. **Desde `20260913160000` (rateio incremental):** rateio=true não exige
+  mais pelo menos um participante ativo, nem que Σ(valor) das ativas bata com o
+  restante — a lista pode vir vazia (rateio ligado, ninguém lançado ainda) e cada
+  participante entra com `valor` apenas informativo (0 = "ainda não sei quanto vai
+  pagar"); a UI reenvia sempre a lista completa atual a cada adição/remoção. Continua
+  validando que os `atleta_id` pertencem à arena. Recalcula o status da mensalidade a
+  partir de `valor_total` (não mais da soma de `valor_devido` das fatias, que deixou
+  de ser garantidamente igual ao total).
 
 - `register_mensalista_payment_atomic(p_operation_id, p_arena_id, p_cobranca_id, p_valor, p_credito_aplicado, p_data, p_modo_pagamento_id, p_observacao, p_registered_by, p_lancar_excedente_credito default false)`
   Idempotente (p_operation_id = id do pagamento). **O dinheiro pode exceder o devido**
-  (migração `20260904160000`): `p_lancar_excedente_credito=false` grava o excedente na
-  cobrança (`valor_pago > valor_devido`); `=true` quita a cobrança no valor exato e lança
-  o excedente como `mensalista_creditos` tipo='lancamento' — vinculado ao `atleta_id` da
-  cobrança ou, se for parcela de **avulso**, ao **responsável da recorrência**
+  (migração `20260904160000`, escopo ajustado para a mensalidade inteira em
+  `20260913160000`): o "devido" que importa é `mensalidade.valor_total` menos a soma
+  já paga por **todas as fatias ativas** da mensalidade (não mais a `valor_devido` da
+  fatia que está recebendo o pagamento, que deixou de ser um teto significativo com o
+  rateio incremental). `p_lancar_excedente_credito=false` grava o excedente na cobrança
+  que está pagando (`valor_pago` fica acima do que sobrava); `=true` registra nessa
+  cobrança só o que ainda faltava da mensalidade e lança o excedente como
+  `mensalista_creditos` tipo='lancamento' — vinculado ao `atleta_id` da cobrança ou, se
+  for parcela de **avulso**, ao **responsável da recorrência**
   (`planos_mensalista.athlete_id`); retorna `credito_atleta_id`. O **crédito aplicado**
-  (`p_credito_aplicado`) nunca pode exceder o devido. Crédito aplicado exige
-  cobrança com atleta_id e saldo suficiente (grava `mensalista_creditos` tipo='uso',
-  valor negativo). Insere `mensalista_pagamentos` (valor = dinheiro total recebido);
-  atualiza a cobrança (valor_pago, credito_aplicado, pago_em). Só a parte em dinheiro
+  (`p_credito_aplicado`) nunca pode exceder o que falta da mensalidade inteira. Crédito
+  aplicado exige cobrança com atleta_id e saldo suficiente (grava `mensalista_creditos`
+  tipo='uso', valor negativo). Insere `mensalista_pagamentos` (valor = dinheiro total
+  recebido); atualiza a cobrança (valor_pago, credito_aplicado, pago_em — agora marcado
+  no primeiro pagamento, não mais quando a fatia "fecha"). Só a parte em dinheiro
   vai para `public.transactions`
   (type='entrada', category='Mensalidade', source_type='mensalista_pagamento',
   source_id=pagamento.id, ON CONFLICT DO UPDATE). Recalcula o status. Ao transicionar
@@ -717,6 +740,20 @@ Backfill: cada `public.transactions` com source_type='monthly_plan_month' vira u
   (price/rental_price = valor_total / sessoes_por_mes) e gera 1 mês 'reservado' à frente
   via `public._insert_monthly_plan_month_bookings`, exceto se
   data_encerramento_prevista cobrir o mês seguinte.
+
+- `remove_mensalista_rateio_participante_atomic(p_arena_id, p_cobranca_id, p_registered_by)`
+  (`20260913170000`). Exclui uma `mensalista_cobrancas` e reverte tudo o que havia sido
+  lançado para ela: apaga os `mensalista_pagamentos` dessa cobrança (caem em cascata) e
+  as linhas de `public.transactions` correspondentes (mesma convenção de exclusão
+  definitiva de `deleteTransactionAction`, sem lançamento de estorno); apaga também as
+  `mensalista_creditos` com `cobranca_id` igual (tanto o crédito **consumido** por ela
+  — linhas `tipo='uso'`, negativas, removê-las devolve o saldo — quanto qualquer
+  excedente que ela tivesse **lançado** — `tipo='lancamento'`, positivas). Bloqueado com
+  `ERRCODE 55000` quando `mensalidade.status = 'quitado'` (as reservas do mês já foram
+  confirmadas e o próximo mês já rolou) ou `'cancelado'`. Recalcula o status da
+  mensalidade a partir de `valor_total`. Retorna `valor_revertido`, `credito_revertido`,
+  `status` e a lista atualizada de `cobrancas` (mesmo formato de
+  `configure_mensalista_rateio_atomic`).
 
 - `launch_mensalista_credit_atomic(p_operation_id, p_arena_id, p_atleta_id, p_valor, p_descricao, p_registered_by)`
   Idempotente (p_operation_id = id do crédito). Valida atleta na arena. Insere
@@ -766,8 +803,14 @@ Backfill: cada `public.transactions` com source_type='monthly_plan_month' vira u
     "Registrar pagamento" direto. Também retorna `fidelidade` = `{ moeda:
     arenas.nome_moeda_virtual, saldo: athlete_loyalty_balance.balance }` para o
     card de saldo do programa de fidelidade.
-  - configureRateioAction / registrarPagamentoAction / lancarCreditoAction /
-    retirarCreditoAction / setEncerramentoAction — parse zod + RPC correspondente.
+  - configureRateioAction / removerParticipanteRateioAction / registrarPagamentoAction /
+    lancarCreditoAction / retirarCreditoAction / setEncerramentoAction — parse zod + RPC
+    correspondente. `configureRateioAction` também refaz um SELECT em
+    `mensalista_cobrancas` após a RPC e devolve `data.cobrancas` — o `RateioModal` usa
+    isso para persistir cada adição/toggle de participante imediatamente e seguir
+    trabalhando com ids reais, sem precisar de um refresh de página inteiro a cada
+    participante. `removerParticipanteRateioAction` devolve `valorRevertido`,
+    `creditoRevertido`, `status` e `cobrancas` (mesmo formato).
 
 ### 18.4 Rotas e UI
 
@@ -785,11 +828,23 @@ Backfill: cada `public.transactions` com source_type='monthly_plan_month' vira u
   **Histórico de reajustes** (`RecorrenciaResumo.reajustes`). A **criação** de
   recorrência continua no calendário do espaço (`BookingModal` → `create_monthly_plan_atomic`),
   que agora mostra as recorrências que ainda cabem no mês e a 1ª mensalidade proporcional.
-- Modais: `RateioModal` (lista de atletas do rateio, toggle + valor + adicionar
-  participante/nome avulso, split igual ao vivo), `RegistrarPagamentoModal` (valor +
-  data + forma + aplicar crédito; **permite pagar acima do devido** e pergunta se o
-  excedente vira crédito), `ReajustarValorModal` (novo valor + vigência mês atual/seguinte
-  + observação), `LancarCreditoModal`, `RetirarCreditoModal`
+- Modais: `RateioModal` — desde `20260913160000`, fluxo incremental: mostra o valor
+  total devido fixo; "Ativar rateio" liga sem exigir ninguém declarado; participantes
+  (atleta cadastrado ou avulso) entram um a um via busca/"+ Adicionar participante",
+  persistidos na hora (`configureRateioAction`); cada linha mostra só o quanto essa
+  pessoa já pagou, com botão "Registrar pagamento" que abre o `RegistrarPagamentoModal`
+  embutido para aquela fatia; toggle de ativo/remover só é permitido para quem ainda
+  não pagou nada; um ícone de lixeira em cada linha — no modal e também na tabela de
+  participantes por recorrência em `MensalistaDetailClient` (e na de "Pendências de
+  meses anteriores") — chama `removerParticipanteRateioAction` (confirmação antes,
+  bloqueado quando a mensalidade está quitada); resumo fixo **Pago / Falta** (ou "Pago a
+  mais") sobre o valor total; "Desativar rateio" colapsa para a fatia única do
+  responsável — `RegistrarPagamentoModal`
+  (valor + data + forma + aplicar crédito; **permite pagar acima do devido** e pergunta
+  se o excedente vira crédito; aceita `restanteMensalidade` opcional — quando informado,
+  vindo de uma mensalidade com rateio, o "Restante" e o teto de crédito usam o que falta
+  da mensalidade inteira em vez do `valor_devido` da fatia), `ReajustarValorModal` (novo
+  valor + vigência mês atual/seguinte + observação), `LancarCreditoModal`, `RetirarCreditoModal`
   (retirada parcial do saldo do responsável, limitada ao saldo, registrada no extrato
   de créditos), `EncerramentoModal`.
 - Util `src/lib/format.ts` — formatCurrency / formatCompetencia / formatDate / toCompetencia.
