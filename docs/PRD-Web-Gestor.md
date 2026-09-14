@@ -365,6 +365,7 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
 - **Crédito manual:** botão **Lançar crédito** registra um valor em R$ para um atleta (responsável ou participante do rateio). O saldo fica sempre visível para o gestor e pode ser **abatido** no registro de um pagamento futuro. Um lançamento de crédito **não** entra no caixa; só vira receita quando é usado.
 - **Retirada de crédito:** botão **Retirar crédito** desconta um valor do saldo do responsável, registrado como movimento "Retirada" no extrato de créditos. Não pode ultrapassar o saldo disponível e pode ser feita em **várias parcelas** até zerar o crédito (ex.: crédito de R$ 500 → retirada de R$ 200 num mês, R$ 200 no seguinte, R$ 100 depois). Cada retirada fica no histórico com data, valor e observação. Também não gera lançamento no caixa.
 - **Previsão de encerramento:** botão **Encerrar** grava o mês a partir do qual a recorrência vai acabar + uma observação. As reservas ainda não confirmadas a partir desse mês são canceladas, liberando o horário. O encerramento **definitivo** continua sendo o cancelamento do plano.
+- **Cancelamento definitivo (Cancelar plano):** encerra a recorrência agora — marca o plano `cancelado` e cancela **todas** as reservas futuras a partir de agora, sejam elas "reservado" (mês ainda não confirmado) ou já **confirmed** (ex.: o restante do mês corrente). *Corrigido em 13/09/2026:* antes, as sessões já confirmadas do mês corrente sobreviviam ao cancelamento e continuavam ocupando o calendário — a tela de Mensalistas mostrava a recorrência como cancelada, mas a agenda seguia como se ela existisse. Valores já recebidos não são estornados automaticamente (usar crédito/retirada manual se precisar compensar o atleta).
 - **Integração financeira:** cada pagamento em dinheiro gera uma entrada em `Financeiro` na categoria "Mensalidade" (aparece nos relatórios de pagamento). O painel "Cobranças Pendentes — Mensalistas" do Financeiro passa a levar ao detalhe do mensalista.
 - **Cadastro assistido (BookingModal → aba Mensal):**
   - O modal mostra, sem exigir cálculo do gestor, **quantas recorrências ainda cabem no mês corrente** a partir de hoje (data + intervalo) e as reservas que serão criadas neste mês (confirmadas) vs. a cadência dos próximos 2 meses (reservado).
@@ -436,6 +437,28 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
 
 **Perfis futuros** (Conveniado, Cliente Fidelidade e outros que a arena queira criar) entram como novos papéis com tabela de preço própria.
 
+---
+
+### 5.16 Relatório de Pagamentos (Relatórios → Pagamentos)
+
+Lista, mês a mês, todo lançamento financeiro da arena — reservas avulsas, mensalidades, comandas, rotativo e entradas manuais — com status Pago/Pendente/Cancelado e filtros de Período, Tipo de Jogo (Avulso/Mensal), Espaço e Esporte.
+
+- **Filtro de Atleta** (13/09/2026): busca por nome e filtra todas as movimentações daquele atleta, casando ele como **responsável** (dono da reserva/recorrência) **ou participante** (convidado de reserva avulsa com rateio, participante de rateio de mensalista, pagador de comanda/rotativo).
+- **Checkbox "Rateio — Ver linha a linha"** (13/09/2026): só pode ser marcado com Tipo de Jogo = Mensal. Marcado, troca as linhas agregadas de mensalidade por uma visão detalhada: uma linha **Recorrência** por plano (contexto — espaço, esporte, responsável, status do mês; não soma valor, só informativo) e uma linha **Rateio** por cobrança ativa da mensalidade daquele mês (quem deve pagar, quanto já pagou/falta). Sem Atleta selecionado, mostra de todos os responsáveis do período; com Atleta selecionado, só das recorrências em que ele é o responsável.
+- **"Quanto o atleta deve" no mês** (13/09/2026): ao selecionar um Atleta — sem precisar escolher o Tipo de Jogo — dois cards aparecem acima da tabela: **"{atleta} deve de Mensal"** (soma do que falta pagar nas cobranças de rateio ativas dele nas mensalidades do mês) e **"{atleta} deve de Avulso"** (soma das reservas avulsas pendentes daquele mês em que ele é responsável ou participante não pago).
+- **Checkbox "Detalhar por hora" — extrato de ocupação** (14/09/2026): resolve o fechamento de mês com professor/mensalista. Desmarcado, o relatório é o de sempre (mensalidade agrupada, uma linha por pagamento). Marcado, **cada reserva vira uma linha por hora ocupada**, com data, faixa de horário, espaço, esporte, valor e status:
+
+  ```
+  01/09/2026  16:00 às 17:00  Quadra 2  Beach Tennis  R$ 100,00  Pago
+  01/09/2026  17:00 às 18:00  Quadra 2  Beach Tennis  R$ 120,00  Pago
+  ```
+
+  - Vale para **Mensal e Avulso** — com Tipo de Jogo = Todos, os dois aparecem discriminados lado a lado.
+  - **Valor da hora:** no mensal sai da **tabela de preço do horário** (a reserva de mensalista guarda a fatia da mensalidade, que não é o preço da hora); no avulso vale **o que foi realmente cobrado na reserva**, rateado entre as horas, para respeitar desconto/negociação. Se a tabela escolhida (ex.: Professor) estiver sem grade, cai na tabela **Padrão** do espaço — melhor que exibir R$ 0,00.
+  - Entram as **aulas de mensalista já confirmadas** (são justamente as que aconteceram) e as **datas canceladas**, que aparecem marcadas como Cancelado e **ficam fora do total**. Para o mês não ser contado duas vezes, as linhas agregadas de mensalidade saem enquanto o detalhamento está ligado.
+- **Horário na linha de mensalidade** (14/09/2026): o pagamento de mensalidade passa a mostrar a **faixa da recorrência** ("20:00 às 21:00"), igual à linha de reserva avulsa — antes aparecia só um horário solto, que na verdade era artefato de fuso (a data do lançamento é guardada à meia-noite). Plano de professor com mais de um bloco mostra **"Vários horários"**, e lançamento sem horário nenhum (entrada manual, competência do mês) mostra "—" em vez de inventar uma hora.
+- **Coluna Atleta de quem não tem cadastro** (14/09/2026): participante avulso do rateio, comanda de balcão e afins passam a aparecer como **"Avulsa"** em vez de um travessão — o travessão parecia dado faltando. Reserva feita em nome de quem não tem cadastro mostra o **nome digitado pelo gestor**, que é mais informativo que o rótulo.
+- **Cards "Total a cobrar"** (14/09/2026): abaixo dos três cards de status, mostra **pago + pendente, sem os cancelados**, e ao lado o **total de horas de espaço ocupado**. Combinado com o filtro de Atleta, é o número que o gestor passa para o professor no início do mês. A exportação para Excel acompanha, com as colunas **Horário** e **Horas**.
 
 ---
 

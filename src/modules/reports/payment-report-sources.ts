@@ -66,8 +66,18 @@ export function resolveReportSourceFlags(filters: PaymentStatusFilters = {}): Re
  * - Avulso confirmado: Pago no relatório.
  * - Avulso reservado (não pago): Pendente no relatório (também gerenciável no Financeiro).
  * - Mensalista reservado ou cancelado: entra no relatório.
+ *
+ * No **extrato de ocupação** (`detalharPorHora`) a regra se inverte: ali a
+ * pergunta é "quando o atleta usou o espaço", então toda reserva entra —
+ * inclusive a de mensalista já confirmada (é justamente a aula que aconteceu) e
+ * a avulsa cancelada (o gestor quer ver a data que caiu). Para não contar o mês
+ * duas vezes, quem sai nesse modo são as transações de Mensalidade.
  */
-export function shouldIncludeBookingRow(booking: BookingLike): boolean {
+export function shouldIncludeBookingRow(
+  booking: BookingLike,
+  options: { detalharPorHora?: boolean } = {}
+): boolean {
+  if (options.detalharPorHora) return true
   if (booking.plano_mensalista_id && booking.status === 'confirmed') return false
   if (
     !booking.plano_mensalista_id &&
@@ -109,13 +119,17 @@ export function isSystemGeneratedMirroredTransaction(
  * Define se uma transação de entrada deve aparecer no relatório.
  * - full: todas as entradas manuais + Mensalidade; exclui só espelhos automáticos
  * - mensal: só Mensalidade
+ * - `detalharPorHora`: a Mensalidade sai (o mês já aparece hora a hora nas
+ *   reservas); lançamento manual e demais categorias continuam.
  */
 export function shouldIncludeTransactionRow(
   category: string,
   description: string | null | undefined,
   mode: ReportQueryMode,
-  stationTypeNames: string[]
+  stationTypeNames: string[],
+  options: { detalharPorHora?: boolean } = {}
 ): boolean {
+  if (options.detalharPorHora && category === 'Mensalidade') return false
   if (mode === 'avulso' || mode === 'booking_scoped') return false
   if (mode === 'mensal') return category === 'Mensalidade'
 

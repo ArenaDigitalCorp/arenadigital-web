@@ -9,18 +9,501 @@ import type {
   CourtFilter,
   SportFilter,
   PaymentStatusFilters,
+  AthleteDebtSummary,
 } from '@/modules/reports/types/report.types'
+import { PAYMENT_STATUS_SUMMARY_EXCLUDED_SERVICOS } from '@/modules/reports/types/report.types'
 import {
   resolveReportSourceFlags,
   shouldIncludeBookingRow,
   shouldIncludeTransactionRow,
 } from '@/modules/reports/payment-report-sources'
+import { buildUsageLines, saoPauloWallClock } from '@/modules/reports/usage-lines'
+import { matchPriceDay, priceAtInstant } from '@/modules/courts/lib/court-price-resolver'
+import type { CourtPriceDay } from '@/modules/courts/types/price-table.types'
+
+/**
+ * `planos_mensalista_blocos` (blocos por recorrência) e a mensalidade/cobrança
+ * embutidas por relação ainda não estão nos tipos gerados — mesmo cliente
+ * destipado usado em `modules/bookings/actions/mensalistaActions.ts`.
+ */
+/* eslint-disable @typescript-eslint/no-explicit-any -- tabelas/relações ainda fora dos tipos gerados */
+type LooseClient = { from: (table: string) => any }
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 async function getStationTypeNames(supabase: ReturnType<typeof getSupabaseAdmin>): Promise<string[]> {
   const { data: stationTypes } = await supabase.from('station_types').select('name')
   return (stationTypes ?? [])
     .map((row) => row.name)
     .filter((name): name is string => typeof name === 'string' && name.length > 0)
+}
+
+/** Atleta filtrado casa como responsável OU como participante de qualquer natureza. */
+function matchesAtleta(ids: Array<string | null | undefined>, atletaId?: string): boolean {
+  if (!atletaId) return true
+  return ids.some((id) => id === atletaId)
+}
+
+/** Grades de preço de um espaço, prontas para o extrato de ocupação. */
+interface CourtPricing {
+  bookingType: 'hourly' | 'unique'
+  /** Grade por id de tabela — o snapshot gravado na reserva/plano. */
+  porTabela: Map<string, CourtPriceDay[]>
+  /** Grade por tipo ('mensalista', 'professor', …) — plano antigo, sem snapshot. */
+  porTipo: Map<string, CourtPriceDay[]>
+  /** Grade da tabela padrão do espaço: último recurso antes de desistir. */
+  padrao: CourtPriceDay[] | null
+}
+
+function hhmm(value: string | null | undefined): string {
+  return (value ?? '').slice(0, 5)
+}
+
+/**
+ * Carrega, em 4 consultas, a grade de preço de todos os espaços da arena.
+ * Só é chamado no modo extrato — o relatório normal não precisa de preço de hora.
+ */
+async function loadArenaPricing(
+  loose: LooseClient,
+  arenaId: string
+): Promise<Map<string, CourtPricing>> {
+  const [{ data: courts }, { data: tables }] = await Promise.all([
+    loose.from('courts').select('id, booking_type').eq('arena_id', arenaId),
+    loose
+      .from('court_price_tables')
+      .select('id, court_id, tipo, is_default')
+      .eq('arena_id', arenaId),
+  ])
+
+  const tableRows = (tables ?? []) as {
+    id: string
+    court_id: string
+    tipo: string
+    is_default: boolean
+  }[]
+
+  let dayRows: {
+    id: string
+    price_table_id: string
+    dia_semana: number
+    habilitado: boolean
+    hora_inicio: string
+    hora_fim: string
+    slot_shift_time: string | null
+    preco_base: number
+  }[] = []
+  let bandRows: {
+    price_table_day_id: string
+    hora_inicio: string
+    hora_fim: string
+    preco: number
+  }[] = []
+
+  if (tableRows.length > 0) {
+    const { data: days } = await loose
+      .from('court_price_table_days')
+      .select('id, price_table_id, dia_semana, habilitado, hora_inicio, hora_fim, slot_shift_time, preco_base')
+      .in('price_table_id', tableRows.map((t) => t.id))
+    dayRows = (days ?? []) as typeof dayRows
+
+    if (dayRows.length > 0) {
+      const { data: bands } = await loose
+        .from('court_price_table_bands')
+        .select('price_table_day_id, hora_inicio, hora_fim, preco')
+        .in('price_table_day_id', dayRows.map((d) => d.id))
+      bandRows = (bands ?? []) as typeof bandRows
+    }
+  }
+
+  const bandsByDay = new Map<string, { start: string; end: string; price: number }[]>()
+  for (const band of bandRows) {
+    const list = bandsByDay.get(band.price_table_day_id) ?? []
+    list.push({ start: hhmm(band.hora_inicio), end: hhmm(band.hora_fim), price: Number(band.preco) || 0 })
+    bandsByDay.set(band.price_table_day_id, list)
+  }
+
+  const daysByTable = new Map<string, CourtPriceDay[]>()
+  for (const day of dayRows) {
+    const list = daysByTable.get(day.price_table_id) ?? []
+    list.push({
+      diaSemana: day.dia_semana,
+      enabled: day.habilitado,
+      startTime: hhmm(day.hora_inicio),
+      endTime: hhmm(day.hora_fim),
+      slotShiftTime: day.slot_shift_time ? hhmm(day.slot_shift_time) : null,
+      basePrice: Number(day.preco_base) || 0,
+      bands: bandsByDay.get(day.id) ?? [],
+    })
+    daysByTable.set(day.price_table_id, list)
+  }
+
+  const pricing = new Map<string, CourtPricing>()
+  for (const court of (courts ?? []) as { id: string; booking_type: string | null }[]) {
+    pricing.set(court.id, {
+      bookingType: court.booking_type === 'unique' ? 'unique' : 'hourly',
+      porTabela: new Map(),
+      porTipo: new Map(),
+      padrao: null,
+    })
+  }
+
+  for (const table of tableRows) {
+    const court = pricing.get(table.court_id)
+    if (!court) continue
+    const days = daysByTable.get(table.id) ?? []
+    court.porTabela.set(table.id, days)
+    court.porTipo.set(table.tipo, days)
+    if (table.is_default) court.padrao = days
+  }
+
+  return pricing
+}
+
+/**
+ * Faixa de horário da recorrência por trás de cada transação de Mensalidade,
+ * para a linha de pagamento mostrar "20:00 às 21:00" como a de reserva mostra.
+ *
+ * O caminho até o plano depende de quem criou a transação:
+ *  - `mensalista_pagamento` → pagamento → cobrança → mensalidade → plano
+ *    (um embed aninhado só, sem consulta por linha);
+ *  - `monthly_plan_month`   → o id do plano já está no próprio `source_id`.
+ *
+ * Devolve `null` para a transação sem plano resolvível (lançamento manual, por
+ * exemplo): a tela mostra "—" em vez de derivar uma hora de `launch_date`, que
+ * é uma data e renderiza como um horário fantasma.
+ */
+async function loadHorarioDaRecorrencia(
+  loose: LooseClient,
+  transactions: { id: string; category: string | null; source_type: string | null; source_id: string | null }[]
+): Promise<Map<string, string | null>> {
+  const horarios = new Map<string, string | null>()
+  const mensalidades = transactions.filter((t) => t.category === 'Mensalidade')
+  if (mensalidades.length === 0) return horarios
+
+  const pagamentoIds = new Set<string>()
+  const planoPorTransacao = new Map<string, string>()
+
+  for (const t of mensalidades) {
+    horarios.set(t.id, null)
+    if (t.source_type === 'mensalista_pagamento' && t.source_id) {
+      pagamentoIds.add(t.source_id)
+    } else if (t.source_type === 'monthly_plan_month' && t.source_id) {
+      // source_id = "<plano_id>:YYYY-MM"
+      planoPorTransacao.set(t.id, t.source_id.split(':')[0])
+    }
+  }
+
+  const planoPorPagamento = new Map<string, string>()
+  if (pagamentoIds.size > 0) {
+    const { data: pagamentos } = await loose
+      .from('mensalista_pagamentos')
+      .select('id, cobranca:cobranca_id(mensalidade:mensalidade_id(plano_id))')
+      .in('id', [...pagamentoIds])
+    for (const pagamento of (pagamentos ?? []) as {
+      id: string
+      cobranca?: { mensalidade?: { plano_id?: string } | null } | null
+    }[]) {
+      const planoId = pagamento.cobranca?.mensalidade?.plano_id
+      if (planoId) planoPorPagamento.set(pagamento.id, planoId)
+    }
+    for (const t of mensalidades) {
+      if (t.source_type !== 'mensalista_pagamento' || !t.source_id) continue
+      const planoId = planoPorPagamento.get(t.source_id)
+      if (planoId) planoPorTransacao.set(t.id, planoId)
+    }
+  }
+
+  const planoIds = [...new Set(planoPorTransacao.values())]
+  if (planoIds.length === 0) return horarios
+
+  const [{ data: planos }, { data: blocos }] = await Promise.all([
+    loose.from('planos_mensalista').select('id, horario_inicio, horario_fim').in('id', planoIds),
+    loose
+      .from('planos_mensalista_blocos')
+      .select('plano_id, horario_inicio, horario_fim')
+      .in('plano_id', planoIds),
+  ])
+
+  const faixasPorPlano = new Map<string, Set<string>>()
+  for (const bloco of (blocos ?? []) as { plano_id: string; horario_inicio: string; horario_fim: string }[]) {
+    const faixas = faixasPorPlano.get(bloco.plano_id) ?? new Set<string>()
+    faixas.add(`${hhmm(bloco.horario_inicio)}-${hhmm(bloco.horario_fim)}`)
+    faixasPorPlano.set(bloco.plano_id, faixas)
+  }
+
+  const rotuloPorPlano = new Map<string, string>()
+  for (const plano of (planos ?? []) as {
+    id: string
+    horario_inicio: string
+    horario_fim: string
+  }[]) {
+    // Professor com vários blocos não cabe numa faixa só — dizer qual seria mentira.
+    rotuloPorPlano.set(
+      plano.id,
+      (faixasPorPlano.get(plano.id)?.size ?? 0) > 1
+        ? 'Vários horários'
+        : `${hhmm(plano.horario_inicio)} às ${hhmm(plano.horario_fim)}`
+    )
+  }
+
+  for (const [transacaoId, planoId] of planoPorTransacao) {
+    horarios.set(transacaoId, rotuloPorPlano.get(planoId) ?? null)
+  }
+
+  return horarios
+}
+
+/**
+ * Preço da hora de uma reserva de mensalista. A cascata é a mesma de
+ * `quoteSessaoMensalistaAction`: snapshot da reserva → snapshot do plano →
+ * tabela do tipo mensalista do espaço → tabela padrão. A padrão também entra
+ * como rede quando a tabela escolhida existe mas está sem grade — Mensalista e
+ * Professor nascem vazias, e uma linha zerada no extrato seria pior que o
+ * preço padrão do espaço.
+ */
+function buildPrecoDaHora(
+  pricing: CourtPricing | undefined,
+  tableIds: (string | null | undefined)[],
+  tipoPreferido: string | null,
+  startISO: string,
+  endISO: string
+): (instant: Date) => number | null {
+  if (!pricing) return () => null
+
+  const candidatos: (CourtPriceDay[] | null)[] = [
+    ...tableIds.map((id) => (id ? pricing.porTabela.get(id) ?? null : null)),
+    tipoPreferido ? pricing.porTipo.get(tipoPreferido) ?? null : null,
+    pricing.padrao,
+  ]
+
+  const wallStart = saoPauloWallClock(new Date(startISO))
+  const wallEnd = saoPauloWallClock(new Date(endISO))
+
+  for (const days of candidatos) {
+    if (!days || days.length === 0) continue
+    const match = matchPriceDay(days, wallStart, wallEnd)
+    if (match) return (instant: Date) => priceAtInstant(match, instant)
+  }
+
+  return () => null
+}
+
+/**
+ * Ids de `planos_mensalista` que têm algum bloco (ou a coluna legada) na
+ * quadra/esporte informados. `null` = sem restrição de espaço/esporte.
+ */
+async function resolveAllowedPlanoIds(
+  loose: LooseClient,
+  arenaId: string,
+  opts: { courtId?: string; sportId?: string }
+): Promise<Set<string> | null> {
+  if (!opts.courtId && !opts.sportId) return null
+
+  let planoQuery = loose.from('planos_mensalista').select('id, court_id, sport_id').eq('arena_id', arenaId)
+  if (opts.sportId) planoQuery = planoQuery.eq('sport_id', opts.sportId)
+  const { data: planos } = await planoQuery
+
+  let allowed = new Set<string>((planos ?? []).map((p: { id: string }) => p.id))
+
+  if (opts.courtId) {
+    const legacyMatch = new Set<string>(
+      (planos ?? []).filter((p: { court_id: string }) => p.court_id === opts.courtId).map((p: { id: string }) => p.id)
+    )
+    const { data: blocos } = await loose
+      .from('planos_mensalista_blocos')
+      .select('plano_id')
+      .eq('arena_id', arenaId)
+      .eq('court_id', opts.courtId)
+    const blocoMatch = new Set<string>((blocos ?? []).map((b: { plano_id: string }) => b.plano_id))
+    allowed = new Set([...allowed].filter((id) => legacyMatch.has(id) || blocoMatch.has(id)))
+  }
+
+  return allowed
+}
+
+/**
+ * Visão "Rateio" do Mensal: em vez de uma linha agregada por transação, uma
+ * linha `Recorrência` (contexto, sem valor — não entra na soma dos cards)
+ * por plano e uma linha `Rateio` por cobrança ativa da mensalidade do mês,
+ * para o(s) responsável(is) que passam nos filtros.
+ */
+async function buildRateioBreakdownRows(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  arenaId: string,
+  competencia: string,
+  opts: { courtId?: string; sportId?: string; atletaId?: string }
+): Promise<PaymentStatusRow[]> {
+  const loose = supabase as unknown as LooseClient
+
+  const allowedPlanoIds = await resolveAllowedPlanoIds(loose, arenaId, opts)
+
+  let mensalidadeQuery = loose
+    .from('mensalista_mensalidades')
+    .select('id, plano_id, athlete_id, competencia, status')
+    .eq('arena_id', arenaId)
+    .eq('competencia', competencia)
+  if (opts.atletaId) mensalidadeQuery = mensalidadeQuery.eq('athlete_id', opts.atletaId)
+
+  const { data: mensalidadesRaw, error: mensalidadeError } = await mensalidadeQuery
+  if (mensalidadeError) {
+    console.error(`[buildRateioBreakdownRows] mensalidades: ${mensalidadeError.message}`)
+    return []
+  }
+
+  const mensalidades = (mensalidadesRaw ?? []).filter(
+    (m: { plano_id: string }) => !allowedPlanoIds || allowedPlanoIds.has(m.plano_id)
+  )
+  if (mensalidades.length === 0) return []
+
+  const planoIds = [...new Set(mensalidades.map((m: { plano_id: string }) => m.plano_id))]
+  const mensalidadeIds = mensalidades.map((m: { id: string }) => m.id)
+
+  const [{ data: planos }, { data: blocos }, { data: cobrancas }] = await Promise.all([
+    loose
+      .from('planos_mensalista')
+      .select('id, athlete_name, court_id, sport_id, horario_inicio, horario_fim, courts:court_id(name), sports:sport_id(name)')
+      .in('id', planoIds),
+    loose.from('planos_mensalista_blocos').select('plano_id').in('plano_id', planoIds),
+    loose
+      .from('mensalista_cobrancas')
+      .select('id, mensalidade_id, nome, valor_devido, valor_pago, credito_aplicado, pago_em, ativo')
+      .in('mensalidade_id', mensalidadeIds)
+      .eq('ativo', true),
+  ])
+
+  const planoMap = new Map((planos ?? []).map((p: { id: string }) => [p.id, p]))
+  const blocosPorPlano = new Map<string, number>()
+  for (const b of blocos ?? []) {
+    blocosPorPlano.set(b.plano_id, (blocosPorPlano.get(b.plano_id) ?? 0) + 1)
+  }
+  const cobrancasPorMensalidade = new Map<string, typeof cobrancas>()
+  for (const c of cobrancas ?? []) {
+    const list = cobrancasPorMensalidade.get(c.mensalidade_id) ?? []
+    list.push(c)
+    cobrancasPorMensalidade.set(c.mensalidade_id, list)
+  }
+
+  const rows: PaymentStatusRow[] = []
+  for (const m of mensalidades) {
+    const plano = planoMap.get(m.plano_id) as
+      | {
+          athlete_name: string
+          horario_inicio?: string | null
+          horario_fim?: string | null
+          courts?: { name: string } | null
+          sports?: { name: string } | null
+        }
+      | undefined
+    const nBlocos = blocosPorPlano.get(m.plano_id) ?? 0
+    const espaco = nBlocos > 1 ? `${nBlocos} horários` : plano?.courts?.name ?? null
+    const esporte = plano?.sports?.name ?? null
+
+    rows.push({
+      id: `recorrencia-${m.id}`,
+      data: m.competencia,
+      // A competência é um mês, não um instante: o horário vem da faixa da
+      // recorrência (ou "Vários horários" quando o plano tem mais de um bloco).
+      horario:
+        nBlocos > 1
+          ? 'Vários horários'
+          : plano?.horario_inicio && plano?.horario_fim
+            ? `${hhmm(plano.horario_inicio)} às ${hhmm(plano.horario_fim)}`
+            : null,
+      atleta: plano?.athlete_name ?? null,
+      servico: 'Recorrência',
+      espaco,
+      esporte,
+      valor: null,
+      status: m.status === 'quitado' ? 'Pago' : 'Pendente',
+    })
+
+    for (const c of cobrancasPorMensalidade.get(m.id) ?? []) {
+      const settled = Number(c.valor_pago ?? 0) + Number(c.credito_aplicado ?? 0)
+      const remaining = Math.max(0, round2(Number(c.valor_devido ?? 0) - settled))
+      const isPago = remaining <= 0.01 && settled > 0
+      rows.push({
+        id: `rateio-${c.id}`,
+        data: c.pago_em ?? m.competencia,
+        // Sem pagamento registrado a data é a competência — mês, não hora.
+        horario: c.pago_em ? undefined : null,
+        atleta: c.nome,
+        servico: 'Rateio',
+        espaco,
+        esporte,
+        valor: isPago ? settled : remaining,
+        status: isPago ? 'Pago' : 'Pendente',
+      })
+    }
+  }
+
+  return rows
+}
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100
+}
+
+/** "Quanto o atleta deve" de Mensal e de Avulso na competência — usado pelos
+ * cards que só aparecem quando o filtro de Atleta está selecionado. Não
+ * respeita espaço/esporte: dívida é do atleta, não de uma quadra específica. */
+async function computeAthleteDebtSummary(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  arenaId: string,
+  atletaId: string,
+  competenciaStart: string,
+  competenciaEnd: string
+): Promise<AthleteDebtSummary> {
+  const loose = supabase as unknown as LooseClient
+
+  const avulsoQuery = supabase
+    .from('bookings')
+    .select('id, athlete_id, price, status, plano_mensalista_id, cobranca_por_participante, booking_participants(atleta_id, funcao, valor, pago_em)')
+    .eq('arena_id', arenaId)
+    .is('plano_mensalista_id', null)
+    .in('status', ['reservado', 'pending_payment'])
+    .gte('start_time', competenciaStart)
+    .lte('start_time', competenciaEnd + 'T23:59:59')
+
+  const cobrancaQuery = loose
+    .from('mensalista_cobrancas')
+    .select('id, valor_devido, valor_pago, credito_aplicado, ativo, mensalidade:mensalidade_id!inner(arena_id, competencia)')
+    .eq('atleta_id', atletaId)
+    .eq('ativo', true)
+    .eq('mensalidade.arena_id', arenaId)
+    .eq('mensalidade.competencia', competenciaStart)
+
+  const [avulsoResult, cobrancaResult] = await Promise.all([avulsoQuery, cobrancaQuery])
+
+  if (avulsoResult.error) console.error(`[computeAthleteDebtSummary] avulso: ${avulsoResult.error.message}`)
+  if (cobrancaResult.error) console.error(`[computeAthleteDebtSummary] mensal: ${cobrancaResult.error.message}`)
+
+  let avulso = 0
+  for (const b of (avulsoResult.data ?? []) as Array<{
+    athlete_id: string | null
+    price: number | null
+    cobranca_por_participante: boolean
+    booking_participants: Array<{ atleta_id: string; funcao: string; valor: number | null; pago_em: string | null }>
+  }>) {
+    const participants = (b.booking_participants ?? []).filter(
+      (p) => p.funcao === 'responsavel' || p.funcao === 'convidado'
+    )
+    if (b.cobranca_por_participante && participants.length > 0) {
+      const mine = participants.find((p) => p.atleta_id === atletaId && !p.pago_em)
+      if (mine) avulso += Number(mine.valor ?? b.price ?? 0)
+    } else if (b.athlete_id === atletaId) {
+      avulso += Number(b.price ?? 0)
+    }
+  }
+
+  let mensal = 0
+  for (const c of (cobrancaResult.data ?? []) as Array<{
+    valor_devido: number
+    valor_pago: number
+    credito_aplicado: number
+  }>) {
+    mensal += Math.max(0, Number(c.valor_devido ?? 0) - Number(c.valor_pago ?? 0) - Number(c.credito_aplicado ?? 0))
+  }
+
+  return { mensal: round2(mensal), avulso: round2(avulso) }
 }
 
 export async function getPaymentStatusReportAction(
@@ -32,6 +515,7 @@ export async function getPaymentStatusReportAction(
   summary?: PaymentStatusSummary
   courts?: CourtFilter[]
   sports?: SportFilter[]
+  athleteDebt?: AthleteDebtSummary | null
   error?: string
 }> {
   try {
@@ -40,7 +524,7 @@ export async function getPaymentStatusReportAction(
 
     let query = supabase
       .from('bookings')
-      .select('id, start_time, status, price, plano_mensalista_id, sport_id, cobranca_por_participante, courts!bookings_court_id_fkey(id, name), sports(id, name), atleta:athlete_id(id, nome_perfil), booking_participants(id, funcao, pago_em, valor)')
+      .select('id, start_time, end_time, status, price, athlete_name, plano_mensalista_id, court_id, sport_id, cobranca_por_participante, courts!bookings_court_id_fkey(id, name), sports(id, name), atleta:athlete_id(id, nome_perfil), booking_participants(id, atleta_id, funcao, pago_em, valor)')
       .eq('arena_id', arenaId)
       .order('start_time', { ascending: false })
       .order('id', { ascending: false })
@@ -65,7 +549,7 @@ export async function getPaymentStatusReportAction(
           order_number,
           status,
           customer_name,
-          atleta:atleta(nome_perfil),
+          atleta:atleta(id, nome_perfil),
           station:stations!station_orders_station_id_fkey(name, station_type:station_types(name))
         )
       `)
@@ -83,7 +567,7 @@ export async function getPaymentStatusReportAction(
         valor_pago,
         data_inscricao,
         tipo_pagamento,
-        atleta:id_atleta(nome_perfil),
+        atleta:id_atleta(id, nome_perfil),
         modo_pagamento:modo_pagamento_id(nome),
         rotativo:rotativos!inner(
           id_arena,
@@ -108,7 +592,7 @@ export async function getPaymentStatusReportAction(
         quantidade,
         valor_pago,
         created_at,
-        atleta:atleta_id(nome_perfil),
+        atleta:atleta_id(id, nome_perfil),
         modo_pagamento:modo_pagamento_id(nome)
       `)
       .eq('arena_id', arenaId)
@@ -122,6 +606,10 @@ export async function getPaymentStatusReportAction(
 
     const sourceFlags = resolveReportSourceFlags(filters)
     const stationTypeNames = await getStationTypeNames(supabase)
+    // Rateio troca as linhas agregadas de transação pela quebra linha a linha —
+    // a consulta de transactions vira redundante nesse modo (economiza 1 query).
+    const wantsRateioBreakdown = filters.tipo === 'mensal' && filters.rateio === true
+    const detalharPorHora = filters.detalharPorHora === true
 
     let transactionsQuery = supabase
       .from('transactions')
@@ -131,7 +619,9 @@ export async function getPaymentStatusReportAction(
         description,
         total_value,
         launch_date,
-        atleta:atleta_id(nome_perfil),
+        source_type,
+        source_id,
+        atleta:atleta_id(id, nome_perfil),
         modo_pagamento:modo_pagamento_id(nome)
       `)
       .eq('arena_id', arenaId)
@@ -154,7 +644,9 @@ export async function getPaymentStatusReportAction(
       sourceFlags.includeStationPayments ? fetchAllSupabaseRows(stationPaymentsQuery) : Promise.resolve({ data: [], error: null }),
       sourceFlags.includeRotativoInscricoes ? fetchAllSupabaseRows(rotativoInscricoesQuery) : Promise.resolve({ data: [], error: null }),
       sourceFlags.includeRotativoCreditos ? fetchAllSupabaseRows(rotativoCreditosQuery) : Promise.resolve({ data: [], error: null }),
-      sourceFlags.includeTransactions ? fetchAllSupabaseRows(transactionsQuery) : Promise.resolve({ data: [], error: null }),
+      sourceFlags.includeTransactions && !wantsRateioBreakdown
+        ? fetchAllSupabaseRows(transactionsQuery)
+        : Promise.resolve({ data: [], error: null }),
     ])
 
     // Bookings é a fonte principal e de onde vêm os filtros — se falhar, o relatório não tem como funcionar.
@@ -170,47 +662,133 @@ export async function getPaymentStatusReportAction(
     logSourceError('rotativo_creditos', rotativoCreditosResult.error)
     logSourceError('transactions', transactionsResult.error)
 
-    const bookingRows: PaymentStatusRow[] = (bookingsResult.data ?? [])
-      .filter((b: any) => shouldIncludeBookingRow(b))
-      .map((b: any) => {
-        let status: PaymentStatusRow['status'] = 'Pendente'
-        if (b.status === 'confirmed') status = 'Pago'
-        else if (b.status === 'cancelled') status = 'Cancelado'
-
-        const billingParticipants = (b.booking_participants ?? []).filter(
-          (p: { funcao?: string }) => p.funcao === 'responsavel' || p.funcao === 'convidado'
+    const bookingsFiltradas = (bookingsResult.data ?? [])
+      .filter((b: any) => shouldIncludeBookingRow(b, { detalharPorHora }))
+      .filter((b: { atleta?: { id: string } | null; booking_participants?: { atleta_id: string }[] }) =>
+        matchesAtleta(
+          [b.atleta?.id, ...(b.booking_participants ?? []).map((p) => p.atleta_id)],
+          filters.atletaId
         )
-        let valor: number | null = b.price ?? null
-        if (b.cobranca_por_participante && billingParticipants.length > 0) {
-          if (b.status === 'reservado') {
-            const unpaid = billingParticipants.filter((p: { pago_em?: string | null }) => !p.pago_em)
-            valor = unpaid.reduce(
-              (sum: number, p: { valor?: number | null }) =>
-                sum + Number(p.valor ?? b.price ?? 0),
-              0
-            )
-          } else {
-            valor = billingParticipants.reduce(
-              (sum: number, p: { valor?: number | null }) =>
-                sum + Number(p.valor ?? b.price ?? 0),
-              0
-            )
-          }
-        }
+      )
 
-        return {
+    // Grade de preço só é necessária no extrato, e só para reserva de mensalista
+    // (o avulso vale o que foi cobrado nele). Os planos entram para resolver o
+    // snapshot de tabela de quem foi criado com tabela escolhida (ex.: Professor).
+    const pricingPorEspaco = detalharPorHora
+      ? await loadArenaPricing(supabase as unknown as LooseClient, arenaId)
+      : new Map<string, CourtPricing>()
+
+    const tabelaPorPlano = new Map<string, string | null>()
+    if (detalharPorHora) {
+      const planoIds = [
+        ...new Set(
+          bookingsFiltradas
+            .map((b: { plano_mensalista_id: string | null }) => b.plano_mensalista_id)
+            .filter((id: string | null): id is string => Boolean(id))
+        ),
+      ]
+      if (planoIds.length > 0) {
+        const { data: planos } = await (supabase as unknown as LooseClient)
+          .from('planos_mensalista')
+          .select('id, price_table_id')
+          .in('id', planoIds)
+        for (const plano of (planos ?? []) as { id: string; price_table_id: string | null }[]) {
+          tabelaPorPlano.set(plano.id, plano.price_table_id)
+        }
+      }
+    }
+
+    const bookingRows: PaymentStatusRow[] = []
+    for (const b of bookingsFiltradas as any[]) {
+      let status: PaymentStatusRow['status'] = 'Pendente'
+      if (b.status === 'confirmed') status = 'Pago'
+      else if (b.status === 'cancelled') status = 'Cancelado'
+
+      const billingParticipants = (b.booking_participants ?? []).filter(
+        (p: { funcao?: string }) => p.funcao === 'responsavel' || p.funcao === 'convidado'
+      )
+      let valor: number | null = b.price ?? null
+      if (b.cobranca_por_participante && billingParticipants.length > 0) {
+        if (b.status === 'reservado') {
+          const unpaid = billingParticipants.filter((p: { pago_em?: string | null }) => !p.pago_em)
+          valor = unpaid.reduce(
+            (sum: number, p: { valor?: number | null }) =>
+              sum + Number(p.valor ?? b.price ?? 0),
+            0
+          )
+        } else {
+          valor = billingParticipants.reduce(
+            (sum: number, p: { valor?: number | null }) =>
+              sum + Number(p.valor ?? b.price ?? 0),
+            0
+          )
+        }
+      }
+
+      const ehMensal = Boolean(b.plano_mensalista_id)
+      const base = {
+        // Reserva de quem não tem cadastro guarda o nome digitado pelo gestor —
+        // melhor mostrá-lo do que cair no rótulo genérico "Avulsa" da tela.
+        atleta: b.atleta?.nome_perfil ?? (b.athlete_name || null),
+        servico: (ehMensal ? 'Mensal' : 'Avulso') as PaymentStatusRow['servico'],
+        espaco: b.courts?.name ?? null,
+        esporte: b.sports?.name ?? null,
+        status,
+      }
+
+      if (!detalharPorHora) {
+        const horas =
+          b.end_time && b.start_time
+            ? (new Date(b.end_time).getTime() - new Date(b.start_time).getTime()) / 3_600_000
+            : null
+        bookingRows.push({
           id: b.id,
           data: b.start_time,
-          atleta: b.atleta?.nome_perfil ?? null,
-          servico: b.plano_mensalista_id ? 'Mensal' : 'Avulso',
-          espaco: b.courts?.name ?? null,
-          esporte: b.sports?.name ?? null,
+          fim: b.end_time ?? null,
+          horas: horas != null && horas > 0 ? Math.round(horas * 100) / 100 : null,
           valor,
-          status,
-        }
+          ...base,
+        })
+        continue
+      }
+
+      const pricing = pricingPorEspaco.get(b.court_id)
+      const linhas = buildUsageLines({
+        startISO: b.start_time,
+        endISO: b.end_time,
+        // Mensalista: a reserva guarda a fatia da mensalidade, não o preço da
+        // hora — quem vale é a tabela. Avulso: vale o que foi cobrado.
+        valorReserva: ehMensal ? null : valor,
+        valorFallback: valor,
+        bookingType: pricing?.bookingType ?? 'hourly',
+        // `bookings.price_table_id` existe no banco mas ninguém escreve nele
+        // ainda (só o plano guarda o snapshot), então a cascata começa no plano.
+        precoDaHora: buildPrecoDaHora(
+          pricing,
+          [ehMensal ? tabelaPorPlano.get(b.plano_mensalista_id) ?? null : null],
+          ehMensal ? 'mensalista' : null,
+          b.start_time,
+          b.end_time
+        ),
       })
 
-    const stationPaymentRows: PaymentStatusRow[] = (stationPaymentsResult.data ?? []).map((payment: any) => {
+      linhas.forEach((linha, index) => {
+        bookingRows.push({
+          id: linhas.length > 1 ? `${b.id}-h${index}` : b.id,
+          data: linha.inicioISO,
+          fim: linha.fimISO,
+          horas: linha.horas,
+          valor: linha.valor,
+          ...base,
+        })
+      })
+    }
+
+    const stationPaymentRows: PaymentStatusRow[] = (stationPaymentsResult.data ?? [])
+      .filter((payment: { station_orders?: { atleta?: { id: string } | null } | null }) =>
+        matchesAtleta([payment.station_orders?.atleta?.id], filters.atletaId)
+      )
+      .map((payment: any) => {
       const order = payment.station_orders
       const station = order?.station
       const stationTypeName = station?.station_type?.name ?? null
@@ -230,7 +808,11 @@ export async function getPaymentStatusReportAction(
       }
     })
 
-    const rotativoInscricaoRows: PaymentStatusRow[] = (rotativoInscricoesResult.data ?? []).map((inscricao: any) => {
+    const rotativoInscricaoRows: PaymentStatusRow[] = (rotativoInscricoesResult.data ?? [])
+      .filter((inscricao: { atleta?: { id: string } | null }) =>
+        matchesAtleta([inscricao.atleta?.id], filters.atletaId)
+      )
+      .map((inscricao: any) => {
       const rotativo = inscricao.rotativo
       let status: PaymentStatusRow['status'] = 'Pago'
       if (rotativo?.status === 'desativado') status = 'Cancelado'
@@ -247,7 +829,9 @@ export async function getPaymentStatusReportAction(
       }
     })
 
-    const rotativoCreditoRows: PaymentStatusRow[] = (rotativoCreditosResult.data ?? []).map((mov: any) => ({
+    const rotativoCreditoRows: PaymentStatusRow[] = (rotativoCreditosResult.data ?? [])
+      .filter((mov: { atleta?: { id: string } | null }) => matchesAtleta([mov.atleta?.id], filters.atletaId))
+      .map((mov: any) => ({
       id: `rotativo-credito-${mov.id}`,
       data: mov.created_at,
       atleta: mov.atleta?.nome_perfil ?? null,
@@ -258,13 +842,30 @@ export async function getPaymentStatusReportAction(
       status: 'Pago' as const,
     }))
 
-    const transactionRows: PaymentStatusRow[] = (transactionsResult.data ?? [])
+    const transacoesFiltradas = (transactionsResult.data ?? [])
       .filter((t: any) =>
-        shouldIncludeTransactionRow(t.category ?? '', t.description, sourceFlags.mode, stationTypeNames)
+        shouldIncludeTransactionRow(t.category ?? '', t.description, sourceFlags.mode, stationTypeNames, {
+          detalharPorHora,
+        })
       )
-      .map((t: any) => ({
+      .filter((t: { atleta?: { id: string } | null }) => matchesAtleta([t.atleta?.id], filters.atletaId))
+
+    const horarioPorTransacao = await loadHorarioDaRecorrencia(
+      supabase as unknown as LooseClient,
+      transacoesFiltradas as {
+        id: string
+        category: string | null
+        source_type: string | null
+        source_id: string | null
+      }[]
+    )
+
+    const transactionRows: PaymentStatusRow[] = transacoesFiltradas.map((t: any) => ({
       id: `transaction-${t.id}`,
       data: t.launch_date,
+      // `launch_date` é uma data (guardada à meia-noite): sem rótulo da
+      // recorrência, a coluna Horário mostra "—" em vez de um horário fantasma.
+      horario: horarioPorTransacao.get(t.id) ?? null,
       atleta: t.atleta?.nome_perfil ?? null,
       servico: t.category === 'Mensalidade' ? 'Mensalista' : 'Entrada Manual',
       espaco: t.category === 'Mensalidade' ? (t.description ?? null) : (t.category ?? null),
@@ -273,18 +874,38 @@ export async function getPaymentStatusReportAction(
       status: 'Pago' as const,
     }))
 
+    const rateioRows = wantsRateioBreakdown
+      ? await buildRateioBreakdownRows(supabase, arenaId, filters.startDate ?? '', {
+          courtId: filters.courtId,
+          sportId: filters.sportId,
+          atletaId: filters.atletaId,
+        })
+      : []
+
     const rows: PaymentStatusRow[] = [
       ...bookingRows,
       ...stationPaymentRows,
       ...rotativoInscricaoRows,
       ...rotativoCreditoRows,
       ...transactionRows,
+      ...rateioRows,
     ].sort(
       (a, b) => new Date(b.data).getTime() - new Date(a.data).getTime()
     )
 
+    const athleteDebt = filters.atletaId
+      ? await computeAthleteDebtSummary(
+          supabase,
+          arenaId,
+          filters.atletaId,
+          filters.startDate ?? '',
+          filters.endDate ?? filters.startDate ?? ''
+        )
+      : null
+
     const summary: PaymentStatusSummary = rows.reduce(
       (acc, r) => {
+        if (PAYMENT_STATUS_SUMMARY_EXCLUDED_SERVICOS.includes(r.servico)) return acc
         if (r.status === 'Pago') {
           acc.totalPago += r.valor ?? 0
           acc.countPago++
@@ -295,10 +916,26 @@ export async function getPaymentStatusReportAction(
           acc.totalCancelado += r.valor ?? 0
           acc.countCancelado++
         }
+        // "Quanto cobrar" e horas ocupadas ignoram o que foi cancelado.
+        if (r.status !== 'Cancelado') {
+          acc.totalACobrar += r.valor ?? 0
+          acc.totalHoras += r.horas ?? 0
+        }
         return acc
       },
-      { totalPago: 0, totalPendente: 0, totalCancelado: 0, countPago: 0, countPendente: 0, countCancelado: 0 }
+      {
+        totalPago: 0,
+        totalPendente: 0,
+        totalCancelado: 0,
+        countPago: 0,
+        countPendente: 0,
+        countCancelado: 0,
+        totalACobrar: 0,
+        totalHoras: 0,
+      }
     )
+    summary.totalACobrar = Math.round(summary.totalACobrar * 100) / 100
+    summary.totalHoras = Math.round(summary.totalHoras * 100) / 100
 
     const courts: CourtFilter[] = courtsResult.data ?? []
 
@@ -309,7 +946,7 @@ export async function getPaymentStatusReportAction(
     }
     const sports: SportFilter[] = [...sportsMap.values()]
 
-    return { success: true, rows, summary, courts, sports }
+    return { success: true, rows, summary, courts, sports, athleteDebt }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro ao buscar relatório'
     return { success: false, error: message }

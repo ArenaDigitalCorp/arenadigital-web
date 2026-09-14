@@ -261,7 +261,7 @@ export function MensalistaDetailClient({
   const handleCancelPlano = async (planoId: string, label: string) => {
     if (
       !window.confirm(
-        `Cancelar definitivamente a recorrência "${label}"? As reservas futuras ainda não confirmadas serão canceladas. Esta ação não pode ser desfeita.`
+        `Cancelar definitivamente a recorrência "${label}"? Todas as reservas futuras (mesmo as já confirmadas) serão canceladas e o horário liberado na agenda. Valores já recebidos não são estornados automaticamente. Esta ação não pode ser desfeita.`
       )
     ) {
       return

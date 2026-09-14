@@ -1250,6 +1250,22 @@ ganhou `blocos?: PlanoMensalistaBloco[] | null`.
 
 ---
 
+### 20.9 Cancelamento definitivo do plano (`cancel_monthly_plan_atomic`)
+
+*Ajustado em 13/09/2026.* Marca `planos_mensalista.status = 'cancelado'` e
+cancela toda reserva futura (`start_time >= now()`) do plano, **incluindo as
+já `confirmed`** — não só as `reservado`. Antes, o `UPDATE` filtrava
+`status = 'reservado'`, e como o mês corrente nasce sempre `confirmed` na
+criação do plano (independente de já estar pago), o restante do mês corrente
+sobrevivia ao cancelamento e continuava ocupando o calendário — dessincronia
+entre a tela de Mensalistas (recorrência cancelada) e o calendário do espaço
+(horário ainda "reservado"). Migration
+`20260913180000_cancel_monthly_plan_confirmed_too.sql`; teste pgTAP em
+`atomic_monthly_plans.sql` atualizado para esperar 0 `confirmed` / 0
+`reservado` / 8 `cancelled` após o cancelamento (antes: 4/0/4). Não lança
+crédito automático — valor já recebido fica como está; compensar o atleta é
+manual (Lançar/Retirar crédito).
+
 ## 21. Cancelamento de uma sessão do plano mensalista
 
 Implementado em 11/09/2026. Cancela **um** booking da recorrência, com crédito
@@ -1594,3 +1610,146 @@ depois, essas voltam para recálculo, e a escolha manual do gestor é removida d
 conjunto para nunca ser sobrescrita.
 
 Testes: `tests/atleta-perfil.test.mjs` (19).
+
+## 26. Relatório de Pagamentos — filtro de Atleta, Rateio linha a linha e dívida do mês
+
+Implementado em 13/09/2026, em cima do relatório existente (`getPaymentStatusReportAction`,
+`StatusPagamentosPageClient`).
+
+### 26.1 Tipos (`modules/reports/types/report.types.ts`)
+
+- `PaymentStatusRow.servico` ganha `'Recorrência' | 'Rateio'`.
+- `PAYMENT_STATUS_SUMMARY_EXCLUDED_SERVICOS = ['Recorrência']` — a linha
+  `Recorrência` é só contexto (o plano/mensalidade do mês), sem `valor`; excluída
+  da soma dos cards para não contar 2x o que as linhas `Rateio` já somam.
+- `PaymentStatusFilters` ganha `atletaId?: string` e `rateio?: boolean` (só tem
+  efeito com `tipo: 'mensal'`).
+- Novo `AthleteDebtSummary = { mensal: number; avulso: number }`.
+
+### 26.2 Filtro de Atleta
+
+Casa o atleta filtrado como **responsável OU participante** em qualquer fonte do
+relatório — não só `bookings.athlete_id`/`transactions.atleta_id`, mas também
+`booking_participants.atleta_id` (convidado de avulso com rateio) e
+`station_orders.atleta.id`/`rotativo_inscricoes.atleta.id`/`rotativo_credito_movimentos.atleta.id`.
+Implementado como pós-filtro em JS (`matchesAtleta`) depois do fetch de cada fonte —
+todas já traziam `id` do atleta relacionado (ou passaram a trazer: `booking_participants`
+ganhou `atleta_id` no `select`, e os `atleta:...(nome_perfil)` das demais fontes
+ganharam `id`), então não precisou de nova query.
+
+### 26.3 Checkbox "Rateio" (`rateio: boolean`, só com `tipo: 'mensal'`)
+
+`buildRateioBreakdownRows(supabase, arenaId, competencia, { courtId, sportId, atletaId })`
+substitui as linhas agregadas de `transactions` (categoria "Mensalidade") — a query de
+`transactions` nem roda nesse modo (`wantsRateioBreakdown` no `reportActions.ts`).
+
+- Busca `mensalista_mensalidades` da `competencia` (= `filters.startDate`, primeiro
+  dia do mês) e `arena_id`; filtra por `athlete_id = atletaId` quando informado
+  (responsável, não participante — ver 26.4 sobre por quê).
+- Espaço/esporte: `resolveAllowedPlanoIds` junta `planos_mensalista` (coluna legada
+  `court_id`/`sport_id`) com `planos_mensalista_blocos` (blocos extras de planos
+  multi-horário) pra achar os `plano_id` que batem com o filtro.
+- Por mensalidade: 1 linha `Recorrência` (plano + status quitado→Pago/senão→Pendente,
+  `valor: null`) + 1 linha `Rateio` por `mensalista_cobrancas` ativa (`ativo=true`) —
+  `valor` = quitado (`valor_pago+credito_aplicado`) se cobriu o `valor_devido`, senão
+  o que falta (`valor_devido - pago - crédito`), status Pago/Pendente correspondente.
+- `planos_mensalista_blocos` e a relação `mensalidade:mensalidade_id!inner(...)` ainda
+  não estão nos tipos gerados — mesmo cliente destipado (`LooseClient`) usado em
+  `modules/bookings/actions/mensalistaActions.ts`.
+
+### 26.4 "Quanto o atleta deve" (`athleteDebt`, cards no client)
+
+`computeAthleteDebtSummary` roda sempre que `filters.atletaId` está setado (com
+qualquer `tipo`, inclusive `todos`) — não depende do checkbox Rateio nem do filtro
+de Espaço/Esporte (dívida é do atleta, não de uma quadra).
+
+- **Avulso devido:** `bookings` sem `plano_mensalista_id`, `status IN (reservado,
+  pending_payment)`, no mês; soma `price` quando o atleta é `athlete_id`, ou a fatia
+  não paga (`booking_participants.valor` sem `pago_em`) quando é convidado de reserva
+  com `cobranca_por_participante`.
+- **Mensal devido:** `mensalista_cobrancas` do atleta (`atleta_id = filtro`,
+  `ativo = true`) cuja mensalidade (`!inner` join) é da `arena` e `competencia` do
+  mês; soma `valor_devido - valor_pago - credito_aplicado` (clampado em 0).
+
+Por que a linha `Rateio` (26.3) casa por **responsável** e o card de dívida (26.4)
+casa por **participante direto** (`cobranca.atleta_id`): o checkbox mostra "as
+recorrências de um responsável e o que está ligado a elas" (visão da recorrência);
+o card responde "quanto ESSA pessoa deve", incluindo quando ela só participa do
+rateio de alguém.
+
+### 26.5 UI (`StatusPagamentosPageClient.tsx`)
+
+- `AthleteFilterField` — combobox de busca única (debounce 400ms, `searchAthletesAction`
+  reaproveitado de `modules/loyalty`), mesmo padrão do `BookingParticipantsField`.
+- Checkbox "Rateio — Ver linha a linha" (`Checkbox` do design system) fica
+  desabilitado fora de `tipo='mensal'`; trocar o Tipo para outro valor desliga o
+  Rateio automaticamente.
+- 2 cards novos ("{atleta} deve de Mensal" / "de Avulso") só renderizam com atleta
+  selecionado, ao lado dos 3 cards existentes (Pago/Pendente/Cancelado).
+- `applyFilters` foi refeito para receber um objeto de overrides parciais
+  (`Partial<FilterState>`) em vez de 4 parâmetros posicionais — precisava para não
+  multiplicar combinações com os 2 filtros novos.
+
+## 27. Relatório de Pagamentos — extrato de ocupação hora a hora
+
+Implementado em 14/09/2026. Fecha o mês com professor/mensalista: lista cada
+hora de espaço ocupada, com o preço daquela hora.
+
+### 27.1 Tipos e contrato
+
+- `PaymentStatusRow` ganha `fim?: string | null` e `horas?: number | null` —
+  presentes só em linha que vem de reserva (comanda/rotativo/lançamento manual
+  não ocupam intervalo).
+- `PaymentStatusSummary` ganha `totalACobrar` (pago + pendente, cancelado fora) e
+  `totalHoras`.
+- `PaymentStatusFilters` ganha `detalharPorHora?: boolean`.
+- Export: `PAYMENT_STATUS_EXPORT_HEADERS` passa a ter **Horário** e **Horas**;
+  `buildPaymentStatusSheetData(rows, formatData, formatHorario?)`.
+
+### 27.2 `modules/reports/usage-lines.ts` (puro, testado)
+
+`buildUsageLines({ startISO, endISO, valorReserva, precoDaHora, bookingType,
+valorFallback })` devolve uma linha por hora (última fração rateada), ou uma
+linha só quando o espaço é `booking_type = 'unique'`.
+
+Regra de valor, nessa ordem:
+1. `valorReserva` (avulso) — rateado por duração, **sobra do arredondamento na
+   última linha**, para a soma bater ao centavo com o que foi cobrado;
+2. `precoDaHora(instante)` — tabela de preço (mensal);
+3. `valorFallback` — valor gravado na reserva, quando nenhuma tabela cobre;
+4. `null` — sem nada disso, a linha fica sem valor em vez de virar R$ 0,00.
+
+**`saoPauloWallClock(instant)`** devolve um `Date` cujos componentes *locais* são
+os de São Paulo. Sem isso o relatório erraria a grade: o servidor roda em UTC e
+uma quinta 21:00 na arena é **sexta 00:00** em UTC — leria a linha errada da
+tabela. O módulo não tem import de runtime (só tipos, apagados pelo
+`--experimental-strip-types`), por isso é testável direto em `tests/`.
+
+### 27.3 Preço da hora (`reportActions.ts`)
+
+- `loadArenaPricing(loose, arenaId)` monta, em 4 consultas, `courtId →
+  { bookingType, porTabela, porTipo, padrao }` a partir de `court_price_tables` →
+  `court_price_table_days` → `court_price_table_bands`. Só roda no modo extrato.
+- `buildPrecoDaHora(...)` aplica a cascata de `quoteSessaoMensalistaAction`:
+  snapshot do plano → tabela do tipo `mensalista` do espaço → **tabela padrão**.
+  A padrão entra também como rede quando a tabela escolhida existe mas está
+  **sem grade** — `Mensalista` e `Professor` nascem vazias
+  (`seed_court_price_tables`), e `resolve_court_price` devolveria 0 para elas.
+- O cálculo usa `matchPriceDay`/`priceAtInstant` de
+  `courts/lib/court-price-resolver.ts`, a porta TS de `public.resolve_court_price`.
+  Conferido contra o banco: uma reserva de 2h atravessando as faixas de R$ 100 e
+  R$ 120 dá `[100, 120]` no TS e `220` no `resolve_court_price` — mesmo número.
+
+### 27.4 O que entra e o que sai no modo extrato
+
+`payment-report-sources.ts` ganhou o parâmetro `{ detalharPorHora }`:
+
+- `shouldIncludeBookingRow` passa a aceitar **toda** reserva — inclusive a de
+  mensalista já `confirmed` (a aula que aconteceu) e a avulsa `cancelled` (a data
+  que caiu). Fora do extrato a regra antiga continua igual.
+- `shouldIncludeTransactionRow` **descarta a categoria `Mensalidade`**, senão o
+  mês entraria duas vezes (uso + pagamento). Lançamento manual e demais
+  categorias seguem aparecendo.
+
+O `summary` soma `totalACobrar`/`totalHoras` só no que não está cancelado, e
+continua ignorando as linhas `Recorrência` (§26.1).

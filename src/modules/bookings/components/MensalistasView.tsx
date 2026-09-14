@@ -98,7 +98,7 @@ export function MensalistasView({
   const handleCancelar = async (planoId: string, nome: string) => {
     if (
       !confirm(
-        `Tem certeza que deseja cancelar o plano de ${nome}? Todas as reservas futuras "Ag. Confirmação" serão canceladas.`
+        `Tem certeza que deseja cancelar o plano de ${nome}? Todas as reservas futuras (mesmo as já confirmadas) serão canceladas e o horário liberado na agenda.`
       )
     )
       return;
