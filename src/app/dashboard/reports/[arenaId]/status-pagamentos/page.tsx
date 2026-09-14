@@ -34,6 +34,8 @@ export default async function StatusPagamentosPage({
         countPago: 0,
         countPendente: 0,
         countCancelado: 0,
+        totalACobrar: 0,
+        totalHoras: 0,
       }}
       initialCourts={result.courts ?? []}
       initialSports={result.sports ?? []}
