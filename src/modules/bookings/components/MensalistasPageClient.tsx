@@ -97,7 +97,7 @@ export function MensalistasPageClient({ arenaId, initialPlanos }: Props) {
 
     const handleCancelar = (plano: PlanoMensalistaComDetalhes) => {
         const nome = plano.atleta?.nome_perfil ?? plano.athlete_name
-        if (!confirm(`Cancelar o plano de ${nome}? As reservas futuras pendentes serão canceladas.`)) return
+        if (!confirm(`Cancelar o plano de ${nome}? Todas as reservas futuras (mesmo as já confirmadas) serão canceladas e o horário liberado na agenda.`)) return
         setLoadingId(`cancel-${plano.id}`)
         startTransition(async () => {
             const res = await cancelPlanoMensalistaAction(arenaId, plano.id)
