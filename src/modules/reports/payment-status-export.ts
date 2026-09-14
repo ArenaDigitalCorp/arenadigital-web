@@ -2,6 +2,8 @@ import type { PaymentStatusRow } from '@/modules/reports/types/report.types'
 
 export const PAYMENT_STATUS_EXPORT_HEADERS = [
   'Data',
+  'Horário',
+  'Horas',
   'Atleta',
   'Serviço',
   'Espaço',
@@ -12,13 +14,18 @@ export const PAYMENT_STATUS_EXPORT_HEADERS = [
 
 export function buildPaymentStatusSheetData(
   rows: PaymentStatusRow[],
-  formatDateTime: (iso: string) => string,
+  formatData: (iso: string) => string,
+  formatHorario: (row: PaymentStatusRow) => string = (row) => formatData(row.data),
 ): Array<Array<string | number>> {
   return [
     [...PAYMENT_STATUS_EXPORT_HEADERS],
     ...rows.map((row) => [
-      formatDateTime(row.data),
-      row.atleta ?? '—',
+      formatData(row.data),
+      formatHorario(row),
+      row.horas ?? '',
+      // Sem atleta cadastrado (participante avulso do rateio, comanda de balcão…):
+      // "Avulsa" diz o que é; um travessão só parecia dado faltando.
+      row.atleta ?? 'Avulsa',
       row.servico,
       row.espaco ?? '—',
       row.esporte ?? '—',
