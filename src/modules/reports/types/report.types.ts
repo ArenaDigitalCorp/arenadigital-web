@@ -63,6 +63,24 @@ export type CourtFilter = { id: string; name: string }
 export type SportFilter = { id: string; name: string }
 export type AthleteFilter = { id: string; nome_perfil: string }
 
+/**
+ * Dados da arena para o cabeçalho do PDF exportado — nome, contato e endereço
+ * já resolvidos (cidade/UF vêm de `municipios`/`estados`, ver
+ * `getArenaBillingAddress`). Carregado uma vez na página, não a cada export.
+ */
+export type PaymentStatusArenaInfo = {
+  name: string
+  phone: string | null
+  email: string | null
+  cpfCnpj: string | null
+  street: string | null
+  number: string | null
+  complement: string | null
+  neighborhood: string | null
+  city: string | null
+  stateUf: string | null
+}
+
 export type PaymentStatusFilters = {
   tipo?: 'avulso' | 'mensal' | 'todos'
   startDate?: string
