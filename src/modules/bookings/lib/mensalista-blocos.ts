@@ -149,6 +149,38 @@ export function fimDoMes(base: Date): Date {
 }
 
 /**
+ * Ocorrências de um bloco entre `de` e `ate`, descontando a de hoje quando ela
+ * já começou — não dá para jogar (nem cobrar) um horário que já passou.
+ *
+ * Só a ocorrência de HOJE pode cair nesse caso: qualquer outra data em `de..ate`
+ * é necessariamente futura. Espelha a mesma regra que
+ * `create_monthly_plan_blocks_atomic` usa no banco para decidir quais sessões
+ * viram reserva (`horario_inicio >= now()`) — contar aqui uma sessão que o
+ * banco nunca vai criar infla a mensalidade e o "cobrado agora" por cima do que
+ * o atleta realmente vai jogar.
+ */
+export function ocorrenciasDoBloco(
+  bloco: Pick<Bloco, 'diaSemana' | 'from'>,
+  de: Date,
+  ate: Date,
+  agora: Date
+): Date[] {
+  const datas = ocorrencias(bloco.diaSemana, de, ate);
+  const [primeira] = datas;
+  if (!primeira) return datas;
+
+  const ehHoje =
+    primeira.getFullYear() === agora.getFullYear() &&
+    primeira.getMonth() === agora.getMonth() &&
+    primeira.getDate() === agora.getDate();
+  if (!ehHoje) return datas;
+
+  const inicioDeHoje = new Date(primeira);
+  inicioDeHoje.setHours(bloco.from, 0, 0, 0);
+  return inicioDeHoje >= agora ? datas : datas.slice(1);
+}
+
+/**
  * Primeiro dia do primeiro mês em que o plano roda **inteiro** — o mês que serve
  * de referência tanto para sugerir a mensalidade quanto para dividir o pró-rata.
  *
@@ -304,20 +336,20 @@ export interface ResumoPlano {
 }
 
 /** Quantas ocorrências dos blocos caem inteiramente num mês. */
-function ocorrenciasNoMes(blocos: Bloco[], mesInicio: Date): number {
+function ocorrenciasNoMes(blocos: Bloco[], mesInicio: Date, agora: Date): number {
   const mesFim = fimDoMes(mesInicio);
   return blocos.reduce(
-    (total, bloco) => total + ocorrencias(bloco.diaSemana, mesInicio, mesFim).length,
+    (total, bloco) => total + ocorrenciasDoBloco(bloco, mesInicio, mesFim, agora).length,
     0
   );
 }
 
 /** Minutos que os blocos ocupam num mês — base do rateio, igual ao banco. */
-function minutosNoMes(blocos: Bloco[], mesInicio: Date): number {
+function minutosNoMes(blocos: Bloco[], mesInicio: Date, agora: Date): number {
   const mesFim = fimDoMes(mesInicio);
   return blocos.reduce(
     (total, bloco) =>
-      total + ocorrencias(bloco.diaSemana, mesInicio, mesFim).length * bloco.hours.length * 60,
+      total + ocorrenciasDoBloco(bloco, mesInicio, mesFim, agora).length * bloco.hours.length * 60,
     0
   );
 }
@@ -325,11 +357,17 @@ function minutosNoMes(blocos: Bloco[], mesInicio: Date): number {
 /**
  * Compõe o subtotal. `valorPrimeiroMes` espelha o pró-rata por minutos que
  * `generate_mensalista_mensalidades_atomic` aplica na primeira competência.
+ *
+ * `agora` é o instante real (com hora), não só a data — é o que permite
+ * descontar a ocorrência de hoje quando o horário do bloco já passou. Default
+ * `new Date()` para quem chama sem se preocupar com isso; os testes fixam um
+ * valor para não depender do relógio da máquina.
  */
 export function resumirPlano(
   blocos: Bloco[],
   valoresPorBloco: number[],
-  inicioVigencia: Date
+  inicioVigencia: Date,
+  agora: Date = new Date()
 ): ResumoPlano {
   const mesAtualFim = fimDoMes(inicioVigencia);
   const referenciaInicio = mesReferencia(inicioVigencia);
@@ -338,8 +376,8 @@ export function resumirPlano(
   const resumos: ResumoBloco[] = blocos.map((bloco, index) => ({
     ...bloco,
     valorOcorrencia: valoresPorBloco[index] ?? 0,
-    ocorrenciasMesCheio: ocorrencias(bloco.diaSemana, referenciaInicio, referenciaFim).length,
-    ocorrenciasPrimeiroMes: ocorrencias(bloco.diaSemana, inicioVigencia, mesAtualFim).length,
+    ocorrenciasMesCheio: ocorrenciasDoBloco(bloco, referenciaInicio, referenciaFim, agora).length,
+    ocorrenciasPrimeiroMes: ocorrenciasDoBloco(bloco, inicioVigencia, mesAtualFim, agora).length,
   }));
 
   let horasSemana = 0;
@@ -363,15 +401,15 @@ export function resumirPlano(
   // Como cada competência é proporcional aos minutos do mês, a fatura varia
   // conforme o calendário. Percorre um ano a partir da referência e reduz aos
   // valores distintos.
-  const minutosReferencia = minutosNoMes(blocos, referenciaInicio);
+  const minutosReferencia = minutosNoMes(blocos, referenciaInicio, agora);
   const porValor = new Map<number, ValorMensalPossivel>();
   if (minutosReferencia > 0) {
     for (let i = 0; i < 12; i++) {
       const mes = new Date(referenciaInicio.getFullYear(), referenciaInicio.getMonth() + i, 1);
-      const minutos = minutosNoMes(blocos, mes);
+      const minutos = minutosNoMes(blocos, mes, agora);
       if (minutos <= 0) continue;
       const valor = Math.round(mesCheioArredondado * (minutos / minutosReferencia) * 100) / 100;
-      porValor.set(valor, { ocorrencias: ocorrenciasNoMes(blocos, mes), valor });
+      porValor.set(valor, { ocorrencias: ocorrenciasNoMes(blocos, mes, agora), valor });
     }
   }
 
@@ -399,8 +437,17 @@ export function resumirPlano(
  * O denominador NÃO é o mês de início: um plano que começa em setembro (4
  * quintas) com mensalidade calculada sobre outubro (5 quintas) cobraria 1/4 do
  * mês por sessão, e não 1/5 — 25% a mais do que o combinado.
+ *
+ * `agora` (o instante real, com hora) desconta a ocorrência de hoje quando o
+ * horário do bloco já passou — ver `ocorrenciasDoBloco`. Sem isso, marcar às
+ * 20h40 um mensalista de segunda 16h–17h cobrava a sessão de hoje, que nem o
+ * banco vai criar como reserva.
  */
-export function fracaoPrimeiroMes(blocos: Bloco[], inicioVigencia: Date): number {
+export function fracaoPrimeiroMes(
+  blocos: Bloco[],
+  inicioVigencia: Date,
+  agora: Date = new Date()
+): number {
   const mesFim = fimDoMes(inicioVigencia);
   const referenciaInicio = mesReferencia(inicioVigencia);
   const referenciaFim = fimDoMes(referenciaInicio);
@@ -411,8 +458,8 @@ export function fracaoPrimeiroMes(blocos: Bloco[], inicioVigencia: Date): number
   for (const bloco of blocos) {
     const duracao = bloco.hours.length * 60;
     minutosReferencia +=
-      ocorrencias(bloco.diaSemana, referenciaInicio, referenciaFim).length * duracao;
-    minutosRestantes += ocorrencias(bloco.diaSemana, inicioVigencia, mesFim).length * duracao;
+      ocorrenciasDoBloco(bloco, referenciaInicio, referenciaFim, agora).length * duracao;
+    minutosRestantes += ocorrenciasDoBloco(bloco, inicioVigencia, mesFim, agora).length * duracao;
   }
 
   if (minutosReferencia <= 0) return 0;
