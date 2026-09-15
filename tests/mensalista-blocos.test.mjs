@@ -8,6 +8,7 @@ import {
   avaliarSlot,
   fracaoPrimeiroMes,
   ocorrencias,
+  ocorrenciasDoBloco,
   resumirPlano,
   slotKey,
 } from '../src/modules/bookings/lib/mensalista-blocos.ts'
@@ -96,6 +97,82 @@ test('o pró-rata pondera por duração, não por número de sessões', () => {
 
 test('sem blocos a fração é zero em vez de dividir por zero', () => {
   assert.equal(fracaoPrimeiroMes([], new Date(2026, 8, 9)), 0)
+})
+
+// ── Desconta a ocorrência de hoje quando o horário já passou ─────────────
+// Marcar um mensalista às 20h40 para um horário de segunda 16h–17h não pode
+// cobrar a sessão de hoje: nem o banco cria essa reserva
+// (`create_monthly_plan_blocks_atomic` só conta `horario_inicio >= now()`).
+
+const SEGUNDA_16H = { diaSemana: 1, from: 16, to: 17 }
+
+test('ocorrência de hoje some quando o bloco já começou', () => {
+  // 14/09/2026 é segunda-feira.
+  const hoje = new Date(2026, 8, 14)
+  const finalDoMes = new Date(2026, 8, 30)
+  const depoisDoBloco = new Date(2026, 8, 14, 20, 40)
+
+  const datas = ocorrenciasDoBloco(SEGUNDA_16H, hoje, finalDoMes, depoisDoBloco)
+  assert.equal(datas.length, 2, 'sobram as segundas 21 e 28 — hoje já passou')
+  assert.equal(datas[0].getDate(), 21)
+})
+
+test('ocorrência de hoje conta quando o bloco ainda não começou', () => {
+  const hoje = new Date(2026, 8, 14)
+  const finalDoMes = new Date(2026, 8, 30)
+  const antesDoBloco = new Date(2026, 8, 14, 10, 0)
+
+  const datas = ocorrenciasDoBloco(SEGUNDA_16H, hoje, finalDoMes, antesDoBloco)
+  assert.equal(datas.length, 3, 'ainda dá tempo de jogar hoje às 16h')
+})
+
+test('dias que não são hoje nunca são descontados', () => {
+  // A mesma pergunta, feita numa terça: a segunda mais próxima já é futura,
+  // então o horário do bloco é irrelevante.
+  const terca = new Date(2026, 8, 15)
+  const finalDoMes = new Date(2026, 8, 30)
+  const agora = new Date(2026, 8, 15, 23, 0)
+
+  const datas = ocorrenciasDoBloco(SEGUNDA_16H, terca, finalDoMes, agora)
+  assert.equal(datas.length, 2, 'as segundas 21 e 28 continuam de pé')
+})
+
+test('cobrado agora exclui a sessão de hoje que já passou', () => {
+  // Plano de segunda 16h-17h a R$ 80, marcado às 20h40 de segunda 14/09/2026.
+  const bloco = agruparBlocos([slotKey('quadra-1', 1, 16)])
+  const inicio = new Date(2026, 8, 14)
+  const antesDoBloco = new Date(2026, 8, 14, 10, 0)
+  const depoisDoBloco = new Date(2026, 8, 14, 20, 40)
+
+  const resumo = resumirPlano(bloco, [80], inicio, depoisDoBloco)
+  const aindaDaTempo = resumirPlano(bloco, [80], inicio, antesDoBloco)
+
+  assert.equal(resumo.ocorrenciasPrimeiroMes, 2, 'restam as segundas 21 e 28 — hoje já era')
+  assert.equal(
+    aindaDaTempo.ocorrenciasPrimeiroMes, 3,
+    'às 10h ainda dá tempo de jogar hoje às 16h — sem o horário, a conta ficaria sempre igual à de 20h40'
+  )
+
+  const fracao = fracaoPrimeiroMes(bloco, inicio, depoisDoBloco)
+  assert.equal(
+    Math.round(resumo.valorMesCheio * fracao * 100) / 100,
+    resumo.valorPrimeiroMes,
+    'o pró-rata cobrado agora bate com as sessões que realmente sobraram'
+  )
+})
+
+// ── Campo de valor acompanha a tabela ao adicionar blocos ────────────────
+// `setValorMensal` é assíncrono: se a ref `lastAutoValorBlocos.current` for
+// sobrescrita com o texto NOVO antes do updater rodar, o updater compara o
+// valor antigo do campo contra o valor novo (nunca bate) e o campo trava no
+// primeiro preenchimento — acrescentar um segundo horário não reajusta mais
+// o valor mensal sugerido.
+
+test('o auto-preenchimento do valor mensal lê o sugerido anterior antes de atualizar a ref', () => {
+  const modal = read('../src/modules/bookings/components/BookingModal.tsx')
+
+  assert.match(modal, /const sugeridoAnterior = lastAutoValorBlocos\.current/)
+  assert.match(modal, /setValorMensal\(\(prev\) => \(prev === '' \|\| prev === sugeridoAnterior \? texto : prev\)\)/)
 })
 
 // ── Subtotal ──────────────────────────────────────────────────────────────

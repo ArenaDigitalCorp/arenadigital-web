@@ -70,6 +70,19 @@ const sections = [
         ],
     },
     {
+        title: "6.1. Assinatura Arena Digital Plus no aplicativo",
+        body: [
+            "A assinatura Arena Digital Plus destinada ao atleta é contratada e cobrada pela loja do dispositivo (Apple App Store ou Google Play), conforme o preço e a moeda exibidos antes da confirmação da compra.",
+        ],
+        list: [
+            "A assinatura tem renovação automática mensal até que seja cancelada",
+            "O gerenciamento e o cancelamento são realizados nas configurações de assinaturas da respectiva loja",
+            "Após o cancelamento, o acesso permanece disponível até o fim do período já pago, salvo revogação, reembolso ou determinação diferente da loja",
+            "Pedidos de reembolso são analisados pela Apple ou pelo Google conforme as regras da loja e a legislação aplicável",
+            "A exclusão da conta Arena Digital não substitui o cancelamento da assinatura na loja",
+        ],
+    },
+    {
         title: "7. Responsabilidades",
         body: ["A Arena Digital não é responsável por:"],
         list: [
@@ -109,7 +122,7 @@ const sections = [
     },
     {
         title: "12. Contato",
-        body: ["Em caso de dúvidas, entre em contato pelo e-mail: seuemail@arena.com"],
+        body: ["Em caso de dúvidas, entre em contato pelo e-mail: contato@arenadigital.app"],
     },
 ];
 
@@ -157,7 +170,7 @@ export default function TermsOfUsePage() {
                             </section>
                         ))}
 
-                        <p className="mt-9 text-[10px] leading-[1.5]">Última atualização: 14/04/2026</p>
+                        <p className="mt-9 text-[10px] leading-[1.5]">Última atualização: 13/09/2026</p>
                     </div>
                 </section>
             </main>

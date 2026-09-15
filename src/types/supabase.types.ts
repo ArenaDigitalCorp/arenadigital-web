@@ -6087,6 +6087,18 @@ export type Database = {
         }
         Returns: Json
       }
+      // Adicionado manualmente — RPC nova em
+      // 20260913170000_mensalista_rateio_remover_participante.sql, ainda não
+      // aplicada/regerada via `pnpm db:types`. Remover este comentário quando
+      // o `db:types` rodar contra o banco com a migration aplicada.
+      remove_mensalista_rateio_participante_atomic: {
+        Args: {
+          p_arena_id: string
+          p_cobranca_id: string
+          p_registered_by: string
+        }
+        Returns: Json
+      }
       confirm_backoffice_booking_payment: {
         Args: {
           p_amount?: number

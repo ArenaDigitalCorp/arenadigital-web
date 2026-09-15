@@ -31,6 +31,12 @@ interface Props {
   onSuccess: () => void
   arenaId: string
   cobranca: CobrancaRow | null
+  /** Quanto falta da MENSALIDADE inteira (não da fatia). Quando informado
+   *  (mensalidade com rateio ativo), é o que manda como "Restante" e teto do
+   *  crédito — a fatia individual não tem mais um valor_devido significativo.
+   *  Quando null, cai no cálculo tradicional a partir de `cobranca.valor_devido`
+   *  (mensalidade sem rateio, onde a fatia única É o valor total). */
+  restanteMensalidade?: number | null
   creditoSaldo: number
   modosPagamento: { id: string; nome: string }[]
   /** Nome do responsável pela recorrência — recebe o crédito quando a parcela é de um avulso. */
@@ -43,17 +49,19 @@ export function RegistrarPagamentoModal({
   onSuccess,
   arenaId,
   cobranca,
+  restanteMensalidade = null,
   creditoSaldo,
   modosPagamento,
   responsavelNome,
 }: Props) {
   const restante = cobranca
-    ? Math.max(
+    ? (restanteMensalidade ??
+      Math.max(
         0,
         Number(cobranca.valor_devido) -
           Number(cobranca.valor_pago) -
           Number(cobranca.credito_aplicado)
-      )
+      ))
     : 0
 
   const creditoDisponivel = cobranca?.atleta_id
@@ -148,7 +156,10 @@ export function RegistrarPagamentoModal({
             <div className="rounded-xl bg-slate-50 p-3 text-sm">
               <p className="font-bold text-arena-navy-800">{cobranca.nome}</p>
               <p className="text-arena-navy-800/60">
-                Devido {formatCurrency(cobranca.valor_devido)} · Restante{' '}
+                {restanteMensalidade == null && (
+                  <>Devido {formatCurrency(cobranca.valor_devido)} · </>
+                )}
+                Restante{' '}
                 <span className="font-bold text-amber-600">
                   {formatCurrency(restante)}
                 </span>
