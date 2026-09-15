@@ -81,10 +81,10 @@ test('o pró-rata pondera por duração, não por número de sessões', () => {
     slotKey('quadra-1', 6, 10),
   ])
 
-  const mesInteiro = fracaoPrimeiroMes(blocos, new Date(2026, 8, 1))
+  const mesInteiro = fracaoPrimeiroMes(blocos, new Date(2026, 8, 1), new Date(2026, 8, 1))
   assert.equal(mesInteiro, 1, 'começando no dia 1 cobra o mês cheio')
 
-  const parcial = fracaoPrimeiroMes(blocos, new Date(2026, 8, 9))
+  const parcial = fracaoPrimeiroMes(blocos, new Date(2026, 8, 9), new Date(2026, 8, 9))
   assert.ok(parcial > 0 && parcial < 1, `esperava fração parcial, veio ${parcial}`)
 
   // Numerador: o que ainda cabe em setembro a partir de 09/09 —
@@ -96,7 +96,7 @@ test('o pró-rata pondera por duração, não por número de sessões', () => {
 })
 
 test('sem blocos a fração é zero em vez de dividir por zero', () => {
-  assert.equal(fracaoPrimeiroMes([], new Date(2026, 8, 9)), 0)
+  assert.equal(fracaoPrimeiroMes([], new Date(2026, 8, 9), new Date(2026, 8, 9)), 0)
 })
 
 // ── Desconta a ocorrência de hoje quando o horário já passou ─────────────
@@ -179,7 +179,7 @@ test('o auto-preenchimento do valor mensal lê o sugerido anterior antes de atua
 
 test('o subtotal multiplica cada bloco pelas ocorrências do seu dia', () => {
   const blocos = agruparBlocos([slotKey('quadra-1', 2, 19), slotKey('quadra-1', 2, 20)])
-  const resumo = resumirPlano(blocos, [170], new Date(2026, 8, 9))
+  const resumo = resumirPlano(blocos, [170], new Date(2026, 8, 9), new Date(2026, 8, 9))
 
   assert.equal(resumo.horasSemana, 2)
   assert.equal(resumo.valorSemana, 170)
@@ -369,8 +369,8 @@ const taxaProRata = (resumo, fracao) =>
 test('o pró-rata cobra o mesmo preço por sessão que o valor mensal', () => {
   // Quinta 20h–21h a R$ 100/ocorrência, plano criado em sexta 11/09/2026.
   const inicio = new Date(2026, 8, 11)
-  const resumo = resumirPlano([QUINTA_20H], [100], inicio)
-  const fracao = fracaoPrimeiroMes([QUINTA_20H], inicio)
+  const resumo = resumirPlano([QUINTA_20H], [100], inicio, inicio)
+  const fracao = fracaoPrimeiroMes([QUINTA_20H], inicio, inicio)
 
   assert.equal(
     Math.round(taxaProRata(resumo, fracao) * 100) / 100,
@@ -381,8 +381,8 @@ test('o pró-rata cobra o mesmo preço por sessão que o valor mensal', () => {
 
 test('caso do gestor: restam 2 quintas em setembro/2026, pró-rata = 2 sessões', () => {
   const inicio = new Date(2026, 8, 11) // sexta
-  const resumo = resumirPlano([QUINTA_20H], [100], inicio)
-  const fracao = fracaoPrimeiroMes([QUINTA_20H], inicio)
+  const resumo = resumirPlano([QUINTA_20H], [100], inicio, inicio)
+  const fracao = fracaoPrimeiroMes([QUINTA_20H], inicio, inicio)
 
   // setembro/2026 tem quintas em 3, 10, 17 e 24 — restam 17 e 24
   assert.equal(resumo.ocorrenciasPrimeiroMes, 2)
@@ -396,8 +396,8 @@ test('caso do gestor: restam 2 quintas em setembro/2026, pró-rata = 2 sessões'
 
 test('plano que começa no dia 1º não tem pró-rata, e o mensal é o do próprio mês', () => {
   const inicio = new Date(2026, 8, 1) // terça, 01/09/2026
-  const resumo = resumirPlano([QUINTA_20H], [100], inicio)
-  const fracao = fracaoPrimeiroMes([QUINTA_20H], inicio)
+  const resumo = resumirPlano([QUINTA_20H], [100], inicio, inicio)
+  const fracao = fracaoPrimeiroMes([QUINTA_20H], inicio, inicio)
 
   assert.equal(fracao, 1, 'o mês inteiro está disponível — nada a proporcionalizar')
   assert.equal(resumo.ocorrenciasMesCheio, 4, 'setembro/2026 tem 4 quintas')
@@ -406,10 +406,10 @@ test('plano que começa no dia 1º não tem pró-rata, e o mensal é o do própr
 
 test('a referência do mês cheio é o primeiro mês em que o plano roda inteiro', () => {
   // começando dia 1º, o próprio mês já é cheio
-  assert.equal(resumirPlano([QUINTA_20H], [100], new Date(2026, 9, 1)).ocorrenciasMesCheio, 5,
+  assert.equal(resumirPlano([QUINTA_20H], [100], new Date(2026, 9, 1), new Date(2026, 9, 1)).ocorrenciasMesCheio, 5,
     'outubro/2026 tem 5 quintas')
   // começando no meio, a referência é o mês seguinte
-  assert.equal(resumirPlano([QUINTA_20H], [100], new Date(2026, 9, 15)).ocorrenciasMesCheio, 4,
+  assert.equal(resumirPlano([QUINTA_20H], [100], new Date(2026, 9, 15), new Date(2026, 9, 15)).ocorrenciasMesCheio, 4,
     'novembro/2026 tem 4 quintas')
 })
 
@@ -419,8 +419,8 @@ test('com blocos de durações diferentes, a invariante é por minuto', () => {
   const sabado = { courtId: 'q1', courtName: 'Q1', diaSemana: 6, from: 9, to: 11, hours: [9, 10] }
   const inicio = new Date(2026, 8, 11)
 
-  const resumo = resumirPlano([terca, sabado], [50, 100], inicio)
-  const fracao = fracaoPrimeiroMes([terca, sabado], inicio)
+  const resumo = resumirPlano([terca, sabado], [50, 100], inicio, inicio)
+  const fracao = fracaoPrimeiroMes([terca, sabado], inicio, inicio)
   assert.ok(fracao > 0 && fracao < 1)
 
   // Preço por sessão NÃO serve de invariante aqui: outubro tem 4 terças e 5
@@ -475,7 +475,7 @@ test('o pró-rata do banco usa o mesmo mês de referência da tela', { skip: !ha
 
 test('a fatura de cada mês acompanha quantas reservas o mês tem', () => {
   const inicio = new Date(2026, 8, 11)
-  const resumo = resumirPlano([QUINTA_20H], [100], inicio)
+  const resumo = resumirPlano([QUINTA_20H], [100], inicio, inicio)
 
   assert.deepEqual(
     resumo.variacaoMensal,
@@ -491,7 +491,7 @@ test('somando as competências, cada sessão custa o preço de tabela', () => {
   // Uma janela de 12 meses tem 52 OU 53 quintas — não dá para fixar o total em
   // R$ 5.200. O que vale sempre é: total ÷ sessões = preço da hora.
   const inicio = new Date(2026, 9, 1) // outubro, que já é o mês de referência
-  const resumo = resumirPlano([QUINTA_20H], [100], inicio)
+  const resumo = resumirPlano([QUINTA_20H], [100], inicio, inicio)
 
   let total = 0
   let sessoes = 0
@@ -512,7 +512,7 @@ test('plano sem variação de calendário não polui a tela', () => {
   // Sete blocos, um por dia da semana: todo mês tem 28..31 ocorrências, então
   // há variação; já um plano de um dia só em fevereiro não-bissexto seria fixo.
   // O que importa aqui é o contrato: a lista traz os valores DISTINTOS.
-  const resumo = resumirPlano([QUINTA_20H], [100], new Date(2026, 9, 1))
+  const resumo = resumirPlano([QUINTA_20H], [100], new Date(2026, 9, 1), new Date(2026, 9, 1))
   const valores = resumo.variacaoMensal.map((v) => v.valor)
   assert.equal(new Set(valores).size, valores.length, 'sem valores repetidos')
 })
