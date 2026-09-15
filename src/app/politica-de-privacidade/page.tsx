@@ -103,6 +103,7 @@ const sections: { title: string; blocks: Block[] }[] = [
                 type: "ul",
                 items: [
                     "Sistemas de autenticação (Google, Apple e outros provedores autorizados);",
+                    "Apple App Store e Google Play, incluindo identificadores de produto, compra, transação e assinatura, status e período de acesso;",
                     "Gateways de pagamento;",
                     "Plataformas parceiras;",
                     "Redes sociais (quando o login social for utilizado).",
@@ -466,7 +467,7 @@ export default function PrivacyPolicyPage() {
                             </section>
                         ))}
 
-                        <p className="mt-9 text-[10px] leading-[1.5]">Última atualização: 22/07/2026</p>
+                        <p className="mt-9 text-[10px] leading-[1.5]">Última atualização: 13/09/2026</p>
                     </div>
                 </section>
             </main>

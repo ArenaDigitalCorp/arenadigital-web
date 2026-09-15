@@ -17,6 +17,7 @@ import {
   MoreVertical,
   Plus,
   Star,
+  Trash2,
   TrendingUp,
   Wallet,
   CalendarX2,
@@ -43,6 +44,7 @@ import {
 } from '@/lib/format'
 import { toast } from 'sonner'
 import { cancelPlanoMensalistaAction } from '@/modules/bookings/actions/mensalistaActions'
+import { removerParticipanteRateioAction } from '@/modules/mensalistas/actions/mensalistaActions'
 import { RateioModal } from './RateioModal'
 import { RegistrarPagamentoModal } from './RegistrarPagamentoModal'
 import { LancarCreditoModal } from './LancarCreditoModal'
@@ -127,6 +129,27 @@ function formatLoyalty(value: number): string {
   })}`
 }
 
+function round2(n: number) {
+  return Math.round((n + Number.EPSILON) * 100) / 100
+}
+
+/** Soma paga (dinheiro + crédito) pelas cobranças ativas informadas. */
+function somaPaga(cobrancas: CobrancaRow[]): number {
+  return cobrancas.reduce(
+    (s, c) => s + Number(c.valor_pago) + Number(c.credito_aplicado),
+    0
+  )
+}
+
+/** Quanto falta da mensalidade como um todo — nunca da fatia individual, que
+ *  com o rateio incremental deixou de somar necessariamente o valor_total. */
+function restanteMensalidade(valorTotal: number, cobrancasAtivas: CobrancaRow[]): number {
+  return Math.max(0, round2(valorTotal - somaPaga(cobrancasAtivas)))
+}
+
+/** Sem rateio a fatia única É o valor_total, então o status por cobrança
+ *  ainda é significativo. Com rateio, o "devido" de uma fatia isolada não
+ *  representa nada — o único status que importa é o da mensalidade inteira. */
 function isQuitada(c: CobrancaRow): boolean {
   return (
     Number(c.valor_pago) + Number(c.credito_aplicado) + 0.01 >= Number(c.valor_devido)
@@ -142,13 +165,15 @@ function cobrancaStatus(c: CobrancaRow): { label: string; className: string } {
 
 type RecorrenciaPagamentoStatus = 'pago' | 'pendente' | null
 
-/** Status agregado da mensalidade da recorrência: pendente se qualquer cobrança
- *  ativa (rateada ou não) ainda não estiver quitada; null quando não há mensalidade
- *  gerada para o mês. */
+/** Status agregado da mensalidade da recorrência: pendente enquanto a soma
+ *  paga pelas cobranças ativas não cobrir o valor_total; null quando não há
+ *  mensalidade gerada para o mês. */
 function recorrenciaPagamentoStatus(rec: RecorrenciaResumo): RecorrenciaPagamentoStatus {
   const ativas = rec.cobrancas.filter((c) => c.ativo)
   if (!rec.mensalidade || ativas.length === 0) return null
-  return ativas.every(isQuitada) ? 'pago' : 'pendente'
+  return restanteMensalidade(Number(rec.mensalidade.valor_total), ativas) <= 0.01
+    ? 'pago'
+    : 'pendente'
 }
 
 const STATUS_PAGAMENTO_STYLE: Record<'pago' | 'pendente', { label: string; className: string }> = {
@@ -169,6 +194,7 @@ export function MensalistaDetailClient({
   const [isPending, startTransition] = useTransition()
   const [page, setPage] = useState(1)
   const [cancelingId, setCancelingId] = useState<string | null>(null)
+  const [removingCobrancaId, setRemovingCobrancaId] = useState<string | null>(null)
   const [expandedPlanoIds, setExpandedPlanoIds] = useState<Set<string>>(new Set())
   const [pagamentoFilter, setPagamentoFilter] = useState<'todos' | 'pendente' | 'pago'>(
     'todos'
@@ -190,7 +216,10 @@ export function MensalistaDetailClient({
     cobrancas: CobrancaRow[]
     participantesSugeridos: { id: string; nome: string }[]
   } | null>(null)
-  const [pagamentoTarget, setPagamentoTarget] = useState<CobrancaRow | null>(null)
+  const [pagamentoTarget, setPagamentoTarget] = useState<{
+    cobranca: CobrancaRow
+    restanteMensalidade: number
+  } | null>(null)
   const [encerramentoTarget, setEncerramentoTarget] = useState<{
     planoId: string
     label: string
@@ -232,7 +261,7 @@ export function MensalistaDetailClient({
   const handleCancelPlano = async (planoId: string, label: string) => {
     if (
       !window.confirm(
-        `Cancelar definitivamente a recorrência "${label}"? As reservas futuras ainda não confirmadas serão canceladas. Esta ação não pode ser desfeita.`
+        `Cancelar definitivamente a recorrência "${label}"? Todas as reservas futuras (mesmo as já confirmadas) serão canceladas e o horário liberado na agenda. Valores já recebidos não são estornados automaticamente. Esta ação não pode ser desfeita.`
       )
     ) {
       return
@@ -248,6 +277,34 @@ export function MensalistaDetailClient({
       }
     } finally {
       setCancelingId(null)
+    }
+  }
+
+  /** Exclui um participante do rateio e reverte o dinheiro/crédito lançados
+   *  para ele — ação destrutiva (some do caixa da arena), por isso confirma. */
+  const handleRemoverParticipante = async (c: CobrancaRow) => {
+    const pago = Number(c.valor_pago) + Number(c.credito_aplicado)
+    const aviso =
+      pago > 0
+        ? `Excluir "${c.nome}" do rateio e reverter ${formatCurrency(pago)} lançados para ela(e)? O dinheiro sai do caixa da arena e o crédito envolvido é desfeito. Esta ação não pode ser desfeita.`
+        : `Excluir "${c.nome}" do rateio?`
+    if (!window.confirm(aviso)) return
+
+    setRemovingCobrancaId(c.id)
+    try {
+      const res = await removerParticipanteRateioAction({ arenaId, cobrancaId: c.id })
+      if (res.success) {
+        toast.success(
+          pago > 0
+            ? `Participante removido e ${formatCurrency(pago)} revertidos.`
+            : 'Participante removido do rateio.'
+        )
+        refresh()
+      } else {
+        toast.error(res.error ?? 'Erro ao remover participante')
+      }
+    } finally {
+      setRemovingCobrancaId(null)
     }
   }
 
@@ -443,6 +500,9 @@ export function MensalistaDetailClient({
             return total + Math.max(0, hf - hi)
           }, 0)
           const m = rec.mensalidade
+          const restanteMensalidadeAtual = m
+            ? restanteMensalidade(Number(m.valor_total), rec.cobrancas.filter((c) => c.ativo))
+            : 0
           const isOpen = expandedPlanoIds.has(p.id)
           const valorMesAtual = m ? Number(m.valor_total) : Number(p.valor_mensal)
           const isProporcional =
@@ -661,7 +721,29 @@ export function MensalistaDetailClient({
                       ao início).
                     </p>
                   ) : (
-                    <div className="overflow-x-auto">
+                    <>
+                      {m.rateio && (
+                        <div className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-2.5 text-sm">
+                          <span className="font-medium text-arena-navy-800/60">
+                            Pago:{' '}
+                            <span className="font-bold text-emerald-600">
+                              {formatCurrency(somaPaga(rec.cobrancas.filter((c) => c.ativo)))}
+                            </span>
+                          </span>
+                          <span className="font-medium text-arena-navy-800/60">
+                            Falta:{' '}
+                            <span
+                              className={cn(
+                                'font-bold',
+                                restanteMensalidadeAtual > 0 ? 'text-amber-600' : 'text-slate-400'
+                              )}
+                            >
+                              {formatCurrency(restanteMensalidadeAtual)}
+                            </span>
+                          </span>
+                        </div>
+                      )}
+                      <div className="overflow-x-auto">
                       <table className={arenaDataTable.table}>
                         <thead>
                           <tr className={arenaDataTable.theadRow}>
@@ -685,8 +767,13 @@ export function MensalistaDetailClient({
                           {rec.cobrancas
                             .filter((c) => c.ativo)
                             .map((c) => {
+                              // Sem rateio a fatia é o total: status por cobrança
+                              // ainda é significativo. Com rateio, só a mensalidade
+                              // como um todo tem um "quitado" que faça sentido.
                               const st = cobrancaStatus(c)
-                              const quitada = isQuitada(c)
+                              const quitada = m.rateio
+                                ? restanteMensalidadeAtual <= 0.01
+                                : isQuitada(c)
                               return (
                                 <tr key={c.id} className={arenaDataTable.tbodyRow}>
                                   <td className={arenaDataTable.tdBold}>
@@ -698,7 +785,7 @@ export function MensalistaDetailClient({
                                     )}
                                   </td>
                                   <td className={arenaDataTable.td}>
-                                    {formatCurrency(c.valor_devido)}
+                                    {m.rateio ? '—' : formatCurrency(c.valor_devido)}
                                   </td>
                                   <td className={cn(arenaDataTable.td, 'text-emerald-600 font-bold')}>
                                     {formatCurrency(c.valor_pago)}
@@ -712,31 +799,60 @@ export function MensalistaDetailClient({
                                     {c.pago_em ? formatDate(c.pago_em) : '—'}
                                   </td>
                                   <td className={arenaDataTable.td}>
-                                    <Badge
-                                      className={cn(
-                                        'border-none font-bold text-[10px]',
-                                        st.className
-                                      )}
-                                    >
-                                      {st.label}
-                                    </Badge>
+                                    {m.rateio ? (
+                                      '—'
+                                    ) : (
+                                      <Badge
+                                        className={cn(
+                                          'border-none font-bold text-[10px]',
+                                          st.className
+                                        )}
+                                      >
+                                        {st.label}
+                                      </Badge>
+                                    )}
                                   </td>
                                   <td className={arenaDataTable.tdRight}>
-                                    <Button
-                                      size="sm"
-                                      disabled={quitada}
-                                      onClick={() => setPagamentoTarget(c)}
-                                      className="h-8 px-3 rounded-lg text-xs bg-emerald-500 hover:bg-emerald-600 text-white font-bold"
-                                    >
-                                      Registrar pagamento
-                                    </Button>
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      <Button
+                                        size="sm"
+                                        disabled={quitada}
+                                        onClick={() =>
+                                          setPagamentoTarget({
+                                            cobranca: c,
+                                            restanteMensalidade: restanteMensalidadeAtual,
+                                          })
+                                        }
+                                        className="h-8 px-3 rounded-lg text-xs bg-emerald-500 hover:bg-emerald-600 text-white font-bold"
+                                      >
+                                        Registrar pagamento
+                                      </Button>
+                                      {m.rateio && (
+                                        <button
+                                          onClick={() => handleRemoverParticipante(c)}
+                                          disabled={
+                                            removingCobrancaId === c.id ||
+                                            m.status === 'quitado'
+                                          }
+                                          title={
+                                            m.status === 'quitado'
+                                              ? 'Mensalidade já quitada'
+                                              : 'Excluir participante e reverter o que foi lançado para ele'
+                                          }
+                                          className="h-8 w-8 flex items-center justify-center rounded-lg text-arena-navy-800/30 hover:text-red-500 hover:bg-red-50 disabled:opacity-40 disabled:hover:bg-transparent flex-shrink-0"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </button>
+                                      )}
+                                    </div>
                                   </td>
                                 </tr>
                               )
                             })}
                         </tbody>
                       </table>
-                    </div>
+                      </div>
+                    </>
                   )}
 
                   {rec.reajustes.length > 0 && (
@@ -828,12 +944,12 @@ export function MensalistaDetailClient({
                     <tbody>
                       {a.cobrancas.map((c) => {
                         const st = cobrancaStatus(c)
-                        const quitada = isQuitada(c)
+                        const quitada = a.rateio ? a.restante <= 0.01 : isQuitada(c)
                         return (
                           <tr key={c.id} className={arenaDataTable.tbodyRow}>
                             <td className={arenaDataTable.tdBold}>{c.nome}</td>
                             <td className={arenaDataTable.td}>
-                              {formatCurrency(c.valor_devido)}
+                              {a.rateio ? '—' : formatCurrency(c.valor_devido)}
                             </td>
                             <td className={cn(arenaDataTable.td, 'text-emerald-600 font-bold')}>
                               {formatCurrency(
@@ -841,24 +957,42 @@ export function MensalistaDetailClient({
                               )}
                             </td>
                             <td className={arenaDataTable.td}>
-                              <Badge
-                                className={cn(
-                                  'border-none font-bold text-[10px]',
-                                  st.className
-                                )}
-                              >
-                                {st.label}
-                              </Badge>
+                              {a.rateio ? (
+                                '—'
+                              ) : (
+                                <Badge
+                                  className={cn(
+                                    'border-none font-bold text-[10px]',
+                                    st.className
+                                  )}
+                                >
+                                  {st.label}
+                                </Badge>
+                              )}
                             </td>
                             <td className={arenaDataTable.tdRight}>
-                              <Button
-                                size="sm"
-                                disabled={quitada}
-                                onClick={() => setPagamentoTarget(c)}
-                                className="h-8 px-3 rounded-lg text-xs bg-red-500 hover:bg-red-600 text-white font-bold"
-                              >
-                                Registrar pagamento
-                              </Button>
+                              <div className="flex items-center justify-end gap-1.5">
+                                <Button
+                                  size="sm"
+                                  disabled={quitada}
+                                  onClick={() =>
+                                    setPagamentoTarget({ cobranca: c, restanteMensalidade: a.restante })
+                                  }
+                                  className="h-8 px-3 rounded-lg text-xs bg-red-500 hover:bg-red-600 text-white font-bold"
+                                >
+                                  Registrar pagamento
+                                </Button>
+                                {a.rateio && (
+                                  <button
+                                    onClick={() => handleRemoverParticipante(c)}
+                                    disabled={removingCobrancaId === c.id}
+                                    title="Excluir participante e reverter o que foi lançado para ele"
+                                    className="h-8 w-8 flex items-center justify-center rounded-lg text-arena-navy-800/30 hover:text-red-500 hover:bg-red-50 disabled:opacity-40 disabled:hover:bg-transparent flex-shrink-0"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         )
@@ -1108,13 +1242,17 @@ export function MensalistaDetailClient({
         mensalidade={rateioTarget?.mensalidade ?? null}
         cobrancas={rateioTarget?.cobrancas ?? []}
         participantesSugeridos={rateioTarget?.participantesSugeridos ?? []}
+        creditoSaldo={creditoSaldo}
+        modosPagamento={modosPagamento}
+        responsavelNome={resumo.nome}
       />
       <RegistrarPagamentoModal
         open={!!pagamentoTarget}
         onClose={() => setPagamentoTarget(null)}
         onSuccess={refresh}
         arenaId={arenaId}
-        cobranca={pagamentoTarget}
+        cobranca={pagamentoTarget?.cobranca ?? null}
+        restanteMensalidade={pagamentoTarget?.restanteMensalidade ?? null}
         creditoSaldo={creditoSaldo}
         modosPagamento={modosPagamento}
         responsavelNome={resumo.nome}

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from 'react'
+import { useRef, useState, useTransition } from 'react'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import {
@@ -8,10 +8,16 @@ import {
   Clock,
   XCircle,
   FileSpreadsheet,
+  FileText,
   Filter,
   ChevronLeft,
   ChevronRight,
   Loader2,
+  Search,
+  X,
+  Wallet,
+  CalendarClock,
+  Receipt,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -23,15 +29,19 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { cn } from '@/lib/utils'
+import { Checkbox } from '@/components/ui/checkbox'
+import { cn, normalizeString } from '@/lib/utils'
 import { arenaDataTable } from '@/lib/arena-data-table'
 import { getPaymentStatusReportAction } from '@/modules/reports/actions/reportActions'
+import { searchAthletesAction } from '@/modules/loyalty/actions/loyaltyActions'
 import { buildPaymentStatusSheetData } from '@/modules/reports/payment-status-export'
 import type {
   PaymentStatusRow,
   PaymentStatusSummary,
   CourtFilter,
   SportFilter,
+  AthleteDebtSummary,
+  PaymentStatusArenaInfo,
 } from '@/modules/reports/types/report.types'
 
 const PAGE_SIZE = 10
@@ -49,12 +59,33 @@ function formatCurrency(value: number) {
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
-function formatDateTime(iso: string) {
+function formatDate(iso: string) {
   try {
-    return format(parseISO(iso), "dd/MM/yyyy HH:mm", { locale: ptBR })
+    return format(parseISO(iso), 'dd/MM/yyyy', { locale: ptBR })
   } catch {
     return iso
   }
+}
+
+/**
+ * "16:00 às 17:00" quando a linha ocupa um intervalo. Linha sem instante usa o
+ * rótulo que o servidor mandou (faixa da recorrência) ou "—" quando ela não
+ * tem horário nenhum — derivar hora de uma data daria um horário fantasma.
+ */
+function formatHorario(row: PaymentStatusRow) {
+  if (row.horario !== undefined) return row.horario ?? '—'
+  try {
+    const inicio = format(parseISO(row.data), 'HH:mm', { locale: ptBR })
+    if (!row.fim) return inicio
+    return `${inicio} às ${format(parseISO(row.fim), 'HH:mm', { locale: ptBR })}`
+  } catch {
+    return '—'
+  }
+}
+
+function formatHoras(horas: number) {
+  const arredondado = Math.round(horas * 100) / 100
+  return `${arredondado.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}h`
 }
 
 function generateMonthOptions() {
@@ -88,6 +119,112 @@ interface Props {
   initialSports: SportFilter[]
   initialStartDate: string
   initialEndDate: string
+  arenaInfo: PaymentStatusArenaInfo
+}
+
+/** Combobox de atleta único, com busca — casa reserva/mensalidade como responsável ou participante. */
+function AthleteFilterField({
+  arenaId,
+  selected,
+  onSelect,
+  onClear,
+}: {
+  arenaId: string
+  selected: { id: string; nome_perfil: string } | null
+  onSelect: (a: { id: string; nome_perfil: string }) => void
+  onClear: () => void
+}) {
+  const [search, setSearch] = useState('')
+  const [results, setResults] = useState<{ id: string; nome_perfil: string }[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const searchTimeout = useRef<NodeJS.Timeout | null>(null)
+
+  function handleSearch(value: string) {
+    setSearch(value)
+    if (searchTimeout.current) clearTimeout(searchTimeout.current)
+
+    if (value.length < 2) {
+      setResults([])
+      return
+    }
+
+    setIsSearching(true)
+    searchTimeout.current = setTimeout(async () => {
+      try {
+        const result = await searchAthletesAction(arenaId)
+        if (result.success && result.data) {
+          const normalizedSearch = normalizeString(value)
+          setResults(
+            (result.data as { id: string; nome_perfil: string }[]).filter((a) =>
+              normalizeString(a.nome_perfil).includes(normalizedSearch)
+            )
+          )
+        }
+      } finally {
+        setIsSearching(false)
+      }
+    }, 400)
+  }
+
+  if (selected) {
+    return (
+      <div className="flex flex-col gap-1 min-w-[200px]">
+        <label className="text-xs font-medium text-gray-500">Atleta</label>
+        <div className="flex h-9 items-center justify-between gap-2 rounded-md border border-input bg-white px-3 text-sm">
+          <span className="truncate font-medium text-arena-navy-800">{selected.nome_perfil}</span>
+          <button
+            type="button"
+            onClick={onClear}
+            className="shrink-0 text-arena-navy-800/40 hover:text-arena-navy-800"
+            aria-label="Limpar filtro de atleta"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="relative flex flex-col gap-1 min-w-[200px]">
+      <label className="text-xs font-medium text-gray-500">Atleta</label>
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-arena-navy-800/30" />
+        <input
+          value={search}
+          onChange={(e) => handleSearch(e.target.value)}
+          placeholder="Buscar atleta..."
+          className="h-9 w-full rounded-md border border-input bg-white pl-8 pr-3 text-sm outline-none focus:ring-2 focus:ring-arena-button/30"
+        />
+      </div>
+      {search.length >= 2 && (
+        <div className="absolute top-full z-10 mt-1 max-h-56 w-full min-w-[220px] overflow-y-auto rounded-md border border-slate-100 bg-white shadow-lg">
+          {isSearching ? (
+            <div className="flex items-center gap-2 px-3 py-2 text-xs text-arena-navy-800/40">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Buscando...
+            </div>
+          ) : results.length === 0 ? (
+            <p className="px-3 py-2 text-xs text-arena-navy-800/40">Nenhum atleta encontrado.</p>
+          ) : (
+            results.map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => {
+                  onSelect(a)
+                  setSearch('')
+                  setResults([])
+                }}
+                className="block w-full truncate px-3 py-2 text-left text-sm font-medium text-arena-navy-800 hover:bg-arena-navy-800/5"
+              >
+                {a.nome_perfil}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export function StatusPagamentosPageClient({
@@ -97,12 +234,14 @@ export function StatusPagamentosPageClient({
   initialCourts,
   initialSports,
   initialStartDate,
+  arenaInfo,
 }: Props) {
   const now = new Date()
   const currentMonth = format(now, 'yyyy-MM')
 
   const [rows, setRows] = useState<PaymentStatusRow[]>(initialRows)
   const [summary, setSummary] = useState<PaymentStatusSummary>(initialSummary)
+  const [athleteDebt, setAthleteDebt] = useState<AthleteDebtSummary | null>(null)
   const [courts] = useState<CourtFilter[]>(initialCourts)
   const [sports] = useState<SportFilter[]>(initialSports)
 
@@ -110,64 +249,139 @@ export function StatusPagamentosPageClient({
   const [tipo, setTipo] = useState<'todos' | 'avulso' | 'mensal'>('todos')
   const [courtId, setCourtId] = useState<string>('todos')
   const [sportId, setSportId] = useState<string>('todos')
+  const [atleta, setAtleta] = useState<{ id: string; nome_perfil: string } | null>(null)
+  const [rateio, setRateio] = useState(false)
+  const [detalharPorHora, setDetalharPorHora] = useState(false)
   const [page, setPage] = useState(1)
   const [isPending, startTransition] = useTransition()
+  const [isExportingPdf, setIsExportingPdf] = useState(false)
 
   const monthOptions = generateMonthOptions()
 
-  function applyFilters(
-    month: string,
-    t: typeof tipo,
-    cId: string,
-    sId: string,
-  ) {
-    const { startDate, endDate } = getMonthRange(month)
+  type FilterState = {
+    month: string
+    tipo: typeof tipo
+    courtId: string
+    sportId: string
+    atletaId: string | null
+    rateio: boolean
+    detalharPorHora: boolean
+  }
+
+  function applyFilters(overrides: Partial<FilterState> = {}) {
+    const state: FilterState = {
+      month: selectedMonth,
+      tipo,
+      courtId,
+      sportId,
+      atletaId: atleta?.id ?? null,
+      rateio,
+      detalharPorHora,
+      ...overrides,
+    }
+    const { startDate, endDate } = getMonthRange(state.month)
     startTransition(async () => {
       const result = await getPaymentStatusReportAction(arenaId, {
         startDate,
         endDate,
-        tipo: t === 'todos' ? undefined : t,
-        courtId: cId === 'todos' ? undefined : cId,
-        sportId: sId === 'todos' ? undefined : sId,
+        tipo: state.tipo === 'todos' ? undefined : state.tipo,
+        courtId: state.courtId === 'todos' ? undefined : state.courtId,
+        sportId: state.sportId === 'todos' ? undefined : state.sportId,
+        atletaId: state.atletaId ?? undefined,
+        rateio: state.tipo === 'mensal' ? state.rateio : undefined,
+        detalharPorHora: state.detalharPorHora || undefined,
       })
       if (result.success) {
         setRows(result.rows ?? [])
         setSummary(result.summary ?? {
           totalPago: 0, totalPendente: 0, totalCancelado: 0,
           countPago: 0, countPendente: 0, countCancelado: 0,
+          totalACobrar: 0, totalHoras: 0,
         })
+        setAthleteDebt(result.athleteDebt ?? null)
         setPage(1)
       }
     })
   }
 
+  function handleDetalharChange(checked: boolean) {
+    setDetalharPorHora(checked)
+    applyFilters({ detalharPorHora: checked })
+  }
+
   function handleMonthChange(v: string) {
     setSelectedMonth(v)
-    applyFilters(v, tipo, courtId, sportId)
+    applyFilters({ month: v })
   }
 
   function handleTipoChange(v: string) {
     const t = v as typeof tipo
     setTipo(t)
-    applyFilters(selectedMonth, t, courtId, sportId)
+    // Rateio só faz sentido com Tipo = Mensal — sai do ar (e some do filtro) nos outros.
+    if (t !== 'mensal' && rateio) setRateio(false)
+    applyFilters({ tipo: t, rateio: t === 'mensal' ? rateio : false })
   }
 
   function handleCourtChange(v: string) {
     setCourtId(v)
-    applyFilters(selectedMonth, tipo, v, sportId)
+    applyFilters({ courtId: v })
   }
 
   function handleSportChange(v: string) {
     setSportId(v)
-    applyFilters(selectedMonth, tipo, courtId, v)
+    applyFilters({ sportId: v })
+  }
+
+  function handleAtletaSelect(a: { id: string; nome_perfil: string }) {
+    setAtleta(a)
+    applyFilters({ atletaId: a.id })
+  }
+
+  function handleAtletaClear() {
+    setAtleta(null)
+    applyFilters({ atletaId: null })
+  }
+
+  function handleRateioChange(checked: boolean) {
+    setRateio(checked)
+    applyFilters({ rateio: checked })
   }
 
   async function handleExportExcel() {
     const { default: writeExcelFile } = await import('write-excel-file/browser')
-    const sheetData = buildPaymentStatusSheetData(rows, formatDateTime)
+    const sheetData = buildPaymentStatusSheetData(rows, formatDate, formatHorario)
     const { startDate, endDate } = getMonthRange(selectedMonth)
     await writeExcelFile(sheetData, { sheet: 'Status Pagamentos' })
       .toFile(`status-pagamentos-${startDate}-${endDate}.xlsx`)
+  }
+
+  async function handleExportPdf() {
+    setIsExportingPdf(true)
+    try {
+      const { generatePaymentStatusPdf } = await import('@/modules/reports/payment-status-pdf')
+      const { startDate, endDate } = getMonthRange(selectedMonth)
+      await generatePaymentStatusPdf({
+        rows,
+        summary,
+        arena: arenaInfo,
+        filtros: {
+          monthLabel,
+          tipo,
+          courtName: courtId !== 'todos' ? (courts.find((c) => c.id === courtId)?.name ?? null) : null,
+          sportName: sportId !== 'todos' ? (sports.find((s) => s.id === sportId)?.name ?? null) : null,
+          atletaNome: atleta?.nome_perfil ?? null,
+          rateio,
+          detalharPorHora,
+        },
+        athleteDebt: atleta && athleteDebt ? { nome: atleta.nome_perfil, ...athleteDebt } : null,
+        formatDate,
+        formatHorario,
+        formatCurrency,
+        fileName: `status-pagamentos-${startDate}-${endDate}`,
+      })
+    } finally {
+      setIsExportingPdf(false)
+    }
   }
 
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
@@ -184,8 +398,8 @@ export function StatusPagamentosPageClient({
         </p>
       </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* Summary cards — os 4 numa linha só a partir de lg; empilham em 2 no tablet */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-5 flex items-start gap-4">
             <div className="p-2 bg-green-50 rounded-lg">
@@ -224,7 +438,59 @@ export function StatusPagamentosPageClient({
             </div>
           </CardContent>
         </Card>
+
+        {/* Fechamento do mês: o que cobrar (cancelado fica de fora) e quanto tempo de espaço isso representa */}
+        <Card>
+          <CardContent className="p-5 flex items-start gap-4">
+            <div className="p-2 bg-arena-button/10 rounded-lg">
+              <Receipt className="h-6 w-6 text-arena-button" />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total a cobrar</p>
+              <p className="text-2xl font-bold text-gray-900 mt-0.5">{formatCurrency(summary.totalACobrar)}</p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Pago + pendente, sem cancelados
+                {summary.totalHoras > 0 && ` · ${formatHoras(summary.totalHoras)} ocupadas`}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Quanto o atleta filtrado deve no mês — só aparece com Atleta selecionado */}
+      {atleta && athleteDebt && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Card>
+            <CardContent className="p-5 flex items-start gap-4">
+              <div className="p-2 bg-indigo-50 rounded-lg">
+                <CalendarClock className="h-6 w-6 text-indigo-500" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  {atleta.nome_perfil} deve de Mensal
+                </p>
+                <p className="text-2xl font-bold text-gray-900 mt-0.5">{formatCurrency(athleteDebt.mensal)}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{monthLabel}</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-5 flex items-start gap-4">
+              <div className="p-2 bg-teal-50 rounded-lg">
+                <Wallet className="h-6 w-6 text-teal-500" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  {atleta.nome_perfil} deve de Avulso
+                </p>
+                <p className="text-2xl font-bold text-gray-900 mt-0.5">{formatCurrency(athleteDebt.avulso)}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{monthLabel}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Filters */}
       <Card>
@@ -246,6 +512,13 @@ export function StatusPagamentosPageClient({
               </Select>
             </div>
 
+            <AthleteFilterField
+              arenaId={arenaId}
+              selected={atleta}
+              onSelect={handleAtletaSelect}
+              onClear={handleAtletaClear}
+            />
+
             <div className="flex flex-col gap-1 min-w-[140px]">
               <label className="text-xs font-medium text-gray-500">Tipo de Jogo</label>
               <Select value={tipo} onValueChange={handleTipoChange}>
@@ -258,6 +531,53 @@ export function StatusPagamentosPageClient({
                   <SelectItem value="mensal">Mensal</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-500">Ocupação</label>
+              <div className="flex h-9 items-center gap-2">
+                <Checkbox
+                  id="detalhar-por-hora"
+                  checked={detalharPorHora}
+                  onCheckedChange={(checked) => handleDetalharChange(checked === true)}
+                  className="data-[state=checked]:border-arena-button data-[state=checked]:bg-arena-button"
+                />
+                <label
+                  htmlFor="detalhar-por-hora"
+                  className="cursor-pointer text-xs font-medium whitespace-nowrap text-arena-navy-800/60"
+                >
+                  Detalhar por hora
+                </label>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label
+                className={cn(
+                  "text-xs font-medium",
+                  tipo === 'mensal' ? "text-gray-500" : "text-gray-300"
+                )}
+              >
+                Rateio
+              </label>
+              <div className="flex h-9 items-center gap-2">
+                <Checkbox
+                  id="rateio-filtro"
+                  checked={rateio}
+                  disabled={tipo !== 'mensal'}
+                  onCheckedChange={(checked) => handleRateioChange(checked === true)}
+                  className="data-[state=checked]:border-arena-button data-[state=checked]:bg-arena-button"
+                />
+                <label
+                  htmlFor="rateio-filtro"
+                  className={cn(
+                    "text-xs font-medium whitespace-nowrap",
+                    tipo === 'mensal' ? "text-arena-navy-800/60 cursor-pointer" : "text-arena-navy-800/25"
+                  )}
+                >
+                  Ver linha a linha
+                </label>
+              </div>
             </div>
 
             {courts.length > 0 && (
@@ -318,16 +638,32 @@ export function StatusPagamentosPageClient({
             <h2 className="text-base font-bold text-arena-navy-800">Lançamentos</h2>
             <p className="text-xs text-arena-navy-800/40">{monthLabel}</p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={handleExportExcel}
-            disabled={rows.length === 0}
-          >
-            <FileSpreadsheet className="h-4 w-4 text-green-600" />
-            Exportar Excel
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={handleExportExcel}
+              disabled={rows.length === 0}
+            >
+              <FileSpreadsheet className="h-4 w-4 text-green-600" />
+              Exportar Excel
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={handleExportPdf}
+              disabled={rows.length === 0 || isExportingPdf}
+            >
+              {isExportingPdf ? (
+                <Loader2 className="h-4 w-4 animate-spin text-red-600" />
+              ) : (
+                <FileText className="h-4 w-4 text-red-600" />
+              )}
+              Exportar PDF
+            </Button>
+          </div>
         </div>
 
         <div className="overflow-x-auto px-6">
@@ -335,6 +671,7 @@ export function StatusPagamentosPageClient({
             <thead>
               <tr className={arenaDataTable.theadRow}>
                 <th className={arenaDataTable.th}>Data</th>
+                <th className={arenaDataTable.th}>Horário</th>
                 <th className={arenaDataTable.th}>Atleta</th>
                 <th className={arenaDataTable.th}>Serviço</th>
                 <th className={arenaDataTable.th}>Espaço</th>
@@ -346,7 +683,7 @@ export function StatusPagamentosPageClient({
             <tbody>
               {isPending ? (
                 <tr>
-                  <td colSpan={7} className={arenaDataTable.emptyCell}>
+                  <td colSpan={8} className={arenaDataTable.emptyCell}>
                     <div className="flex flex-col items-center gap-2">
                       <Loader2 className="h-6 w-6 animate-spin text-arena-button" />
                       Carregando lançamentos...
@@ -355,7 +692,7 @@ export function StatusPagamentosPageClient({
                 </tr>
               ) : paginatedRows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className={arenaDataTable.emptyCell}>
+                  <td colSpan={8} className={arenaDataTable.emptyCell}>
                     Nenhum lançamento encontrado para os filtros selecionados.
                   </td>
                 </tr>
@@ -365,10 +702,15 @@ export function StatusPagamentosPageClient({
                   return (
                     <tr key={row.id} className={arenaDataTable.tbodyRow}>
                       <td className={cn(arenaDataTable.td, "whitespace-nowrap text-arena-navy-800/60")}>
-                        {formatDateTime(row.data)}
+                        {formatDate(row.data)}
+                      </td>
+                      <td className={cn(arenaDataTable.td, "whitespace-nowrap text-arena-navy-800/60")}>
+                        {formatHorario(row)}
                       </td>
                       <td className={arenaDataTable.tdBold}>
-                        {row.atleta ?? <span className="text-arena-navy-800/30">—</span>}
+                        {row.atleta ?? (
+                          <span className="font-medium text-arena-navy-800/45">Avulsa</span>
+                        )}
                       </td>
                       <td className={arenaDataTable.td}>
                         <span className="inline-flex items-center rounded-full bg-arena-navy-800/5 px-2.5 py-0.5 text-xs font-medium text-arena-navy-800">

@@ -618,6 +618,12 @@ Migrações (repositório arenadigital-db, fonte única do schema):
 - `20260828120040_mensalista_launch_credit.sql`
 - `20260828120050_mensalista_set_termination.sql`
 - `20260828120100_mensalista_billing_acl.sql` — REVOKE/GRANT EXECUTE (service_role) das 5 RPCs.
+- `20260913160000_mensalista_rateio_flexivel.sql` — rateio incremental (ver §18.2):
+  `configure_mensalista_rateio_atomic` não exige mais participante(s) nem soma batendo;
+  `register_mensalista_payment_atomic` passa a limitar crédito aplicado/excedente pelo
+  que falta da **mensalidade inteira**, não da fatia.
+- `20260913170000_mensalista_rateio_remover_participante.sql` — nova RPC
+  `remove_mensalista_rateio_participante_atomic` (ver §18.2).
 
 As RPCs atômicas antigas (`create_/cancel_/confirm_monthly_plan_month_atomic`) continuam
 no banco; a nova UI não chama mais `confirm_monthly_plan_month_atomic` — a confirmação do
@@ -651,8 +657,13 @@ mês passa pelo fluxo de pagamento abaixo.
 `mensalista_cobrancas` — parcela por pessoa (1 linha quando não há rateio)
 - id uuid pk / arena_id / mensalidade_id fk on delete cascade
 - atleta_id uuid fk atleta on delete set null — NULL = participante avulso (só nome)
-- nome text not null / valor_devido / valor_pago / credito_aplicado numeric(10,2)
-- pago_em timestamptz — preenchido quando valor_pago + credito_aplicado >= valor_devido
+- nome text not null / valor_devido / valor_pago / credito_aplicado numeric(10,2) —
+  com rateio ativo, valor_devido de uma fatia não é mais garantidamente significativo
+  (participantes podem ser adicionados sem um valor pré-declarado; ver §18.2); o que
+  vale sempre é `mensalista_mensalidades.valor_total` menos a soma paga pelas fatias
+  ativas
+- pago_em timestamptz — desde `20260913160000`, preenchido no primeiro pagamento
+  registrado contra a fatia (não depende mais de valor_devido)
 - modo_pagamento_id fk modo_pagamento / ativo boolean default true (toggle do rateio)
 - observacao text / created_at / updated_at
 
@@ -696,20 +707,32 @@ Backfill: cada `public.transactions` com source_type='monthly_plan_month' vira u
 - `configure_mensalista_rateio_atomic(p_arena_id, p_mensalidade_id, p_rateio, p_participantes jsonb, p_registered_by)`
   p_participantes = [{ atleta_id?, nome, ativo, valor }]. Congela as parcelas já pagas,
   apaga as não pagas e recria a partir da lista. rateio=false colapsa numa parcela do
-  responsável. Valida Σ(ativas) + Σ(travadas) = valor_total (tolerância 0,01) e que os
-  atleta_id pertencem à arena. Recalcula o status da mensalidade.
+  responsável. **Desde `20260913160000` (rateio incremental):** rateio=true não exige
+  mais pelo menos um participante ativo, nem que Σ(valor) das ativas bata com o
+  restante — a lista pode vir vazia (rateio ligado, ninguém lançado ainda) e cada
+  participante entra com `valor` apenas informativo (0 = "ainda não sei quanto vai
+  pagar"); a UI reenvia sempre a lista completa atual a cada adição/remoção. Continua
+  validando que os `atleta_id` pertencem à arena. Recalcula o status da mensalidade a
+  partir de `valor_total` (não mais da soma de `valor_devido` das fatias, que deixou
+  de ser garantidamente igual ao total).
 
 - `register_mensalista_payment_atomic(p_operation_id, p_arena_id, p_cobranca_id, p_valor, p_credito_aplicado, p_data, p_modo_pagamento_id, p_observacao, p_registered_by, p_lancar_excedente_credito default false)`
   Idempotente (p_operation_id = id do pagamento). **O dinheiro pode exceder o devido**
-  (migração `20260904160000`): `p_lancar_excedente_credito=false` grava o excedente na
-  cobrança (`valor_pago > valor_devido`); `=true` quita a cobrança no valor exato e lança
-  o excedente como `mensalista_creditos` tipo='lancamento' — vinculado ao `atleta_id` da
-  cobrança ou, se for parcela de **avulso**, ao **responsável da recorrência**
+  (migração `20260904160000`, escopo ajustado para a mensalidade inteira em
+  `20260913160000`): o "devido" que importa é `mensalidade.valor_total` menos a soma
+  já paga por **todas as fatias ativas** da mensalidade (não mais a `valor_devido` da
+  fatia que está recebendo o pagamento, que deixou de ser um teto significativo com o
+  rateio incremental). `p_lancar_excedente_credito=false` grava o excedente na cobrança
+  que está pagando (`valor_pago` fica acima do que sobrava); `=true` registra nessa
+  cobrança só o que ainda faltava da mensalidade e lança o excedente como
+  `mensalista_creditos` tipo='lancamento' — vinculado ao `atleta_id` da cobrança ou, se
+  for parcela de **avulso**, ao **responsável da recorrência**
   (`planos_mensalista.athlete_id`); retorna `credito_atleta_id`. O **crédito aplicado**
-  (`p_credito_aplicado`) nunca pode exceder o devido. Crédito aplicado exige
-  cobrança com atleta_id e saldo suficiente (grava `mensalista_creditos` tipo='uso',
-  valor negativo). Insere `mensalista_pagamentos` (valor = dinheiro total recebido);
-  atualiza a cobrança (valor_pago, credito_aplicado, pago_em). Só a parte em dinheiro
+  (`p_credito_aplicado`) nunca pode exceder o que falta da mensalidade inteira. Crédito
+  aplicado exige cobrança com atleta_id e saldo suficiente (grava `mensalista_creditos`
+  tipo='uso', valor negativo). Insere `mensalista_pagamentos` (valor = dinheiro total
+  recebido); atualiza a cobrança (valor_pago, credito_aplicado, pago_em — agora marcado
+  no primeiro pagamento, não mais quando a fatia "fecha"). Só a parte em dinheiro
   vai para `public.transactions`
   (type='entrada', category='Mensalidade', source_type='mensalista_pagamento',
   source_id=pagamento.id, ON CONFLICT DO UPDATE). Recalcula o status. Ao transicionar
@@ -717,6 +740,20 @@ Backfill: cada `public.transactions` com source_type='monthly_plan_month' vira u
   (price/rental_price = valor_total / sessoes_por_mes) e gera 1 mês 'reservado' à frente
   via `public._insert_monthly_plan_month_bookings`, exceto se
   data_encerramento_prevista cobrir o mês seguinte.
+
+- `remove_mensalista_rateio_participante_atomic(p_arena_id, p_cobranca_id, p_registered_by)`
+  (`20260913170000`). Exclui uma `mensalista_cobrancas` e reverte tudo o que havia sido
+  lançado para ela: apaga os `mensalista_pagamentos` dessa cobrança (caem em cascata) e
+  as linhas de `public.transactions` correspondentes (mesma convenção de exclusão
+  definitiva de `deleteTransactionAction`, sem lançamento de estorno); apaga também as
+  `mensalista_creditos` com `cobranca_id` igual (tanto o crédito **consumido** por ela
+  — linhas `tipo='uso'`, negativas, removê-las devolve o saldo — quanto qualquer
+  excedente que ela tivesse **lançado** — `tipo='lancamento'`, positivas). Bloqueado com
+  `ERRCODE 55000` quando `mensalidade.status = 'quitado'` (as reservas do mês já foram
+  confirmadas e o próximo mês já rolou) ou `'cancelado'`. Recalcula o status da
+  mensalidade a partir de `valor_total`. Retorna `valor_revertido`, `credito_revertido`,
+  `status` e a lista atualizada de `cobrancas` (mesmo formato de
+  `configure_mensalista_rateio_atomic`).
 
 - `launch_mensalista_credit_atomic(p_operation_id, p_arena_id, p_atleta_id, p_valor, p_descricao, p_registered_by)`
   Idempotente (p_operation_id = id do crédito). Valida atleta na arena. Insere
@@ -766,8 +803,14 @@ Backfill: cada `public.transactions` com source_type='monthly_plan_month' vira u
     "Registrar pagamento" direto. Também retorna `fidelidade` = `{ moeda:
     arenas.nome_moeda_virtual, saldo: athlete_loyalty_balance.balance }` para o
     card de saldo do programa de fidelidade.
-  - configureRateioAction / registrarPagamentoAction / lancarCreditoAction /
-    retirarCreditoAction / setEncerramentoAction — parse zod + RPC correspondente.
+  - configureRateioAction / removerParticipanteRateioAction / registrarPagamentoAction /
+    lancarCreditoAction / retirarCreditoAction / setEncerramentoAction — parse zod + RPC
+    correspondente. `configureRateioAction` também refaz um SELECT em
+    `mensalista_cobrancas` após a RPC e devolve `data.cobrancas` — o `RateioModal` usa
+    isso para persistir cada adição/toggle de participante imediatamente e seguir
+    trabalhando com ids reais, sem precisar de um refresh de página inteiro a cada
+    participante. `removerParticipanteRateioAction` devolve `valorRevertido`,
+    `creditoRevertido`, `status` e `cobrancas` (mesmo formato).
 
 ### 18.4 Rotas e UI
 
@@ -785,11 +828,23 @@ Backfill: cada `public.transactions` com source_type='monthly_plan_month' vira u
   **Histórico de reajustes** (`RecorrenciaResumo.reajustes`). A **criação** de
   recorrência continua no calendário do espaço (`BookingModal` → `create_monthly_plan_atomic`),
   que agora mostra as recorrências que ainda cabem no mês e a 1ª mensalidade proporcional.
-- Modais: `RateioModal` (lista de atletas do rateio, toggle + valor + adicionar
-  participante/nome avulso, split igual ao vivo), `RegistrarPagamentoModal` (valor +
-  data + forma + aplicar crédito; **permite pagar acima do devido** e pergunta se o
-  excedente vira crédito), `ReajustarValorModal` (novo valor + vigência mês atual/seguinte
-  + observação), `LancarCreditoModal`, `RetirarCreditoModal`
+- Modais: `RateioModal` — desde `20260913160000`, fluxo incremental: mostra o valor
+  total devido fixo; "Ativar rateio" liga sem exigir ninguém declarado; participantes
+  (atleta cadastrado ou avulso) entram um a um via busca/"+ Adicionar participante",
+  persistidos na hora (`configureRateioAction`); cada linha mostra só o quanto essa
+  pessoa já pagou, com botão "Registrar pagamento" que abre o `RegistrarPagamentoModal`
+  embutido para aquela fatia; toggle de ativo/remover só é permitido para quem ainda
+  não pagou nada; um ícone de lixeira em cada linha — no modal e também na tabela de
+  participantes por recorrência em `MensalistaDetailClient` (e na de "Pendências de
+  meses anteriores") — chama `removerParticipanteRateioAction` (confirmação antes,
+  bloqueado quando a mensalidade está quitada); resumo fixo **Pago / Falta** (ou "Pago a
+  mais") sobre o valor total; "Desativar rateio" colapsa para a fatia única do
+  responsável — `RegistrarPagamentoModal`
+  (valor + data + forma + aplicar crédito; **permite pagar acima do devido** e pergunta
+  se o excedente vira crédito; aceita `restanteMensalidade` opcional — quando informado,
+  vindo de uma mensalidade com rateio, o "Restante" e o teto de crédito usam o que falta
+  da mensalidade inteira em vez do `valor_devido` da fatia), `ReajustarValorModal` (novo
+  valor + vigência mês atual/seguinte + observação), `LancarCreditoModal`, `RetirarCreditoModal`
   (retirada parcial do saldo do responsável, limitada ao saldo, registrada no extrato
   de créditos), `EncerramentoModal`.
 - Util `src/lib/format.ts` — formatCurrency / formatCompetencia / formatDate / toCompetencia.
@@ -1154,7 +1209,9 @@ caminho legado por sessões preservado.
 ### 20.4 Camada web
 
 - `src/modules/bookings/lib/mensalista-blocos.ts` — aritmética de calendário pura:
-  `agruparBlocos` (horas contíguas ⇒ um bloco), `ocorrencias`, `avaliarSlot`
+  `agruparBlocos` (horas contíguas ⇒ um bloco), `ocorrencias`, `ocorrenciasDoBloco`
+  (desconta a ocorrência de hoje quando o horário do bloco já começou — corrigido em
+  14/09/2026, ver 22.4), `avaliarSlot`
   (estados `free | busy | conflict-future | closed | past` considerando **todo** o
   horizonte), `resumirPlano`, `fracaoPrimeiroMes` (espelha o pró-rata por minutos do
   banco), `intervaloDeCotacao`. Coberta por `tests/mensalista-blocos.test.mjs`.
@@ -1194,6 +1251,22 @@ ganhou `blocos?: PlanoMensalistaBloco[] | null`.
   componente trata com `p.blocos ?? []`.
 
 ---
+
+### 20.9 Cancelamento definitivo do plano (`cancel_monthly_plan_atomic`)
+
+*Ajustado em 13/09/2026.* Marca `planos_mensalista.status = 'cancelado'` e
+cancela toda reserva futura (`start_time >= now()`) do plano, **incluindo as
+já `confirmed`** — não só as `reservado`. Antes, o `UPDATE` filtrava
+`status = 'reservado'`, e como o mês corrente nasce sempre `confirmed` na
+criação do plano (independente de já estar pago), o restante do mês corrente
+sobrevivia ao cancelamento e continuava ocupando o calendário — dessincronia
+entre a tela de Mensalistas (recorrência cancelada) e o calendário do espaço
+(horário ainda "reservado"). Migration
+`20260913180000_cancel_monthly_plan_confirmed_too.sql`; teste pgTAP em
+`atomic_monthly_plans.sql` atualizado para esperar 0 `confirmed` / 0
+`reservado` / 8 `cancelled` após o cancelamento (antes: 4/0/4). Não lança
+crédito automático — valor já recebido fica como está; compensar o atleta é
+manual (Lançar/Retirar crédito).
 
 ## 21. Cancelamento de uma sessão do plano mensalista
 
@@ -1346,6 +1419,29 @@ produção para migrar.
 Testes: `tests/mensalista-blocos.test.mjs` (invariante preço-por-hora, caso real
 do gestor, plano iniciado no dia 1º, blocos de durações diferentes, variação anual,
 e as três referências no SQL).
+
+### 22.4 O pró-rata também precisa saber a HORA de hoje, não só a data (14/09/2026)
+
+`resumirPlano` e `fracaoPrimeiroMes` ganharam um parâmetro `agora: Date` (default
+`new Date()`), e passam a usar `ocorrenciasDoBloco` em vez de `ocorrencias` cru.
+Antes, `inicioVigencia` (a data de hoje à meia-noite) fazia com que a ocorrência de
+HOJE sempre contasse na primeira competência, mesmo com o horário do bloco já
+tendo passado — marcar às 20h40 um mensalista de segunda 16h–17h cobrava a sessão
+de hoje, que o atleta não tem mais como jogar. `ocorrenciasDoBloco` descarta essa
+ocorrência quando `horario_inicio < agora`, espelhando a mesma regra que
+`create_monthly_plan_blocks_atomic` já usava para decidir quais reservas criar
+(`IF v_start_time >= now() THEN ...`).
+
+**Pendência (banco):** o item 1 da lista em 22.1 (`resumirPlano`/`fracaoPrimeiroMes`)
+ficou consciente da hora; os itens 2 e 3 — `generate_mensalista_mensalidades_atomic`
+e `private.mensalista_month_minutes`, em `arenadigital-db` — ainda tomam `p_from`
+como `date`, sem hora. Na prática o próprio `create_monthly_plan_blocks_atomic` já
+não cria a reserva de hoje quando o horário passou, então não sobra reserva
+"fantasma"; mas o valor da primeira mensalidade gerada por
+`generate_mensalista_mensalidades_atomic` ainda pode não bater com o que a tela
+mostrou em "Cobrado agora" nesse caso de borda (criar o plano depois do horário de
+hoje já ter passado). Alinhar as duas pontas requer uma migration em
+`arenadigital-db` e está fora do escopo desta correção (feita só na tela).
 
 ---
 
@@ -1539,3 +1635,360 @@ depois, essas voltam para recálculo, e a escolha manual do gestor é removida d
 conjunto para nunca ser sobrescrita.
 
 Testes: `tests/atleta-perfil.test.mjs` (19).
+
+## 26. Relatório de Pagamentos — filtro de Atleta, Rateio linha a linha e dívida do mês
+
+Implementado em 13/09/2026, em cima do relatório existente (`getPaymentStatusReportAction`,
+`StatusPagamentosPageClient`).
+
+### 26.1 Tipos (`modules/reports/types/report.types.ts`)
+
+- `PaymentStatusRow.servico` ganha `'Recorrência' | 'Rateio'`.
+- `PAYMENT_STATUS_SUMMARY_EXCLUDED_SERVICOS = ['Recorrência']` — a linha
+  `Recorrência` é só contexto (o plano/mensalidade do mês), sem `valor`; excluída
+  da soma dos cards para não contar 2x o que as linhas `Rateio` já somam.
+- `PaymentStatusFilters` ganha `atletaId?: string` e `rateio?: boolean` (só tem
+  efeito com `tipo: 'mensal'`).
+- Novo `AthleteDebtSummary = { mensal: number; avulso: number }`.
+
+### 26.2 Filtro de Atleta
+
+Casa o atleta filtrado como **responsável OU participante** em qualquer fonte do
+relatório — não só `bookings.athlete_id`/`transactions.atleta_id`, mas também
+`booking_participants.atleta_id` (convidado de avulso com rateio) e
+`station_orders.atleta.id`/`rotativo_inscricoes.atleta.id`/`rotativo_credito_movimentos.atleta.id`.
+Implementado como pós-filtro em JS (`matchesAtleta`) depois do fetch de cada fonte —
+todas já traziam `id` do atleta relacionado (ou passaram a trazer: `booking_participants`
+ganhou `atleta_id` no `select`, e os `atleta:...(nome_perfil)` das demais fontes
+ganharam `id`), então não precisou de nova query.
+
+### 26.3 Checkbox "Rateio" (`rateio: boolean`, só com `tipo: 'mensal'`)
+
+`buildRateioBreakdownRows(supabase, arenaId, competencia, { courtId, sportId, atletaId })`
+substitui as linhas agregadas de `transactions` (categoria "Mensalidade") — a query de
+`transactions` nem roda nesse modo (`wantsRateioBreakdown` no `reportActions.ts`).
+
+- Busca `mensalista_mensalidades` da `competencia` (= `filters.startDate`, primeiro
+  dia do mês) e `arena_id`; filtra por `athlete_id = atletaId` quando informado
+  (responsável, não participante — ver 26.4 sobre por quê).
+- Espaço/esporte: `resolveAllowedPlanoIds` junta `planos_mensalista` (coluna legada
+  `court_id`/`sport_id`) com `planos_mensalista_blocos` (blocos extras de planos
+  multi-horário) pra achar os `plano_id` que batem com o filtro.
+- Por mensalidade: 1 linha `Recorrência` (plano + status quitado→Pago/senão→Pendente,
+  `valor: null`) + 1 linha `Rateio` por `mensalista_cobrancas` ativa (`ativo=true`) —
+  `valor` = quitado (`valor_pago+credito_aplicado`) se cobriu o `valor_devido`, senão
+  o que falta (`valor_devido - pago - crédito`), status Pago/Pendente correspondente.
+- `planos_mensalista_blocos` e a relação `mensalidade:mensalidade_id!inner(...)` ainda
+  não estão nos tipos gerados — mesmo cliente destipado (`LooseClient`) usado em
+  `modules/bookings/actions/mensalistaActions.ts`.
+
+### 26.4 "Quanto o atleta deve" (`athleteDebt`, cards no client)
+
+`computeAthleteDebtSummary` roda sempre que `filters.atletaId` está setado (com
+qualquer `tipo`, inclusive `todos`) — não depende do checkbox Rateio nem do filtro
+de Espaço/Esporte (dívida é do atleta, não de uma quadra).
+
+- **Avulso devido:** `bookings` sem `plano_mensalista_id`, `status IN (reservado,
+  pending_payment)`, no mês; soma `price` quando o atleta é `athlete_id`, ou a fatia
+  não paga (`booking_participants.valor` sem `pago_em`) quando é convidado de reserva
+  com `cobranca_por_participante`.
+- **Mensal devido:** `mensalista_cobrancas` do atleta (`atleta_id = filtro`,
+  `ativo = true`) cuja mensalidade (`!inner` join) é da `arena` e `competencia` do
+  mês; soma `valor_devido - valor_pago - credito_aplicado` (clampado em 0).
+
+Por que a linha `Rateio` (26.3) casa por **responsável** e o card de dívida (26.4)
+casa por **participante direto** (`cobranca.atleta_id`): o checkbox mostra "as
+recorrências de um responsável e o que está ligado a elas" (visão da recorrência);
+o card responde "quanto ESSA pessoa deve", incluindo quando ela só participa do
+rateio de alguém.
+
+### 26.5 UI (`StatusPagamentosPageClient.tsx`)
+
+- `AthleteFilterField` — combobox de busca única (debounce 400ms, `searchAthletesAction`
+  reaproveitado de `modules/loyalty`), mesmo padrão do `BookingParticipantsField`.
+- Checkbox "Rateio — Ver linha a linha" (`Checkbox` do design system) fica
+  desabilitado fora de `tipo='mensal'`; trocar o Tipo para outro valor desliga o
+  Rateio automaticamente.
+- 2 cards novos ("{atleta} deve de Mensal" / "de Avulso") só renderizam com atleta
+  selecionado, ao lado dos 3 cards existentes (Pago/Pendente/Cancelado).
+- `applyFilters` foi refeito para receber um objeto de overrides parciais
+  (`Partial<FilterState>`) em vez de 4 parâmetros posicionais — precisava para não
+  multiplicar combinações com os 2 filtros novos.
+
+## 27. Relatório de Pagamentos — extrato de ocupação hora a hora
+
+Implementado em 14/09/2026. Fecha o mês com professor/mensalista: lista cada
+hora de espaço ocupada, com o preço daquela hora.
+
+### 27.1 Tipos e contrato
+
+- `PaymentStatusRow` ganha `fim?: string | null` e `horas?: number | null` —
+  presentes só em linha que vem de reserva (comanda/rotativo/lançamento manual
+  não ocupam intervalo).
+- `PaymentStatusSummary` ganha `totalACobrar` (pago + pendente, cancelado fora) e
+  `totalHoras`.
+- `PaymentStatusFilters` ganha `detalharPorHora?: boolean`.
+- Export: `PAYMENT_STATUS_EXPORT_HEADERS` passa a ter **Horário** e **Horas**;
+  `buildPaymentStatusSheetData(rows, formatData, formatHorario?)`.
+
+### 27.2 `modules/reports/usage-lines.ts` (puro, testado)
+
+`buildUsageLines({ startISO, endISO, valorReserva, precoDaHora, bookingType,
+valorFallback })` devolve uma linha por hora (última fração rateada), ou uma
+linha só quando o espaço é `booking_type = 'unique'`.
+
+Regra de valor, nessa ordem:
+1. `valorReserva` (avulso) — rateado por duração, **sobra do arredondamento na
+   última linha**, para a soma bater ao centavo com o que foi cobrado;
+2. `precoDaHora(instante)` — tabela de preço (mensal);
+3. `valorFallback` — valor gravado na reserva, quando nenhuma tabela cobre;
+4. `null` — sem nada disso, a linha fica sem valor em vez de virar R$ 0,00.
+
+**`saoPauloWallClock(instant)`** devolve um `Date` cujos componentes *locais* são
+os de São Paulo. Sem isso o relatório erraria a grade: o servidor roda em UTC e
+uma quinta 21:00 na arena é **sexta 00:00** em UTC — leria a linha errada da
+tabela. O módulo não tem import de runtime (só tipos, apagados pelo
+`--experimental-strip-types`), por isso é testável direto em `tests/`.
+
+### 27.3 Preço da hora (`reportActions.ts`)
+
+- `loadArenaPricing(loose, arenaId)` monta, em 4 consultas, `courtId →
+  { bookingType, porTabela, porTipo, padrao }` a partir de `court_price_tables` →
+  `court_price_table_days` → `court_price_table_bands`. Só roda no modo extrato.
+- `buildPrecoDaHora(...)` aplica a cascata de `quoteSessaoMensalistaAction`:
+  snapshot do plano → tabela do tipo `mensalista` do espaço → **tabela padrão**.
+  A padrão entra também como rede quando a tabela escolhida existe mas está
+  **sem grade** — `Mensalista` e `Professor` nascem vazias
+  (`seed_court_price_tables`), e `resolve_court_price` devolveria 0 para elas.
+- O cálculo usa `matchPriceDay`/`priceAtInstant` de
+  `courts/lib/court-price-resolver.ts`, a porta TS de `public.resolve_court_price`.
+  Conferido contra o banco: uma reserva de 2h atravessando as faixas de R$ 100 e
+  R$ 120 dá `[100, 120]` no TS e `220` no `resolve_court_price` — mesmo número.
+
+### 27.4 O que entra e o que sai no modo extrato
+
+`payment-report-sources.ts` ganhou o parâmetro `{ detalharPorHora }`:
+
+- `shouldIncludeBookingRow` passa a aceitar **toda** reserva — inclusive a de
+  mensalista já `confirmed` (a aula que aconteceu) e a avulsa `cancelled` (a data
+  que caiu). Fora do extrato a regra antiga continua igual.
+- `shouldIncludeTransactionRow` **descarta a categoria `Mensalidade`**, senão o
+  mês entraria duas vezes (uso + pagamento). Lançamento manual e demais
+  categorias seguem aparecendo.
+
+O `summary` soma `totalACobrar`/`totalHoras` só no que não está cancelado, e
+continua ignorando as linhas `Recorrência` (§26.1).
+
+---
+
+## 28. Relatório de Pagamentos — o mensal vem da cobrança, não da transação (14/09/2026)
+
+### 28.1 O que estava errado
+
+O mensalista entrava no relatório pela transação de categoria `Mensalidade`. São
+duas, criadas pelo banco em momentos diferentes:
+
+| `source_type` | Quando nasce | `total_value` |
+|---|---|---|
+| `monthly_plan_month` | na **criação** do plano (`create_monthly_plan_blocks_atomic`) | `valor_mensal` **cheio** |
+| `mensalista_pagamento` | a cada pagamento registrado | o valor recebido |
+
+A primeira é herança do modelo anterior à camada mensalidade→cobrança→pagamento
+(28/08/2026) — a migration de remodelagem chega a tratar todo posting
+`monthly_plan_month` histórico como mensalidade **quitada** no backfill. Ela não
+conhece o pró-rata: um plano de R$ 320/mês criado no meio de setembro grava
+R$ 320, quando a competência de estreia vale R$ 240. E, por ser `type='entrada'`,
+o relatório a dava como **Paga** (`status: 'Pago'` fixo nas linhas de transação),
+antes de qualquer recebimento — contradizendo o card `athleteDebt`, que já lia a
+cobrança e mostrava R$ 240 em aberto.
+
+Somar as duas transações contaria o mesmo mês duas vezes assim que o gestor
+registrasse o pagamento.
+
+### 28.2 Fonte nova: `mensalidade-rows.ts`
+
+Módulo **puro** (só tipos importados), no espírito de `usage-lines.ts`:
+
+- `loadMensalidadesDaCompetencia` (em `reportActions.ts`, a parte que consulta)
+  devolve `MensalidadeContexto[]` — mensalidade + plano + espaço/esporte +
+  `horario` da recorrência + cobranças ativas. É a mesma consulta que a visão
+  Rateio já fazia, agora compartilhada pelas duas visões (uma query a menos).
+- `resumoDaMensalidade(m)` → `{ valor, status, pagoEm }`. Devido = soma de
+  `valor_devido` das cobranças ativas (ou `valor_total` quando não há nenhuma);
+  liquidado = `valor_pago + credito_aplicado`. Quitada → `Pago` com a data do
+  recebimento mais recente; parcial/aberta → `Pendente` com o que falta;
+  `status='cancelado'` → `Cancelado` (fora do "quanto cobrar").
+- `buildMensalidadeRows` (1 linha `Mensalista` por mensalidade) e
+  `buildRateioBreakdownRows` (linhas `Recorrência` + `Rateio`) consomem o mesmo
+  contexto — a soma das linhas de Rateio bate com a linha agregada, por
+  construção.
+
+### 28.3 O que sai, para não contar duas vezes
+
+- `shouldIncludeTransactionRow` recebe `sourceType` e descarta a transação de
+  `Mensalidade` gerada pelo sistema (`MENSALIDADE_SYSTEM_SOURCE_TYPES` =
+  `monthly_plan_month`, `mensalista_pagamento`). **Lançamento manual** do
+  Financeiro na mesma categoria não tem `source_type` e continua entrando.
+- As **reservas** de um plano que já tem mensalidade na competência saem
+  (`planosComMensalidade`). Sem isso, um mês cujas reservas ainda estão
+  `reservado` (os meses à frente) apareceria como a mensalidade **mais** cada
+  sessão. Meses ainda sem mensalidade gerada seguem listando as reservas, como
+  antes — o relatório converge conforme `generate_mensalista_mensalidades_atomic`
+  materializa cada competência.
+- No extrato (`detalharPorHora`) nada disso roda: lá o mês aparece hora a hora
+  nas reservas e a mensalidade sai inteira (§27.4).
+
+Testes: `tests/relatorio-mensalidade-competencia.test.mjs`.
+
+### 28.4 Pendência (banco)
+
+A transação `monthly_plan_month` continua sendo gravada na criação do plano, com
+o valor cheio, e **segue aparecendo no Financeiro e no faturamento do Dashboard**
+(nenhum dos dois filtra por `source_type`) como uma entrada que ninguém pagou.
+O relatório de Pagamentos deixou de contá-la, mas a correção de raiz é parar de
+lançá-la — a cobrança do mensalista já é `mensalista_mensalidades` +
+`mensalista_cobrancas`, e o recebimento já vira transação em
+`mensalista_register_payment`. Requer migration em `arenadigital-db`.
+
+---
+
+## 29. Relatório de Pagamentos — exportação em PDF (15/09/2026)
+
+### 29.1 Por que dois módulos separados
+
+- `payment-status-pdf-data.ts`: **puro**, sem import de runtime — `buildAppliedFiltersDescription`
+  (filtros efetivamente selecionados, na mesma lógica de "o que aparece" da tela) e
+  `formatArenaAddressLine` (junta rua/número/complemento/bairro/cidade/UF, omitindo o
+  que falta em vez de deixar vírgula solta). Testado direto em `tests/payment-status-pdf.test.mjs`.
+- `payment-status-pdf.ts`: só roda no navegador — usa `fetch`/`FileReader` para embutir
+  o logo como data URL e `jspdf`/`jspdf-autotable` (`4.2.1`/`5.0.8`, via `pnpm`) para
+  desenhar. `StatusPagamentosPageClient` importa este módulo **dinamicamente** no clique
+  de "Exportar PDF" (`await import('@/modules/reports/payment-status-pdf')`), o mesmo
+  padrão já usado para `write-excel-file/browser` — nem jsPDF nem a lib de Excel entram
+  no bundle inicial da página.
+
+### 29.2 Dados da arena no cabeçalho
+
+`PaymentStatusArenaInfo` (novo tipo em `report.types.ts`) é resolvido uma vez em
+`page.tsx`, **fora** da action do relatório (não muda por filtro):
+
+```
+[getPaymentStatusReportAction, getArenaByIdAction, getArenaBillingAddress]
+  = await Promise.all([...])
+```
+
+`getArenaByIdAction` dá nome/telefone/e-mail; `getArenaBillingAddress` (já existente,
+usado pela tela de assinatura) resolve endereço + CNPJ/CPF, inclusive cidade/UF via
+`municipios`/`estados`. `arenaInfo` desce como prop para o client, ao lado de
+`initialCourts`/`initialSports`.
+
+### 29.3 Layout do PDF
+
+`jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })`. De cima para baixo,
+tudo centralizado até a régua horizontal:
+
+1. Logo (`/logo_arena_front_bgbranco.png` — 3ª troca no mesmo dia: primeiro
+   `logo_arena.png`, depois `img/logo_pdf.png` — marca quadrada, agora esse banner
+   horizontal em fundo branco; proporção fixa 625:211, dimensionado por
+   `LOGO_WIDTH = 130pt` — o banner é largo e baixo, então quem manda é a largura,
+   não a altura) + "Sistema de Gestão para Arenas Esportivas".
+2. Nome da arena (negrito) + endereço — só isso (telefone, e-mail e CNPJ/CPF
+   saíram do cabeçalho em 15/09/2026, a pedido; `getArenaByIdAction`/
+   `getArenaBillingAddress` continuam trazendo os três, só não entram mais no PDF).
+   Sem endereço cadastrado, a linha nem aparece (`formatArenaAddressLine` devolve
+   `null`).
+3. Título "Relatório de Pagamentos — {mês}" + "Filtros aplicados" (`buildAppliedFiltersDescription`,
+   quebrado em linhas com `splitTextToSize`) + "Resumo do período" (os totais de
+   `PaymentStatusSummary` — **sem** "Horas ocupadas", ver 29.5 — mais "{atleta} deve..."
+   quando há Atleta filtrado).
+4. Tabela via `autoTable(doc, {...})` — mesmas colunas da tela (Data, Horário, Atleta,
+   Serviço, Espaço, Esporte, Valor, Status), não as da planilha Excel (que tem
+   "Horas" a mais, uma coluna analítica que não está na UI). Status colorido por linha
+   via `didParseCell` (verde/amarelo/vermelho, mesma paleta dos badges). Rodapé via
+   `didDrawPage`: "Gerado em ..." à esquerda, "Página X de Y" à direita.
+
+### 29.4 Verificação
+
+`autoTable`/`jsPDF` são bibliotecas de terceiros — o comportamento dos hooks
+(`didParseCell`, `didDrawPage`) e de `columnStyles` com chave numérica não dá pra
+confirmar só lendo `.d.ts`. Rodado um smoke test fora da suíte (script descartável,
+fora do repo) chamando `autoTable` com os mesmos hooks e `doc.output('arraybuffer')`:
+gerou o PDF sem exceção. A suíte de testes do projeto cobre só a parte pura
+(`payment-status-pdf-data.ts`) e os contratos de import dinâmico/strings-chave do
+módulo browser-only, por regex de source — não a renderização em si.
+
+### 29.5 "Horas ocupadas" removido do resumo (15/09/2026)
+
+`summary.totalHoras` soma `horas` das linhas de `bookingRows` (reserva avulsa ou de
+mensalista) — mas **não** das linhas de `mensalidade-rows` (§28), que não carregam
+`horas`. Como a maioria das recorrências já tem mensalidade gerada na competência
+(e as reservas correspondentes saem da lista — §28.3), o total ficava restrito às
+poucas reservas que ainda não viraram mensalidade: um mês real com dezenas de horas
+de mensalistas mostrava "2h ocupadas", vindo só de duas reservas avulsas de 1h. O
+número nunca representou o total do período — foi tirado do resumo do PDF
+(`resumoPartes` em `payment-status-pdf.ts`) junto com o parâmetro `formatHoras`,
+que ficou sem uso.
+
+**Pendência:** o card "Total a cobrar" da tela (`StatusPagamentosPageClient.tsx`)
+ainda mostra o mesmo número (`· {formatHoras(summary.totalHoras)} ocupadas`) — não
+foi tocado porque o pedido era sobre o PDF. Calcular horas ocupadas corretamente
+exigiria somar também os blocos de `planos_mensalista_blocos` das mensalidades do
+mês (não só das reservas soltas), o que está fora do escopo desta correção.
+
+---
+
+## 30. Calendário do espaço — visão de Mês (15/09/2026)
+
+### 30.1 Escopo: acréscimo, não substituição
+
+`CourtCalendarPageClient.tsx` (`/dashboard/arenas/{id}/courts/{courtId}/calendar`) já tinha
+Dia/Semana — uma grade `[80px_1fr]` (coluna de horário + 1 ou 7 colunas de dia) que
+rola verticalmente pelos slots de hora. `viewMode` virou `'day' | 'week' | 'month'`
+e o bloco JSX de Dia/Semana permanece **byte a byte o mesmo**, dentro do ramo `else`
+de um `viewMode === "month" ? (...) : (...)`; a visão de Mês é o ramo novo, num
+layout completamente diferente (grid 7 colunas de dias, sem coluna de horário nem
+scroll interno por slot). `tests/court-calendar-month-view.test.mjs` fixa isso por
+regex de source — inclusive que `<TimeSlot` (exclusivo de Dia/Semana) continua
+presente.
+
+### 30.2 Grade do mês e busca de reservas
+
+`monthDays` é a grade exibida: `startOfWeek(startOfMonth(currentDate))` até
+`endOfWeek(endOfMonth(currentDate))` (semana começando segunda, como em `weekDays`)
+— inclui os dias do mês anterior/seguinte que completam a primeira/última semana,
+para a grade nunca ter uma linha pela metade.
+
+`loadBookings` ganhou o ramo `month`: busca **a grade inteira**, não só
+`1º..último dia do mês` — senão os dias de outro mês nas bordas apareceriam sem os
+agendamentos que de fato têm. Dia e Semana seguem exatamente como antes.
+
+`getBookingsForDay(date)` filtra `bookings` (já carregadas para a grade) por
+`isSameDay` + `blocksAvailability` (mesmo filtro que decide o que ocupa um slot em
+Dia/Semana) e ordena por horário — até 3 aparecem no card do dia, o resto vira
+"+N mais".
+
+### 30.3 Interação
+
+- **Clicar no dia** (fundo do card) → `setViewMode("day")` + `setCurrentDate(day)` +
+  `loadBookings(day, "day")`. É o "drill-down" padrão de calendário de mês: não dá
+  pra cadastrar reserva direto no card do mês (não há horário ali), então o clique
+  leva pra a visão que tem.
+- **Clicar numa reserva** dentro do card → `e.stopPropagation()` (não troca de
+  visão) + abre `BookingDetailsModal`, mesmo componente usado em Dia/Semana.
+- Cor do chip por status/esporte: `getMonthChipStyles`, mesma regra de
+  `SingleBookingCard` (pending_payment → laranja, reservado → âmbar, confirmado →
+  cor do esporte via `getSportStyles`), resumida pra um chip de uma linha.
+
+### 30.4 Navegação e rótulo do período
+
+`handlePrevious`/`handleNext` ganharam o terceiro ramo (`subMonths`/`addMonths`);
+"Hoje" já era genérico por `viewMode`. O rótulo do período no topo mostra
+`format(currentDate, "MMMM 'de' yyyy")` em Mês, ao lado de `dd 'de' MMMM` (Dia) e
+`dd/MM – dd/MM` (Semana) que continuam iguais.
+
+### 30.5 Fora do escopo
+
+`court-slots.ts` (§15.3) é o utilitário compartilhado que a aba Operação usa;
+`CourtCalendarPageClient.tsx` mantém suas próprias cópias locais de `parseHHMM`,
+`generateSlotsForDate` etc. — duplicação pré-existente, não mexida aqui (fora do
+pedido, que era só acrescentar a visão de Mês).
