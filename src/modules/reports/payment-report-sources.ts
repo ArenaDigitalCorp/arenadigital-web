@@ -3,6 +3,27 @@ import type { PaymentStatusFilters } from '@/modules/reports/types/report.types'
 /** Categorias espelhadas em outra fonte do relatório — nunca contam via Financeiro. */
 export const SYSTEM_MIRRORED_TRANSACTION_CATEGORIES = ['Reserva Avulsa', 'Rotativo'] as const
 
+/**
+ * Transações de Mensalidade que o sistema cria sozinho — espelhadas pela fonte
+ * de verdade da cobrança (`mensalista_mensalidades` + `mensalista_cobrancas`).
+ *
+ * - `monthly_plan_month`: lançada na **criação** do plano com o valor mensal
+ *   CHEIO, herança do modelo anterior à camada mensalidade→cobrança→pagamento.
+ *   No mês de estreia a mensalidade é proporcional (R$ 240 de um mensal de
+ *   R$ 320), então essa transação mostra um valor que ninguém deve — e, por ser
+ *   uma entrada, o relatório ainda a dava como paga antes de qualquer
+ *   recebimento.
+ * - `mensalista_pagamento`: lançada a cada pagamento registrado. Contar as duas
+ *   somaria a mesma mensalidade duas vezes assim que o gestor recebesse.
+ *
+ * Lançamento manual do Financeiro na categoria "Mensalidade" não tem
+ * `source_type` e continua entrando.
+ */
+export const MENSALIDADE_SYSTEM_SOURCE_TYPES = [
+  'monthly_plan_month',
+  'mensalista_pagamento',
+] as const
+
 export type ReportQueryMode = 'full' | 'mensal' | 'avulso' | 'booking_scoped'
 
 export type ReportSourceFlags = {
@@ -116,9 +137,23 @@ export function isSystemGeneratedMirroredTransaction(
 }
 
 /**
+ * A mensalidade desta transação já entra no relatório pela própria cobrança?
+ *
+ * Só vale para o que o sistema lançou sozinho (`source_type` conhecido); o
+ * lançamento manual de caixa na mesma categoria continua sendo dele mesmo.
+ */
+export function isMirroredMensalidadeTransaction(
+  category: string,
+  sourceType: string | null | undefined
+): boolean {
+  if (category !== 'Mensalidade') return false
+  return (MENSALIDADE_SYSTEM_SOURCE_TYPES as readonly string[]).includes(sourceType ?? '')
+}
+
+/**
  * Define se uma transação de entrada deve aparecer no relatório.
- * - full: todas as entradas manuais + Mensalidade; exclui só espelhos automáticos
- * - mensal: só Mensalidade
+ * - full: todas as entradas manuais + Mensalidade manual; exclui espelhos automáticos
+ * - mensal: só Mensalidade lançada à mão (a do plano vem de `mensalista_mensalidades`)
  * - `detalharPorHora`: a Mensalidade sai (o mês já aparece hora a hora nas
  *   reservas); lançamento manual e demais categorias continuam.
  */
@@ -127,9 +162,10 @@ export function shouldIncludeTransactionRow(
   description: string | null | undefined,
   mode: ReportQueryMode,
   stationTypeNames: string[],
-  options: { detalharPorHora?: boolean } = {}
+  options: { detalharPorHora?: boolean; sourceType?: string | null } = {}
 ): boolean {
   if (options.detalharPorHora && category === 'Mensalidade') return false
+  if (isMirroredMensalidadeTransaction(category, options.sourceType)) return false
   if (mode === 'avulso' || mode === 'booking_scoped') return false
   if (mode === 'mensal') return category === 'Mensalidade'
 

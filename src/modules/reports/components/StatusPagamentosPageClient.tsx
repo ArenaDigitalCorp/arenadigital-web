@@ -8,6 +8,7 @@ import {
   Clock,
   XCircle,
   FileSpreadsheet,
+  FileText,
   Filter,
   ChevronLeft,
   ChevronRight,
@@ -40,6 +41,7 @@ import type {
   CourtFilter,
   SportFilter,
   AthleteDebtSummary,
+  PaymentStatusArenaInfo,
 } from '@/modules/reports/types/report.types'
 
 const PAGE_SIZE = 10
@@ -117,6 +119,7 @@ interface Props {
   initialSports: SportFilter[]
   initialStartDate: string
   initialEndDate: string
+  arenaInfo: PaymentStatusArenaInfo
 }
 
 /** Combobox de atleta único, com busca — casa reserva/mensalidade como responsável ou participante. */
@@ -231,6 +234,7 @@ export function StatusPagamentosPageClient({
   initialCourts,
   initialSports,
   initialStartDate,
+  arenaInfo,
 }: Props) {
   const now = new Date()
   const currentMonth = format(now, 'yyyy-MM')
@@ -250,6 +254,7 @@ export function StatusPagamentosPageClient({
   const [detalharPorHora, setDetalharPorHora] = useState(false)
   const [page, setPage] = useState(1)
   const [isPending, startTransition] = useTransition()
+  const [isExportingPdf, setIsExportingPdf] = useState(false)
 
   const monthOptions = generateMonthOptions()
 
@@ -348,6 +353,35 @@ export function StatusPagamentosPageClient({
     const { startDate, endDate } = getMonthRange(selectedMonth)
     await writeExcelFile(sheetData, { sheet: 'Status Pagamentos' })
       .toFile(`status-pagamentos-${startDate}-${endDate}.xlsx`)
+  }
+
+  async function handleExportPdf() {
+    setIsExportingPdf(true)
+    try {
+      const { generatePaymentStatusPdf } = await import('@/modules/reports/payment-status-pdf')
+      const { startDate, endDate } = getMonthRange(selectedMonth)
+      await generatePaymentStatusPdf({
+        rows,
+        summary,
+        arena: arenaInfo,
+        filtros: {
+          monthLabel,
+          tipo,
+          courtName: courtId !== 'todos' ? (courts.find((c) => c.id === courtId)?.name ?? null) : null,
+          sportName: sportId !== 'todos' ? (sports.find((s) => s.id === sportId)?.name ?? null) : null,
+          atletaNome: atleta?.nome_perfil ?? null,
+          rateio,
+          detalharPorHora,
+        },
+        athleteDebt: atleta && athleteDebt ? { nome: atleta.nome_perfil, ...athleteDebt } : null,
+        formatDate,
+        formatHorario,
+        formatCurrency,
+        fileName: `status-pagamentos-${startDate}-${endDate}`,
+      })
+    } finally {
+      setIsExportingPdf(false)
+    }
   }
 
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
@@ -604,16 +638,32 @@ export function StatusPagamentosPageClient({
             <h2 className="text-base font-bold text-arena-navy-800">Lançamentos</h2>
             <p className="text-xs text-arena-navy-800/40">{monthLabel}</p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={handleExportExcel}
-            disabled={rows.length === 0}
-          >
-            <FileSpreadsheet className="h-4 w-4 text-green-600" />
-            Exportar Excel
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={handleExportExcel}
+              disabled={rows.length === 0}
+            >
+              <FileSpreadsheet className="h-4 w-4 text-green-600" />
+              Exportar Excel
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={handleExportPdf}
+              disabled={rows.length === 0 || isExportingPdf}
+            >
+              {isExportingPdf ? (
+                <Loader2 className="h-4 w-4 animate-spin text-red-600" />
+              ) : (
+                <FileText className="h-4 w-4 text-red-600" />
+              )}
+              Exportar PDF
+            </Button>
+          </div>
         </div>
 
         <div className="overflow-x-auto px-6">

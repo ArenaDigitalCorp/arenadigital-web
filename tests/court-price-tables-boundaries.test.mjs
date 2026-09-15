@@ -122,9 +122,12 @@ test('o BookingModal só sugere: o valor segue editável e há "usar sugerido"',
   // só sobrescreve quando o campo está vazio ou ainda mostra a última sugestão
   assert.match(
     bookingModal,
-    /prev === '' \|\| prev === lastAutoCourtPrice\.current/,
+    /prev === '' \|\| prev === sugeridoAnterior \? String\(res\.value\) : prev/,
     'não pode clobber o valor digitado pelo gestor'
   )
+  // a ref só pode ser lida ANTES de ser sobrescrita — senão a comparação acima
+  // nunca bate numa recotação e o campo trava na primeira sugestão
+  assert.match(bookingModal, /const sugeridoAnterior = lastAutoCourtPrice\.current/)
   assert.match(bookingModal, /usar sugerido/)
   // o valor efetivo enviado é o do campo, não a cotação
   assert.match(bookingModal, /rentalPrice: court/)
@@ -136,8 +139,9 @@ test('o valor mensal sugerido também não sobrescreve edição do gestor', () =
   // sugestão anterior, nunca um valor que o gestor digitou.
   assert.match(
     bookingModal,
-    /prev === '' \|\| prev === lastAutoValorBlocos\.current/
+    /prev === '' \|\| prev === sugeridoAnterior \? texto : prev/
   )
+  assert.match(bookingModal, /const sugeridoAnterior = lastAutoValorBlocos\.current/)
   assert.match(bookingModal, /valor_mensal: Number\(valorMensal\)/)
 })
 

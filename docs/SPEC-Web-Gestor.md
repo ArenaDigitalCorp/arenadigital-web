@@ -1209,7 +1209,9 @@ caminho legado por sessões preservado.
 ### 20.4 Camada web
 
 - `src/modules/bookings/lib/mensalista-blocos.ts` — aritmética de calendário pura:
-  `agruparBlocos` (horas contíguas ⇒ um bloco), `ocorrencias`, `avaliarSlot`
+  `agruparBlocos` (horas contíguas ⇒ um bloco), `ocorrencias`, `ocorrenciasDoBloco`
+  (desconta a ocorrência de hoje quando o horário do bloco já começou — corrigido em
+  14/09/2026, ver 22.4), `avaliarSlot`
   (estados `free | busy | conflict-future | closed | past` considerando **todo** o
   horizonte), `resumirPlano`, `fracaoPrimeiroMes` (espelha o pró-rata por minutos do
   banco), `intervaloDeCotacao`. Coberta por `tests/mensalista-blocos.test.mjs`.
@@ -1417,6 +1419,29 @@ produção para migrar.
 Testes: `tests/mensalista-blocos.test.mjs` (invariante preço-por-hora, caso real
 do gestor, plano iniciado no dia 1º, blocos de durações diferentes, variação anual,
 e as três referências no SQL).
+
+### 22.4 O pró-rata também precisa saber a HORA de hoje, não só a data (14/09/2026)
+
+`resumirPlano` e `fracaoPrimeiroMes` ganharam um parâmetro `agora: Date` (default
+`new Date()`), e passam a usar `ocorrenciasDoBloco` em vez de `ocorrencias` cru.
+Antes, `inicioVigencia` (a data de hoje à meia-noite) fazia com que a ocorrência de
+HOJE sempre contasse na primeira competência, mesmo com o horário do bloco já
+tendo passado — marcar às 20h40 um mensalista de segunda 16h–17h cobrava a sessão
+de hoje, que o atleta não tem mais como jogar. `ocorrenciasDoBloco` descarta essa
+ocorrência quando `horario_inicio < agora`, espelhando a mesma regra que
+`create_monthly_plan_blocks_atomic` já usava para decidir quais reservas criar
+(`IF v_start_time >= now() THEN ...`).
+
+**Pendência (banco):** o item 1 da lista em 22.1 (`resumirPlano`/`fracaoPrimeiroMes`)
+ficou consciente da hora; os itens 2 e 3 — `generate_mensalista_mensalidades_atomic`
+e `private.mensalista_month_minutes`, em `arenadigital-db` — ainda tomam `p_from`
+como `date`, sem hora. Na prática o próprio `create_monthly_plan_blocks_atomic` já
+não cria a reserva de hoje quando o horário passou, então não sobra reserva
+"fantasma"; mas o valor da primeira mensalidade gerada por
+`generate_mensalista_mensalidades_atomic` ainda pode não bater com o que a tela
+mostrou em "Cobrado agora" nesse caso de borda (criar o plano depois do horário de
+hoje já ter passado). Alinhar as duas pontas requer uma migration em
+`arenadigital-db` e está fora do escopo desta correção (feita só na tela).
 
 ---
 
@@ -1753,3 +1778,217 @@ tabela. O módulo não tem import de runtime (só tipos, apagados pelo
 
 O `summary` soma `totalACobrar`/`totalHoras` só no que não está cancelado, e
 continua ignorando as linhas `Recorrência` (§26.1).
+
+---
+
+## 28. Relatório de Pagamentos — o mensal vem da cobrança, não da transação (14/09/2026)
+
+### 28.1 O que estava errado
+
+O mensalista entrava no relatório pela transação de categoria `Mensalidade`. São
+duas, criadas pelo banco em momentos diferentes:
+
+| `source_type` | Quando nasce | `total_value` |
+|---|---|---|
+| `monthly_plan_month` | na **criação** do plano (`create_monthly_plan_blocks_atomic`) | `valor_mensal` **cheio** |
+| `mensalista_pagamento` | a cada pagamento registrado | o valor recebido |
+
+A primeira é herança do modelo anterior à camada mensalidade→cobrança→pagamento
+(28/08/2026) — a migration de remodelagem chega a tratar todo posting
+`monthly_plan_month` histórico como mensalidade **quitada** no backfill. Ela não
+conhece o pró-rata: um plano de R$ 320/mês criado no meio de setembro grava
+R$ 320, quando a competência de estreia vale R$ 240. E, por ser `type='entrada'`,
+o relatório a dava como **Paga** (`status: 'Pago'` fixo nas linhas de transação),
+antes de qualquer recebimento — contradizendo o card `athleteDebt`, que já lia a
+cobrança e mostrava R$ 240 em aberto.
+
+Somar as duas transações contaria o mesmo mês duas vezes assim que o gestor
+registrasse o pagamento.
+
+### 28.2 Fonte nova: `mensalidade-rows.ts`
+
+Módulo **puro** (só tipos importados), no espírito de `usage-lines.ts`:
+
+- `loadMensalidadesDaCompetencia` (em `reportActions.ts`, a parte que consulta)
+  devolve `MensalidadeContexto[]` — mensalidade + plano + espaço/esporte +
+  `horario` da recorrência + cobranças ativas. É a mesma consulta que a visão
+  Rateio já fazia, agora compartilhada pelas duas visões (uma query a menos).
+- `resumoDaMensalidade(m)` → `{ valor, status, pagoEm }`. Devido = soma de
+  `valor_devido` das cobranças ativas (ou `valor_total` quando não há nenhuma);
+  liquidado = `valor_pago + credito_aplicado`. Quitada → `Pago` com a data do
+  recebimento mais recente; parcial/aberta → `Pendente` com o que falta;
+  `status='cancelado'` → `Cancelado` (fora do "quanto cobrar").
+- `buildMensalidadeRows` (1 linha `Mensalista` por mensalidade) e
+  `buildRateioBreakdownRows` (linhas `Recorrência` + `Rateio`) consomem o mesmo
+  contexto — a soma das linhas de Rateio bate com a linha agregada, por
+  construção.
+
+### 28.3 O que sai, para não contar duas vezes
+
+- `shouldIncludeTransactionRow` recebe `sourceType` e descarta a transação de
+  `Mensalidade` gerada pelo sistema (`MENSALIDADE_SYSTEM_SOURCE_TYPES` =
+  `monthly_plan_month`, `mensalista_pagamento`). **Lançamento manual** do
+  Financeiro na mesma categoria não tem `source_type` e continua entrando.
+- As **reservas** de um plano que já tem mensalidade na competência saem
+  (`planosComMensalidade`). Sem isso, um mês cujas reservas ainda estão
+  `reservado` (os meses à frente) apareceria como a mensalidade **mais** cada
+  sessão. Meses ainda sem mensalidade gerada seguem listando as reservas, como
+  antes — o relatório converge conforme `generate_mensalista_mensalidades_atomic`
+  materializa cada competência.
+- No extrato (`detalharPorHora`) nada disso roda: lá o mês aparece hora a hora
+  nas reservas e a mensalidade sai inteira (§27.4).
+
+Testes: `tests/relatorio-mensalidade-competencia.test.mjs`.
+
+### 28.4 Pendência (banco)
+
+A transação `monthly_plan_month` continua sendo gravada na criação do plano, com
+o valor cheio, e **segue aparecendo no Financeiro e no faturamento do Dashboard**
+(nenhum dos dois filtra por `source_type`) como uma entrada que ninguém pagou.
+O relatório de Pagamentos deixou de contá-la, mas a correção de raiz é parar de
+lançá-la — a cobrança do mensalista já é `mensalista_mensalidades` +
+`mensalista_cobrancas`, e o recebimento já vira transação em
+`mensalista_register_payment`. Requer migration em `arenadigital-db`.
+
+---
+
+## 29. Relatório de Pagamentos — exportação em PDF (15/09/2026)
+
+### 29.1 Por que dois módulos separados
+
+- `payment-status-pdf-data.ts`: **puro**, sem import de runtime — `buildAppliedFiltersDescription`
+  (filtros efetivamente selecionados, na mesma lógica de "o que aparece" da tela) e
+  `formatArenaAddressLine` (junta rua/número/complemento/bairro/cidade/UF, omitindo o
+  que falta em vez de deixar vírgula solta). Testado direto em `tests/payment-status-pdf.test.mjs`.
+- `payment-status-pdf.ts`: só roda no navegador — usa `fetch`/`FileReader` para embutir
+  o logo como data URL e `jspdf`/`jspdf-autotable` (`4.2.1`/`5.0.8`, via `pnpm`) para
+  desenhar. `StatusPagamentosPageClient` importa este módulo **dinamicamente** no clique
+  de "Exportar PDF" (`await import('@/modules/reports/payment-status-pdf')`), o mesmo
+  padrão já usado para `write-excel-file/browser` — nem jsPDF nem a lib de Excel entram
+  no bundle inicial da página.
+
+### 29.2 Dados da arena no cabeçalho
+
+`PaymentStatusArenaInfo` (novo tipo em `report.types.ts`) é resolvido uma vez em
+`page.tsx`, **fora** da action do relatório (não muda por filtro):
+
+```
+[getPaymentStatusReportAction, getArenaByIdAction, getArenaBillingAddress]
+  = await Promise.all([...])
+```
+
+`getArenaByIdAction` dá nome/telefone/e-mail; `getArenaBillingAddress` (já existente,
+usado pela tela de assinatura) resolve endereço + CNPJ/CPF, inclusive cidade/UF via
+`municipios`/`estados`. `arenaInfo` desce como prop para o client, ao lado de
+`initialCourts`/`initialSports`.
+
+### 29.3 Layout do PDF
+
+`jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })`. De cima para baixo,
+tudo centralizado até a régua horizontal:
+
+1. Logo (`/logo_arena_front_bgbranco.png` — 3ª troca no mesmo dia: primeiro
+   `logo_arena.png`, depois `img/logo_pdf.png` — marca quadrada, agora esse banner
+   horizontal em fundo branco; proporção fixa 625:211, dimensionado por
+   `LOGO_WIDTH = 130pt` — o banner é largo e baixo, então quem manda é a largura,
+   não a altura) + "Sistema de Gestão para Arenas Esportivas".
+2. Nome da arena (negrito) + endereço — só isso (telefone, e-mail e CNPJ/CPF
+   saíram do cabeçalho em 15/09/2026, a pedido; `getArenaByIdAction`/
+   `getArenaBillingAddress` continuam trazendo os três, só não entram mais no PDF).
+   Sem endereço cadastrado, a linha nem aparece (`formatArenaAddressLine` devolve
+   `null`).
+3. Título "Relatório de Pagamentos — {mês}" + "Filtros aplicados" (`buildAppliedFiltersDescription`,
+   quebrado em linhas com `splitTextToSize`) + "Resumo do período" (os totais de
+   `PaymentStatusSummary` — **sem** "Horas ocupadas", ver 29.5 — mais "{atleta} deve..."
+   quando há Atleta filtrado).
+4. Tabela via `autoTable(doc, {...})` — mesmas colunas da tela (Data, Horário, Atleta,
+   Serviço, Espaço, Esporte, Valor, Status), não as da planilha Excel (que tem
+   "Horas" a mais, uma coluna analítica que não está na UI). Status colorido por linha
+   via `didParseCell` (verde/amarelo/vermelho, mesma paleta dos badges). Rodapé via
+   `didDrawPage`: "Gerado em ..." à esquerda, "Página X de Y" à direita.
+
+### 29.4 Verificação
+
+`autoTable`/`jsPDF` são bibliotecas de terceiros — o comportamento dos hooks
+(`didParseCell`, `didDrawPage`) e de `columnStyles` com chave numérica não dá pra
+confirmar só lendo `.d.ts`. Rodado um smoke test fora da suíte (script descartável,
+fora do repo) chamando `autoTable` com os mesmos hooks e `doc.output('arraybuffer')`:
+gerou o PDF sem exceção. A suíte de testes do projeto cobre só a parte pura
+(`payment-status-pdf-data.ts`) e os contratos de import dinâmico/strings-chave do
+módulo browser-only, por regex de source — não a renderização em si.
+
+### 29.5 "Horas ocupadas" removido do resumo (15/09/2026)
+
+`summary.totalHoras` soma `horas` das linhas de `bookingRows` (reserva avulsa ou de
+mensalista) — mas **não** das linhas de `mensalidade-rows` (§28), que não carregam
+`horas`. Como a maioria das recorrências já tem mensalidade gerada na competência
+(e as reservas correspondentes saem da lista — §28.3), o total ficava restrito às
+poucas reservas que ainda não viraram mensalidade: um mês real com dezenas de horas
+de mensalistas mostrava "2h ocupadas", vindo só de duas reservas avulsas de 1h. O
+número nunca representou o total do período — foi tirado do resumo do PDF
+(`resumoPartes` em `payment-status-pdf.ts`) junto com o parâmetro `formatHoras`,
+que ficou sem uso.
+
+**Pendência:** o card "Total a cobrar" da tela (`StatusPagamentosPageClient.tsx`)
+ainda mostra o mesmo número (`· {formatHoras(summary.totalHoras)} ocupadas`) — não
+foi tocado porque o pedido era sobre o PDF. Calcular horas ocupadas corretamente
+exigiria somar também os blocos de `planos_mensalista_blocos` das mensalidades do
+mês (não só das reservas soltas), o que está fora do escopo desta correção.
+
+---
+
+## 30. Calendário do espaço — visão de Mês (15/09/2026)
+
+### 30.1 Escopo: acréscimo, não substituição
+
+`CourtCalendarPageClient.tsx` (`/dashboard/arenas/{id}/courts/{courtId}/calendar`) já tinha
+Dia/Semana — uma grade `[80px_1fr]` (coluna de horário + 1 ou 7 colunas de dia) que
+rola verticalmente pelos slots de hora. `viewMode` virou `'day' | 'week' | 'month'`
+e o bloco JSX de Dia/Semana permanece **byte a byte o mesmo**, dentro do ramo `else`
+de um `viewMode === "month" ? (...) : (...)`; a visão de Mês é o ramo novo, num
+layout completamente diferente (grid 7 colunas de dias, sem coluna de horário nem
+scroll interno por slot). `tests/court-calendar-month-view.test.mjs` fixa isso por
+regex de source — inclusive que `<TimeSlot` (exclusivo de Dia/Semana) continua
+presente.
+
+### 30.2 Grade do mês e busca de reservas
+
+`monthDays` é a grade exibida: `startOfWeek(startOfMonth(currentDate))` até
+`endOfWeek(endOfMonth(currentDate))` (semana começando segunda, como em `weekDays`)
+— inclui os dias do mês anterior/seguinte que completam a primeira/última semana,
+para a grade nunca ter uma linha pela metade.
+
+`loadBookings` ganhou o ramo `month`: busca **a grade inteira**, não só
+`1º..último dia do mês` — senão os dias de outro mês nas bordas apareceriam sem os
+agendamentos que de fato têm. Dia e Semana seguem exatamente como antes.
+
+`getBookingsForDay(date)` filtra `bookings` (já carregadas para a grade) por
+`isSameDay` + `blocksAvailability` (mesmo filtro que decide o que ocupa um slot em
+Dia/Semana) e ordena por horário — até 3 aparecem no card do dia, o resto vira
+"+N mais".
+
+### 30.3 Interação
+
+- **Clicar no dia** (fundo do card) → `setViewMode("day")` + `setCurrentDate(day)` +
+  `loadBookings(day, "day")`. É o "drill-down" padrão de calendário de mês: não dá
+  pra cadastrar reserva direto no card do mês (não há horário ali), então o clique
+  leva pra a visão que tem.
+- **Clicar numa reserva** dentro do card → `e.stopPropagation()` (não troca de
+  visão) + abre `BookingDetailsModal`, mesmo componente usado em Dia/Semana.
+- Cor do chip por status/esporte: `getMonthChipStyles`, mesma regra de
+  `SingleBookingCard` (pending_payment → laranja, reservado → âmbar, confirmado →
+  cor do esporte via `getSportStyles`), resumida pra um chip de uma linha.
+
+### 30.4 Navegação e rótulo do período
+
+`handlePrevious`/`handleNext` ganharam o terceiro ramo (`subMonths`/`addMonths`);
+"Hoje" já era genérico por `viewMode`. O rótulo do período no topo mostra
+`format(currentDate, "MMMM 'de' yyyy")` em Mês, ao lado de `dd 'de' MMMM` (Dia) e
+`dd/MM – dd/MM` (Semana) que continuam iguais.
+
+### 30.5 Fora do escopo
+
+`court-slots.ts` (§15.3) é o utilitário compartilhado que a aba Operação usa;
+`CourtCalendarPageClient.tsx` mantém suas próprias cópias locais de `parseHHMM`,
+`generateSlotsForDate` etc. — duplicação pré-existente, não mexida aqui (fora do
+pedido, que era só acrescentar a visão de Mês).
