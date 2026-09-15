@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react"
 import Link from "next/link"
-import { format, addDays, subDays, startOfWeek, endOfWeek, addWeeks, subWeeks, isSameDay, parseISO, startOfDay, getHours, getMinutes, getDay, addMonths } from "date-fns"
+import { format, addDays, subDays, startOfWeek, endOfWeek, addWeeks, subWeeks, isSameDay, parseISO, startOfDay, getHours, getMinutes, getDay, addMonths, subMonths, startOfMonth, endOfMonth, isSameMonth, isToday } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { ArrowLeft, ChevronLeft, ChevronRight, Lightbulb } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -89,6 +89,18 @@ const getSportStyles = (sportName: string) => {
     if (n.includes('tênis') || n.includes('tenis')) return { bg: 'bg-[#F0FDF4]', border: 'border-[#4ADE80]', text: 'text-[#15803D]', textSecondary: 'text-[#15803D]/60' }
     if (n.includes('padel')) return { bg: 'bg-[#FAF5FF]', border: 'border-[#C084FC]', text: 'text-[#7E22CE]', textSecondary: 'text-[#7E22CE]/60' }
     return { bg: 'bg-[#F1F5F9]', border: 'border-[#94A3B8]', text: 'text-[#334155]', textSecondary: 'text-[#334155]/60' }
+}
+
+/** Estilo compacto do chip de reserva na visão de Mês — mesma lógica de status do card de hora. */
+function getMonthChipStyles(booking: Booking, court: Court) {
+    if (booking.status === 'pending_payment') {
+        return { bg: 'bg-orange-50', border: 'border-orange-400', text: 'text-orange-800' }
+    }
+    if (booking.status === 'reservado') {
+        return { bg: 'bg-amber-50', border: 'border-amber-400', text: 'text-amber-800' }
+    }
+    const s = getSportStyles(booking.sports?.name || court.sports?.[0]?.name || '')
+    return { bg: s.bg, border: s.border, text: s.text }
 }
 
 function blocksAvailability(booking: Booking) {
@@ -243,7 +255,7 @@ export function CourtCalendarPageClient({ arenaId, courtId, initialCourt, initia
     const [bookings, setBookings] = useState<Booking[]>(initialBookings as Booking[])
     const [futureBookings, setFutureBookings] = useState<Booking[]>([])
     const [currentDate, setCurrentDate] = useState(new Date(initialDate))
-    const [viewMode, setViewMode] = useState<'day' | 'week'>('day')
+    const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('day')
     const [isBookingModalOpen, setIsBookingModalOpen] = useState(false)
     const [bookingToEdit, setBookingToEdit] = useState<Booking | null>(null)
     const [selectedSlotDate, setSelectedSlotDate] = useState<Date>(new Date(initialDate))
@@ -254,14 +266,21 @@ export function CourtCalendarPageClient({ arenaId, courtId, initialCourt, initia
     const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
     const [isDayOpportunitiesModalOpen, setIsDayOpportunitiesModalOpen] = useState(false)
 
-    const loadBookings = useCallback(async (date: Date, mode: 'day' | 'week') => {
+    const loadBookings = useCallback(async (date: Date, mode: 'day' | 'week' | 'month') => {
         let startStr: string, endStr: string
         if (mode === 'day') {
             startStr = startOfDay(date).toISOString()
             endStr = addDays(startOfDay(date), 1).toISOString()
-        } else {
+        } else if (mode === 'week') {
             startStr = startOfWeek(date, { weekStartsOn: 1 }).toISOString()
             endStr = addDays(endOfWeek(date, { weekStartsOn: 1 }), 1).toISOString()
+        } else {
+            // Cobre a grade inteira exibida no mês, inclusive os dias do mês
+            // anterior/seguinte que aparecem para completar as semanas.
+            const gridStart = startOfWeek(startOfMonth(date), { weekStartsOn: 1 })
+            const gridEnd = endOfWeek(endOfMonth(date), { weekStartsOn: 1 })
+            startStr = gridStart.toISOString()
+            endStr = addDays(gridEnd, 1).toISOString()
         }
         const res = await getBookingsByCourtAction(arenaId, courtId, startStr, endStr)
         if (res.success) setBookings(res.data as Booking[])
@@ -282,13 +301,13 @@ export function CourtCalendarPageClient({ arenaId, courtId, initialCourt, initia
     }, [arenaId, courtId])
 
     const handlePrevious = () => {
-        const next = viewMode === 'day' ? subDays(currentDate, 1) : subWeeks(currentDate, 1)
+        const next = viewMode === 'day' ? subDays(currentDate, 1) : viewMode === 'week' ? subWeeks(currentDate, 1) : subMonths(currentDate, 1)
         setCurrentDate(next)
         loadBookings(next, viewMode)
     }
 
     const handleNext = () => {
-        const next = viewMode === 'day' ? addDays(currentDate, 1) : addWeeks(currentDate, 1)
+        const next = viewMode === 'day' ? addDays(currentDate, 1) : viewMode === 'week' ? addWeeks(currentDate, 1) : addMonths(currentDate, 1)
         setCurrentDate(next)
         loadBookings(next, viewMode)
     }
@@ -299,7 +318,7 @@ export function CourtCalendarPageClient({ arenaId, courtId, initialCourt, initia
         loadBookings(today, viewMode)
     }
 
-    const handleViewMode = (mode: 'day' | 'week') => {
+    const handleViewMode = (mode: 'day' | 'week' | 'month') => {
         setViewMode(mode)
         loadBookings(currentDate, mode)
     }
@@ -382,6 +401,18 @@ export function CourtCalendarPageClient({ arenaId, courtId, initialCourt, initia
 
     const weekDays = Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(currentDate, { weekStartsOn: 1 }), i))
 
+    // Grade de dias exibida na visão de Mês: semanas completas (seg–dom),
+    // incluindo os dias do mês anterior/seguinte que preenchem a primeira/última semana.
+    const monthGridStart = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 1 })
+    const monthGridEnd = endOfWeek(endOfMonth(currentDate), { weekStartsOn: 1 })
+    const monthDays: Date[] = []
+    for (let d = monthGridStart; d <= monthGridEnd; d = addDays(d, 1)) monthDays.push(d)
+
+    const getBookingsForDay = (date: Date) =>
+        bookings
+            .filter((b) => blocksAvailability(b) && isSameDay(parseISO(b.start_time), date))
+            .sort((a, b) => parseISO(a.start_time).getTime() - parseISO(b.start_time).getTime())
+
     const slotsDay = generateSlotsForDate(currentDate, court.day_config as any[] | null)
     const slotsWeek = (() => {
         const map = new Map<string, SlotTime>()
@@ -461,6 +492,18 @@ export function CourtCalendarPageClient({ arenaId, courtId, initialCourt, initia
                             >
                                 Semana
                             </button>
+                            <button
+                                type="button"
+                                onClick={() => handleViewMode("month")}
+                                className={cn(
+                                    "h-8 rounded-md px-3 text-xs font-bold transition-colors",
+                                    viewMode === "month"
+                                        ? "border border-border bg-white text-arena-navy-800 shadow-sm"
+                                        : "bg-transparent text-arena-navy-800/60 hover:text-arena-navy-800"
+                                )}
+                            >
+                                Mês
+                            </button>
                         </div>
 
                         <div className="inline-flex items-center rounded-lg border border-border bg-white">
@@ -476,7 +519,9 @@ export function CourtCalendarPageClient({ arenaId, courtId, initialCourt, initia
                             <div className="min-w-34 px-3 text-center text-sm font-bold text-arena-navy-800 sm:min-w-40 sm:px-4">
                                 {viewMode === "day"
                                     ? format(currentDate, "dd 'de' MMMM", { locale: ptBR })
-                                    : `${format(weekDays[0], "dd/MM")} – ${format(weekDays[6], "dd/MM")}`}
+                                    : viewMode === "week"
+                                    ? `${format(weekDays[0], "dd/MM")} – ${format(weekDays[6], "dd/MM")}`
+                                    : format(currentDate, "MMMM 'de' yyyy", { locale: ptBR })}
                             </div>
                             <Button
                                 variant="ghost"
@@ -520,6 +565,79 @@ export function CourtCalendarPageClient({ arenaId, courtId, initialCourt, initia
                 </div>
 
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                    {viewMode === "month" ? (
+                    <div className="min-h-0 flex-1 overflow-y-auto p-3">
+                        <div className="grid grid-cols-7 gap-1.5 pb-1.5 text-center text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                            {["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map((d) => (
+                                <div key={d}>{d}</div>
+                            ))}
+                        </div>
+                        <div className="grid grid-cols-7 gap-1.5">
+                            {monthDays.map((day) => {
+                                const dayBookings = getBookingsForDay(day)
+                                const inMonth = isSameMonth(day, currentDate)
+                                const today = isToday(day)
+                                const visibleBookings = dayBookings.slice(0, 3)
+                                const extraCount = dayBookings.length - visibleBookings.length
+                                return (
+                                    <div
+                                        key={day.toISOString()}
+                                        onClick={() => {
+                                            setViewMode("day")
+                                            setCurrentDate(day)
+                                            loadBookings(day, "day")
+                                        }}
+                                        className={cn(
+                                            "flex min-h-[92px] cursor-pointer flex-col items-stretch gap-1 rounded-lg border p-1.5 text-left transition-colors",
+                                            inMonth
+                                                ? "border-border bg-white hover:border-arena-button/40 hover:bg-arena-button/5"
+                                                : "border-border/50 bg-muted/30 hover:bg-muted/50"
+                                        )}
+                                    >
+                                        <span
+                                            className={cn(
+                                                "inline-flex h-5 w-5 items-center justify-center self-end rounded-full text-[11px] font-bold",
+                                                today
+                                                    ? "bg-arena-button text-white"
+                                                    : inMonth
+                                                    ? "text-arena-navy-800"
+                                                    : "text-muted-foreground/50"
+                                            )}
+                                        >
+                                            {format(day, "d")}
+                                        </span>
+                                        <div className="flex flex-1 flex-col gap-0.5 overflow-hidden">
+                                            {visibleBookings.map((b) => {
+                                                const chip = getMonthChipStyles(b, court)
+                                                return (
+                                                    <div
+                                                        key={b.id}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            setSelectedBooking(b)
+                                                            setIsBookingDetailsModalOpen(true)
+                                                        }}
+                                                        className={cn(
+                                                            "truncate rounded border-l-2 px-1 py-0.5 text-[10px] font-semibold leading-tight",
+                                                            chip.bg, chip.border, chip.text
+                                                        )}
+                                                    >
+                                                        {format(parseISO(b.start_time), "HH:mm")} · {formatBookingParticipantLabel(b)}
+                                                    </div>
+                                                )
+                                            })}
+                                            {extraCount > 0 && (
+                                                <span className="px-1 text-[10px] font-bold text-arena-navy-800/50">
+                                                    +{extraCount} mais
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    </div>
+                    ) : (
                     <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto overscroll-contain">
                         <div className="min-w-[320px] sm:min-w-[720px]">
                             <div className="sticky top-0 z-2 grid grid-cols-[80px_1fr] border-b border-border bg-muted/95 backdrop-blur supports-backdrop-filter:bg-muted/80">
@@ -626,6 +744,7 @@ export function CourtCalendarPageClient({ arenaId, courtId, initialCourt, initia
                             })}
                         </div>
                     </div>
+                    )}
                 </div>
             </Card>
 
