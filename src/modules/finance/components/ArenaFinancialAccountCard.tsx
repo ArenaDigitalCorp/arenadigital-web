@@ -4,10 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
   ArrowDownToLine,
-  Building2,
   CheckCircle2,
   Clock3,
-  Landmark,
   Loader2,
   RefreshCw,
   ShieldCheck,
@@ -32,7 +30,6 @@ import {
 import type {
   ArenaFinancialOverview,
   ArenaPixKeyType,
-  ArenaWithdrawalStatus,
 } from '@/modules/finance/types/arena-financial-account.types'
 import { cn } from '@/lib/utils'
 
@@ -43,16 +40,6 @@ const PIX_KEY_TYPES: Array<{ value: ArenaPixKeyType; label: string }> = [
   { value: 'PHONE', label: 'Telefone' },
   { value: 'EVP', label: 'Chave aleatória' },
 ]
-
-const WITHDRAWAL_STATUS: Record<ArenaWithdrawalStatus, { label: string; className: string }> = {
-  requested: { label: 'Solicitado', className: 'bg-slate-100 text-slate-700' },
-  processing: { label: 'Processando', className: 'bg-amber-50 text-amber-700' },
-  unknown: { label: 'Em conciliação', className: 'bg-orange-50 text-orange-700' },
-  pending: { label: 'Pendente', className: 'bg-amber-50 text-amber-700' },
-  done: { label: 'Concluído', className: 'bg-emerald-50 text-emerald-700' },
-  failed: { label: 'Falhou', className: 'bg-red-50 text-red-700' },
-  cancelled: { label: 'Cancelado', className: 'bg-slate-100 text-slate-600' },
-}
 
 function closedPeriod() {
   const finish = new Date()
@@ -71,15 +58,6 @@ function formatCents(value: number | null) {
     style: 'currency',
     currency: 'BRL',
   }).format(value / 100)
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(value))
 }
 
 function amountFromInput(value: string): number | null {
@@ -225,25 +203,19 @@ export function ArenaFinancialAccountCard({ arenaId }: { arenaId: string }) {
             </p>
           </div>
           <Button asChild className="shrink-0 bg-amber-950 text-white hover:bg-amber-900">
-            <Link href={`/dashboard/arenas/${arenaId}/edit`}>Concluir ativação</Link>
+            <Link href={`/dashboard/arenas/${arenaId}/edit?tab=receiving#receiving-account-title`}>
+              Ir para o cadastro
+            </Link>
           </Button>
         </Card>
       )}
       <Card className="overflow-hidden rounded-2xl border-none bg-[#071F33] text-white shadow-xl">
-        <div className="grid lg:grid-cols-[1.25fr_1fr]">
-          <div className="relative overflow-hidden p-7 lg:p-8">
+          <div className="grid lg:grid-cols-[1.45fr_1fr]">
+            <div className="relative overflow-hidden p-6 sm:p-7">
             <div className="absolute -right-16 -top-20 h-52 w-52 rounded-full bg-arena-button/20 blur-3xl" />
             <div className="relative">
               <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="rounded-xl bg-white/10 p-2.5">
-                    <Landmark className="h-5 w-5 text-[#FFB000]" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/50">Conta Arena</p>
-                    <p className="font-bold">Saldo de reservas online</p>
-                  </div>
-                </div>
+                <p className="text-sm font-semibold text-white/55">Disponível para saque</p>
                 <Button
                   size="icon"
                   variant="ghost"
@@ -256,27 +228,26 @@ export function ArenaFinancialAccountCard({ arenaId }: { arenaId: string }) {
                 </Button>
               </div>
 
-              <p className="mt-8 text-sm font-semibold text-white/55">Disponível para saque</p>
-              <p className="mt-1 text-4xl font-black tracking-tight lg:text-5xl">
+              <p className="mt-2 text-4xl font-black tracking-tight lg:text-5xl">
                 {formatCents(overview.balanceCents)}
               </p>
               <div className="mt-5 flex flex-wrap gap-3">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-400/10 px-3 py-1.5 text-xs font-bold text-emerald-300">
-                  <ShieldCheck className="h-3.5 w-3.5" />
-                  Subconta isolada por Arena
-                </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-white/8 px-3 py-1.5 text-xs font-bold text-white/65">
                   <Clock3 className="h-3.5 w-3.5" />
                   Extrato até {new Date(`${overview.statementPeriod.finishDate}T12:00:00`).toLocaleDateString('pt-BR')}
+                </span>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-400/10 px-3 py-1.5 text-xs font-bold text-emerald-300">
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  Subconta protegida
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="border-t border-white/10 bg-white/[0.04] p-7 lg:border-l lg:border-t-0 lg:p-8">
+            <div className="border-t border-white/10 bg-white/[0.04] p-6 sm:p-7 lg:border-l lg:border-t-0">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/45">Destino do saque</p>
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/45">Destino Pix do saque</p>
                 <p className="mt-2 text-lg font-black">
                   {overview.destination.configured
                     ? overview.destination.maskedPixKey
@@ -290,7 +261,7 @@ export function ArenaFinancialAccountCard({ arenaId }: { arenaId: string }) {
               </div>
               <WalletCards className="h-6 w-6 text-[#FFB000]" />
             </div>
-            <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+            <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
               <Button
                 className="bg-white text-[#071F33] hover:bg-white/90"
                 onClick={() => setDestinationOpen(true)}
@@ -307,72 +278,8 @@ export function ArenaFinancialAccountCard({ arenaId }: { arenaId: string }) {
               </Button>
             </div>
           </div>
-        </div>
+          </div>
       </Card>
-
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <Card className="rounded-2xl border-none bg-white p-6 shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="font-black text-arena-navy-800">Saques da subconta</h2>
-              <p className="text-sm text-slate-500">Acompanhamento e conciliação por operação.</p>
-            </div>
-            <ArrowDownToLine className="h-5 w-5 text-arena-button" />
-          </div>
-          <div className="mt-5 space-y-3">
-            {overview.withdrawals.length ? overview.withdrawals.slice(0, 6).map((withdrawal) => {
-              const status = WITHDRAWAL_STATUS[withdrawal.status]
-              return (
-                <div key={withdrawal.id} className="flex items-center justify-between gap-4 rounded-xl bg-slate-50 p-4">
-                  <div>
-                    <p className="font-black text-arena-navy-800">{formatCents(withdrawal.amountCents)}</p>
-                    <p className="mt-0.5 text-xs text-slate-500">{formatDate(withdrawal.requestedAt)}</p>
-                  </div>
-                  <span className={cn('rounded-full px-2.5 py-1 text-xs font-bold', status.className)}>
-                    {status.label}
-                  </span>
-                </div>
-              )
-            }) : (
-              <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
-                Nenhum saque solicitado.
-              </div>
-            )}
-          </div>
-        </Card>
-
-        <Card className="rounded-2xl border-none bg-white p-6 shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="font-black text-arena-navy-800">Extrato Asaas</h2>
-              <p className="text-sm text-slate-500">Últimos lançamentos conciliados.</p>
-            </div>
-            <Building2 className="h-5 w-5 text-arena-button" />
-          </div>
-          <div className="mt-5 divide-y divide-slate-100">
-            {overview.statement.length ? overview.statement.slice(0, 8).map((entry) => (
-              <div key={entry.id} className="flex items-center justify-between gap-4 py-3 first:pt-0">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-bold text-arena-navy-800">
-                    {entry.description || entry.type}
-                  </p>
-                  <p className="mt-0.5 text-xs text-slate-500">{entry.occurredOn}</p>
-                </div>
-                <p className={cn(
-                  'shrink-0 text-sm font-black',
-                  entry.amountCents >= 0 ? 'text-emerald-600' : 'text-red-500',
-                )}>
-                  {entry.amountCents >= 0 ? '+' : ''}{formatCents(entry.amountCents)}
-                </p>
-              </div>
-            )) : (
-              <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
-                Nenhum lançamento no período fechado.
-              </div>
-            )}
-          </div>
-        </Card>
-      </div>
 
       <Dialog open={destinationOpen} onOpenChange={(open) => !savingDestination && setDestinationOpen(open)}>
         <DialogContent>

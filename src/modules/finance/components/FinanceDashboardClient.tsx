@@ -3,7 +3,7 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BarChart3, Plus, AlertCircle, CheckCircle2, Loader2, Clock, MapPin, Calendar } from "lucide-react";
-import React, { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getFinanceDashboardAction, getAvulsosComPendenciaAction } from "@/modules/finance/actions/financeActions";
 import type { AvulsoPendenciaItem } from "@/modules/finance/actions/financeActions";
 import { confirmarPagamentoAvulsoAction, confirmarPagamentoParticipanteAvulsoAction } from "@/modules/bookings/actions/bookingActions";
@@ -28,7 +28,6 @@ interface Props {
     initialRecentEntradas: Transaction[];
     initialRecentSaidas: Transaction[];
     initialChartSeries: ArenaFinanceDailyRow[];
-    financialAccount?: React.ReactNode;
 }
 
 function computeTotals(summary: ArenaFinanceSummary) {
@@ -50,7 +49,7 @@ function computeComparison(summary: ArenaFinanceSummary) {
     };
 }
 
-export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentEntradas, initialRecentSaidas, initialChartSeries, financialAccount }: Props) {
+export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentEntradas, initialRecentSaidas, initialChartSeries }: Props) {
     const [totals, setTotals] = useState(() => computeTotals(initialSummary));
     const [recentEntradas, setRecentEntradas] = useState<Transaction[]>(initialRecentEntradas);
     const [recentSaidas, setRecentSaidas] = useState<Transaction[]>(initialRecentSaidas);
@@ -196,8 +195,6 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                 <h1 className="text-3xl font-black text-arena-navy-800 tracking-tight">Financeiro</h1>
                 <p className="text-arena-navy-800/60 font-medium">Controle suas entradas e saídas em um só lugar.</p>
             </div>
-
-            {financialAccount}
 
             <div className="grid gap-6 lg:grid-cols-2 items-stretch">
                 {/* Left Column: Totals */}
