@@ -30,6 +30,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Arena Digital - Gestão de Arenas",
   description: "Sistema de gestão para arenas esportivas.",
+  verification: {
+    google: "Bmvz79nSwZbqSk292Ok3BJ_Kne4hva2rmYS-q8mAeKw",
+  },
 };
 
 export default function RootLayout({
