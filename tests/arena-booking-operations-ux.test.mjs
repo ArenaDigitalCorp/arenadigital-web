@@ -11,15 +11,19 @@ const [editPage, operationsPanel, arenaForm, bookingCard, cancellationCard, paym
   readFile(new URL('../src/modules/arenas/components/ArenaPixSplitSettingsCard.tsx', import.meta.url), 'utf8'),
 ])
 
-test('booking operations are grouped after the Arena profile form', () => {
+test('Arena profile and receiving settings are separated into explicit tabs', () => {
   const formPosition = editPage.indexOf('<ArenaForm')
+  const financialAccountPosition = editPage.indexOf('<ArenaFinancialAccountCard')
   const operationsPosition = editPage.indexOf('<ArenaBookingOperationsPanel')
   const bookingPosition = operationsPanel.indexOf('<ArenaAppBookingSettingsCard')
   const cancellationPosition = operationsPanel.indexOf('<ArenaCancellationPolicyCard')
   const paymentPosition = operationsPanel.indexOf('<ArenaPixSplitSettingsCard')
 
   assert.ok(formPosition >= 0)
-  assert.ok(operationsPosition > formPosition)
+  assert.ok(financialAccountPosition > formPosition)
+  assert.ok(operationsPosition > financialAccountPosition)
+  assert.match(editPage, /Dados da arena/u)
+  assert.match(editPage, /Dados de recebimento/u)
   assert.ok(bookingPosition >= 0)
   assert.ok(cancellationPosition > bookingPosition)
   assert.ok(paymentPosition > cancellationPosition)
