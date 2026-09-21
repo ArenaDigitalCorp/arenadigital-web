@@ -27,7 +27,25 @@ export interface ReajusteRow {
   created_at: string
 }
 
-export type StatusPlano = 'ativo' | 'encerrando' | 'cancelado'
+/** Uma linha do histórico de pausas de uma recorrência.
+ *  Tipo manual: `planos_mensalista_pausas` ainda não está nos tipos gerados. */
+export interface PausaRow {
+  id: string
+  arena_id: string
+  plano_id: string
+  pausa_inicio: string
+  pausa_fim: string
+  cobranca_modo: 'integral' | 'proporcional' | 'nenhuma'
+  bookings_acao: 'liberar' | 'manter'
+  status: 'ativa' | 'cancelada'
+  observacao: string | null
+  registered_by: string | null
+  cancelada_em: string | null
+  cancelada_por: string | null
+  created_at: string
+}
+
+export type StatusPlano = 'ativo' | 'pausado' | 'encerrando' | 'cancelado'
 export type SituacaoPagamento = 'quitado' | 'parcial' | 'pendente'
 export type MensalidadeStatus = 'aberto' | 'parcial' | 'quitado' | 'cancelado'
 
@@ -38,6 +56,8 @@ export interface RecorrenciaResumo {
   cobrancas: CobrancaRow[]
   /** Histórico de reajustes de valor desta recorrência (mais recente primeiro). */
   reajustes: ReajusteRow[]
+  /** Histórico de pausas desta recorrência (mais recente primeiro). */
+  pausas: PausaRow[]
   /** Participantes adicionais vinculados à reserva na criação do plano — sugeridos
    *  como participantes do rateio quando ele ainda não foi configurado. */
   participantesSugeridos: { id: string; nome: string }[]

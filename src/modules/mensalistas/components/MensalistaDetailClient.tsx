@@ -51,11 +51,13 @@ import { LancarCreditoModal } from './LancarCreditoModal'
 import { RetirarCreditoModal } from './RetirarCreditoModal'
 import { EncerramentoModal } from './EncerramentoModal'
 import { ReajustarValorModal } from './ReajustarValorModal'
+import { PausarPlanoModal } from './PausarPlanoModal'
 import type {
   CobrancaRow,
   CreditoRow,
   MensalidadeRow,
   MensalistaDetalhe,
+  PausaRow,
   RecorrenciaResumo,
 } from '@/modules/mensalistas/types/mensalista.types'
 
@@ -231,6 +233,11 @@ export function MensalistaDetailClient({
     label: string
     valorAtual: number
     valorMesAtual: number | null
+  } | null>(null)
+  const [pausaTarget, setPausaTarget] = useState<{
+    planoId: string
+    label: string
+    pausaAtiva: PausaRow | null
   } | null>(null)
   const [creditoOpen, setCreditoOpen] = useState(false)
   const [retiradaOpen, setRetiradaOpen] = useState(false)
@@ -507,6 +514,7 @@ export function MensalistaDetailClient({
           const valorMesAtual = m ? Number(m.valor_total) : Number(p.valor_mensal)
           const isProporcional =
             !!m && Math.abs(valorMesAtual - Number(p.valor_mensal)) > 0.01
+          const pausaAtiva = rec.pausas.find((pa) => pa.status === 'ativa') ?? null
           return (
             <Card key={p.id} className="border-none shadow-sm bg-white overflow-hidden">
               <div
@@ -577,6 +585,11 @@ export function MensalistaDetailClient({
                       {STATUS_PAGAMENTO_STYLE[status].label}
                     </Badge>
                   )}
+                  {pausaAtiva && (
+                    <Badge className="bg-sky-100 text-sky-700 border-none font-bold text-[10px] uppercase">
+                      Pausado
+                    </Badge>
+                  )}
                   {p.status !== 'ativo' && (
                     <Badge className="bg-gray-100 text-gray-500 border-none font-bold text-[10px] uppercase">
                       Cancelado
@@ -641,6 +654,18 @@ export function MensalistaDetailClient({
                         }
                       >
                         Reajustar valor
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={p.status !== 'ativo'}
+                        onClick={() =>
+                          setPausaTarget({
+                            planoId: p.id,
+                            label: `${(p.court as { name?: string } | null)?.name ?? ''} · ${DIAS[p.dia_semana]} ${horario}`,
+                            pausaAtiva,
+                          })
+                        }
+                      >
+                        {pausaAtiva ? 'Editar pausa' : 'Pausar plano'}
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
@@ -1294,6 +1319,15 @@ export function MensalistaDetailClient({
         valorAtual={reajusteTarget?.valorAtual ?? 0}
         valorMesAtual={reajusteTarget?.valorMesAtual ?? null}
         competencia={`${competencia}-01`}
+      />
+      <PausarPlanoModal
+        open={!!pausaTarget}
+        onClose={() => setPausaTarget(null)}
+        onSuccess={refresh}
+        arenaId={arenaId}
+        planoId={pausaTarget?.planoId ?? ''}
+        planoLabel={pausaTarget?.label ?? ''}
+        pausaAtiva={pausaTarget?.pausaAtiva ?? null}
       />
     </div>
   )

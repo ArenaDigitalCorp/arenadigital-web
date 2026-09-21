@@ -109,17 +109,21 @@ test('mensalista billing mutations use typed atomic RPCs behind server authoriza
     'retirarCreditoSchema',
     'setEncerramentoSchema',
     'reajustarValorSchema',
+    'pausarPlanoSchema',
+    'removerPausaSchema',
   ]) {
     assert.match(source, new RegExp(`${schemaName}\\.parse\\(input\\)`))
   }
 
   assert.match(source, /\.rpc\(\s*['"]reajustar_plano_mensalista_atomic['"]/)
+  assert.match(source, /\.rpc\(\s*['"]pausar_plano_mensalista_atomic['"]/)
+  assert.match(source, /\.rpc\(\s*['"]remover_pausa_mensalista_atomic['"]/)
 
   assert.equal(
     source.match(/await assertArenaBackofficeAccess\(/g)?.length,
-    9
+    11
   )
-  assert.equal(source.match(/await requireAuthenticatedDbUser\(\)/g)?.length, 9)
+  assert.equal(source.match(/await requireAuthenticatedDbUser\(\)/g)?.length, 11)
   assert.doesNotMatch(source, /as unknown as RpcClient|type RpcClient/)
 
   for (const table of [
@@ -140,7 +144,7 @@ test('mensalista financial operation IDs are validated and forwarded unchanged',
 
   assert.equal(
     source.match(/p_operation_id:\s*parsed\.operationId/g)?.length,
-    4
+    5
   )
   assert.doesNotMatch(source, /p_operation_id:\s*(?:crypto\.randomUUID|randomUUID)/)
 })

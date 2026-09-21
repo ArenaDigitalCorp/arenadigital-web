@@ -1992,3 +1992,133 @@ Dia/Semana) e ordena por horário — até 3 aparecem no card do dia, o resto vi
 `CourtCalendarPageClient.tsx` mantém suas próprias cópias locais de `parseHHMM`,
 `generateSlotsForDate` etc. — duplicação pré-existente, não mexida aqui (fora do
 pedido, que era só acrescentar a visão de Mês).
+
+---
+
+## 31. Pausar plano do mensalista (21/09/2026)
+
+Complementa §18. Feature nova: até aqui o ciclo de uma recorrência só tinha
+`ativo`/`cancelado` (definitivo) e a "previsão de encerramento" (unidirecional).
+Não havia como registrar um afastamento temporário e **reversível** — o
+mensalista viaja um período e volta, sem perder o horário.
+
+### 31.1 Modelo de dados
+
+Migrations em `arenadigital-db`: `20260921100000_mensalista_pausa_schema.sql`,
+`20260921100010_mensalista_pausa_atomic.sql`,
+`20260921100020_mensalista_pausa_bookings_skip.sql`.
+
+Nova tabela `planos_mensalista_pausas` (auditável, mesmo espírito de
+`planos_mensalista_reajustes`, não colunas em `planos_mensalista`): `id`
+(= operation_id), `arena_id`, `plano_id`, `pausa_inicio`/`pausa_fim` (date),
+`cobranca_modo` (`integral`|`proporcional`|`nenhuma`), `bookings_acao`
+(`liberar`|`manter`), `status` (`ativa`|`cancelada`), `observacao`,
+`registered_by`, `cancelada_em`/`cancelada_por`. Índice único parcial
+`WHERE status='ativa'` garante no máximo uma pausa ativa por plano — a RPC de
+criação supera (cancela) uma pausa futura existente em vez de empilhar. RLS
+só-SELECT via `can_access_arena_backoffice`; toda escrita via RPC
+`SECURITY DEFINER`. O plano **continua `status='ativo'`** durante a pausa —
+"pausado" é derivado (existe uma pausa `ativa` para o plano), não um valor de
+`planos_mensalista.status`.
+
+### 31.2 `private.mensalista_pausa_kept_ratio`
+
+Fração (0..1) das ocorrências normais de uma competência que ficam **fora**
+do intervalo de pausa. Reaproveita `private.mensalista_plan_blocks` (a mesma
+fonte de ocorrências de `mensalista_valor_competencia` e
+`_insert_monthly_plan_month_bookings`) em vez de duplicar a iteração de
+dia-da-semana/blocos — mesma preocupação de fonte única que motivou extrair
+`mensalista_valor_competencia` em 09/09. `cobranca_modo='proporcional'`
+multiplica essa fração pelo `valor_total` **já materializado** da mensalidade
+(que já reflete pró-rata de mês de estreia e proporção por blocos), em vez de
+recalcular do zero.
+
+### 31.3 `pausar_plano_mensalista_atomic`
+
+Segue o esqueleto de `reajustar_plano_mensalista_atomic` (idempotência por
+`p_operation_id`, advisory lock, `SELECT … FOR UPDATE` do plano, exige
+`status='ativo'`):
+
+- Rejeita `pausa_inicio` no passado e uma pausa que se sobreponha a uma **em
+  andamento** (`ERRCODE 55000`). Uma pausa **futura ainda não iniciada** do
+  mesmo plano é superada automaticamente (chama
+  `private.mensalista_pausa_reverter` nela antes de inserir a nova) — é o
+  mecanismo de "editar pausa": não existe uma RPC de update separada.
+- Para cada competência que o intervalo toca: chama
+  `generate_mensalista_mensalidades_atomic` (materializa se ainda não existe)
+  e reescreve `valor_total`/`valor_devido` conforme `cobranca_modo`, pulando
+  mensalidades com rateio ou pagamento (mesmo critério do reajuste, contado em
+  `mensalidades_com_rateio_ignoradas`/`_com_pagamento_ignoradas`).
+  `nenhuma` grava `valor_total=0` e `status='cancelado'` — reaproveita o
+  enum já existente de `mensalista_mensalidades.status`; o filtro
+  `status <> 'cancelado'` que a tela já usa nos totais passa a excluir esse
+  mês automaticamente, sem mudança nenhuma no frontend.
+- Resolve as reservas **já existentes** no intervalo (`status IN
+  ('reservado','confirmed')`): `bookings_acao='liberar'` cancela
+  (`UPDATE … SET status='cancelled'`, mesma forma de
+  `set_mensalista_termination_atomic`); `'manter'` não toca.
+
+### 31.4 `private.mensalista_pausa_reverter` e `remover_pausa_mensalista_atomic`
+
+`mensalista_pausa_reverter(pausa_id, registered_by)` é o desfazimento
+compartilhado entre "editar pausa" (§31.3) e "remover pausa": marca a pausa
+`cancelada`, recalcula via `mensalista_valor_competencia` (ignorando a pausa)
+as mensalidades que ela havia tocado e ainda não têm rateio/pagamento, e — só
+quando `bookings_acao='liberar'` — reativa (`status='reservado'`) as reservas
+`cancelled` dentro do intervalo da pausa. É *best-effort* (mesmo espírito de
+não haver desfazimento perfeito no resto do módulo): se algo mais cancelou a
+mesma reserva depois, ela é reativada do mesmo jeito.
+
+`remover_pausa_mensalista_atomic` só aceita uma pausa `ativa` com
+`pausa_inicio` no futuro — mesma regra de "Remover previsão" do encerramento.
+Não é idempotente por operation_id (a ação é rara; um duplo clique encontra a
+pausa já `cancelada` e falha com "Pausa ja foi removida", inofensivo).
+
+### 31.5 Geração de reservas passa a saber pular dias pausados
+
+`_insert_monthly_plan_month_bookings` (chamada por
+`register_mensalista_payment_atomic` ao rolar o mês seguinte) ganhou, nos dois
+caminhos (legado e por blocos), uma checagem `EXISTS` contra
+`planos_mensalista_pausas` (`status='ativa'`, ocorrência dentro de
+`[pausa_inicio, pausa_fim]`) logo depois do `p_skip_past`. Assinatura
+inalterada. O efeito é que **nenhuma reserva nova nasce** dentro de um período
+pausado — o calendário do espaço já trata `cancelled`/ausência de reserva como
+horário livre (`blocksAvailability` em `CourtCalendarPageClient.tsx`), então
+não há nenhuma mudança do lado da leitura da agenda.
+
+`register_mensalista_payment_atomic` não muda: a condição de rolagem
+(`data_encerramento_prevista`) continua igual, decidindo só **se** o próximo
+mês é gerado — quais dias dentro dele nascem é decisão da função acima.
+
+### 31.6 Web
+
+Módulo `src/modules/mensalistas/`: `PausaRow` (tipo manual, como `ReajusteRow`),
+`RecorrenciaResumo.pausas`, `StatusPlano` ganha `'pausado'` (prioridade
+`cancelado > encerrando > pausado > ativo` em `derivePlanoStatus`, que agora
+recebe um `Set<planoId>` de pausas ativas buscado à parte, tanto no overview
+quanto no detalhe). `pausarPlanoSchema`/`removerPausaSchema` +
+`pausarPlanoMensalistaAction`/`removerPausaMensalistaAction` seguem o
+esqueleto de `reajustarValorPlanoAction`. `PausarPlanoModal.tsx` (novo) segue
+o layout do `EncerramentoModal`/`ReajustarValorModal`: período (dois
+`<Input type="date">`), cobrança e ação nas reservas como grupos de botões
+estilo rádio, observação, e "Remover pausa" no rodapé quando a pausa ainda não
+começou. Badge **Pausado** ao lado das tags existentes
+(Proporcional/Pago/Cancelado) na recorrência e no `STATUS_PLANO_STYLE` do
+overview. `supabase.types.ts` ganhou o hand-patch de
+`planos_mensalista_pausas` + as duas RPCs (regeneração oficial pendente,
+mesmo hábito do resto do módulo); `schema-contracts/arenadigital-web.public-tables.txt`
+(no `arenadigital-db`) ganhou a tabela.
+
+### 31.7 Fora do escopo (decisão consciente)
+
+Encerrar uma pausa **em andamento** antecipadamente; múltiplas pausas
+simultâneas no mesmo plano; estorno automático de valores já pagos antes do
+registro da pausa (usar "Lançar crédito" manualmente, mesmo padrão do
+overpay/reajuste).
+
+Testes: `supabase/tests/20260921100010_mensalista_pausa_atomic_test.sql`
+(pgTAP, cobre os três `cobranca_modo`, `liberar`/`manter`, skip na geração
+futura, editar/superar pausa, remover pausa, idempotência e as três
+rejeições). `tests/mensalista-actions-atomic.test.mjs` teve as contagens
+estáticas bumpadas (9→11 auth, 4→5 operation_id) e ganhou os dois novos nomes
+de schema/RPC na lista verificada.

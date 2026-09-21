@@ -80,6 +80,7 @@ const SITUACAO_STYLE: Record<SituacaoPagamento, { label: string; className: stri
 
 const STATUS_PLANO_STYLE: Record<StatusPlano, { label: string; className: string }> = {
   ativo: { label: 'Ativo', className: 'bg-emerald-100 text-emerald-700' },
+  pausado: { label: 'Pausado', className: 'bg-sky-100 text-sky-700' },
   encerrando: { label: 'Encerrando', className: 'bg-orange-100 text-orange-700' },
   cancelado: { label: 'Cancelado', className: 'bg-gray-100 text-gray-500' },
 }
