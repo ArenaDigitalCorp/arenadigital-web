@@ -26,6 +26,7 @@ import {
 import { buildUsageLines, saoPauloWallClock } from '@/modules/reports/usage-lines'
 import { matchPriceDay, priceAtInstant } from '@/modules/courts/lib/court-price-resolver'
 import type { CourtPriceDay } from '@/modules/courts/types/price-table.types'
+import type { PerfilAtleta } from '@/modules/athletes/types/perfil.types'
 
 /**
  * `planos_mensalista_blocos` (blocos por recorrência) e a mensalidade/cobrança
@@ -47,6 +48,48 @@ async function getStationTypeNames(supabase: ReturnType<typeof getSupabaseAdmin>
 function matchesAtleta(ids: Array<string | null | undefined>, atletaId?: string): boolean {
   if (!atletaId) return true
   return ids.some((id) => id === atletaId)
+}
+
+/**
+ * Perfil filtrado casa se qualquer um dos ids (responsável OU participante)
+ * tiver aquele perfil efetivo. Atleta ausente do mapa (sem papel detectado nem
+ * definição manual) vale "Cliente padrão" — mesmo default de `listPerfisAtletaAction`.
+ * Id `null`/`undefined` (participante avulso sem cadastro) nunca casa, porque
+ * não há perfil para atribuir a ele.
+ */
+function matchesPerfil(
+  ids: Array<string | null | undefined>,
+  perfilFiltro: PerfilAtleta | undefined,
+  perfilPorAtleta: Map<string, PerfilAtleta>
+): boolean {
+  if (!perfilFiltro) return true
+  return ids.some((id) => id != null && (perfilPorAtleta.get(id) ?? 'padrao') === perfilFiltro)
+}
+
+/** Perfil efetivo de cada atleta da arena, para o filtro "Perfil de Atleta" do relatório. */
+async function loadPerfilPorAtleta(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  arenaId: string
+): Promise<Map<string, PerfilAtleta>> {
+  const { data, error } = await (
+    supabase as unknown as {
+      rpc: (
+        name: string,
+        args: Record<string, unknown>
+      ) => Promise<{ data: unknown; error: { message: string } | null }>
+    }
+  ).rpc('list_atleta_perfis', { p_arena_id: arenaId })
+
+  if (error) {
+    console.error(`[getPaymentStatusReportAction] list_atleta_perfis: ${error.message}`)
+    return new Map()
+  }
+
+  const mapa = new Map<string, PerfilAtleta>()
+  for (const linha of (data ?? []) as { atleta_id: string; perfil_efetivo: string }[]) {
+    mapa.set(linha.atleta_id, (linha.perfil_efetivo as PerfilAtleta) ?? 'padrao')
+  }
+  return mapa
 }
 
 /** Grades de preço de um espaço, prontas para o extrato de ocupação. */
@@ -367,12 +410,12 @@ async function loadMensalidadesDaCompetencia(
   const [{ data: planos }, { data: blocos }, { data: cobrancas }] = await Promise.all([
     loose
       .from('planos_mensalista')
-      .select('id, athlete_name, court_id, sport_id, horario_inicio, horario_fim, courts:court_id(name), sports:sport_id(name)')
+      .select('id, athlete_id, athlete_name, court_id, sport_id, horario_inicio, horario_fim, courts:court_id(name), sports:sport_id(name)')
       .in('id', planoIds),
     loose.from('planos_mensalista_blocos').select('plano_id').in('plano_id', planoIds),
     loose
       .from('mensalista_cobrancas')
-      .select('id, mensalidade_id, nome, valor_devido, valor_pago, credito_aplicado, pago_em, ativo')
+      .select('id, mensalidade_id, atleta_id, nome, valor_devido, valor_pago, credito_aplicado, pago_em, ativo')
       .in('mensalidade_id', mensalidadeIds)
       .eq('ativo', true),
   ])
@@ -393,6 +436,7 @@ async function loadMensalidadesDaCompetencia(
     (m: { id: string; plano_id: string; competencia: string; valor_total: number; status: string }) => {
       const plano = planoMap.get(m.plano_id) as
         | {
+            athlete_id?: string | null
             athlete_name: string
             horario_inicio?: string | null
             horario_fim?: string | null
@@ -408,6 +452,7 @@ async function loadMensalidadesDaCompetencia(
         competencia: m.competencia,
         valorTotal: Number(m.valor_total ?? 0),
         status: m.status,
+        atletaId: plano?.athlete_id ?? null,
         atleta: plano?.athlete_name ?? null,
         espaco: nBlocos > 1 ? `${nBlocos} horários` : plano?.courts?.name ?? null,
         esporte: plano?.sports?.name ?? null,
@@ -647,6 +692,10 @@ export async function getPaymentStatusReportAction(
     logSourceError('rotativo_creditos', rotativoCreditosResult.error)
     logSourceError('transactions', transactionsResult.error)
 
+    const perfilPorAtleta = filters.perfil
+      ? await loadPerfilPorAtleta(supabase, arenaId)
+      : new Map<string, PerfilAtleta>()
+
     const escopoMensalista = {
       courtId: filters.courtId,
       sportId: filters.sportId,
@@ -669,9 +718,25 @@ export async function getPaymentStatusReportAction(
 
     const planosComMensalidade = new Set(mensalidadesDoMes.map((m) => m.planoId))
 
+    // Perfil filtra diferente dependendo da visão: agregado é 1 linha por
+    // mensalidade (vale o perfil do responsável pelo plano); rateio é 1 linha
+    // por cobrança (cada uma pode ser de um atleta diferente do responsável).
+    const mensalidadesParaLinhas = !filters.perfil
+      ? mensalidadesDoMes
+      : wantsRateioBreakdown
+        ? mensalidadesDoMes
+            .map((m) => ({
+              ...m,
+              cobrancas: m.cobrancas.filter((c) =>
+                matchesPerfil([c.atleta_id], filters.perfil, perfilPorAtleta)
+              ),
+            }))
+            .filter((m) => m.cobrancas.length > 0)
+        : mensalidadesDoMes.filter((m) => matchesPerfil([m.atletaId], filters.perfil, perfilPorAtleta))
+
     const mensalidadeRows = wantsRateioBreakdown
-      ? buildRateioBreakdownRows(mensalidadesDoMes)
-      : buildMensalidadeRows(mensalidadesDoMes)
+      ? buildRateioBreakdownRows(mensalidadesParaLinhas)
+      : buildMensalidadeRows(mensalidadesParaLinhas)
 
     const bookingsFiltradas = (bookingsResult.data ?? [])
       .filter((b: any) => shouldIncludeBookingRow(b, { detalharPorHora }))
@@ -682,12 +747,10 @@ export async function getPaymentStatusReportAction(
         (b: { plano_mensalista_id: string | null }) =>
           !b.plano_mensalista_id || !planosComMensalidade.has(b.plano_mensalista_id)
       )
-      .filter((b: { atleta?: { id: string } | null; booking_participants?: { atleta_id: string }[] }) =>
-        matchesAtleta(
-          [b.atleta?.id, ...(b.booking_participants ?? []).map((p) => p.atleta_id)],
-          filters.atletaId
-        )
-      )
+      .filter((b: { atleta?: { id: string } | null; booking_participants?: { atleta_id: string }[] }) => {
+        const ids = [b.atleta?.id, ...(b.booking_participants ?? []).map((p) => p.atleta_id)]
+        return matchesAtleta(ids, filters.atletaId) && matchesPerfil(ids, filters.perfil, perfilPorAtleta)
+      })
 
     // Grade de preço só é necessária no extrato, e só para reserva de mensalista
     // (o avulso vale o que foi cobrado nele). Os planos entram para resolver o
@@ -803,9 +866,10 @@ export async function getPaymentStatusReportAction(
     }
 
     const stationPaymentRows: PaymentStatusRow[] = (stationPaymentsResult.data ?? [])
-      .filter((payment: { station_orders?: { atleta?: { id: string } | null } | null }) =>
-        matchesAtleta([payment.station_orders?.atleta?.id], filters.atletaId)
-      )
+      .filter((payment: { station_orders?: { atleta?: { id: string } | null } | null }) => {
+        const ids = [payment.station_orders?.atleta?.id]
+        return matchesAtleta(ids, filters.atletaId) && matchesPerfil(ids, filters.perfil, perfilPorAtleta)
+      })
       .map((payment: any) => {
       const order = payment.station_orders
       const station = order?.station
@@ -827,9 +891,10 @@ export async function getPaymentStatusReportAction(
     })
 
     const rotativoInscricaoRows: PaymentStatusRow[] = (rotativoInscricoesResult.data ?? [])
-      .filter((inscricao: { atleta?: { id: string } | null }) =>
-        matchesAtleta([inscricao.atleta?.id], filters.atletaId)
-      )
+      .filter((inscricao: { atleta?: { id: string } | null }) => {
+        const ids = [inscricao.atleta?.id]
+        return matchesAtleta(ids, filters.atletaId) && matchesPerfil(ids, filters.perfil, perfilPorAtleta)
+      })
       .map((inscricao: any) => {
       const rotativo = inscricao.rotativo
       let status: PaymentStatusRow['status'] = 'Pago'
@@ -848,7 +913,10 @@ export async function getPaymentStatusReportAction(
     })
 
     const rotativoCreditoRows: PaymentStatusRow[] = (rotativoCreditosResult.data ?? [])
-      .filter((mov: { atleta?: { id: string } | null }) => matchesAtleta([mov.atleta?.id], filters.atletaId))
+      .filter((mov: { atleta?: { id: string } | null }) => {
+        const ids = [mov.atleta?.id]
+        return matchesAtleta(ids, filters.atletaId) && matchesPerfil(ids, filters.perfil, perfilPorAtleta)
+      })
       .map((mov: any) => ({
       id: `rotativo-credito-${mov.id}`,
       data: mov.created_at,
@@ -867,7 +935,10 @@ export async function getPaymentStatusReportAction(
           sourceType: t.source_type,
         })
       )
-      .filter((t: { atleta?: { id: string } | null }) => matchesAtleta([t.atleta?.id], filters.atletaId))
+      .filter((t: { atleta?: { id: string } | null }) => {
+        const ids = [t.atleta?.id]
+        return matchesAtleta(ids, filters.atletaId) && matchesPerfil(ids, filters.perfil, perfilPorAtleta)
+      })
 
     const horarioPorTransacao = await loadHorarioDaRecorrencia(
       supabase as unknown as LooseClient,
