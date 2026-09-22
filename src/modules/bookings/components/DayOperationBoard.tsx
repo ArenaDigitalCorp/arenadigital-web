@@ -651,7 +651,10 @@ export function DayOperationBoard({
             </header>
 
             {/* Content – sidebar + grid */}
-            <div className="flex-1 flex overflow-hidden">
+            {/* min-h-0: sem isso, um filho flex não encolhe abaixo da altura do
+                próprio conteúdo — a grade cresceria pra caber a tabela inteira
+                e o overflow-hidden do quadro cortaria o resto sem rolagem. */}
+            <div className="flex-1 flex min-h-0 overflow-hidden">
 
                 {/* ── Sidebar de espaços (recolhível para liberar largura da grade) ── */}
                 <div
@@ -671,7 +674,7 @@ export function DayOperationBoard({
                             {allVisible ? 'Desmarcar todos' : 'Selecionar todos'}
                         </button>
                     </div>
-                    <div className="flex-1 overflow-y-auto py-2">
+                    <div className="flex-1 min-h-0 overflow-y-auto py-2">
                         {sortedCourts.map(court => {
                             const checked = visibleCourtIds.has(court.id)
                             const hasBooking = filteredBookings.some(
@@ -718,7 +721,7 @@ export function DayOperationBoard({
                 </div>
 
                 {/* ── Grid de horários ── */}
-                <div className="flex-1 overflow-auto bg-arena-soft">
+                <div className="flex-1 min-h-0 min-w-0 overflow-auto bg-arena-soft">
                     {isLoading ? (
                         <div className="flex items-center justify-center h-full gap-3">
                             <Loader2 className="w-6 h-6 animate-spin text-arena-navy-800/40" />
@@ -977,9 +980,13 @@ export function DayOperationBoard({
     return (
         <TooltipProvider delayDuration={300}>
             {/* Em tela cheia o quadro sai do fluxo; o wrapper preserva a altura da aba
-                para a página não "pular" ao expandir/reduzir. */}
+                para a página não "pular" ao expandir/reduzir. No modal, o quadro usa
+                h-full — sem este wrapper ter uma altura própria, h-full não tem contra
+                o que calcular 100% e o quadro cresce livre, cortado sem rolagem pelo
+                overflow-hidden do modal por cima. */}
             <div
                 className={cn(
+                    isModal && "h-full",
                     isExpanded && !isModal && "h-[calc(100dvh-16rem)] min-h-[420px]"
                 )}
             >
