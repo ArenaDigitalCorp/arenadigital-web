@@ -20,6 +20,8 @@ import type { PaymentStatusRow } from '@/modules/reports/types/report.types'
 export interface MensalistaCobranca {
   id: string
   mensalidade_id: string
+  /** `null` = participante avulso identificado só pelo nome (sem cadastro de atleta). */
+  atleta_id: string | null
   nome: string | null
   valor_devido: number | null
   valor_pago: number | null
@@ -35,6 +37,8 @@ export interface MensalidadeContexto {
   competencia: string
   valorTotal: number
   status: string
+  /** Responsável pelo plano — usado para casar com o filtro de Perfil de Atleta. */
+  atletaId: string | null
   atleta: string | null
   espaco: string | null
   esporte: string | null

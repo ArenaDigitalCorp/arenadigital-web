@@ -63,6 +63,28 @@ export const setEncerramentoSchema = z.object({
   observacao: z.string().trim().max(400).nullable(),
 })
 
+export const pausarPlanoSchema = z
+  .object({
+    arenaId: uuidSchema,
+    planoId: uuidSchema,
+    operationId: uuidSchema,
+    pausaInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    pausaFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    cobrancaModo: z.enum(['integral', 'proporcional', 'nenhuma']),
+    bookingsAcao: z.enum(['liberar', 'manter']),
+    observacao: z.string().trim().max(400).nullable(),
+  })
+  .refine((v) => v.pausaFim >= v.pausaInicio, {
+    message: 'O fim da pausa não pode ser antes do início',
+    path: ['pausaFim'],
+  })
+
+export const removerPausaSchema = z.object({
+  arenaId: uuidSchema,
+  planoId: uuidSchema,
+  pausaId: uuidSchema,
+})
+
 export const reajustarValorSchema = z.object({
   arenaId: uuidSchema,
   planoId: uuidSchema,

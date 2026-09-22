@@ -76,6 +76,16 @@ import {
   type BookingLike,
   type CourtLike,
 } from '@/modules/bookings/lib/mensalista-blocos';
+import { AvulsoBlocosPicker } from '@/modules/bookings/components/AvulsoBlocosPicker';
+import {
+  agruparBlocosAvulso,
+  blocoAvulsoId,
+  inicioDaSemana,
+  intervaloDoBlocoAvulso,
+  slotKeyAvulso,
+  toDateKey,
+  type ResumoBlocoAvulso,
+} from '@/modules/bookings/lib/avulso-blocos';
 import {
   BookingParticipantsField,
   type BookingAthleteOption,
@@ -301,6 +311,29 @@ export function BookingModal({
   // apenas para a aba avulsa e para a checagem de conflito do fluxo antigo.
   const [blocoSlots, setBlocoSlots] = useState<Set<string>>(new Set());
 
+  // Avulso — múltiplos horários/quadras numa reserva nova (grade de uma semana
+  // real, mesma experiência do "Onde e quando" do mensalista). Só existe para
+  // reserva NOVA: editar uma reserva existente continua usando os campos
+  // legados de Data/Horário logo acima, intocados.
+  const [avulsoBlocoSlots, setAvulsoBlocoSlots] = useState<Set<string>>(new Set());
+  const [avulsoWeekStart, setAvulsoWeekStart] = useState<Date>(() =>
+    inicioDaSemana(selectedDate)
+  );
+  const [avulsoActiveCourtId, setAvulsoActiveCourtId] = useState<string>(courtId);
+  const [avulsoCourts, setAvulsoCourts] = useState<CourtLike[]>([]);
+  const [avulsoWeekBookings, setAvulsoWeekBookings] = useState<BookingLike[]>([]);
+  const [isLoadingAvulsoAgenda, setIsLoadingAvulsoAgenda] = useState(false);
+  const [avulsoPriceTableByCourt, setAvulsoPriceTableByCourt] = useState<
+    Record<string, string>
+  >({});
+  const [avulsoBlocoValoresSugeridos, setAvulsoBlocoValoresSugeridos] = useState<
+    Record<string, number>
+  >({});
+  const [avulsoBlocoOverrides, setAvulsoBlocoOverrides] = useState<
+    Record<string, number>
+  >({});
+  const [isQuotingAvulsoBlocos, setIsQuotingAvulsoBlocos] = useState(false);
+
   useEffect(() => {
     if (!isOpen || !selectedAthlete?.id || bookingType !== 'mensal') {
       setPerfilAtleta(null);
@@ -471,6 +504,13 @@ export function BookingModal({
     setAdditionalParticipants([]);
     setSplitBillingPerParticipant(false);
     setDiaSemana(String(selectedDate.getDay()));
+    // Pré-marca a célula clicada — o fluxo de "um clique, uma reserva" continua
+    // idêntico; o gestor só ganha a opção de marcar mais horários/quadras.
+    setAvulsoWeekStart(inicioDaSemana(selectedDate));
+    setAvulsoActiveCourtId(courtId);
+    setAvulsoBlocoSlots(new Set([slotKeyAvulso(courtId, toDateKey(selectedDate), selectedHour)]));
+    setAvulsoBlocoOverrides({});
+    setAvulsoBlocoValoresSugeridos({});
     void loadCourtSports();
   }, [
     isOpen,
@@ -686,6 +726,188 @@ export function BookingModal({
     // activeCourtId fora das deps de propósito: trocar de espaço não recarrega.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, bookingType, existingBooking, arenaId, courtId]);
+
+  // ── Avulso multi-slot: espaços da arena + reservas só da semana exibida ──
+  // Diferente do mensalista, não precisa de horizonte nenhum — cada célula é
+  // uma data concreta, então só a semana visível importa. Recarrega ao trocar
+  // de semana.
+  useEffect(() => {
+    if (!isOpen || bookingType !== 'avulso' || existingBooking) return;
+    let cancelled = false;
+    getCourtsByArenaAction(arenaId).then((res) => {
+      if (cancelled) return;
+      const courts = ((res.data ?? []) as CourtLike[]).filter(
+        (court) => (court as { status?: string }).status !== 'inativo'
+      );
+      setAvulsoCourts(courts);
+      setAvulsoActiveCourtId((prev) =>
+        courts.some((court) => court.id === prev) ? prev : (courts[0]?.id ?? courtId)
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, bookingType, existingBooking, arenaId, courtId]);
+
+  useEffect(() => {
+    if (!isOpen || bookingType !== 'avulso' || existingBooking) return;
+    let cancelled = false;
+    setIsLoadingAvulsoAgenda(true);
+
+    const fim = new Date(avulsoWeekStart);
+    fim.setDate(fim.getDate() + 7);
+
+    getBookingsByArenaAction(arenaId, avulsoWeekStart.toISOString(), fim.toISOString())
+      .then((res) => {
+        if (cancelled) return;
+        setAvulsoWeekBookings((res.data ?? []) as BookingLike[]);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingAvulsoAgenda(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, bookingType, existingBooking, arenaId, avulsoWeekStart]);
+
+  const blocosAvulsoSelecionados = useMemo(
+    () => agruparBlocosAvulso(avulsoBlocoSlots),
+    [avulsoBlocoSlots]
+  );
+
+  // Tabela de preço de cada espaço que entrou na seleção — o padrão do espaço,
+  // igual ao fluxo avulso de sempre (mensal usa Mensalista/Professor; aqui não
+  // há esse papel a considerar).
+  useEffect(() => {
+    if (!isOpen || bookingType !== 'avulso' || existingBooking) return;
+    const courtIds = Array.from(new Set(blocosAvulsoSelecionados.map((b) => b.courtId)));
+    const faltando = courtIds.filter((id) => !avulsoPriceTableByCourt[id]);
+    if (faltando.length === 0) return;
+
+    let cancelled = false;
+    Promise.all(
+      faltando.map(async (id) => ({
+        id,
+        tables: (await listCourtPriceTableOptionsAction(arenaId, id)).data ?? [],
+      }))
+    ).then((results) => {
+      if (cancelled) return;
+      setAvulsoPriceTableByCourt((prev) => {
+        const next = { ...prev };
+        for (const { id, tables } of results) {
+          if (next[id]) continue;
+          const preferida = tables.find((t) => t.isDefault) ?? tables[0];
+          if (preferida) next[id] = preferida.id;
+        }
+        return next;
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, bookingType, existingBooking, blocosAvulsoSelecionados, avulsoPriceTableByCourt, arenaId]);
+
+  // Cotação por bloco (debounced) — cada bloco pode ter preço diferente
+  // (espaços/tabelas diferentes), por isso o valor é por bloco, não um único
+  // campo somado no fim como no mensal.
+  useEffect(() => {
+    if (!isOpen || bookingType !== 'avulso' || existingBooking) return;
+    if (blocosAvulsoSelecionados.length === 0) {
+      setAvulsoBlocoValoresSugeridos({});
+      setIsQuotingAvulsoBlocos(false);
+      return;
+    }
+    const semTabela = blocosAvulsoSelecionados.some(
+      (bloco) => !avulsoPriceTableByCourt[bloco.courtId]
+    );
+    if (semTabela) return;
+
+    let cancelled = false;
+    setIsQuotingAvulsoBlocos(true);
+    const timer = setTimeout(() => {
+      Promise.all(
+        blocosAvulsoSelecionados.map(async (bloco) => {
+          const { startISO, endISO } = intervaloDoBlocoAvulso(bloco);
+          const priceTableId = avulsoPriceTableByCourt[bloco.courtId];
+          const res = await quoteCourtPriceAction(arenaId, bloco.courtId, priceTableId, startISO, endISO);
+          return { id: blocoAvulsoId(bloco), valor: res.success ? res.value : 0 };
+        })
+      )
+        .then((results) => {
+          if (cancelled) return;
+          setAvulsoBlocoValoresSugeridos(() => {
+            const next: Record<string, number> = {};
+            for (const { id, valor } of results) next[id] = valor;
+            return next;
+          });
+        })
+        .finally(() => {
+          if (!cancelled) setIsQuotingAvulsoBlocos(false);
+        });
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [isOpen, bookingType, existingBooking, blocosAvulsoSelecionados, avulsoPriceTableByCourt, arenaId]);
+
+  const resumoBlocosAvulso: ResumoBlocoAvulso[] = useMemo(
+    () =>
+      blocosAvulsoSelecionados.map((bloco) => {
+        const id = blocoAvulsoId(bloco);
+        const valorSugerido = avulsoBlocoValoresSugeridos[id] ?? 0;
+        const valor = avulsoBlocoOverrides[id] ?? valorSugerido;
+        return { ...bloco, valorSugerido, valor };
+      }),
+    [blocosAvulsoSelecionados, avulsoBlocoValoresSugeridos, avulsoBlocoOverrides]
+  );
+
+  const isMultiBlocoAvulso = !existingBooking && resumoBlocosAvulso.length > 1;
+
+  // Recorrência, serviço e cobrança separada só fazem sentido para UMA reserva
+  // por vez — com mais de um bloco escolhido, saem do ar automaticamente.
+  useEffect(() => {
+    if (!isMultiBlocoAvulso) return;
+    setIsRecurring(false);
+    setIncludeServices(false);
+    setServiceLines([]);
+    setSplitBillingPerParticipant(false);
+  }, [isMultiBlocoAvulso]);
+
+  const handleToggleAvulsoSlot = (key: string) => {
+    setAvulsoBlocoSlots((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const handleRemoveAvulsoBloco = (blocoKey: string) => {
+    const bloco = blocosAvulsoSelecionados.find((b) => blocoAvulsoId(b) === blocoKey);
+    if (!bloco) return;
+    setAvulsoBlocoSlots((prev) => {
+      const next = new Set(prev);
+      for (const hora of bloco.hours) next.delete(slotKeyAvulso(bloco.courtId, bloco.date, hora));
+      return next;
+    });
+    setAvulsoBlocoOverrides((prev) => {
+      const next = { ...prev };
+      delete next[blocoKey];
+      return next;
+    });
+  };
+
+  const handleAvulsoBlocoValorChange = (blocoKey: string, valor: number) => {
+    setAvulsoBlocoOverrides((prev) => ({ ...prev, [blocoKey]: valor }));
+  };
+
+  const totalAvulsoMultiDisplay =
+    resumoBlocosAvulso.reduce((sum, b) => sum + (Number.isFinite(b.valor) ? b.valor : 0), 0) +
+    sumBookingServiceLines(serviceLines);
 
   // Tabelas de preço de cada espaço que entrou na recorrência. São por quadra,
   // então um plano que usa dois espaços escolhe duas tabelas.
@@ -997,6 +1219,138 @@ export function BookingModal({
     }
   };
 
+  /**
+   * Salva a reserva avulsa NOVA a partir da grade multi-slot: uma chamada de
+   * `saveBackofficeBookingBundleAction` por bloco (cada um pode ter espaço e
+   * preço diferentes) — por trás, continua criando reservas avulsas comuns,
+   * uma por bloco, exatamente como se o gestor tivesse repetido o cadastro.
+   */
+  const handleSaveAvulsoMulti = async () => {
+    if (!selectedAthlete && !search) {
+      toast.error('Informe o nome do responsável');
+      return;
+    }
+    if (resumoBlocosAvulso.length === 0) {
+      toast.error('Marque ao menos um horário na grade');
+      return;
+    }
+    if (resumoBlocosAvulso.some((b) => !Number.isFinite(b.valor) || b.valor < 0)) {
+      toast.error('Informe um valor válido para todos os horários escolhidos');
+      return;
+    }
+    const cobrancaSeparada = resumoBlocosAvulso.length === 1 && splitBillingPerParticipant;
+    if (cobrancaSeparada) {
+      if (!selectedAthlete?.id) {
+        toast.error(
+          'Para cobrança separada, o responsável precisa ser um atleta cadastrado'
+        );
+        return;
+      }
+      if (additionalParticipants.length === 0) {
+        toast.error(
+          'Adicione pelo menos um participante para cobrança separada'
+        );
+        return;
+      }
+    }
+    const servicePayload =
+      resumoBlocosAvulso.length === 1
+        ? serviceLines.map((l) => ({ product_id: l.productId, quantity: l.quantity }))
+        : [];
+
+    setIsSaving(true);
+    try {
+      const resultados: { ok: boolean; error?: string; bloco: ResumoBlocoAvulso }[] = [];
+      for (const bloco of resumoBlocosAvulso) {
+        const { startISO, endISO } = intervaloDoBlocoAvulso(bloco);
+        const result = await saveBackofficeBookingBundleAction(arenaId, {
+          operationId: crypto.randomUUID(),
+          updateBookingId: null,
+          courtId: bloco.courtId,
+          athleteName: selectedAthlete ? selectedAthlete.nome_perfil : search,
+          athleteId: selectedAthlete?.id ?? null,
+          sportId: selectedSport || null,
+          rentalPrice: bloco.valor,
+          splitBilling: cobrancaSeparada,
+          recurrenceId: null,
+          slots: [{ start_time: startISO, end_time: endISO }],
+          services: servicePayload,
+          additionalAthleteIds: additionalParticipants.map((p) => p.id),
+        });
+        resultados.push({ ok: result.success, error: result.error, bloco });
+      }
+
+      const sucesso = resultados.filter((r) => r.ok);
+      const falhas = resultados.filter((r) => !r.ok);
+
+      if (sucesso.length > 0) {
+        trackAction('booking_save', 'success', {
+          arena_id: arenaId,
+          booking_type: 'avulso',
+          edit_mode: false,
+          recurring: false,
+          multi_slot: resultados.length > 1,
+        });
+      }
+      if (falhas.length > 0) {
+        trackAction('booking_save', 'failure', {
+          arena_id: arenaId,
+          booking_type: 'avulso',
+          multi_slot: resultados.length > 1,
+        });
+      }
+
+      if (falhas.length === 0) {
+        toast.success(
+          sucesso.length === 1
+            ? 'Reserva criada! Confirme o pagamento em Financeiro → Cobranças Avulsas.'
+            : `${sucesso.length} reservas criadas! Confirme os pagamentos em Financeiro → Cobranças Avulsas.`
+        );
+        onSuccess();
+        onClose();
+        resetForm();
+        return;
+      }
+
+      const nomeDoBloco = (b: ResumoBlocoAvulso) => {
+        const nomeCourt = avulsoCourts.find((c) => c.id === b.courtId)?.name ?? 'Espaço';
+        const data = new Date(`${b.date}T00:00:00`);
+        return `${nomeCourt} ${data.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} ${String(b.from).padStart(2, '0')}:00`;
+      };
+
+      if (sucesso.length === 0) {
+        toast.error(falhas[0].error ?? 'Erro ao criar as reservas');
+        return;
+      }
+
+      // Parcial: mantém no modal só os blocos que falharam, para o gestor tentar de novo.
+      toast.error(
+        `${sucesso.length} de ${resultados.length} reservas criadas. Falhou: ${falhas
+          .map((f) => nomeDoBloco(f.bloco))
+          .join(', ')}.`
+      );
+      setAvulsoBlocoSlots((prev) => {
+        const next = new Set(prev);
+        for (const { bloco } of sucesso) {
+          for (const hora of bloco.hours) next.delete(slotKeyAvulso(bloco.courtId, bloco.date, hora));
+        }
+        return next;
+      });
+      onSuccess();
+    } catch (error) {
+      trackAction('booking_save', 'failure', {
+        arena_id: arenaId,
+        booking_type: 'avulso',
+        edit_mode: false,
+        multi_slot: resumoBlocosAvulso.length > 1,
+        source: error instanceof Error ? 'exception' : 'unknown_error',
+      });
+      toast.error('Erro ao criar reserva');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleSaveMensal = async () => {
     if (!selectedAthlete) {
       toast.error('Selecione um atleta vinculado à arena');
@@ -1090,6 +1444,12 @@ export function BookingModal({
     setAvulsoSuggested(null);
     lastAutoCourtPrice.current = null;
     lastAutoValorBlocos.current = null;
+    setAvulsoBlocoSlots(new Set());
+    setAvulsoBlocoOverrides({});
+    setAvulsoBlocoValoresSugeridos({});
+    setAvulsoPriceTableByCourt({});
+    setAvulsoActiveCourtId(courtId);
+    setAvulsoWeekStart(inicioDaSemana(selectedDate));
   };
 
   // ── Helpers para gerar slots a verificar ────────────────────────────────
@@ -1158,8 +1518,57 @@ export function BookingModal({
     return slots;
   }
 
+  /**
+   * Checa conflito bloco a bloco (cada um pode ser em quadra diferente) antes
+   * de criar a reserva avulsa nova. Mesma rede de segurança do fluxo de
+   * sempre — só rodada uma vez por bloco em vez de uma vez pra quadra única.
+   */
+  async function handlePreSaveAvulsoMulti() {
+    if (resumoBlocosAvulso.length === 0) {
+      toast.error('Marque ao menos um horário na grade');
+      return;
+    }
+    setConflicts([]);
+    setIsCheckingConflicts(true);
+    try {
+      const todosConflitos: BookingConflict[] = [];
+      for (const bloco of resumoBlocosAvulso) {
+        const { startISO, endISO } = intervaloDoBlocoAvulso(bloco);
+        const result = await checkBookingConflictsAction(arenaId, bloco.courtId, [
+          { startTime: startISO, endTime: endISO },
+        ]);
+        if (!result.success) {
+          trackAction('booking_conflict_check', 'failure', {
+            arena_id: arenaId,
+            court_id: bloco.courtId,
+            booking_type: 'avulso',
+            source: 'server_result',
+          });
+          toast.error(result.error ?? 'Erro ao verificar conflitos');
+          return;
+        }
+        todosConflitos.push(...result.conflicts);
+      }
+      if (todosConflitos.length > 0) {
+        track('booking_conflict_detected', {
+          arena_id: arenaId,
+          booking_type: 'avulso',
+          conflict_count: todosConflitos.length,
+        });
+        setConflicts(todosConflitos);
+        return;
+      }
+      await handleSaveAvulsoMulti();
+    } finally {
+      setIsCheckingConflicts(false);
+    }
+  }
+
   // ── Pre-save: verifica conflitos antes de salvar ─────────────────────────
   async function handlePreSave() {
+    if (bookingType === 'avulso' && !existingBooking) {
+      return handlePreSaveAvulsoMulti();
+    }
     if (bookingType === 'avulso' && avulsoEndTimeError) {
       toast.error(avulsoEndTimeError);
       return;
@@ -1367,7 +1776,7 @@ export function BookingModal({
                         onRegisterNew={() => setIsAthleteModalOpen(true)}
                         disabled={isSaving}
                       />
-                      {additionalParticipants.length > 0 && (
+                      {additionalParticipants.length > 0 && !isMultiBlocoAvulso && (
                         <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
                           <div className="flex items-start gap-3">
                             <button
@@ -1414,23 +1823,30 @@ export function BookingModal({
                         </div>
                       )}
                     </div>
-                    <div className="space-y-2 lg:col-span-3">
-                      <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">
-                        Data
-                      </Label>
-                      <div className="relative">
-                        <CalendarIcon className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-arena-navy-800/20" />
-                        <Input
-                          value={format(selectedDate, 'dd/MM/yyyy', {
-                            locale: ptBR,
-                          })}
-                          readOnly
-                          placeholder="dd/mm/aaaa"
-                          className="h-14 rounded-xl border-arena-navy-800/10 bg-gray-50 pl-12 font-bold text-arena-navy-800 focus:ring-0"
-                        />
+                    {existingBooking && (
+                      <div className="space-y-2 lg:col-span-3">
+                        <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">
+                          Data
+                        </Label>
+                        <div className="relative">
+                          <CalendarIcon className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-arena-navy-800/20" />
+                          <Input
+                            value={format(selectedDate, 'dd/MM/yyyy', {
+                              locale: ptBR,
+                            })}
+                            readOnly
+                            placeholder="dd/mm/aaaa"
+                            className="h-14 rounded-xl border-arena-navy-800/10 bg-gray-50 pl-12 font-bold text-arena-navy-800 focus:ring-0"
+                          />
+                        </div>
                       </div>
-                    </div>
-                    <div className="space-y-2 lg:col-span-3">
+                    )}
+                    <div
+                      className={cn(
+                        'space-y-2',
+                        existingBooking ? 'lg:col-span-3' : 'lg:col-span-6'
+                      )}
+                    >
                       <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">
                         Esporte
                       </Label>
@@ -1468,6 +1884,44 @@ export function BookingModal({
                     </div>
                   </div>
 
+                  {/* Grade multi-slot — só para reserva nova. Editar uma reserva
+                      existente continua com os campos de Data/Horário abaixo. */}
+                  {!existingBooking && (
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">
+                          Onde e quando
+                        </Label>
+                        <span className="ml-auto text-[11.5px] font-medium text-arena-navy-800/40">
+                          Clique nos horários livres. Horas seguidas viram um bloco só.
+                        </span>
+                      </div>
+                      <AvulsoBlocosPicker
+                        courts={avulsoCourts}
+                        bookings={avulsoWeekBookings}
+                        isLoading={isLoadingAvulsoAgenda}
+                        selected={avulsoBlocoSlots}
+                        onToggleSlot={handleToggleAvulsoSlot}
+                        onRemoveBloco={handleRemoveAvulsoBloco}
+                        weekStart={avulsoWeekStart}
+                        onNavigateWeek={(dir) =>
+                          setAvulsoWeekStart((prev) => {
+                            const next = new Date(prev);
+                            next.setDate(next.getDate() + dir * 7);
+                            return next;
+                          })
+                        }
+                        activeCourtId={avulsoActiveCourtId}
+                        onActiveCourtChange={setAvulsoActiveCourtId}
+                        blocos={resumoBlocosAvulso}
+                        onBlocoValorChange={handleAvulsoBlocoValorChange}
+                        isQuoting={isQuotingAvulsoBlocos}
+                        disabled={isSaving}
+                      />
+                    </div>
+                  )}
+
+                  {existingBooking && (
                   <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-5">
                     <div className="space-y-2 lg:col-span-3">
                       <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">
@@ -1574,9 +2028,16 @@ export function BookingModal({
                       )}
                     </div>
                   </div>
+                  )}
 
                   <div className="grid grid-cols-1 gap-8 border-t border-slate-200 pt-6 md:grid-cols-2 md:gap-0">
-                    {!existingBooking ? (
+                    {!existingBooking && isMultiBlocoAvulso ? (
+                      <div className="flex min-w-0 flex-col justify-center md:border-r md:border-slate-200 md:pr-8">
+                        <p className="text-xs font-medium leading-relaxed text-arena-navy-800/40">
+                          Reserva recorrente fica disponível só com um único horário selecionado na grade acima.
+                        </p>
+                      </div>
+                    ) : !existingBooking ? (
                       <div className="flex min-w-0 flex-col md:border-r md:border-slate-200 md:pr-8">
                         <div className="flex items-start gap-3 border-b border-slate-200 pb-4">
                           <button
@@ -1673,6 +2134,13 @@ export function BookingModal({
                       />
                     )}
 
+                    {isMultiBlocoAvulso ? (
+                      <div className="flex min-w-0 flex-col justify-center md:pl-8">
+                        <p className="text-xs font-medium leading-relaxed text-arena-navy-800/40">
+                          Adicionar serviço fica disponível só com um único horário selecionado na grade acima.
+                        </p>
+                      </div>
+                    ) : (
                     <div className="flex min-w-0 flex-col md:pl-8">
                       <div className="flex items-start gap-3 border-b border-slate-200 pb-4">
                         <button
@@ -1727,24 +2195,27 @@ export function BookingModal({
                         </div>
                       )}
                     </div>
+                    )}
                   </div>
 
                   <div className="mt-6 border-t border-slate-200 pt-6">
                     <div className="flex flex-wrap items-baseline justify-between gap-3">
                       <span className="text-sm font-medium text-arena-navy-800/70">
-                        Total da reserva
+                        {existingBooking || resumoBlocosAvulso.length <= 1
+                          ? 'Total da reserva'
+                          : `Total de ${resumoBlocosAvulso.length} reservas`}
                       </span>
                       <span className="text-2xl font-black tracking-tight text-arena-button">
-                        {fmtBrl(totalDisplay)}
+                        {fmtBrl(existingBooking ? totalDisplay : totalAvulsoMultiDisplay)}
                       </span>
                     </div>
-                    {splitBillingPerParticipant ? (
+                    {existingBooking && splitBillingPerParticipant ? (
                       <p className="mt-2 text-[11px] font-medium text-arena-navy-800/45">
                         {participantCount} participante
                         {participantCount !== 1 ? 's' : ''} ×{' '}
                         {fmtBrl(Number(courtPrice) || 0)}
                       </p>
-                    ) : serviceLines.length > 0 ? (
+                    ) : existingBooking && serviceLines.length > 0 ? (
                       <p className="mt-2 text-[11px] font-medium text-arena-navy-800/45">
                         Locação {fmtBrl(Number(courtPrice) || 0)} + serviços{' '}
                         {fmtBrl(servicesSumDisplay)}
