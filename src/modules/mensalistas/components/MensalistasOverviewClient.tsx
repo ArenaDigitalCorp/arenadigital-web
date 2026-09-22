@@ -85,17 +85,42 @@ const STATUS_PLANO_STYLE: Record<StatusPlano, { label: string; className: string
   cancelado: { label: 'Cancelado', className: 'bg-gray-100 text-gray-500' },
 }
 
-type StatusFilter = 'todos' | StatusPlano
 type SituacaoFilter = 'todas' | SituacaoPagamento
+
+/** Chips com toggle próprio — Pausado não tem chip e só aparece com "Todos" selecionado. */
+const STATUS_CHIPS = ['ativo', 'encerrando', 'cancelado'] as const satisfies readonly StatusPlano[]
+const ALL_STATUS_PLANO: StatusPlano[] = ['ativo', 'pausado', 'encerrando', 'cancelado']
+/**
+ * Quem trabalha nessa tela quer ver ativo/encerrando primeiro — cancelado (e
+ * pausado, só visível em "Todos") é ruído até que o gestor peça por ele.
+ */
+const DEFAULT_STATUS_FILTROS: StatusPlano[] = ['ativo', 'encerrando']
 
 export function MensalistasOverviewClient({ arenaId, competencia, overview }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('todos')
+  const [statusFiltros, setStatusFiltros] = useState<Set<StatusPlano>>(
+    () => new Set(DEFAULT_STATUS_FILTROS)
+  )
   const [situacaoFilter, setSituacaoFilter] = useState<SituacaoFilter>('todas')
   const [soAtraso, setSoAtraso] = useState(false)
+
+  const todosStatusSelecionados = ALL_STATUS_PLANO.every((s) => statusFiltros.has(s))
+
+  function toggleStatusChip(status: StatusPlano) {
+    setStatusFiltros((prev) => {
+      const next = new Set(prev)
+      if (next.has(status)) next.delete(status)
+      else next.add(status)
+      return next
+    })
+  }
+
+  function selecionarTodosStatus() {
+    setStatusFiltros(new Set(ALL_STATUS_PLANO))
+  }
 
   const competenciaDate = parseISO(`${competencia}-01`)
 
@@ -120,13 +145,13 @@ export function MensalistasOverviewClient({ arenaId, competencia, overview }: Pr
         !term ||
         r.nome.toLowerCase().includes(term) ||
         (r.telefone ?? '').toLowerCase().includes(term)
-      const matchStatus = statusFilter === 'todos' || r.statusPlano === statusFilter
+      const matchStatus = statusFiltros.has(r.statusPlano)
       const matchSituacao =
         situacaoFilter === 'todas' || r.situacao === situacaoFilter
       const matchAtraso = !soAtraso || r.atrasoValor > 0
       return matchSearch && matchStatus && matchSituacao && matchAtraso
     })
-  }, [overview.resumos, search, statusFilter, situacaoFilter, soAtraso])
+  }, [overview.resumos, search, statusFiltros, situacaoFilter, soAtraso])
 
   return (
     <div className="space-y-8">
@@ -233,20 +258,29 @@ export function MensalistasOverviewClient({ arenaId, competencia, overview }: Pr
       <Card className="border-none shadow-sm bg-white p-6 space-y-5">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-2">
-            {(['todos', 'ativo', 'encerrando', 'cancelado'] as const).map((f) => (
+            <button
+              onClick={selecionarTodosStatus}
+              className={cn(
+                'px-3 py-1.5 rounded-lg text-xs font-bold transition-colors',
+                todosStatusSelecionados
+                  ? 'bg-arena-navy-800 text-white'
+                  : 'bg-[#F1F5F9] text-arena-navy-800/60 hover:bg-arena-navy-800/10'
+              )}
+            >
+              Todos
+            </button>
+            {STATUS_CHIPS.map((f) => (
               <button
                 key={f}
-                onClick={() => setStatusFilter(f)}
+                onClick={() => toggleStatusChip(f)}
                 className={cn(
                   'px-3 py-1.5 rounded-lg text-xs font-bold transition-colors',
-                  statusFilter === f
+                  statusFiltros.has(f)
                     ? 'bg-arena-navy-800 text-white'
                     : 'bg-[#F1F5F9] text-arena-navy-800/60 hover:bg-arena-navy-800/10'
                 )}
               >
-                {f === 'todos'
-                  ? 'Todos'
-                  : STATUS_PLANO_STYLE[f].label}
+                {STATUS_PLANO_STYLE[f].label}
               </button>
             ))}
             <span className="mx-1 h-4 w-px bg-arena-navy-800/10" />
