@@ -15,6 +15,7 @@ export interface AppliedFiltersInput {
   courtName?: string | null
   sportName?: string | null
   atletaNome?: string | null
+  perfilLabel?: string | null
   rateio: boolean
   detalharPorHora: boolean
 }
@@ -36,6 +37,7 @@ export function buildAppliedFiltersDescription(input: AppliedFiltersInput): Appl
     filtros.push({ label: 'Tipo de Jogo', value: input.tipo === 'avulso' ? 'Avulso' : 'Mensal' })
   }
   if (input.atletaNome) filtros.push({ label: 'Atleta', value: input.atletaNome })
+  if (input.perfilLabel) filtros.push({ label: 'Perfil de Atleta', value: input.perfilLabel })
   if (input.courtName) filtros.push({ label: 'Espaço', value: input.courtName })
   if (input.sportName) filtros.push({ label: 'Esporte', value: input.sportName })
   // Rateio só é um filtro de fato com Tipo = Mensal (é quando o checkbox existe).
