@@ -205,7 +205,7 @@ function TimeSlot({ slot, bookings: slotBookings, available, court, className, o
     const futureEnd = futureBooking ? parseISO(futureBooking.end_time) : null
     return (
         <div
-            className={cn("p-1 group relative", className)}
+            className={cn("bg-[#F0FFFB] p-1 group relative", className)}
             onClick={onEmptyClick}
         >
             <div className="w-full h-full min-h-[40px] flex items-center justify-center rounded hover:bg-emerald-50 cursor-pointer transition-colors group-hover:border-emerald-200 border border-transparent">

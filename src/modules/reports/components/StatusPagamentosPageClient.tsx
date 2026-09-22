@@ -1,7 +1,7 @@
 "use client"
 
-import { useRef, useState, useTransition } from 'react'
-import { format, parseISO } from 'date-fns'
+import { useMemo, useRef, useState, useTransition } from 'react'
+import { format, getDay, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import {
   CheckCircle,
@@ -18,6 +18,9 @@ import {
   Wallet,
   CalendarClock,
   Receipt,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -35,6 +38,7 @@ import { arenaDataTable } from '@/lib/arena-data-table'
 import { getPaymentStatusReportAction } from '@/modules/reports/actions/reportActions'
 import { searchAthletesAction } from '@/modules/loyalty/actions/loyaltyActions'
 import { buildPaymentStatusSheetData } from '@/modules/reports/payment-status-export'
+import { PERFIL_LABEL, PERFIS_ATLETA, type PerfilAtleta } from '@/modules/athletes/types/perfil.types'
 import type {
   PaymentStatusRow,
   PaymentStatusSummary,
@@ -86,6 +90,159 @@ function formatHorario(row: PaymentStatusRow) {
 function formatHoras(horas: number) {
   const arredondado = Math.round(horas * 100) / 100
   return `${arredondado.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}h`
+}
+
+const DIAS_SEMANA_ABREV = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+
+/** Dia da semana da ocorrência (mesma lógica de `formatDate`/`formatHorario`: lê direto de `row.data`). */
+function formatDiaSemana(row: PaymentStatusRow) {
+  try {
+    return DIAS_SEMANA_ABREV[getDay(parseISO(row.data))]
+  } catch {
+    return '—'
+  }
+}
+
+type SortKey =
+  | 'data'
+  | 'horario'
+  | 'diaSemana'
+  | 'atleta'
+  | 'servico'
+  | 'espaco'
+  | 'esporte'
+  | 'valor'
+  | 'status'
+
+function getSortValue(row: PaymentStatusRow, key: SortKey): string | number {
+  switch (key) {
+    case 'data':
+      return parseISO(row.data).getTime()
+    case 'horario':
+      return formatHorario(row)
+    case 'diaSemana':
+      try {
+        return getDay(parseISO(row.data))
+      } catch {
+        return -1
+      }
+    case 'atleta':
+      return row.atleta ?? 'Avulsa'
+    case 'servico':
+      return row.servico
+    case 'espaco':
+      return row.espaco ?? ''
+    case 'esporte':
+      return row.esporte ?? ''
+    case 'valor':
+      return row.valor ?? -Infinity
+    case 'status':
+      return row.status
+  }
+}
+
+/** Linha exibida na tabela — igual a `PaymentStatusRow`, mas pode representar várias ocorrências coladas (Agrupar por atleta). */
+type PaymentStatusDisplayRow = PaymentStatusRow & { occurrences?: number }
+
+function distinctJoin(values: (string | null)[]): string | null {
+  const uniq = [...new Set(values.filter((v): v is string => Boolean(v)))]
+  return uniq.length > 0 ? uniq.join(', ') : null
+}
+
+/**
+ * Colapsa as ocorrências semanais da mesma recorrência (várias datas do mês)
+ * numa linha só por atleta + dia da semana — pensado para o extrato por hora
+ * do mensalista, onde cada semana vira uma linha idêntica em tudo, menos a data.
+ * Valor soma as ocorrências (é isso que se cobra do atleta naquele slot no
+ * mês); status prioriza "Pendente" (ainda tem o que cobrar) sobre "Pago", e só
+ * fecha "Cancelado" se todas as ocorrências foram canceladas.
+ */
+function groupByAtletaEDiaSemana(rows: PaymentStatusRow[]): PaymentStatusDisplayRow[] {
+  const groups = new Map<string, PaymentStatusRow[]>()
+  const order: string[] = []
+
+  for (const row of rows) {
+    const atletaKey = row.atleta ?? 'Avulsa'
+    let dia = -1
+    try {
+      dia = getDay(parseISO(row.data))
+    } catch {
+      // mantém dia = -1 (linha sem data válida cai no próprio grupo)
+    }
+    const key = `${atletaKey}__${dia}`
+    if (!groups.has(key)) {
+      groups.set(key, [])
+      order.push(key)
+    }
+    groups.get(key)!.push(row)
+  }
+
+  return order.map((key) => {
+    const group = groups.get(key)!
+    const first = [...group].sort(
+      (a, b) => parseISO(a.data).getTime() - parseISO(b.data).getTime()
+    )[0]
+    const valores = group.map((r) => r.valor).filter((v): v is number => v != null)
+    const valor = valores.length > 0 ? Math.round(valores.reduce((s, v) => s + v, 0) * 100) / 100 : null
+    const status: PaymentStatusRow['status'] = group.every((r) => r.status === 'Cancelado')
+      ? 'Cancelado'
+      : group.some((r) => r.status === 'Pendente')
+        ? 'Pendente'
+        : 'Pago'
+
+    return {
+      ...first,
+      id: `grp-${key}`,
+      valor,
+      status,
+      espaco: distinctJoin(group.map((r) => r.espaco)),
+      esporte: distinctJoin(group.map((r) => r.esporte)),
+      horario: distinctJoin(group.map((r) => formatHorario(r))),
+      occurrences: group.length,
+    }
+  })
+}
+
+/** Data normal para linha única; contagem de ocorrências quando a linha é um grupo. */
+function formatDataCell(row: PaymentStatusDisplayRow) {
+  if (row.occurrences && row.occurrences > 1) return `${row.occurrences}x no mês`
+  return formatDate(row.data)
+}
+
+function SortableTh({
+  label,
+  sortKey,
+  activeKey,
+  direction,
+  onSort,
+  align = 'left',
+  className,
+}: {
+  label: string
+  sortKey: SortKey
+  activeKey: SortKey | null
+  direction: 'asc' | 'desc'
+  onSort: (key: SortKey) => void
+  align?: 'left' | 'right'
+  className?: string
+}) {
+  const isActive = activeKey === sortKey
+  const Icon = isActive ? (direction === 'asc' ? ArrowUp : ArrowDown) : ArrowUpDown
+  return (
+    <th
+      className={cn(
+        align === 'right' ? arenaDataTable.thRight : arenaDataTable.th,
+        'cursor-pointer select-none hover:text-arena-navy-800',
+        className
+      )}
+      onClick={() => onSort(sortKey)}
+    >
+      <span className={cn('inline-flex items-center gap-1', align === 'right' && 'w-full justify-end')}>
+        {label}
+        <Icon className={cn('h-3.5 w-3.5 shrink-0', isActive ? 'text-arena-navy-800' : 'text-arena-navy-800/30')} />
+      </span>
+    </th>
+  )
 }
 
 function generateMonthOptions() {
@@ -250,11 +407,27 @@ export function StatusPagamentosPageClient({
   const [courtId, setCourtId] = useState<string>('todos')
   const [sportId, setSportId] = useState<string>('todos')
   const [atleta, setAtleta] = useState<{ id: string; nome_perfil: string } | null>(null)
+  const [perfilFiltro, setPerfilFiltro] = useState<PerfilAtleta | 'todos'>('todos')
   const [rateio, setRateio] = useState(false)
   const [detalharPorHora, setDetalharPorHora] = useState(false)
   const [page, setPage] = useState(1)
   const [isPending, startTransition] = useTransition()
   const [isExportingPdf, setIsExportingPdf] = useState(false)
+  const [sortKey, setSortKey] = useState<SortKey | null>(null)
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  const [agruparPorAtleta, setAgruparPorAtleta] = useState(false)
+
+  const showDiaSemanaColumn = tipo === 'mensal' && detalharPorHora
+
+  function handleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+    setPage(1)
+  }
 
   const monthOptions = generateMonthOptions()
 
@@ -264,6 +437,7 @@ export function StatusPagamentosPageClient({
     courtId: string
     sportId: string
     atletaId: string | null
+    perfil: PerfilAtleta | 'todos'
     rateio: boolean
     detalharPorHora: boolean
   }
@@ -275,6 +449,7 @@ export function StatusPagamentosPageClient({
       courtId,
       sportId,
       atletaId: atleta?.id ?? null,
+      perfil: perfilFiltro,
       rateio,
       detalharPorHora,
       ...overrides,
@@ -288,6 +463,7 @@ export function StatusPagamentosPageClient({
         courtId: state.courtId === 'todos' ? undefined : state.courtId,
         sportId: state.sportId === 'todos' ? undefined : state.sportId,
         atletaId: state.atletaId ?? undefined,
+        perfil: state.perfil === 'todos' ? undefined : state.perfil,
         rateio: state.tipo === 'mensal' ? state.rateio : undefined,
         detalharPorHora: state.detalharPorHora || undefined,
       })
@@ -306,7 +482,13 @@ export function StatusPagamentosPageClient({
 
   function handleDetalharChange(checked: boolean) {
     setDetalharPorHora(checked)
+    if (!checked) setAgruparPorAtleta(false)
     applyFilters({ detalharPorHora: checked })
+  }
+
+  function handleAgruparChange(checked: boolean) {
+    setAgruparPorAtleta(checked)
+    setPage(1)
   }
 
   function handleMonthChange(v: string) {
@@ -342,6 +524,12 @@ export function StatusPagamentosPageClient({
     applyFilters({ atletaId: null })
   }
 
+  function handlePerfilChange(v: string) {
+    const p = v as PerfilAtleta | 'todos'
+    setPerfilFiltro(p)
+    applyFilters({ perfil: p })
+  }
+
   function handleRateioChange(checked: boolean) {
     setRateio(checked)
     applyFilters({ rateio: checked })
@@ -349,7 +537,7 @@ export function StatusPagamentosPageClient({
 
   async function handleExportExcel() {
     const { default: writeExcelFile } = await import('write-excel-file/browser')
-    const sheetData = buildPaymentStatusSheetData(rows, formatDate, formatHorario)
+    const sheetData = buildPaymentStatusSheetData(sortedRows, formatDate, formatHorario)
     const { startDate, endDate } = getMonthRange(selectedMonth)
     await writeExcelFile(sheetData, { sheet: 'Status Pagamentos' })
       .toFile(`status-pagamentos-${startDate}-${endDate}.xlsx`)
@@ -361,7 +549,7 @@ export function StatusPagamentosPageClient({
       const { generatePaymentStatusPdf } = await import('@/modules/reports/payment-status-pdf')
       const { startDate, endDate } = getMonthRange(selectedMonth)
       await generatePaymentStatusPdf({
-        rows,
+        rows: sortedRows,
         summary,
         arena: arenaInfo,
         filtros: {
@@ -370,6 +558,7 @@ export function StatusPagamentosPageClient({
           courtName: courtId !== 'todos' ? (courts.find((c) => c.id === courtId)?.name ?? null) : null,
           sportName: sportId !== 'todos' ? (sports.find((s) => s.id === sportId)?.name ?? null) : null,
           atletaNome: atleta?.nome_perfil ?? null,
+          perfilLabel: perfilFiltro !== 'todos' ? PERFIL_LABEL[perfilFiltro] : null,
           rateio,
           detalharPorHora,
         },
@@ -384,8 +573,24 @@ export function StatusPagamentosPageClient({
     }
   }
 
-  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
-  const paginatedRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const baseRows = useMemo<PaymentStatusDisplayRow[]>(
+    () => (agruparPorAtleta ? groupByAtletaEDiaSemana(rows) : rows),
+    [rows, agruparPorAtleta]
+  )
+
+  const sortedRows = useMemo(() => {
+    if (!sortKey) return baseRows
+    const dir = sortDir === 'asc' ? 1 : -1
+    return [...baseRows].sort((a, b) => {
+      const va = getSortValue(a, sortKey)
+      const vb = getSortValue(b, sortKey)
+      if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir
+      return String(va).localeCompare(String(vb), 'pt-BR', { sensitivity: 'base', numeric: true }) * dir
+    })
+  }, [baseRows, sortKey, sortDir])
+
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE))
+  const paginatedRows = sortedRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   const monthLabel = monthOptions.find((m) => m.value === selectedMonth)?.label ?? selectedMonth
 
@@ -495,8 +700,8 @@ export function StatusPagamentosPageClient({
       {/* Filters */}
       <Card>
         <CardContent className="p-5">
-          <div className="flex flex-wrap gap-3 items-end">
-            <div className="flex flex-col gap-1 min-w-[160px]">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-gray-500">Período</label>
               <Select value={selectedMonth} onValueChange={handleMonthChange}>
                 <SelectTrigger className="h-9">
@@ -512,6 +717,23 @@ export function StatusPagamentosPageClient({
               </Select>
             </div>
 
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-500">Perfil de Atleta</label>
+              <Select value={perfilFiltro} onValueChange={handlePerfilChange}>
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  {PERFIS_ATLETA.map((perfil) => (
+                    <SelectItem key={perfil} value={perfil}>
+                      {PERFIL_LABEL[perfil]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <AthleteFilterField
               arenaId={arenaId}
               selected={atleta}
@@ -519,7 +741,7 @@ export function StatusPagamentosPageClient({
               onClear={handleAtletaClear}
             />
 
-            <div className="flex flex-col gap-1 min-w-[140px]">
+            <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-gray-500">Tipo de Jogo</label>
               <Select value={tipo} onValueChange={handleTipoChange}>
                 <SelectTrigger className="h-9">
@@ -551,6 +773,26 @@ export function StatusPagamentosPageClient({
               </div>
             </div>
 
+            {detalharPorHora && (
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-gray-500">Agrupamento</label>
+                <div className="flex h-9 items-center gap-2">
+                  <Checkbox
+                    id="agrupar-por-atleta"
+                    checked={agruparPorAtleta}
+                    onCheckedChange={(checked) => handleAgruparChange(checked === true)}
+                    className="data-[state=checked]:border-arena-button data-[state=checked]:bg-arena-button"
+                  />
+                  <label
+                    htmlFor="agrupar-por-atleta"
+                    className="cursor-pointer text-xs font-medium whitespace-nowrap text-arena-navy-800/60"
+                  >
+                    Agrupar por atleta
+                  </label>
+                </div>
+              </div>
+            )}
+
             <div className="flex flex-col gap-1">
               <label
                 className={cn(
@@ -581,7 +823,7 @@ export function StatusPagamentosPageClient({
             </div>
 
             {courts.length > 0 && (
-              <div className="flex flex-col gap-1 min-w-[160px]">
+              <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-gray-500">Espaço</label>
                 <Select value={courtId} onValueChange={handleCourtChange}>
                   <SelectTrigger className="h-9">
@@ -600,7 +842,7 @@ export function StatusPagamentosPageClient({
             )}
 
             {sports.length > 0 && (
-              <div className="flex flex-col gap-1 min-w-[160px]">
+              <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-gray-500">Esporte</label>
                 <Select value={sportId} onValueChange={handleSportChange}>
                   <SelectTrigger className="h-9">
@@ -617,11 +859,13 @@ export function StatusPagamentosPageClient({
                 </Select>
               </div>
             )}
+          </div>
 
+          <div className="mt-4 flex justify-end">
             <Button
               variant="outline"
               size="sm"
-              className="h-9 gap-2 ml-auto"
+              className="h-9 gap-2"
               disabled={isPending}
             >
               <Filter className="h-4 w-4" />
@@ -670,20 +914,38 @@ export function StatusPagamentosPageClient({
           <table className={arenaDataTable.table}>
             <thead>
               <tr className={arenaDataTable.theadRow}>
-                <th className={arenaDataTable.th}>Data</th>
-                <th className={arenaDataTable.th}>Horário</th>
-                <th className={arenaDataTable.th}>Atleta</th>
-                <th className={arenaDataTable.th}>Serviço</th>
-                <th className={arenaDataTable.th}>Espaço</th>
-                <th className={arenaDataTable.th}>Esporte</th>
-                <th className={cn(arenaDataTable.th, "text-arena-button")}>Valor</th>
-                <th className={cn(arenaDataTable.thRight, "w-28")}>Status</th>
+                <SortableTh label="Data" sortKey="data" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                <SortableTh label="Horário" sortKey="horario" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                {showDiaSemanaColumn && (
+                  <SortableTh label="Dia da Semana" sortKey="diaSemana" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                )}
+                <SortableTh label="Atleta" sortKey="atleta" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                <SortableTh label="Serviço" sortKey="servico" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                <SortableTh label="Espaço" sortKey="espaco" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                <SortableTh label="Esporte" sortKey="esporte" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                <SortableTh
+                  label="Valor"
+                  sortKey="valor"
+                  activeKey={sortKey}
+                  direction={sortDir}
+                  onSort={handleSort}
+                  className="text-arena-button"
+                />
+                <SortableTh
+                  label="Status"
+                  sortKey="status"
+                  activeKey={sortKey}
+                  direction={sortDir}
+                  onSort={handleSort}
+                  align="right"
+                  className="w-28"
+                />
               </tr>
             </thead>
             <tbody>
               {isPending ? (
                 <tr>
-                  <td colSpan={8} className={arenaDataTable.emptyCell}>
+                  <td colSpan={showDiaSemanaColumn ? 9 : 8} className={arenaDataTable.emptyCell}>
                     <div className="flex flex-col items-center gap-2">
                       <Loader2 className="h-6 w-6 animate-spin text-arena-button" />
                       Carregando lançamentos...
@@ -692,7 +954,7 @@ export function StatusPagamentosPageClient({
                 </tr>
               ) : paginatedRows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className={arenaDataTable.emptyCell}>
+                  <td colSpan={showDiaSemanaColumn ? 9 : 8} className={arenaDataTable.emptyCell}>
                     Nenhum lançamento encontrado para os filtros selecionados.
                   </td>
                 </tr>
@@ -702,11 +964,16 @@ export function StatusPagamentosPageClient({
                   return (
                     <tr key={row.id} className={arenaDataTable.tbodyRow}>
                       <td className={cn(arenaDataTable.td, "whitespace-nowrap text-arena-navy-800/60")}>
-                        {formatDate(row.data)}
+                        {formatDataCell(row)}
                       </td>
                       <td className={cn(arenaDataTable.td, "whitespace-nowrap text-arena-navy-800/60")}>
                         {formatHorario(row)}
                       </td>
+                      {showDiaSemanaColumn && (
+                        <td className={cn(arenaDataTable.td, "whitespace-nowrap text-arena-navy-800/60")}>
+                          {formatDiaSemana(row)}
+                        </td>
+                      )}
                       <td className={arenaDataTable.tdBold}>
                         {row.atleta ?? (
                           <span className="font-medium text-arena-navy-800/45">Avulsa</span>
@@ -741,9 +1008,9 @@ export function StatusPagamentosPageClient({
 
         <div className="flex items-center justify-between border-t border-slate-100 px-6 py-4">
           <p className="text-xs text-arena-navy-800/40">
-            {rows.length === 0
+            {sortedRows.length === 0
               ? '0 resultados'
-              : `Exibindo ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, rows.length)} de ${rows.length}`}
+              : `Exibindo ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, sortedRows.length)} de ${sortedRows.length}`}
           </p>
           <div className="flex items-center gap-1">
             <Button

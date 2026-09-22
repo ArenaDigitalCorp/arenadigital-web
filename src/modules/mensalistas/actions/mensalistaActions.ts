@@ -15,6 +15,8 @@ import {
   retirarCreditoSchema,
   setEncerramentoSchema,
   reajustarValorSchema,
+  pausarPlanoSchema,
+  removerPausaSchema,
   competenciaSchema,
   uuidSchema,
 } from '@/modules/mensalistas/schemas/mensalista.schema'
@@ -28,6 +30,7 @@ import type {
   MensalistasOverview,
   PagamentoComContexto,
   PagamentoRow,
+  PausaRow,
   PlanoMensalistaComDetalhes,
   ReajusteRow,
   RecorrenciaResumo,
@@ -56,10 +59,14 @@ function round2(n: number) {
   return Math.round((n + Number.EPSILON) * 100) / 100
 }
 
-function derivePlanoStatus(planos: PlanoMensalistaComDetalhes[]): StatusPlano {
+function derivePlanoStatus(
+  planos: PlanoMensalistaComDetalhes[],
+  pausaAtivaPlanoIds: Set<string> = new Set()
+): StatusPlano {
   const naoCancelados = planos.filter((p) => p.status !== 'cancelado')
   if (naoCancelados.length === 0) return 'cancelado'
   if (naoCancelados.some((p) => p.data_encerramento_prevista)) return 'encerrando'
+  if (naoCancelados.some((p) => pausaAtivaPlanoIds.has(p.id))) return 'pausado'
   return 'ativo'
 }
 
@@ -104,6 +111,7 @@ export async function getMensalistasOverviewAction(
       { data: mensalidadesData, error: mensError },
       { data: atrasoMensData, error: atrasoError },
       { data: saldoData, error: saldoError },
+      { data: pausasAtivasData, error: pausasAtivasError },
     ] = await Promise.all([
       supabase
         .from('planos_mensalista')
@@ -125,12 +133,22 @@ export async function getMensalistasOverviewAction(
         .from('mensalista_credito_saldo')
         .select('atleta_id, saldo')
         .eq('arena_id', parsedArena),
+      supabase
+        .from('planos_mensalista_pausas')
+        .select('plano_id')
+        .eq('arena_id', parsedArena)
+        .eq('status', 'ativa'),
     ])
 
     if (planosError) throw new Error(planosError.message)
     if (mensError) throw new Error(mensError.message)
     if (atrasoError) throw new Error(atrasoError.message)
     if (saldoError) throw new Error(saldoError.message)
+    if (pausasAtivasError) throw new Error(pausasAtivasError.message)
+
+    const pausaAtivaPlanoIds = new Set(
+      ((pausasAtivasData ?? []) as { plano_id: string }[]).map((p) => p.plano_id)
+    )
 
     const planos = (planosData ?? []) as unknown as PlanoMensalistaComDetalhes[]
     const mensalidades = (mensalidadesData ?? []) as MensalidadeRow[]
@@ -238,7 +256,7 @@ export async function getMensalistasOverviewAction(
         athleteId,
         nome,
         telefone: primary.atleta?.telefone ?? null,
-        statusPlano: derivePlanoStatus(athletePlanos),
+        statusPlano: derivePlanoStatus(athletePlanos, pausaAtivaPlanoIds),
         recorrenciasCount: athletePlanos.filter((p) => p.status !== 'cancelado').length,
         inicio,
         encerramentoPrevisto: encerramentos[0] ?? null,
@@ -489,6 +507,25 @@ export async function getMensalistaDetailAction(
       reajustesByPlano.set(r.plano_id, list)
     }
 
+    const { data: pausasData, error: pausasErr } = await supabase
+      .from('planos_mensalista_pausas')
+      .select('*')
+      .eq('arena_id', parsedArena)
+      .in('plano_id', planos.map((p) => p.id))
+      .order('created_at', { ascending: false })
+    if (pausasErr) throw new Error(pausasErr.message)
+    const pausasByPlano = new Map<string, PausaRow[]>()
+    for (const pa of (pausasData ?? []) as unknown as PausaRow[]) {
+      const list = pausasByPlano.get(pa.plano_id) ?? []
+      list.push(pa)
+      pausasByPlano.set(pa.plano_id, list)
+    }
+    const pausaAtivaDetailPlanoIds = new Set(
+      ((pausasData ?? []) as unknown as PausaRow[])
+        .filter((pa) => pa.status === 'ativa')
+        .map((pa) => pa.plano_id)
+    )
+
     // Convidados vinculados às reservas do plano na criação: sugestão de
     // participantes do rateio enquanto ele ainda não foi configurado.
     const { data: guestsData, error: guestsErr } = await supabase
@@ -531,6 +568,7 @@ export async function getMensalistaDetailAction(
           ? cobrancasByMensalidade.get(mensalidade.id) ?? []
           : [],
         reajustes: reajustesByPlano.get(plano.id) ?? [],
+        pausas: pausasByPlano.get(plano.id) ?? [],
         participantesSugeridos: participantesSugeridosByPlano.get(plano.id) ?? [],
       }
     })
@@ -575,7 +613,7 @@ export async function getMensalistaDetailAction(
       athleteId: parsedAthlete,
       nome: primary.atleta?.nome_perfil ?? primary.athlete_name,
       telefone: primary.atleta?.telefone ?? null,
-      statusPlano: derivePlanoStatus(planos),
+      statusPlano: derivePlanoStatus(planos, pausaAtivaDetailPlanoIds),
       recorrenciasCount: planos.filter((p) => p.status !== 'cancelado').length,
       inicio: planos.map((p) => p.data_inicio).sort()[0],
       encerramentoPrevisto: encerramentos[0] ?? null,
@@ -887,6 +925,91 @@ export async function reajustarValorPlanoAction(
   } catch (err) {
     const message =
       err instanceof Error ? err.message : 'Erro ao reajustar o valor do plano'
+    return { success: false, error: message }
+  }
+}
+
+export interface PausarPlanoResult {
+  pausaId: string
+  pausaInicio: string
+  pausaFim: string
+  mensalidadesAjustadas: number
+  ignoradasRateio: number
+  ignoradasPagamento: number
+  bookingsLiberados: number
+  idempotent: boolean
+}
+
+export async function pausarPlanoMensalistaAction(
+  input: unknown
+): Promise<{ success: boolean; data?: PausarPlanoResult; error?: string }> {
+  try {
+    const parsed = pausarPlanoSchema.parse(input)
+    await assertArenaBackofficeAccess(parsed.arenaId)
+    const { dbUserId } = await requireAuthenticatedDbUser()
+
+    const { data, error } = await getSupabaseAdmin().rpc(
+      'pausar_plano_mensalista_atomic',
+      {
+        p_operation_id: parsed.operationId,
+        p_arena_id: parsed.arenaId,
+        p_plano_id: parsed.planoId,
+        p_pausa_inicio: parsed.pausaInicio,
+        p_pausa_fim: parsed.pausaFim,
+        p_cobranca_modo: parsed.cobrancaModo,
+        p_bookings_acao: parsed.bookingsAcao,
+        p_observacao: parsed.observacao,
+        p_registered_by: dbUserId,
+      }
+    )
+    if (error) throw new Error(error.message)
+
+    const row = (data ?? {}) as Record<string, unknown>
+    revalidateMensalistaPaths(parsed.arenaId)
+    return {
+      success: true,
+      data: {
+        pausaId: String(row.pausa_id ?? parsed.operationId),
+        pausaInicio: String(row.pausa_inicio ?? parsed.pausaInicio),
+        pausaFim: String(row.pausa_fim ?? parsed.pausaFim),
+        mensalidadesAjustadas: Number(row.mensalidades_ajustadas ?? 0),
+        ignoradasRateio: Number(row.mensalidades_com_rateio_ignoradas ?? 0),
+        ignoradasPagamento: Number(row.mensalidades_com_pagamento_ignoradas ?? 0),
+        bookingsLiberados: Number(row.bookings_liberados ?? 0),
+        idempotent: Boolean(row.idempotent ?? false),
+      },
+    }
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : 'Erro ao pausar o plano'
+    return { success: false, error: message }
+  }
+}
+
+export async function removerPausaMensalistaAction(
+  input: unknown
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const parsed = removerPausaSchema.parse(input)
+    await assertArenaBackofficeAccess(parsed.arenaId)
+    const { dbUserId } = await requireAuthenticatedDbUser()
+
+    const { error } = await getSupabaseAdmin().rpc(
+      'remover_pausa_mensalista_atomic',
+      {
+        p_arena_id: parsed.arenaId,
+        p_plano_id: parsed.planoId,
+        p_pausa_id: parsed.pausaId,
+        p_registered_by: dbUserId,
+      }
+    )
+    if (error) throw new Error(error.message)
+
+    revalidateMensalistaPaths(parsed.arenaId)
+    return { success: true }
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : 'Erro ao remover a pausa'
     return { success: false, error: message }
   }
 }

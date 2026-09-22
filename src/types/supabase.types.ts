@@ -2771,6 +2771,69 @@ export type Database = {
           },
         ]
       }
+      planos_mensalista_pausas: {
+        Row: {
+          arena_id: string
+          bookings_acao: string
+          cancelada_em: string | null
+          cancelada_por: string | null
+          cobranca_modo: string
+          created_at: string
+          id: string
+          observacao: string | null
+          pausa_fim: string
+          pausa_inicio: string
+          plano_id: string
+          registered_by: string | null
+          status: string
+        }
+        Insert: {
+          arena_id: string
+          bookings_acao: string
+          cancelada_em?: string | null
+          cancelada_por?: string | null
+          cobranca_modo: string
+          created_at?: string
+          id?: string
+          observacao?: string | null
+          pausa_fim: string
+          pausa_inicio: string
+          plano_id: string
+          registered_by?: string | null
+          status?: string
+        }
+        Update: {
+          arena_id?: string
+          bookings_acao?: string
+          cancelada_em?: string | null
+          cancelada_por?: string | null
+          cobranca_modo?: string
+          created_at?: string
+          id?: string
+          observacao?: string | null
+          pausa_fim?: string
+          pausa_inicio?: string
+          plano_id?: string
+          registered_by?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planos_mensalista_pausas_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planos_mensalista_pausas_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "planos_mensalista"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mensalista_pagamentos: {
         Row: {
           arena_id: string
@@ -7404,6 +7467,29 @@ export type Database = {
           p_novo_valor: number
           p_observacao: string | null
           p_operation_id: string
+          p_plano_id: string
+          p_registered_by: string
+        }
+        Returns: Json
+      }
+      pausar_plano_mensalista_atomic: {
+        Args: {
+          p_arena_id: string
+          p_bookings_acao: string
+          p_cobranca_modo: string
+          p_observacao: string | null
+          p_operation_id: string
+          p_pausa_fim: string
+          p_pausa_inicio: string
+          p_plano_id: string
+          p_registered_by: string
+        }
+        Returns: Json
+      }
+      remover_pausa_mensalista_atomic: {
+        Args: {
+          p_arena_id: string
+          p_pausa_id: string
           p_plano_id: string
           p_registered_by: string
         }

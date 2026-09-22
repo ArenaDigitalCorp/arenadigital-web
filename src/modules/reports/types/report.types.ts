@@ -1,3 +1,5 @@
+import type { PerfilAtleta } from '@/modules/athletes/types/perfil.types'
+
 export type PaymentStatusRow = {
   id: string
   data: string
@@ -89,6 +91,8 @@ export type PaymentStatusFilters = {
   sportId?: string
   /** Casa o atleta como responsável OU como participante (rateio/comanda/convidado). */
   atletaId?: string
+  /** Perfil do atleta na arena (Cliente padrão/Mensalista/Professor) — casa como responsável OU participante, igual `atletaId`. */
+  perfil?: PerfilAtleta
   /**
    * Só tem efeito com `tipo: 'mensal'`. Troca as linhas agregadas de
    * "Mensalista" (uma por transação) pela quebra linha a linha: uma

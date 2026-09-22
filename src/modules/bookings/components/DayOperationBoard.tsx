@@ -879,7 +879,7 @@ export function DayOperationBoard({
                                                                 key={court.id}
                                                                 onClick={() => handleEmptySlotClick(court, slot)}
                                                                 className={cn(
-                                                                    "bg-white border-r border-b border-arena-navy-800/5 last:border-r-0 relative group/slot p-0",
+                                                                    "bg-[#F0FFFB] border-r border-b border-arena-navy-800/5 last:border-r-0 relative group/slot p-0",
                                                                     interactive && "cursor-pointer hover:bg-emerald-50 transition-colors"
                                                                 )}
                                                             >
