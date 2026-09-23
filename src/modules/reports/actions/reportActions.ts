@@ -410,7 +410,7 @@ async function loadMensalidadesDaCompetencia(
   const [{ data: planos }, { data: blocos }, { data: cobrancas }] = await Promise.all([
     loose
       .from('planos_mensalista')
-      .select('id, athlete_id, athlete_name, court_id, sport_id, horario_inicio, horario_fim, courts:court_id(name), sports:sport_id(name)')
+      .select('id, athlete_id, athlete_name, court_id, sport_id, horario_inicio, horario_fim, courts:court_id(name), sports:sport_id(name), atleta:athlete_id(telefone)')
       .in('id', planoIds),
     loose.from('planos_mensalista_blocos').select('plano_id').in('plano_id', planoIds),
     loose
@@ -442,6 +442,7 @@ async function loadMensalidadesDaCompetencia(
             horario_fim?: string | null
             courts?: { name: string } | null
             sports?: { name: string } | null
+            atleta?: { telefone: string | null } | null
           }
         | undefined
       const nBlocos = blocosPorPlano.get(m.plano_id) ?? 0
@@ -454,6 +455,7 @@ async function loadMensalidadesDaCompetencia(
         status: m.status,
         atletaId: plano?.athlete_id ?? null,
         atleta: plano?.athlete_name ?? null,
+        telefone: plano?.atleta?.telefone ?? null,
         espaco: nBlocos > 1 ? `${nBlocos} horários` : plano?.courts?.name ?? null,
         esporte: plano?.sports?.name ?? null,
         horario:
@@ -554,7 +556,7 @@ export async function getPaymentStatusReportAction(
 
     let query = supabase
       .from('bookings')
-      .select('id, start_time, end_time, status, price, athlete_name, plano_mensalista_id, court_id, sport_id, cobranca_por_participante, courts!bookings_court_id_fkey(id, name), sports(id, name), atleta:athlete_id(id, nome_perfil), booking_participants(id, atleta_id, funcao, pago_em, valor)')
+      .select('id, start_time, end_time, status, price, athlete_name, plano_mensalista_id, court_id, sport_id, cobranca_por_participante, courts!bookings_court_id_fkey(id, name), sports(id, name), atleta:athlete_id(id, nome_perfil, telefone), booking_participants(id, atleta_id, funcao, pago_em, valor)')
       .eq('arena_id', arenaId)
       .order('start_time', { ascending: false })
       .order('id', { ascending: false })
@@ -579,7 +581,7 @@ export async function getPaymentStatusReportAction(
           order_number,
           status,
           customer_name,
-          atleta:atleta(id, nome_perfil),
+          atleta:atleta(id, nome_perfil, telefone),
           station:stations!station_orders_station_id_fkey(name, station_type:station_types(name))
         )
       `)
@@ -597,7 +599,7 @@ export async function getPaymentStatusReportAction(
         valor_pago,
         data_inscricao,
         tipo_pagamento,
-        atleta:id_atleta(id, nome_perfil),
+        atleta:id_atleta(id, nome_perfil, telefone),
         modo_pagamento:modo_pagamento_id(nome),
         rotativo:rotativos!inner(
           id_arena,
@@ -622,7 +624,7 @@ export async function getPaymentStatusReportAction(
         quantidade,
         valor_pago,
         created_at,
-        atleta:atleta_id(id, nome_perfil),
+        atleta:atleta_id(id, nome_perfil, telefone),
         modo_pagamento:modo_pagamento_id(nome)
       `)
       .eq('arena_id', arenaId)
@@ -651,7 +653,7 @@ export async function getPaymentStatusReportAction(
         launch_date,
         source_type,
         source_id,
-        atleta:atleta_id(id, nome_perfil),
+        atleta:atleta_id(id, nome_perfil, telefone),
         modo_pagamento:modo_pagamento_id(nome)
       `)
       .eq('arena_id', arenaId)
@@ -811,6 +813,8 @@ export async function getPaymentStatusReportAction(
         // Reserva de quem não tem cadastro guarda o nome digitado pelo gestor —
         // melhor mostrá-lo do que cair no rótulo genérico "Avulsa" da tela.
         atleta: b.atleta?.nome_perfil ?? (b.athlete_name || null),
+        atletaId: b.atleta?.id ?? null,
+        telefone: b.atleta?.telefone ?? null,
         servico: (ehMensal ? 'Mensal' : 'Avulso') as PaymentStatusRow['servico'],
         espaco: b.courts?.name ?? null,
         esporte: b.sports?.name ?? null,
@@ -882,6 +886,8 @@ export async function getPaymentStatusReportAction(
         id: `station-payment-${payment.id}`,
         data: payment.created_at,
         atleta: payment.paid_by_name ?? order?.atleta?.nome_perfil ?? order?.customer_name ?? null,
+        atletaId: order?.atleta?.id ?? null,
+        telefone: order?.atleta?.telefone ?? null,
         servico: 'Comanda',
         espaco: station?.name ?? stationTypeName,
         esporte: payment.payment_method ?? null,
@@ -904,6 +910,8 @@ export async function getPaymentStatusReportAction(
         id: `rotativo-inscricao-${inscricao.id}`,
         data: inscricao.data_inscricao,
         atleta: inscricao.atleta?.nome_perfil ?? null,
+        atletaId: inscricao.atleta?.id ?? null,
+        telefone: inscricao.atleta?.telefone ?? null,
         servico: 'Rotativo',
         espaco: rotativo?.esporte?.name ?? null,
         esporte: inscricao.modo_pagamento?.nome ?? null,
@@ -921,6 +929,8 @@ export async function getPaymentStatusReportAction(
       id: `rotativo-credito-${mov.id}`,
       data: mov.created_at,
       atleta: mov.atleta?.nome_perfil ?? null,
+      atletaId: mov.atleta?.id ?? null,
+      telefone: mov.atleta?.telefone ?? null,
       servico: 'Crédito rotativo',
       espaco: `${mov.quantidade} crédito${mov.quantidade !== 1 ? 's' : ''}`,
       esporte: mov.modo_pagamento?.nome ?? null,
@@ -957,6 +967,8 @@ export async function getPaymentStatusReportAction(
       // recorrência, a coluna Horário mostra "—" em vez de um horário fantasma.
       horario: horarioPorTransacao.get(t.id) ?? null,
       atleta: t.atleta?.nome_perfil ?? null,
+      atletaId: t.atleta?.id ?? null,
+      telefone: t.atleta?.telefone ?? null,
       servico: t.category === 'Mensalidade' ? 'Mensalista' : 'Entrada Manual',
       espaco: t.category === 'Mensalidade' ? (t.description ?? null) : (t.category ?? null),
       esporte: t.modo_pagamento?.nome ?? null,
