@@ -82,6 +82,10 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
   - Horários disponíveis vs ocupados
   - Atletas cadastrados
 - Acesso rápido às principais ações
+- Gráfico de ocupação por espaço:
+  - Filtro de período: Dia / Semana / Mês (padrão: Dia, o dia atual)
+  - Uma barra por espaço, mostrando capacidade de horários possíveis (fundo) e horários ocupados (preenchimento) no período selecionado
+  - Layout horizontal (nomes dos espaços à esquerda) para suportar arenas com muitos espaços sem sobrepor rótulos; rolagem interna quando a lista é muito longa
 
 ---
 

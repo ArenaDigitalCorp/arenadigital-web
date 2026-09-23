@@ -2122,3 +2122,56 @@ futura, editar/superar pausa, remover pausa, idempotência e as três
 rejeições). `tests/mensalista-actions-atomic.test.mjs` teve as contagens
 estáticas bumpadas (9→11 auth, 4→5 operation_id) e ganhou os dois novos nomes
 de schema/RPC na lista verificada.
+
+## 32. Dashboard — filtro de período e layout horizontal no gráfico de ocupação (22/09/2026)
+
+### 32.1 Problema
+
+O gráfico "Ocupação dos espaços" (`src/modules/dashboard/components/OccupancyChart.tsx`)
+só mostrava a ocupação do dia atual, sem opção de ver semana/mês, e usava
+barras verticais com o nome do espaço no eixo X — em arenas com muitos
+espaços os rótulos se sobrepunham.
+
+### 32.2 Backend (`src/modules/dashboard/actions/dashboardActions.ts`)
+
+`getDashboardDataAction(selectedArenaId, occupancyPeriod: OccupancyPeriod = 'day')`
+ganhou o segundo parâmetro (`OccupancyPeriod = 'day' | 'week' | 'month'`,
+`dashboard.types.ts`). `getOccupancyPeriodRange(period, now)` resolve o
+intervalo: `day` = hoje, `week` = semana corrente (`startOfWeek`/`endOfWeek`,
+`weekStartsOn: 1`), `month` = mês corrente. `buildOccupancyRows` deixou de
+receber um único `dayName` e passou a receber `periodDates: Date[]`
+(`eachDayOfInterval` do intervalo): para cada espaço, itera os dias do
+período, soma a capacidade (`endHour - startHour` do `day_config` daquele
+dia da semana, quando habilitado) e conta as reservas daquele dia dentro da
+mesma janela de horário — mesma lógica de antes, só que somada dia a dia em
+vez de calculada uma única vez para "hoje". A busca de `bookings` usa o
+range do período (`occupancyRangeStartStr`/`occupancyRangeEndStr`, com a
+mesma folga de 6h após o fim do período que já existia para o dia) em vez de
+sempre buscar só o dia atual.
+
+### 32.3 Frontend
+
+`OccupancyChart.tsx`: `BarChart` do recharts passou a usar `layout="vertical"`
+(barras horizontais, uma por espaço, nome no eixo Y à esquerda). Altura do
+container é dinâmica (`Math.min(Math.max(220, N*44+20), 420)`); acima de
+~9 espaços a lista ganha `overflow-y: auto` interno em vez de esticar o
+card indefinidamente. Nome do espaço usa um tick customizado
+(`CourtNameTick`) que trunca em 16 caracteres com "…" e expõe o nome
+completo via `<title>` (tooltip nativo do SVG) — evita sobreposição sem
+esconder a informação. A barra mantém o padrão de "uma barra só" (fundo
+cinza = capacidade do período, preenchimento colorido = ocupado), como
+antes, só que agora refletindo o período filtrado. `Tooltip` ganhou
+`cursor={{ fill: '#f8fafc' }}` para destacar a linha em hover (antes era
+transparente).
+
+`src/app/dashboard/page.tsx`: novo estado `occupancyPeriod` (`OccupancyPeriod`,
+padrão `'day'`) e `Tabs`/`TabsList`/`TabsTrigger` (Dia/Semana/Mês) no
+`CardHeader` do gráfico; título do card e mensagem de vazio mudam por
+período (`OCCUPANCY_PERIOD_LABELS`/`OCCUPANCY_EMPTY_MESSAGES`). A troca de
+período dispara um `useEffect` dedicado que busca só a ocupação
+(`isOccupancyLoading`, aplica `opacity-50` no card durante o fetch) sem
+re-exibir o skeleton de página inteira — esse continua reservado para a
+carga inicial e para troca de arena/usuário (`isLoading`, primeiro
+`useEffect`, que lê o período atual via `occupancyPeriodRef` para não
+precisar depender dele). Seletor de tabs oculto no modo `?tutorial=1`
+(dado mockado fixo em `tutorialDashboardOccupancy`).
