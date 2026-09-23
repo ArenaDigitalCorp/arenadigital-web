@@ -2175,3 +2175,416 @@ carga inicial e para troca de arena/usuário (`isLoading`, primeiro
 `useEffect`, que lê o período atual via `occupancyPeriodRef` para não
 precisar depender dele). Seletor de tabs oculto no modo `?tutorial=1`
 (dado mockado fixo em `tutorialDashboardOccupancy`).
+
+## 33. Templates de Mensagens — tela inicial (aba WhatsApp) (23/09/2026)
+
+### 33.1 Escopo desta etapa
+
+Interface do novo submenu **Configurações → Templates Mensagens**, seguindo
+à risca o padrão visual/estrutural do Catálogo (`src/modules/products`), e
+a modelagem de dados em `arenadigital-db` (33.5). A tela ainda opera com
+estado local no client (`useState`) — os Server Actions (`categoryActions.ts`
+como padrão) entram só depois da migração chegar em homolog e do
+`supabase.types.ts` ser regenerado (33.4).
+
+### 33.2 Menu e rotas
+
+`Sidebar.tsx`: novo item "Templates Mensagens" dentro do accordion
+Configurações, ao lado de Usuários/Assinatura/Perfil da Arena/WhatsApp
+(`settingsTemplatesHref`, ativo quando `pathname.startsWith('/dashboard/settings/templates-mensagens')`).
+
+`dashboard-default-route.ts`: seção `'templates-mensagens'` adicionada ao
+`DashboardSection`, resolvendo para a primeira arena administrável
+(Owner/Gestor) do usuário, igual à seção `'whatsapp'`.
+
+Rotas (mesmo padrão de `settings/whatsapp/[arenaId]`):
+- `src/app/dashboard/settings/templates-mensagens/page.tsx` — redirect via
+  `resolveDashboardDefaultRoute('templates-mensagens')`.
+- `src/app/dashboard/settings/templates-mensagens/[arenaId]/page.tsx` —
+  server component; `assertArenaAdminAccess(arenaId)` (Owner/Gestor, mesma
+  regra das demais telas de Configurações), busca `arenas.name` e renderiza
+  `TemplatesMensagensPageClient` com `initialTemplates: []`.
+- `loading.tsx`/`error.tsx` — `DashboardBlocksLoading`/`DashboardErrorState`,
+  iguais aos de `whatsapp/[arenaId]`.
+
+### 33.3 Módulo (`src/modules/templates-mensagens`)
+
+- `types/templateMensagem.types.ts` — `MessageTemplate` (`id`, `arena_id`,
+  `channel: 'whatsapp'`, `identifier`, `name`, `message`, `status: 'Ativo' | 'Inativo'`,
+  `created_at`) e `MessageTemplateFormInput`. Tipo local provisório —
+  quando o schema web (`supabase.types.ts`) for regenerado após a migração
+  chegar em homolog, substituir por tipos derivados de
+  `Database['public']['Tables']['message_templates']`.
+- `constants/messageVariables.ts` — catálogo de variáveis disponíveis
+  (`MESSAGE_TEMPLATE_VARIABLES`: `token`/`label`/`description`), ver 33.6.
+- `components/TemplatesMensagensPageClient.tsx` — página: header, `DashboardTabs`
+  com uma única aba ("Whatsapp", preparado para novos canais no futuro),
+  toolbar (busca por nome/identificador/mensagem + filtro de status + botão
+  "Novo template"), tabela (`arenaDataTable`: Nome — com o `identifier` como
+  subtítulo em `<code>` —, Mensagem — truncada em 2 linhas —, Status, Criado
+  em, Ações), menu de ações por linha (Editar/Excluir) e
+  `ConfirmActionDialog` para exclusão. CRUD manipula `templates` (state)
+  diretamente, sem Server Action.
+- `components/TemplateMensagemFormModal.tsx` — `Dialog` + `react-hook-form` +
+  `zod` (`identifier` min 2 + regex `^[a-z0-9]+(-[a-z0-9]+)*$`, `name` min 2,
+  `message` min 5, `status`), campos Nome/Identificador/Mensagem (`Textarea`
+  + painel de variáveis, ver 33.6)/Status, no mesmo estilo do
+  `ProductFormModal`.
+
+### 33.4 Status (23/09/2026) — persistência e motor implementados
+
+O gestor já aplicou a migração `20260923120000_message_templates.sql`
+manualmente no projeto de **homolog** (schema conferido em runtime: mesmas
+colunas e constraint `message_templates_identifier_not_blank`). A promoção
+formal `arenadigital-db`: branch `feat/templates-mensagens` → `main` →
+`homolog` **ainda não foi feita** (fica pendente); enquanto isso o app local
+aponta direto pra homolog (`NEXT_PUBLIC_SUPABASE_URL`), então os Server
+Actions abaixo já funcionam de verdade. `src/types/supabase.types.ts` não
+pôde ser regenerado via `pnpm db:types` (exige `supabase login`, só o
+gestor tem o token) — a entrada de `message_templates` foi adicionada **à
+mão**, no mesmo formato do gerador, e conferida contra o schema real.
+
+Concluído nesta etapa:
+- CRUD real (`templateMensagemActions.ts`, padrão de `categoryActions.ts`),
+  substituindo o estado local do client; `TemplatesMensagensPageClient.tsx`
+  e a rota `[arenaId]/page.tsx` já leem/escrevem a tabela.
+- Motor de resolução de variáveis (33.7).
+- Botão de mensagem em Relatórios → Pagamentos (33.8).
+
+Pendente:
+- Promover a migração para `main`/`homolog` pelo fluxo normal do time.
+- `##ARENA_CHAVE_PIX##`/`##ARENA_TITULAR_PIX##` resolvem placeholder fixo —
+  a leitura direta do Pix real esbarra numa redação deliberada de acesso
+  financeiro (33.7).
+- Ampliar o catálogo de variáveis conforme novos pontos de disparo forem
+  definidos (o gestor já sinalizou que virão mais).
+
+### 33.5 Arquitetura de dados (`arenadigital-db`, migração `20260923120000_message_templates.sql`)
+
+Tabela `public.message_templates`: `id`, `arena_id` (FK `arenas`, `ON DELETE
+CASCADE`), `channel` (`text`, hoje só `'whatsapp'` via `CHECK` — segue o
+padrão recente do schema para conjuntos pequenos controlados pelo time,
+como `court_price_tables.tipo`/`arenas_atleta.perfil`, em vez de uma tabela
+de lookup à parte como `station_types`), `identifier` (código curto do
+gestor, único por `arena_id + channel` via índice `lower(identifier)`),
+`name`, `message`, `status` (`'Ativo' | 'Inativo'`, mesma convenção de
+`products.status`), `created_by` (FK `users`, `ON DELETE SET NULL`),
+`created_at`/`updated_at` (trigger `trg_message_templates_updated_at` →
+`public.set_updated_at()`, já existente no baseline).
+
+**RLS:** `ENABLE ROW LEVEL SECURITY` + policy de `SELECT` para
+`authenticated` via `public.can_access_arena_backoffice(arena_id)` (helper
+já usado por `court_price_tables`/`mensalista_*`); escrita liberada só para
+`service_role` (`GRANT ALL ... TO service_role`) — sem RPC dedicada, porque
+não há invariante multi-tabela a proteger aqui (diferente de
+`arena_cancellation_policies`, que versiona e por isso escreve só via RPC
+`SECURITY DEFINER`). Os Server Actions do web (rodando com `getSupabaseAdmin()`)
+seguem o mesmo caminho de escrita direta que `product_categories`.
+
+**Desvio deliberado do pedido original:** o gestor sugeriu uma tabela
+`template_mensagens_canal` (FK separada para o canal). Optou-se por um
+`CHECK` no lugar, por ser o padrão mais recente do schema para esse tipo de
+enum pequeno — combinado com o gestor, que autorizou adaptar ao "mais
+padronizado" do restante do sistema.
+
+### 33.6 Catálogo de variáveis e seletor no formulário
+
+`constants/messageVariables.ts` define as variáveis resolvidas pela
+aplicação no envio — não são dado de banco, dependem de perfil do atleta,
+relatório de mensalista e dados de pagamento da Arena. Cada variável tem
+`category` (`Atleta | Contexto | Mensalista | Arena`), usada tanto para
+agrupar o seletor no formulário quanto como pré-requisito de resolução:
+`Mensalista` só resolve para atleta com plano ativo no mês filtrado; `Arena`
+com "(Asaas)" no rótulo só resolve se o cadastro de pagamentos da Arena
+estiver concluído.
+
+- **Atleta:** `##ATLETA_NOME_COMPLETO##`, `##ATLETA_PRIMEIRO_NOME##`.
+- **Contexto:** `##MES_REFERENCIA##` — mês filtrado na tela de origem, por
+  extenso.
+- **Mensalista:**
+  - `##VALOR_DEVIDO_MES_CORRENTE##` — valor em aberto no mês filtrado
+    (mesma fonte do Relatório de Mensalistas, seção 28), já descontando
+    pagamento parcial/crédito.
+  - `##VALOR_CREDITO_ATUAL##` — saldo de crédito do atleta, mesma fonte da
+    view `mensalista_credito_saldo` (`arenadigital-db`).
+  - `##MENSALISTA_RECORRENCIA##` — dia(s)/horário(s) formatados de todos os
+    blocos do plano (`planos_mensalista_blocos`, ou o par legado
+    `dia_semana`/`horario_inicio`/`horario_fim` quando
+    `recorrencia_por_blocos = false`). Decisão: **uma única variável
+    formatada** (ex. "Terças às 18h e 19h; Quintas às 20h") em vez de
+    tokens separados de dia e horário — evita ambiguidade em planos com
+    mais de um bloco.
+  - `##MENSALISTA_TOTAL_HORAS_MES##` — soma das horas ocupadas no mês
+    filtrado, desconsiderando sessões canceladas. Ainda não existe uma
+    função pronta; a montar a partir de `src/modules/reports/usage-lines.ts`
+    (`buildUsageLines`), mesma base do card "Total a cobrar".
+  - `##MENSALISTA_VALOR_HORA##` — valor da hora vigente (RPC
+    `resolve_court_price`, via `planos_mensalista.price_table_id` ou a
+    tabela de preço tipo `mensalista` da quadra).
+  - `##MENSALISTA_VALOR_MENSALIDADE##` — valor cheio da mensalidade do mês
+    filtrado (`mensalista_mensalidades.valor_total`), **diferente** de
+    `VALOR_DEVIDO_MES_CORRENTE` (que já desconta o que foi pago).
+  - `##MENSALISTA_DATA_VENCIMENTO##` — `mensalista_mensalidades.vencimento`.
+- **Arena:**
+  - `##ARENA_ANTECEDENCIA_CANCELAMENTO##` — horas de antecedência da
+    política de cancelamento vigente (`arena_cancellation_policy_tiers`).
+    Decisão: usar a **faixa com `refund_percentage = 100`** (antecedência
+    mínima para reembolso integral), não a faixa de maior reembolso
+    disponível — fica vazio se a Arena não tiver faixa de 100%.
+  - `##ARENA_CHAVE_PIX##` / `##ARENA_TITULAR_PIX##` — `arena_payment_accounts.pix_key`/`holder_name`
+    (subconta Asaas; não existe "razão social" persistida em lugar
+    nenhum — `holder_name` é o campo mais próximo). Decisão: quando a Arena
+    não tiver essa conta configurada, a **prévia mostra um aviso editável**
+    no lugar do token (ex. "[Pix não configurado]"), em vez de resolver
+    vazio silenciosamente ou bloquear o envio — o gestor decide na hora se
+    edita ou envia assim mesmo.
+  - `##ARENA_CNPJ##` — `arenas.cpf_cnpj` (não distingue CPF de CNPJ).
+
+`TemplateMensagemFormModal.tsx`: o campo Mensagem é um `Textarea` com
+`ref` compartilhada (`field.ref` + `messageTextareaRef`, via callback ref)
+para saber a posição do cursor. Abaixo dele, o painel de variáveis é
+agrupado por `category` (`variablesByCategory`, ordem fixa em
+`VARIABLE_CATEGORY_ORDER`), com scroll interno (`max-h-72`) para caber as
+14 variáveis sem estourar o modal; clicar em uma insere o token na posição
+do cursor (`selectionStart`/`selectionEnd`) via `form.setValue` e devolve o
+foco/cursor à posição seguinte ao token inserido.
+
+**Origem desta lista:** análise de uma mensagem real de mensalista (aviso
+mensal de recorrência + valores + Pix) trazida pelo gestor em 23/09/2026,
+cruzada arquivo a arquivo com o que já existe no sistema.
+
+A resolução real dos tokens está implementada — ver 33.7.
+
+### 33.7 Motor de resolução de variáveis (23/09/2026)
+
+`src/modules/templates-mensagens/actions/templateVariableResolverActions.ts`,
+`resolveMessageTemplateAction(arenaId, atletaId, competencia, rawMessage)`
+(`assertArenaAdminAccess`). Só resolve os tokens que o texto realmente usa
+(`rawMessage.match(/##[A-Z_]+##/g)`), pra não disparar consultas à toa.
+Devolve `{ resolvedMessage, athleteName, athletePhone, warnings[] }`.
+
+- **Atleta/Contexto:** leitura direta de `atleta` (`nome_perfil`, `telefone`)
+  e `format(competencia, 'MMMM', ptBR)` para `##MES_REFERENCIA##`.
+- **Mensalista:** chama **`getMensalistaDetailAction(arenaId, atletaId, competencia)`**
+  (o mesmo loader da tela de Mensalistas — 20.4/seção do `mensalistaActions.ts`)
+  em vez de reconsultar as tabelas; `resumo.restanteMes` →
+  `VALOR_DEVIDO_MES_CORRENTE`, `resumo.valorMes` → `MENSALISTA_VALOR_MENSALIDADE`,
+  `resumo.creditoSaldo` → `VALOR_CREDITO_ATUAL`. Se o atleta não tem plano
+  mensalista (`detail.success === false`), todas as variáveis de mensalista
+  viram `[sem plano mensalista ativo]` com aviso — nunca quebra o preview.
+  - `MENSALISTA_RECORRENCIA`/`MENSALISTA_TOTAL_HORAS_MES`: para cada plano
+    **ativo** (`plano.status !== 'cancelado'`), usa `plano.blocos` (ou o par
+    legado `dia_semana`/`horario_inicio`/`horario_fim` do próprio plano
+    quando não há blocos) e `ocorrenciasNoMes()`
+    (`lib/mensalista-variables.ts`) conta quantas vezes aquele dia da semana
+    cai no mês filtrado, **recortado por `data_inicio`/`data_encerramento_efetiva`**
+    — reflete o mês de estreia/encerramento proporcional de verdade.
+  - `MENSALISTA_VALOR_HORA`: **não** usa `mensalidade.valor_total ÷ horas do
+    mês` — validado contra o caso real do Everton Cebolinha (dois planos de
+    `valor_mensal: 500`, mesma quinta-feira, uma mensalidade prorrateada em
+    `R$ 200` e a outra em `R$ 500` por motivo que não é proporcional às
+    horas deste mês) e deu taxas diferentes (`R$ 250/h` e `R$ 100/h`) pro
+    mesmo valor cheio — errado. A fórmula certa é **`plano.valor_mensal` ÷
+    horas de um **mês cheio** (mesma `ocorrenciasNoMes()`, mas com
+    `dataInicioPlano = startOfMonth(competencia)`, sem recorte)** — deu
+    `R$ 125/h` pros dois planos, consistente. Com mais de um plano ativo,
+    lista `"{quadra} ({esporte}): {valor}/h"` por plano.
+  - `MENSALISTA_DATA_VENCIMENTO`: união dos `mensalidade.vencimento` dos
+    planos ativos; mais de um valor distinto gera aviso (revisar antes de
+    enviar).
+- **Arena:** `##ARENA_CNPJ##` lê `arenas.cpf_cnpj` direto.
+  `##ARENA_ANTECEDENCIA_CANCELAMENTO##` chama
+  `getArenaCancellationPolicySettingsAction` e usa o tier com
+  `refundPercentage === 100` (decisão de 23/09/2026, seção 33.6).
+  **`##ARENA_CHAVE_PIX##`/`##ARENA_TITULAR_PIX##` ainda resolvem um
+  placeholder fixo** — `getArenaPixSplitSettingsAction` existe, mas
+  `settingsForFinancialOnboardingAccess` **redige** `pixKey` pra `''` pra
+  qualquer chamador que não seja `super_admin_backoffice` (nem o próprio
+  Owner da arena vê a chave crua por ali). Preencher de verdade exigiria uma
+  leitura dedicada direto em `arena_payment_accounts` — decisão de produto
+  em aberto, não tomada unilateralmente por contornar um controle de acesso
+  financeiro existente.
+- **Placeholders:** qualquer variável não resolvida vira `[texto entre
+  colchetes]` (nunca um `##TOKEN##` cru sobrando na mensagem) e entra na
+  lista de `warnings` — a prévia mostra os dois.
+
+### 33.8 Botão de mensagem em Relatórios → Pagamentos (23/09/2026)
+
+`PaymentStatusRow` ganhou `atletaId`/`telefone` (opcionais). Propagados nas
+**seis** fontes de linha de `getPaymentStatusReportAction`
+(`reportActions.ts`) — bookings, `station_payments`, `rotativo_inscricoes`,
+`rotativo_credito_movimentos`, `transactions` — bastou adicionar `telefone`
+a um `atleta:X(id, nome_perfil, …)` que já existia em cada `select`, sem
+query nova. `mensalidade-rows.ts` (`buildMensalidadeRows`/`buildRateioBreakdownRows`)
+também propaga (`MensalidadeContexto.telefone`, lido via
+`atleta:athlete_id(telefone)` no `planos_mensalista` de
+`loadMensalidadesDaCompetencia`); a linha `Rateio` (participante do rateio,
+não o responsável) tem `atletaId` mas não `telefone` — sem uma consulta
+extra por participante, o botão simplesmente não aparece nessas linhas.
+
+`StatusPagamentosPageClient.tsx`: nova coluna "Ações" (ícone verde de
+WhatsApp, `lucide-react MessageCircle`), visível só quando
+`row.atletaId && row.telefone`. Clicar abre
+`SendTemplateMessageModal` (`templates-mensagens/components`), passando
+`arenaId`, `competencia={selectedMonth}` (o filtro de período da própria
+tela, formato `YYYY-MM`) e `{ id, nome, telefone }` do atleta da linha.
+
+`SendTemplateMessageModal.tsx`: dois passos —
+1. **Selecionar template**: `getMessageTemplatesByArenaAction(arenaId)`,
+   filtra só `status === 'Ativo'`.
+2. **Prévia**: chama `resolveMessageTemplateAction`, mostra os `warnings`
+   num aviso âmbar e o texto resolvido num `Textarea` **editável** (o
+   gestor corrige manualmente os trechos entre colchetes antes de enviar).
+   "Enviar via WhatsApp" chama `openWhatsAppWeb` (`src/lib/whatsapp-web.ts`,
+   extraído do `handleWhatsApp` de `ClientesOverviewPageClient.tsx`, que
+   passou a reusá-lo) com o telefone do atleta e o texto editado.
+
+## 34. Menu — grupo "Gestão Reservas" e remoção de Cobranças Avulsas do Financeiro (23/09/2026)
+
+### 34.1 `Sidebar.tsx`
+
+Novo grupo expansível "Gestão Reservas" (ícone `ClipboardList`), inserido
+imediatamente antes do bloco de "Relatórios" e seguindo exatamente o mesmo
+template (próprio `useState` de open/active — `isBookingsOpen`/`isBookingsActive`/
+`shouldShowBookingsOpen` —, botão pai com `ChevronDown` que gira, sub-itens
+como `Link` dentro de um bloco recolhível com a linha vertical decorativa).
+`isBookingsActive` é `pathname.includes("/mensalistas") || .includes("/pre-reservas") || .includes("/avulsas")`.
+
+Sub-itens: **Avulsos** (`avulsasHref` novo, `/dashboard/arenas/${arenaId}/avulsas`),
+**Mensalistas** (`mensalistasHref`, já existia) e **Pré-reservas**
+(`preReservasHref`, já existia) — os dois últimos foram **removidos** do
+array `mainNavItems` (onde viviam soltos) e viraram sub-itens do grupo.
+
+**Guard de visibilidade:** `{!isCashier && (...)}`, **sem** `isAdmin` —
+diferente de Relatórios/Configurações (`!isCashier && isAdmin`). Isso é
+proposital: Mensalistas/Pré-reservas hoje não têm `requiresAdmin` no array
+antigo (Atendente os vê), então gatear o grupo por `isAdmin` teria escondido
+o menu de quem já tinha acesso — regressão que este guard evita. Caixa
+continua sem ver o grupo porque `cashierItems` já substitui `mainNavItems`
+inteiro antes de chegar aqui (tanto com quanto sem estação atribuída).
+
+**Tutorial guiado:** `WelcomeTutorialDialog.tsx` tinha um passo com seletor
+`[data-tutorial-menu="memberships"]` apontando para o antigo item solto de
+Mensalistas. Esse atributo foi movido para o botão pai do novo grupo
+"Gestão Reservas" (o clique nele já expõe Mensalistas) — sem isso, o passo
+do tutorial ficaria "órfão" dentro de um accordion fechado.
+
+`ClipboardPen`/`ClipboardClock` (ícones que os itens soltos usavam) saíram
+dos imports — os sub-itens dos grupos (Relatórios/Configurações/Gestão
+Reservas) seguem o padrão visual de só texto, sem ícone.
+
+### 34.2 `FinanceDashboardClient.tsx` — remoção da seção "Cobranças Avulsas"
+
+A página de Avulsos (`/dashboard/arenas/[id]/avulsas`,
+`AvulsasPageClient.tsx`) já existia pronta e completa — só não tinha entrada
+de menu, sendo alcançável apenas pelo link "Ver tudo" que já existia dentro
+do card "Cobranças Avulsas" do Financeiro. Com o item de menu criado (34.1),
+esse card ficou redundante e foi removido de `FinanceDashboardClient.tsx`
+junto com tudo que só existia para ele: estados (`pendingAvulsos`,
+`isLoadingAvulsos`, `confirmingId`, `confirmDialog`), a função
+`loadPendingAvulsos` e seu `useEffect`, `handleConfirmarPagamento`, o
+`<ConfirmarPagamentoDialog>` da tela, e os imports que ficaram sem uso
+(`getAvulsosComPendenciaAction`, `AvulsoPendenciaItem`,
+`confirmarPagamentoAvulsoAction`, `confirmarPagamentoParticipanteAvulsoAction`,
+`ConfirmarPagamentoDialog`, `toast`, `parseISO`, `ptBR` e os ícones
+`AlertCircle`/`CheckCircle2`/`Loader2`/`Clock`/`MapPin`/`Calendar`).
+`getAvulsosComPendenciaAction` (`financeActions.ts`) também foi removida —
+ficou sem nenhum caller no projeto; o tipo `AvulsoPendenciaItem` continua,
+porque `AvulsoListItem` (usado por `getAvulsosTodosAction`, que alimenta a
+página de Avulsos) o estende.
+
+Financeiro agora só tem: cards de Saldo/Entradas/Despesas do mês,
+comparativo e as duas listas "Últimas Entradas"/"Últimas Saídas" (cada uma
+com "Ver tudo" para `/dashboard/finance/{arenaId}/entradas`\-`/saidas`).
+
+## 35. Sidebar — correção de `isActive` sobreposto (23/09/2026)
+
+`espacosActive` (`Sidebar.tsx`) fazia `/dashboard/arenas/` + exclusões
+(`/stations`, `/mensalistas`, `/pre-reservas`, `!p.endsWith("/edit")`) sem
+excluir `/avulsas` — resultado: "Espaços" e "Avulsos" ficavam ativos ao
+mesmo tempo em `/dashboard/arenas/{id}/avulsas`. Corrigido com
+`!p.includes("/avulsas")`.
+
+No mesmo lugar, achado um segundo bug ao auditar as demais checagens:
+`!p.endsWith("/edit")` é genérico demais e também apagava o destaque de
+"Espaços" ao editar um espaço específico (`/dashboard/arenas/{id}/spaces/{spaceId}/edit`),
+quando só deveria excluir a edição da própria arena
+(`/dashboard/arenas/{id}/edit`, que já tem seu próprio destaque em "Perfil
+da Arena"). Trocado pela mesma regex precisa de `isEditingArena`
+(`/\/dashboard\/arenas\/[^/]+\/edit$/`), sem o `$` cair em rotas mais
+profundas.
+
+Auditoria das demais ~20 checagens de `isActive` do arquivo (substrings
+`/mensalistas`, `/pre-reservas`, `/avulsas`, `clientes-overview`,
+`status-pagamentos`, `movimentacao-estacoes`, `/stations`) contra todas as
+rotas reais do app (`find src/app -type d`): nenhuma outra colisão — esses
+termos só existem nas pastas de rota esperadas.
+
+## 36. Componente reutilizável de envio por template (23/09/2026)
+
+`src/modules/templates-mensagens/components/SendTemplateMessageButton.tsx`
+— extrai o par botão+modal que antes vivia só em
+`StatusPagamentosPageClient.tsx` (estado `messageAthlete` no componente
+pai) para um componente autocontido: guarda seu próprio `open`, recebe só
+`arenaId`, `athlete` (`{ id, nome, telefone }`) e `competencia?` opcional
+(default: mês corrente, via `currentCompetencia()`) — quem chama não
+precisa levantar estado nem renderizar o `SendTemplateMessageModal` à
+parte. `athlete` `null`/`undefined` esconde o botão (não há para quem
+mandar); `athlete.telefone` nulo mostra o botão desabilitado, em vez de
+escondê-lo — informa a causa em vez de simplesmente não aparecer.
+
+Duas telas passaram a usar o componente:
+- **Relatórios → Pagamentos Reservas** (`StatusPagamentosPageClient.tsx`):
+  troca o par estado+`<Button>`+`<SendTemplateMessageModal>` inline por uma
+  linha (`<SendTemplateMessageButton arenaId={arenaId} competencia={selectedMonth} athlete={...} />`)
+  na célula de Ações — `competencia` explícita, o mês filtrado na tela.
+- **Relatórios → Atletas e clientes** (`ClientesOverviewPageClient.tsx`):
+  troca o `handleWhatsApp(phone, name)` com texto fixo pelo mesmo
+  componente, sem `competencia` (tela não tem filtro de período, usa o mês
+  corrente). `handleWhatsApp` e o import de `openWhatsAppWeb`/`MessageCircle`
+  saíram do arquivo, sem uso.
+
+`src/lib/whatsapp-web.ts` continua vivo — é o `SendTemplateMessageModal`
+que chama `openWhatsAppWeb` no envio final.
+
+## 37. Coluna "Ações" e exportação de PDF por atleta em Pagamentos Reservas (23/09/2026)
+
+### 37.1 Cabeçalho "Ações" visível
+
+A coluna que já existia para o botão de WhatsApp (seção 33.8) tinha o texto
+"Ações" só em `sr-only` (sem aparecer na tela — ver print anexado pelo
+gestor). Trocado por texto visível no `<th>`.
+
+### 37.2 Exportar PDF por atleta
+
+Novo ícone (`FileText`, tooltip "Exportar PDF deste Atleta") ao lado do
+botão de WhatsApp na coluna Ações, só em linhas com `row.atletaId`. Gera o
+**mesmo PDF** do botão "Exportar PDF" do topo da tela
+(`generatePaymentStatusPdf`), recortado para aquele atleta — sem alterar os
+filtros visíveis da página.
+
+`handleExportPdfForAthlete(atletaId, atletaNome)` (`StatusPagamentosPageClient.tsx`):
+busca de novo no servidor via `getPaymentStatusReportAction` com os filtros
+**atualmente ativos na tela** (Período, Tipo, Espaço, Esporte, Perfil,
+Rateio, Detalhar por hora) mais `atletaId` — o equivalente a preencher o
+filtro de Atleta com essa pessoa e clicar Filtrar → Exportar PDF, só que sem
+mexer no que está na tela. Isso importa porque os `rows` já carregados no
+client podem estar incompletos para aquele atleta quando outro filtro (ex.:
+Tipo = Avulso) já excluiu linhas dele no fetch original — e é a mesma busca
+que recalcula `athleteDebt` (quanto deve de Mensal/Avulso) correto para essa
+pessoa, que só vem preenchido quando o filtro de Atleta está de fato ativo.
+
+**Pipeline de exibição compartilhado:** `statusFilteredRows`/`baseRows`/
+`sortedRows` (três `useMemo` encadeados) viraram uma função pura só,
+`deriveDisplayRows(rows, statusFiltro, agruparPorAtleta, sortKey, sortDir)`
+— filtro de status → agrupar por atleta → ordenar, nessa ordem. Usada tanto
+pelo `sortedRows` da tela (o que alimenta tabela, paginação e as duas
+exportações do topo) quanto pelo PDF por atleta, para os dois lerem os
+lançamentos sob exatamente os mesmos critérios de status/agrupamento/ordem
+vigentes na tela.
+
+`fileName` inclui o nome do atleta (`slugify`, ex.: "Maria Teste" →
+`maria-teste`). Estado de loading por linha (`exportingAthleteId`, spinner
+substitui o ícone) em vez de um único `isExportingPdf` global — outro
+export por atleta ou o export geral não travam por causa de um em
+andamento. Erros aparecem em `toast.error` (import novo no arquivo).

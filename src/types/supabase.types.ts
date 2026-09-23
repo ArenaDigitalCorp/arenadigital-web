@@ -2912,6 +2912,60 @@ export type Database = {
           },
         ]
       }
+      message_templates: {
+        Row: {
+          arena_id: string
+          channel: string
+          created_at: string
+          created_by: string | null
+          id: string
+          identifier: string
+          message: string
+          name: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          arena_id: string
+          channel?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          identifier: string
+          message: string
+          name: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          arena_id?: string
+          channel?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          identifier?: string
+          message?: string
+          name?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_templates_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       modo_pagamento: {
         Row: {
           created_at: string

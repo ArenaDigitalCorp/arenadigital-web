@@ -16,8 +16,7 @@ import {
     Menu,
     Package,
     BarChart2,
-    ClipboardPen,
-    ClipboardClock,
+    ClipboardList,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -55,6 +54,7 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
     const athletesHref = selectedArena ? `/dashboard/athletes/${selectedArena}` : "/dashboard/athletes";
     const mensalistasHref = selectedArena ? `/dashboard/arenas/${selectedArena}/mensalistas` : "/dashboard/arenas";
     const preReservasHref = selectedArena ? `/dashboard/arenas/${selectedArena}/pre-reservas` : "/dashboard/arenas";
+    const avulsasHref = selectedArena ? `/dashboard/arenas/${selectedArena}/avulsas` : "/dashboard/arenas";
 
     // Caixa com estação atribuída → apenas "Minha Estação"
     const cashierWithStation = isCashier && selectedArenaDetails?.assignedStationId ? [
@@ -86,7 +86,10 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
         !p.includes("/stations") &&
         !p.includes("/mensalistas") &&
         !p.includes("/pre-reservas") &&
-        !p.endsWith("/edit");
+        !p.includes("/avulsas") &&
+        // Só a edição da própria arena (Perfil da Arena) sai daqui — edição de um
+        // espaço específico (/spaces/{id}/edit) continua contando como Espaços.
+        !/\/dashboard\/arenas\/[^/]+\/edit$/.test(p);
 
     const mensalistasActive = (p: string) => p.includes("/mensalistas");
 
@@ -110,13 +113,6 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                 requiresAdmin: true,
             },
             {
-                icon: ClipboardClock,
-                label: "Pré-reservas",
-                tutorialKey: "booking-requests",
-                href: preReservasHref,
-                isActive: (p: string) => p.includes("/pre-reservas"),
-            },
-            {
                 icon: Medal,
                 label: "Atletas",
                 tutorialKey: "athletes",
@@ -137,13 +133,6 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                 href: productsHref,
                 isActive: (p: string) => p.startsWith("/dashboard/settings/products/"),
                 requiresAdmin: true,
-            },
-            {
-                icon: ClipboardPen,
-                label: "Mensalistas",
-                tutorialKey: "memberships",
-                href: mensalistasHref,
-                isActive: mensalistasActive,
             },
             {
                 icon: RefreshCw,
@@ -172,15 +161,19 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
     const settingsUsersHref = selectedArena ? `/dashboard/settings/users/${selectedArena}` : "/dashboard/settings/users";
     const settingsSubscriptionHref = selectedArena ? `/dashboard/settings/subscription/${selectedArena}` : "/dashboard/settings/subscription";
     const settingsWhatsappHref = selectedArena ? `/dashboard/settings/whatsapp/${selectedArena}` : "/dashboard/settings/whatsapp";
+    const settingsTemplatesHref = selectedArena ? `/dashboard/settings/templates-mensagens/${selectedArena}` : "/dashboard/settings/templates-mensagens";
     const reportsHref = selectedArena ? `/dashboard/reports/${selectedArena}/status-pagamentos` : "/dashboard/reports";
 
     const isEditingArena = !!pathname.match(/\/dashboard\/arenas\/[^\/]+\/edit$/);
     const isSettingsActive = (pathname.includes("/settings") && !pathname.startsWith("/dashboard/settings/products")) || isEditingArena;
     const isReportsActive = pathname.startsWith("/dashboard/reports/");
+    const isBookingsActive = pathname.includes("/mensalistas") || pathname.includes("/pre-reservas") || pathname.includes("/avulsas");
     const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(isSettingsActive);
     const [isReportsOpen, setIsReportsOpen] = useState<boolean>(isReportsActive);
+    const [isBookingsOpen, setIsBookingsOpen] = useState<boolean>(isBookingsActive);
     const shouldShowSettingsOpen = !isCollapsed && (isSettingsOpen || isSettingsActive);
     const shouldShowReportsOpen = !isCollapsed && (isReportsOpen || isReportsActive);
+    const shouldShowBookingsOpen = !isCollapsed && (isBookingsOpen || isBookingsActive);
 
     return (
         <div className={cn(
@@ -266,6 +259,103 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                             );
                         })}
 
+                        {!isCashier && (
+                        <div>
+                            <Button
+                                variant="ghost"
+                                className={cn(
+                                    "cursor-pointer transition-colors flex items-center rounded-md",
+                                    isCollapsed
+                                        ? cn(
+                                              "h-10 w-10 shrink-0 justify-center p-0",
+                                              isBookingsActive
+                                                  ? cn(navActiveText, "bg-white/10 hover:bg-white/15")
+                                                  : "text-white hover:bg-white/10 hover:text-white",
+                                          )
+                                        : cn(
+                                              "w-full justify-between px-3 text-white hover:bg-white/10 hover:text-white",
+                                              isBookingsActive &&
+                                                  cn(navActiveText, "bg-white/5 hover:bg-white/10 hover:text-arena-accent"),
+                                          ),
+                                )}
+                                onClick={() => !isCollapsed && setIsBookingsOpen(!isBookingsOpen)}
+                                title={isCollapsed ? "Gestão Reservas" : ""}
+                                data-tutorial-menu="memberships"
+                            >
+                                <div
+                                    className={cn(
+                                        "flex items-center gap-1.5",
+                                        isCollapsed ? "size-full justify-center" : "min-w-0 flex-1",
+                                    )}
+                                >
+                                    <ClipboardList className={cn("h-5 w-5 shrink-0", !isCollapsed && "mr-2")} />
+                                    {!isCollapsed && <span className="font-medium text-sm">Gestão Reservas</span>}
+                                </div>
+                                {!isCollapsed && (
+                                    <ChevronDown
+                                        className={cn(
+                                            "h-4 w-4 shrink-0 transition-transform duration-200",
+                                            isBookingsActive ? navActiveText : "text-white",
+                                            shouldShowBookingsOpen && "rotate-180"
+                                        )}
+                                    />
+                                )}
+                            </Button>
+
+                            {shouldShowBookingsOpen && (
+                                <div className="mt-0.5 flex items-stretch gap-2 pl-3">
+                                    <div
+                                        className="flex w-5 shrink-0 flex-col items-center py-1"
+                                        aria-hidden
+                                    >
+                                        <div className="min-h-5 w-px flex-1 rounded-full bg-white/15" />
+                                    </div>
+                                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                                        <Button
+                                            variant="ghost"
+                                            asChild
+                                            className={cn(
+                                                "h-9 w-full justify-start px-2 text-sm font-normal",
+                                                pathname.includes("/avulsas")
+                                                    ? cn(navActiveText, "bg-white/5 hover:bg-white/10 hover:text-arena-accent")
+                                                    : "text-white hover:bg-white/5 hover:text-white"
+                                            )}
+                                            onClick={onNavItemClick}
+                                        >
+                                            <Link href={avulsasHref}>Avulsos</Link>
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            asChild
+                                            className={cn(
+                                                "h-9 w-full justify-start px-2 text-sm font-normal",
+                                                mensalistasActive(pathname)
+                                                    ? cn(navActiveText, "bg-white/5 hover:bg-white/10 hover:text-arena-accent")
+                                                    : "text-white hover:bg-white/5 hover:text-white"
+                                            )}
+                                            onClick={onNavItemClick}
+                                        >
+                                            <Link href={mensalistasHref}>Mensalistas</Link>
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            asChild
+                                            className={cn(
+                                                "h-9 w-full justify-start px-2 text-sm font-normal",
+                                                pathname.includes("/pre-reservas")
+                                                    ? cn(navActiveText, "bg-white/5 hover:bg-white/10 hover:text-arena-accent")
+                                                    : "text-white hover:bg-white/5 hover:text-white"
+                                            )}
+                                            onClick={onNavItemClick}
+                                        >
+                                            <Link href={preReservasHref}>Pré-reservas</Link>
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        )}
+
                         {!isCashier && isAdmin && (
                         <div>
                             <Button
@@ -347,7 +437,7 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                             )}
                                             onClick={onNavItemClick}
                                         >
-                                            <Link href={reportsHref}>Pagamentos</Link>
+                                            <Link href={reportsHref}>Pagamentos Reservas</Link>
                                         </Button>
                                         <Button
                                             variant="ghost"
@@ -485,6 +575,22 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                         >
                                             <Link href={settingsWhatsappHref}>
                                                 WhatsApp
+                                            </Link>
+                                        </Button>
+
+                                        <Button
+                                            variant="ghost"
+                                            asChild
+                                            className={cn(
+                                                "h-9 w-full justify-start px-2 text-sm font-normal",
+                                                pathname.startsWith("/dashboard/settings/templates-mensagens")
+                                                    ? cn(navActiveText, "bg-white/5 hover:bg-white/10 hover:text-arena-accent")
+                                                    : "text-white hover:bg-white/5 hover:text-white"
+                                            )}
+                                            onClick={onNavItemClick}
+                                        >
+                                            <Link href={settingsTemplatesHref}>
+                                                Templates Mensagens
                                             </Link>
                                         </Button>
                                     </div>

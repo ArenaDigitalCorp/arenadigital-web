@@ -44,6 +44,10 @@ test('operators can see conflicts before attempting approval', () => {
 })
 
 test('pre-booking queue is a dedicated sidebar destination', () => {
-  assert.match(sidebar, /label: "Pré-reservas"/u)
+  // Pré-reservas vive dentro do grupo "Gestão Reservas" (Sidebar.tsx), não
+  // mais como item solto de mainNavItems — ainda assim, um Link dedicado
+  // com seu próprio href.
+  assert.match(sidebar, />Pré-reservas<\/Link>/u)
+  assert.match(sidebar, /href=\{preReservasHref\}/u)
   assert.match(sidebar, /\/pre-reservas/u)
 })

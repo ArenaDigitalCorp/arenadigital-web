@@ -183,6 +183,21 @@ const STATUS_PAGAMENTO_STYLE: Record<'pago' | 'pendente', { label: string; class
   pendente: { label: 'Pendente', className: 'bg-red-100 text-red-700' },
 }
 
+/**
+ * `planos_mensalista.status` só tem dois valores de verdade (`ativo`/`cancelado`) —
+ * Pausado/Encerrando são selos à parte (pausa ativa, data de encerramento prevista),
+ * não um terceiro valor deste campo. Mesma mecânica de chips do overview de
+ * Mensalistas (`MensalistasOverviewClient.tsx`): o que está marcado é o que
+ * aparece; Cancelado começa desmarcado (escondido) até o gestor clicar nele.
+ */
+type StatusPlanoFiltro = 'ativo' | 'cancelado'
+const STATUS_PLANO_FILTRO_CHIPS: readonly StatusPlanoFiltro[] = ['ativo', 'cancelado']
+const STATUS_PLANO_FILTRO_LABEL: Record<StatusPlanoFiltro, string> = {
+  ativo: 'Ativo',
+  cancelado: 'Cancelado',
+}
+const DEFAULT_STATUS_PLANO_FILTROS: StatusPlanoFiltro[] = ['ativo']
+
 const PAGE_SIZE = 10
 
 export function MensalistaDetailClient({
@@ -201,8 +216,26 @@ export function MensalistaDetailClient({
   const [pagamentoFilter, setPagamentoFilter] = useState<'todos' | 'pendente' | 'pago'>(
     'todos'
   )
+  const [statusPlanoFiltros, setStatusPlanoFiltros] = useState<Set<StatusPlanoFiltro>>(
+    () => new Set(DEFAULT_STATUS_PLANO_FILTROS)
+  )
   const [historicoOpen, setHistoricoOpen] = useState(false)
   const [creditosOpen, setCreditosOpen] = useState(false)
+
+  const todosStatusPlanoSelecionados = STATUS_PLANO_FILTRO_CHIPS.every((s) => statusPlanoFiltros.has(s))
+
+  function toggleStatusPlanoChip(status: StatusPlanoFiltro) {
+    setStatusPlanoFiltros((prev) => {
+      const next = new Set(prev)
+      if (next.has(status)) next.delete(status)
+      else next.add(status)
+      return next
+    })
+  }
+
+  function selecionarTodosStatusPlano() {
+    setStatusPlanoFiltros(new Set(STATUS_PLANO_FILTRO_CHIPS))
+  }
 
   const togglePlanoExpanded = (planoId: string) => {
     setExpandedPlanoIds((prev) => {
@@ -329,10 +362,13 @@ export function MensalistaDetailClient({
   const recorrenciasOrdenadas = useMemo(() => {
     const rank = (s: RecorrenciaPagamentoStatus) => (s === 'pendente' ? 0 : s === 'pago' ? 1 : 2)
     return recorrencias
+      .filter((rec) =>
+        statusPlanoFiltros.has(rec.plano.status === 'cancelado' ? 'cancelado' : 'ativo')
+      )
       .map((rec) => ({ rec, status: recorrenciaPagamentoStatus(rec) }))
       .filter(({ status }) => pagamentoFilter === 'todos' || status === pagamentoFilter)
       .sort((a, b) => rank(a.status) - rank(b.status))
-  }, [recorrencias, pagamentoFilter])
+  }, [recorrencias, pagamentoFilter, statusPlanoFiltros])
 
   const pagedHistorico = historicoPagamentos.slice(
     (page - 1) * PAGE_SIZE,
@@ -470,6 +506,32 @@ export function MensalistaDetailClient({
             Recorrências e mensalidade do mês
           </h2>
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={selecionarTodosStatusPlano}
+              className={cn(
+                'px-3 py-1.5 rounded-lg text-xs font-bold transition-colors',
+                todosStatusPlanoSelecionados
+                  ? 'bg-arena-navy-800 text-white'
+                  : 'bg-[#F1F5F9] text-arena-navy-800/60 hover:bg-arena-navy-800/10'
+              )}
+            >
+              Todos
+            </button>
+            {STATUS_PLANO_FILTRO_CHIPS.map((f) => (
+              <button
+                key={f}
+                onClick={() => toggleStatusPlanoChip(f)}
+                className={cn(
+                  'px-3 py-1.5 rounded-lg text-xs font-bold transition-colors',
+                  statusPlanoFiltros.has(f)
+                    ? 'bg-arena-navy-800 text-white'
+                    : 'bg-[#F1F5F9] text-arena-navy-800/60 hover:bg-arena-navy-800/10'
+                )}
+              >
+                {STATUS_PLANO_FILTRO_LABEL[f]}
+              </button>
+            ))}
+            <span className="mx-1 h-4 w-px bg-arena-navy-800/10" />
             {(['todos', 'pendente', 'pago'] as const).map((f) => (
               <button
                 key={f}
@@ -477,11 +539,11 @@ export function MensalistaDetailClient({
                 className={cn(
                   'px-3 py-1.5 rounded-lg text-xs font-bold transition-colors',
                   pagamentoFilter === f
-                    ? 'bg-arena-navy-800 text-white'
+                    ? 'bg-arena-button text-white'
                     : 'bg-[#F1F5F9] text-arena-navy-800/60 hover:bg-arena-navy-800/10'
                 )}
               >
-                {f === 'todos' ? 'Todos' : STATUS_PAGAMENTO_STYLE[f].label}
+                {f === 'todos' ? 'Pagamento' : STATUS_PAGAMENTO_STYLE[f].label}
               </button>
             ))}
           </div>
