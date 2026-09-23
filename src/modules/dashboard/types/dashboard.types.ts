@@ -12,3 +12,5 @@ export type OccupancyRow = {
     booked: number;
     total: number;
 };
+
+export type OccupancyPeriod = 'day' | 'week' | 'month';
