@@ -485,7 +485,27 @@ Lista, mês a mês, todo lançamento financeiro da arena — reservas avulsas, m
 
 ---
 
-## 6. Requisitos Não Funcionais
+### 5.17 Templates de Mensagens (23/09/2026)
+
+Novo submenu **Configurações → Templates Mensagens**, para que cada Arena cadastre sua própria base de mensagens padronizadas, reaproveitadas em pontos do sistema que disparam comunicações automáticas (ex.: confirmação de reserva, lembrete de mensalidade). Cada template tem identificador, nome, texto da mensagem e status (Ativo/Inativo); o texto aceita variáveis no formato `##VARIAVEL##` que o sistema substitui por dados reais no envio.
+
+- Estrutura pensada por **canal**, com abas — a primeira e única disponível nesta etapa é **Whatsapp**. Outros canais (ex.: e-mail, notificação push) poderão ser adicionados como novas abas no futuro.
+- Tela em CRUD padrão, com persistência real: listagem com busca e filtro de status, cadastro, edição e exclusão — mesmo padrão visual do Catálogo. O formulário de cadastro mostra, ao lado do texto da mensagem, o catálogo de variáveis disponíveis com uma explicação de cada uma; clicar numa variável insere o token na posição do cursor.
+- **Variáveis disponíveis nesta etapa** (agrupadas no formulário por categoria — Atleta, Contexto, Mensalista, Arena): nome/primeiro nome do atleta; mês de referência filtrado; valor devido no mês, crédito atual, dias/horários da recorrência, total de horas no mês, valor da hora, valor total da mensalidade e data de vencimento (todas do universo Mensalista); antecedência de cancelamento, chave Pix, titular da conta Pix e CNPJ da Arena. Catálogo definido em 23/09/2026 a partir de uma mensagem real que a Arena já envia manualmente a mensalistas (recorrência + valores + dados de pagamento).
+- **Motor de variáveis implementado e validado** contra um caso real (atleta com 2 recorrências, mês de estreia proporcional) — os valores de dívida, crédito e mensalidade batem com o que a tela de Mensalistas mostra. Toda variável não preenchível vira um aviso editável entre colchetes na prévia, nunca um erro nem um `##TOKEN##` cru na mensagem final. Exceção: chave Pix/titular da Arena ainda não são lidos de verdade — esbarra num controle de acesso financeiro existente (ver SPEC) e fica como decisão em aberto.
+- **Botão de envio implementado em Relatórios → Pagamentos:** ícone de WhatsApp na linha de cada lançamento com atleta cadastrado (com telefone) → escolhe o template pelo identificador → vê a prévia já preenchida (editável) → envia pelo WhatsApp Web. Mesmo mecanismo que **Relatórios → Atletas e clientes** já usa hoje (ainda com texto fixo — migrar para templates fica para depois).
+- Acesso restrito a Administrador (Owner/Gestor), como as demais telas de Configurações.
+
+---
+
+### 5.18 Reorganização do menu — "Gestão Reservas" e página própria de Avulsos (23/09/2026)
+
+Novo grupo expansível **"Gestão Reservas"** no menu lateral (mesmo padrão visual de "Relatórios"/"Configurações"), posicionado acima de "Relatórios", reunindo:
+- **Avulsos** (novo item de menu) — a tela já existia pronta (`/dashboard/arenas/[id]/avulsas`, cards de cobranças pendentes/pagas/total recebido, abas de status, busca, tabela com ação de confirmar pagamento) mas não tinha entrada no menu; só era alcançável pelo link "Ver tudo" dentro de Financeiro.
+- **Mensalistas** (já existia como item solto no menu).
+- **Pré-reservas** (já existia como item solto no menu).
+
+A seção "Cobranças Avulsas" que antes aparecia na parte de baixo da página de **Financeiro** foi removida de lá — a página de Avulsos (agora com entrada própria no menu) passa a ser o único lugar para acompanhar e confirmar cobranças avulsas. Financeiro fica só com Saldo/Entradas/Despesas do mês, o comparativo e as últimas entradas/saídas.
 
 - Interface simples e responsiva
 - Performance adequada para uso diário

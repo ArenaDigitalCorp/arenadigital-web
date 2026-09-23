@@ -15,6 +15,7 @@ type DashboardSection =
   | 'users'
   | 'subscription'
   | 'whatsapp'
+  | 'templates-mensagens'
   | 'reports'
   | 'notifications'
 
@@ -91,6 +92,13 @@ export async function resolveDashboardDefaultRoute(section: DashboardSection): P
     const adminArena = arenas.find((arena) => arena.isOwner || arena.role === 'Gestor')
     return adminArena
       ? `/dashboard/settings/whatsapp/${adminArena.arenaId}`
+      : '/dashboard/settings/arenas'
+  }
+
+  if (section === 'templates-mensagens') {
+    const adminArena = arenas.find((arena) => arena.isOwner || arena.role === 'Gestor')
+    return adminArena
+      ? `/dashboard/settings/templates-mensagens/${adminArena.arenaId}`
       : '/dashboard/settings/arenas'
   }
 

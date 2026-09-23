@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { SendTemplateMessageButton } from '@/modules/templates-mensagens/components/SendTemplateMessageButton'
 import {
   Select,
   SelectContent,
@@ -33,6 +34,7 @@ import {
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
+import { toast } from 'sonner'
 import { cn, normalizeString } from '@/lib/utils'
 import { arenaDataTable } from '@/lib/arena-data-table'
 import { getPaymentStatusReportAction } from '@/modules/reports/actions/reportActions'
@@ -49,6 +51,22 @@ import type {
 } from '@/modules/reports/types/report.types'
 
 const PAGE_SIZE = 10
+
+const EMPTY_SUMMARY: PaymentStatusSummary = {
+  totalPago: 0, totalPendente: 0, totalCancelado: 0,
+  countPago: 0, countPendente: 0, countCancelado: 0,
+  totalACobrar: 0, totalHoras: 0,
+}
+
+/** "Maria Teste" → "maria-teste", pro nome do arquivo do PDF por atleta. */
+function slugify(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
 
 const statusConfig: Record<
   PaymentStatusRow['status'],
@@ -200,6 +218,32 @@ function groupByAtletaEDiaSemana(rows: PaymentStatusRow[]): PaymentStatusDisplay
       horario: distinctJoin(group.map((r) => formatHorario(r))),
       occurrences: group.length,
     }
+  })
+}
+
+/**
+ * Mesmo pipeline de exibição (filtro de status → agrupar por atleta → ordenar)
+ * usado tanto pela tabela/exportações da tela quanto pela exportação avulsa
+ * por atleta — para as duas verem exatamente os mesmos dados sob os mesmos
+ * controles (status/agrupamento/ordenação) vigentes na tela.
+ */
+function deriveDisplayRows(
+  inputRows: PaymentStatusRow[],
+  statusFiltro: 'todos' | PaymentStatusRow['status'],
+  agruparPorAtleta: boolean,
+  sortKey: SortKey | null,
+  sortDir: 'asc' | 'desc'
+): PaymentStatusDisplayRow[] {
+  const statusFiltered =
+    statusFiltro === 'todos' ? inputRows : inputRows.filter((r) => r.status === statusFiltro)
+  const grouped = agruparPorAtleta ? groupByAtletaEDiaSemana(statusFiltered) : statusFiltered
+  if (!sortKey) return grouped
+  const dir = sortDir === 'asc' ? 1 : -1
+  return [...grouped].sort((a, b) => {
+    const va = getSortValue(a, sortKey)
+    const vb = getSortValue(b, sortKey)
+    if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir
+    return String(va).localeCompare(String(vb), 'pt-BR', { sensitivity: 'base', numeric: true }) * dir
   })
 }
 
@@ -408,11 +452,13 @@ export function StatusPagamentosPageClient({
   const [sportId, setSportId] = useState<string>('todos')
   const [atleta, setAtleta] = useState<{ id: string; nome_perfil: string } | null>(null)
   const [perfilFiltro, setPerfilFiltro] = useState<PerfilAtleta | 'todos'>('todos')
+  const [statusFiltro, setStatusFiltro] = useState<'todos' | PaymentStatusRow['status']>('todos')
   const [rateio, setRateio] = useState(false)
   const [detalharPorHora, setDetalharPorHora] = useState(false)
   const [page, setPage] = useState(1)
   const [isPending, startTransition] = useTransition()
   const [isExportingPdf, setIsExportingPdf] = useState(false)
+  const [exportingAthleteId, setExportingAthleteId] = useState<string | null>(null)
   const [sortKey, setSortKey] = useState<SortKey | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [agruparPorAtleta, setAgruparPorAtleta] = useState(false)
@@ -469,11 +515,7 @@ export function StatusPagamentosPageClient({
       })
       if (result.success) {
         setRows(result.rows ?? [])
-        setSummary(result.summary ?? {
-          totalPago: 0, totalPendente: 0, totalCancelado: 0,
-          countPago: 0, countPendente: 0, countCancelado: 0,
-          totalACobrar: 0, totalHoras: 0,
-        })
+        setSummary(result.summary ?? EMPTY_SUMMARY)
         setAthleteDebt(result.athleteDebt ?? null)
         setPage(1)
       }
@@ -535,6 +577,11 @@ export function StatusPagamentosPageClient({
     applyFilters({ rateio: checked })
   }
 
+  function handleStatusFiltroChange(v: string) {
+    setStatusFiltro(v as typeof statusFiltro)
+    setPage(1)
+  }
+
   async function handleExportExcel() {
     const { default: writeExcelFile } = await import('write-excel-file/browser')
     const sheetData = buildPaymentStatusSheetData(sortedRows, formatDate, formatHorario)
@@ -573,21 +620,63 @@ export function StatusPagamentosPageClient({
     }
   }
 
-  const baseRows = useMemo<PaymentStatusDisplayRow[]>(
-    () => (agruparPorAtleta ? groupByAtletaEDiaSemana(rows) : rows),
-    [rows, agruparPorAtleta]
-  )
+  /**
+   * Mesmo PDF do botão "Exportar PDF", só que recortado para um atleta —
+   * busca de novo no servidor com os filtros atuais da tela (Período, Tipo,
+   * Espaço, Esporte, Perfil, Rateio, Detalhar por hora) mais `atletaId`, como
+   * se o gestor tivesse preenchido o filtro de Atleta com essa pessoa e
+   * clicado em Filtrar → Exportar PDF. Não mexe nos filtros visíveis da tela.
+   */
+  async function handleExportPdfForAthlete(atletaId: string, atletaNome: string) {
+    setExportingAthleteId(atletaId)
+    try {
+      const { startDate, endDate } = getMonthRange(selectedMonth)
+      const result = await getPaymentStatusReportAction(arenaId, {
+        startDate,
+        endDate,
+        tipo: tipo === 'todos' ? undefined : tipo,
+        courtId: courtId === 'todos' ? undefined : courtId,
+        sportId: sportId === 'todos' ? undefined : sportId,
+        atletaId,
+        perfil: perfilFiltro === 'todos' ? undefined : perfilFiltro,
+        rateio: tipo === 'mensal' ? rateio : undefined,
+        detalharPorHora: detalharPorHora || undefined,
+      })
+      if (!result.success) throw new Error(result.error)
 
-  const sortedRows = useMemo(() => {
-    if (!sortKey) return baseRows
-    const dir = sortDir === 'asc' ? 1 : -1
-    return [...baseRows].sort((a, b) => {
-      const va = getSortValue(a, sortKey)
-      const vb = getSortValue(b, sortKey)
-      if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir
-      return String(va).localeCompare(String(vb), 'pt-BR', { sensitivity: 'base', numeric: true }) * dir
-    })
-  }, [baseRows, sortKey, sortDir])
+      const athleteRows = deriveDisplayRows(result.rows ?? [], statusFiltro, agruparPorAtleta, sortKey, sortDir)
+      const { generatePaymentStatusPdf } = await import('@/modules/reports/payment-status-pdf')
+      await generatePaymentStatusPdf({
+        rows: athleteRows,
+        summary: result.summary ?? EMPTY_SUMMARY,
+        arena: arenaInfo,
+        filtros: {
+          monthLabel,
+          tipo,
+          courtName: courtId !== 'todos' ? (courts.find((c) => c.id === courtId)?.name ?? null) : null,
+          sportName: sportId !== 'todos' ? (sports.find((s) => s.id === sportId)?.name ?? null) : null,
+          atletaNome,
+          perfilLabel: perfilFiltro !== 'todos' ? PERFIL_LABEL[perfilFiltro] : null,
+          rateio,
+          detalharPorHora,
+        },
+        athleteDebt: result.athleteDebt ? { nome: atletaNome, ...result.athleteDebt } : null,
+        formatDate,
+        formatHorario,
+        formatCurrency,
+        fileName: `status-pagamentos-${slugify(atletaNome)}-${startDate}-${endDate}`,
+      })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao exportar PDF do atleta')
+    } finally {
+      setExportingAthleteId(null)
+    }
+  }
+
+  const sortedRows = useMemo(
+    () => deriveDisplayRows(rows, statusFiltro, agruparPorAtleta, sortKey, sortDir),
+    [rows, statusFiltro, agruparPorAtleta, sortKey, sortDir]
+  )
 
   const totalPages = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE))
   const paginatedRows = sortedRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -740,6 +829,21 @@ export function StatusPagamentosPageClient({
               onSelect={handleAtletaSelect}
               onClear={handleAtletaClear}
             />
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-500">Status Pagamento</label>
+              <Select value={statusFiltro} onValueChange={handleStatusFiltroChange}>
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  <SelectItem value="Pago">Pago</SelectItem>
+                  <SelectItem value="Pendente">Pendente</SelectItem>
+                  <SelectItem value="Cancelado">Cancelado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-gray-500">Tipo de Jogo</label>
@@ -940,12 +1044,13 @@ export function StatusPagamentosPageClient({
                   align="right"
                   className="w-28"
                 />
+                <th className={cn(arenaDataTable.thRight, "w-14")}>Ações</th>
               </tr>
             </thead>
             <tbody>
               {isPending ? (
                 <tr>
-                  <td colSpan={showDiaSemanaColumn ? 9 : 8} className={arenaDataTable.emptyCell}>
+                  <td colSpan={showDiaSemanaColumn ? 10 : 9} className={arenaDataTable.emptyCell}>
                     <div className="flex flex-col items-center gap-2">
                       <Loader2 className="h-6 w-6 animate-spin text-arena-button" />
                       Carregando lançamentos...
@@ -954,7 +1059,7 @@ export function StatusPagamentosPageClient({
                 </tr>
               ) : paginatedRows.length === 0 ? (
                 <tr>
-                  <td colSpan={showDiaSemanaColumn ? 9 : 8} className={arenaDataTable.emptyCell}>
+                  <td colSpan={showDiaSemanaColumn ? 10 : 9} className={arenaDataTable.emptyCell}>
                     Nenhum lançamento encontrado para os filtros selecionados.
                   </td>
                 </tr>
@@ -997,6 +1102,36 @@ export function StatusPagamentosPageClient({
                         <Badge variant="outline" className={sc.className}>
                           {sc.label}
                         </Badge>
+                      </td>
+                      <td className={arenaDataTable.tdRight}>
+                        <div className="flex items-center justify-end gap-1">
+                          <SendTemplateMessageButton
+                            arenaId={arenaId}
+                            competencia={selectedMonth}
+                            athlete={
+                              row.atletaId
+                                ? { id: row.atletaId, nome: row.atleta ?? "Atleta", telefone: row.telefone ?? null }
+                                : null
+                            }
+                          />
+                          {row.atletaId && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-arena-navy-800/40 hover:bg-arena-navy-800/5 hover:text-arena-navy-800"
+                              title="Exportar PDF deste Atleta"
+                              disabled={exportingAthleteId === row.atletaId}
+                              onClick={() => handleExportPdfForAthlete(row.atletaId as string, row.atleta ?? "Atleta")}
+                            >
+                              {exportingAthleteId === row.atletaId ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <FileText className="h-4 w-4" />
+                              )}
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   )

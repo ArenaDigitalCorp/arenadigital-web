@@ -4,11 +4,12 @@ import { useState, useMemo, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { format, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { MessageCircle, Eye, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Users } from "lucide-react"
+import { Eye, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { arenaDataTable } from "@/lib/arena-data-table"
+import { SendTemplateMessageButton } from "@/modules/templates-mensagens/components/SendTemplateMessageButton"
 import type { BarCategory, AthleteOverviewItem } from "@/modules/reports/actions/clientesOverviewActions"
 
 interface Props {
@@ -31,14 +32,6 @@ function formatCpf(cpf: string | null): string {
     const d = cpf.replace(/\D/g, '')
     if (d.length === 11) return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}`
     return cpf
-}
-
-function handleWhatsApp(phone: string | null, name: string) {
-    if (!phone) return
-    const clean = phone.replace(/\D/g, '')
-    const final = clean.length <= 11 ? `55${clean}` : clean
-    const msg = `Olá ${name}! Temos novidades na Arena e gostaríamos de te convidar para uma visita. Podemos ajudar com algo?`
-    window.open(`https://wa.me/${final}?text=${encodeURIComponent(msg)}`, '_blank')
 }
 
 // Animated bar component
@@ -465,16 +458,10 @@ function AthleteRow({
                     >
                         <Eye className="h-4 w-4" />
                     </Button>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-[#25D366]/70 hover:text-[#25D366] hover:bg-[#25D366]/10"
-                        title="Enviar mensagem no WhatsApp"
-                        onClick={() => handleWhatsApp(athlete.telefone, athlete.nome)}
-                        disabled={!athlete.telefone}
-                    >
-                        <MessageCircle className="h-4 w-4" />
-                    </Button>
+                    <SendTemplateMessageButton
+                        arenaId={arenaId}
+                        athlete={{ id: athlete.id, nome: athlete.nome, telefone: athlete.telefone }}
+                    />
                 </div>
             </td>
         </tr>
