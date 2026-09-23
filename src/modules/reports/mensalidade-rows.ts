@@ -40,6 +40,7 @@ export interface MensalidadeContexto {
   /** Responsável pelo plano — usado para casar com o filtro de Perfil de Atleta. */
   atletaId: string | null
   atleta: string | null
+  telefone: string | null
   espaco: string | null
   esporte: string | null
   /** Faixa da recorrência, ou "Vários horários" quando o plano tem mais de um bloco. */
@@ -114,6 +115,8 @@ export function buildMensalidadeRows(mensalidades: MensalidadeContexto[]): Payme
       data: pagoEm ?? m.competencia,
       horario: m.horario,
       atleta: m.atleta,
+      atletaId: m.atletaId,
+      telefone: m.telefone,
       servico: 'Mensalista',
       espaco: m.espaco,
       esporte: m.esporte,
@@ -138,6 +141,8 @@ export function buildRateioBreakdownRows(mensalidades: MensalidadeContexto[]): P
       // recorrência (ou "Vários horários" quando o plano tem mais de um bloco).
       horario: m.horario,
       atleta: m.atleta,
+      atletaId: m.atletaId,
+      telefone: m.telefone,
       servico: 'Recorrência',
       espaco: m.espaco,
       esporte: m.esporte,
@@ -153,6 +158,8 @@ export function buildRateioBreakdownRows(mensalidades: MensalidadeContexto[]): P
         // Sem pagamento registrado a data é a competência — mês, não hora.
         horario: c.pago_em ? undefined : null,
         atleta: c.nome,
+        atletaId: c.atleta_id,
+        telefone: null,
         servico: 'Rateio',
         espaco: m.espaco,
         esporte: m.esporte,

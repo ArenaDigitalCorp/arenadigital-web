@@ -23,6 +23,10 @@ export type PaymentStatusRow = {
    */
   horario?: string | null
   atleta: string | null
+  /** Id do atleta (quando cadastrado) — habilita o botão de mensagem por template. */
+  atletaId?: string | null
+  /** Telefone do atleta (quando cadastrado) — usado para abrir o WhatsApp Web. */
+  telefone?: string | null
   servico:
     | 'Avulso'
     | 'Mensal'
