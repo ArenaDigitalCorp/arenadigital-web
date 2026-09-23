@@ -1,13 +1,14 @@
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Users, Map as MapIcon, Calendar as CalendarIcon, TrendingUp, Clock } from "lucide-react"
-import { Suspense, useEffect, useState } from "react"
+import { Suspense, useEffect, useRef, useState } from "react"
 import { useArena } from "@/contexts/ArenaContext"
 import { getDashboardDataAction } from "@/modules/dashboard/actions/dashboardActions"
 import { Skeleton } from "@/components/ui/skeleton"
 import { OccupancyChart } from "@/modules/dashboard/components/OccupancyChart"
-import type { DashboardStats, OccupancyRow } from "@/modules/dashboard/types/dashboard.types"
+import type { DashboardStats, OccupancyPeriod, OccupancyRow } from "@/modules/dashboard/types/dashboard.types"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useDbUser } from "@/contexts/UserContext"
 import {
@@ -16,6 +17,18 @@ import {
     tutorialRecentActivity,
 } from "@/lib/tutorial-mock-data"
 
+const OCCUPANCY_PERIOD_LABELS: Record<OccupancyPeriod, string> = {
+    day: " para hoje",
+    week: " na semana",
+    month: " no mês",
+}
+
+const OCCUPANCY_EMPTY_MESSAGES: Record<OccupancyPeriod, string> = {
+    day: "Nenhum dado de ocupação disponível para hoje.",
+    week: "Nenhum dado de ocupação disponível para esta semana.",
+    month: "Nenhum dado de ocupação disponível para este mês.",
+}
+
 function DashboardPageContent() {
     const router = useRouter()
     const searchParams = useSearchParams()
@@ -23,7 +36,12 @@ function DashboardPageContent() {
     const { selectedArena, selectedArenaDetails, isLoadingArenas } = useArena()
     const [stats, setStats] = useState<DashboardStats>({ receita: 0, receitaChange: 0, reservas: 0, quadras: 0, ativos: 0 })
     const [occupancyData, setOccupancyData] = useState<OccupancyRow[]>([])
+    const [occupancyPeriod, setOccupancyPeriod] = useState<OccupancyPeriod>('day')
     const [isLoading, setIsLoading] = useState(true)
+    const [isOccupancyLoading, setIsOccupancyLoading] = useState(false)
+    const hasLoadedOnceRef = useRef(false)
+    const occupancyPeriodRef = useRef(occupancyPeriod)
+    occupancyPeriodRef.current = occupancyPeriod
     const isTutorial = searchParams.get('tutorial') === '1'
     const displayStats = isTutorial ? tutorialDashboardStats : stats
     const displayOccupancyData = isTutorial ? tutorialDashboardOccupancy : occupancyData
@@ -62,18 +80,42 @@ function DashboardPageContent() {
         async function loadStats() {
             setIsLoading(true)
             try {
-                const res = await getDashboardDataAction(selectedArena ?? 'all')
+                const res = await getDashboardDataAction(selectedArena ?? 'all', occupancyPeriodRef.current)
                 if (res.success) {
                     setStats(res.stats!)
                     setOccupancyData(res.occupancy!)
                 }
             } finally {
+                hasLoadedOnceRef.current = true
                 setIsLoading(false)
             }
         }
 
         loadStats()
     }, [dbUser, selectedArena, selectedArenaDetails, isLoadingArenas, isLoadingUser, isTutorial])
+
+    useEffect(() => {
+        if (isTutorial) return
+        if (!hasLoadedOnceRef.current) return
+        if (isLoadingUser || isLoadingArenas) return
+        if (dbUser?.platform_access_level === 'platform_admin') return
+        if (selectedArenaDetails?.role === 'Caixa') return
+
+        async function loadOccupancy() {
+            setIsOccupancyLoading(true)
+            try {
+                const res = await getDashboardDataAction(selectedArena ?? 'all', occupancyPeriod)
+                if (res.success) {
+                    setOccupancyData(res.occupancy!)
+                }
+            } finally {
+                setIsOccupancyLoading(false)
+            }
+        }
+
+        loadOccupancy()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [occupancyPeriod])
 
     if (!isTutorial && (isLoading || isLoadingUser || isLoadingArenas)) {
         return (
@@ -141,11 +183,20 @@ function DashboardPageContent() {
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
                 <Card className="col-span-4">
-                    <CardHeader>
-                        <CardTitle>Ocupação dos espaços para hoje</CardTitle>
+                    <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
+                        <CardTitle>Ocupação dos espaços{OCCUPANCY_PERIOD_LABELS[occupancyPeriod]}</CardTitle>
+                        {!isTutorial && (
+                            <Tabs value={occupancyPeriod} onValueChange={(value) => setOccupancyPeriod(value as OccupancyPeriod)}>
+                                <TabsList>
+                                    <TabsTrigger value="day">Dia</TabsTrigger>
+                                    <TabsTrigger value="week">Semana</TabsTrigger>
+                                    <TabsTrigger value="month">Mês</TabsTrigger>
+                                </TabsList>
+                            </Tabs>
+                        )}
                     </CardHeader>
-                    <CardContent className="pl-2">
-                        <OccupancyChart data={displayOccupancyData} />
+                    <CardContent className={`pl-2 transition-opacity ${isOccupancyLoading ? 'opacity-50' : ''}`}>
+                        <OccupancyChart data={displayOccupancyData} emptyMessage={OCCUPANCY_EMPTY_MESSAGES[occupancyPeriod]} />
                     </CardContent>
                 </Card>
 
