@@ -176,7 +176,15 @@ test('o resumo do PDF não mostra mais "Horas ocupadas" — a soma não represen
   // Só o texto que iria pro PDF (dentro de um template literal); o comentário
   // explicando a remoção pode citar o rótulo livremente.
   assert.doesNotMatch(pdfModule, /`Horas ocupadas/u)
-  assert.doesNotMatch(pdfModule, /formatHoras/u)
+  // Horas só aparecem onde a contagem é completa: no extrato do atleta e na
+  // coluna do resumo por atleta, que só existe com "Detalhar por hora" (cada
+  // hora de mensalista vem da reserva, não da linha agregada da mensalidade).
+  const resumoDoPeriodo = pdfModule.slice(
+    pdfModule.indexOf('Resumo do período'),
+    pdfModule.indexOf('Tabela de lançamentos'),
+  )
+  assert.doesNotMatch(resumoDoPeriodo, /formatHoras/u)
+  assert.match(pdfModule, /const comHoras = filtros\.detalharPorHora/u)
 })
 
 test('o cabeçalho do PDF só mostra nome e endereço da arena — sem telefone, e-mail ou CNPJ/CPF', async () => {
