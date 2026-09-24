@@ -59,6 +59,7 @@ export default async function StatusPagamentosPage({
         totalACobrar: 0,
         totalHoras: 0,
       }}
+      initialAthleteSummaries={result.athleteSummaries ?? []}
       initialCourts={result.courts ?? []}
       initialSports={result.sports ?? []}
       initialStartDate={startDate}

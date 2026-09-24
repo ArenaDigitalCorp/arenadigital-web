@@ -2588,3 +2588,116 @@ vigentes na tela.
 substitui o ícone) em vez de um único `isExportingPdf` global — outro
 export por atleta ou o export geral não travam por causa de um em
 andamento. Erros aparecem em `toast.error` (import novo no arquivo).
+
+---
+
+## 38. Pagamentos Reservas — status/valor do mensalista no extrato e resumo por atleta (24/09/2026)
+
+Branch `fix/relatorio-pagamentos-reservas`. Nenhuma mudança de banco.
+
+### 38.1 Causa do bug
+
+Com Perfil = Mensalista + Status = Pendente, a visão normal mostrava 6
+mensalidades e o extrato ("Detalhar por hora") só 1 atleta. No extrato o status
+de cada hora vinha de `bookings.status` (`confirmed` → Pago). Só que
+`create_monthly_plan_blocks_atomic` grava as reservas do **1º mês** como
+`confirmed` (`CASE WHEN v_month_offset = 0 THEN 'confirmed' ELSE 'reservado'`),
+e `register_mensalista_payment` só confirma as do mês ao quitar. Logo, todo plano
+que estreou no mês aparecia como Pago no extrato e sumia no filtro Pendente
+(filtro de status é client-side, em `deriveDisplayRows`).
+
+### 38.2 Extrato do mensalista (`reportActions.ts`)
+
+- `loadMensalidadesDoExtrato(loose, arenaId, bookings)` → `Map<"<plano_id>:<competência>",
+  { mensalidade, resumo, partes }>`. Competência = mês da reserva no fuso de SP
+  (`competenciaDe`, via `saoPauloWallClock`). Carrega as mensalidades por
+  competência com `loadMensalidadesDaCompetencia(..., { planoIds })` (novo opt
+  `planoIds`) e, numa consulta própria **sem os filtros da tela**, todas as
+  reservas não canceladas daqueles planos no(s) mês(es). Com Espaço filtrado,
+  ratear o mês só nas horas de um bloco dobraria o valor delas.
+- Na montagem das linhas por hora de reserva com plano e mensalidade resolvida:
+  - `status = statusDaReservaDeMensalista(booking.status, resumo.status)`, com
+    `cancelled` → Cancelado e o resto herdando a mensalidade;
+  - `valorReserva = partes.get(booking.id)` (null para sessão cancelada), rateado
+    por `buildUsageLines` entre as horas;
+  - plano sem mensalidade (anterior à camada de cobrança) segue o caminho antigo
+    (tabela de preço, §27.3).
+- `servico` da reserva com plano passa de `'Mensal'` para `'Mensalista'` (o
+  literal `'Mensal'` continua no union por compatibilidade).
+- Mensalidades na visão normal agora carregam quando `tipo !== 'avulso'` (antes:
+  `sourceFlags.includeTransactions`, falso com Espaço/Esporte). O escopo de
+  espaço/esporte já era tratado por `resolveAllowedPlanoIds`.
+
+### 38.3 `mensalidade-rows.ts` (puro, testado)
+
+- `resumoDaMensalidade` devolve também `devido`, `pago` (dinheiro + crédito) e
+  `emAberto`. Devido ≤ 0,01 **e** nada liquidado → `Cancelado` (mesmo estado que a
+  pausa `cobranca_modo = 'nenhuma'` grava; a pausa proporcional de mês inteiro
+  deixava `aberto` com valor 0).
+- `statusDaReservaDeMensalista(bookingStatus, statusDaMensalidade)`.
+- `ratearMensalidadeNasReservas(valor, reservas[{id, inicioISO, horas}])` →
+  `Map<id, valor>`, proporcional à duração, com a sobra do arredondamento na última
+  reserva em ordem cronológica.
+- `buildRateioBreakdownRows`: mensalidade cancelada → Recorrência e Rateio como
+  `Cancelado`.
+
+### 38.4 Resumo por atleta (`athlete-summary.ts`, puro, testado)
+
+- Tipo `PaymentStatusAthleteSummary { key, atletaId, atleta, telefone, horas,
+  devido, pago, emAberto, status }` (`report.types.ts`).
+- `getPaymentStatusReportAction` devolve `athleteSummaries` (também passado como
+  `initialAthleteSummaries` pela página).
+- `buildAthleteSummaries(contribuições)`. Cada contribuição é `financeiro` (soma
+  dinheiro e decide status) ou `uso` (só horas):
+  - mensalidade: uma vez por plano/mês pela cobrança (`contribuicaoDaMensalidade`,
+    atribuída ao responsável do plano); na visão Rateio, uma por cobrança ativa;
+  - horas de mensalista no extrato: `uso`, para não contar o mês duas vezes;
+  - demais linhas (avulso, comanda, rotativo, entrada manual):
+    `contribuicaoDaLinha(row)`. `Recorrência` fica fora e linha sem atleta/nome
+    é ignorada.
+  - Status: em aberto > 0,01 → Pendente; todas as financeiras canceladas →
+    Cancelado; senão Pago. Ordenação: em aberto desc, depois nome.
+
+### 38.5 Tela e exportações
+
+- `StatusPagamentosPageClient`: `showDiaSemanaColumn = detalharPorHora` (antes
+  exigia Tipo = Mensal). O novo `AthleteSummaryCard` fica acima de "Lançamentos",
+  filtrado por `statusFiltro`, com linha de total e ações de WhatsApp e extrato em PDF.
+  Colunas ordenáveis: `SortableTh` virou genérico (`<K extends string>`) e é
+  reaproveitado com `SummarySortKey` (`atleta | horas | devido | pago | emAberto |
+  status`). O estado (`summarySortKey`/`summarySortDir`) mora no pai, e
+  `sortAthleteSummaries` roda dentro de `visibleAthleteSummaries`, que alimenta a
+  tabela, a aba do Excel e o PDF geral: todos saem na ordem da tela. Sem coluna
+  escolhida, vale a ordem do servidor (em aberto desc); empate desempata pelo nome.
+  Desmarcar "Detalhar por hora" com a ordenação em `horas` volta ao padrão.
+- Seções recolhíveis (Filtros, Resumo por atleta, Lançamentos):
+  `useSecoesRecolhidas()` → `[recolhidas, alternar(secao)]`, com
+  `SecaoRecolhivel = 'filtros' | 'resumo' | 'lancamentos'`, persistido em
+  `localStorage['relatorio-pagamentos:secoes-recolhidas']` (JSON de booleanos,
+  lido após a hidratação; leitura e escrita em try/catch, sem storage tudo abre
+  expandido). `SectionToggle` é o título clicável: `<button aria-expanded
+  aria-controls>` com `ChevronDown` girando, o mesmo padrão visual de
+  `MensalistaDetailClient`. O conteúdo recolhido fica com a classe `hidden`, sem
+  ser desmontado, para não perder a paginação e a ordenação. Minimizado, o cabeçalho
+  ainda mostra um resumo: Filtros usa `buildAppliedFiltersDescription` + Status;
+  Resumo mostra "N atletas · R$ X em aberto"; Lançamentos, "N lançamentos".
+- `handleExportPdfForAthlete` agora força `detalharPorHora: true` e status
+  `'todos'`, e passa `extratoDoAtleta: { nome, resumo }`. Arquivo:
+  `extrato-<slug>-<início>-<fim>.pdf`.
+- `generatePaymentStatusPdf`: novos inputs `athleteSummaries`, `extratoDoAtleta`
+  e `formatDiaSemana`. No extrato, título "Extrato de uso — …" e bloco "Resumo do
+  mês" no lugar do resumo do período; no PDF geral, tabela "Resumo por atleta"
+  antes dos lançamentos; coluna "Dia" quando `formatDiaSemana` vem. O rodapé
+  (gerado em / página X de Y) passou a ser desenhado depois de todas as tabelas,
+  para o total de páginas ficar correto.
+- `payment-status-export.ts`: `buildPaymentStatusSheetData(..., { diaSemana })`
+  insere "Dia" após "Data"; `buildAthleteSummarySheetData(summaries, { horas })`
+  monta a aba "Resumo por atleta" com a linha Total. O Excel sai com 2 abas.
+
+### 38.6 Testes
+
+`tests/relatorio-extrato-mensalista.test.mjs` (16 casos: status herdado da
+mensalidade, rateio ao centavo, estreia proporcional, mensalidade zerada, rateio
+cancelado, resumo por atleta, colunas do Excel). `tests/payment-status-pdf.test.mjs`
+ajustado: "Horas ocupadas" continua fora do resumo do período; horas só aparecem
+no extrato e no resumo por atleta com o detalhamento ligado.

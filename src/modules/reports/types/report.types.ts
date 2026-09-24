@@ -113,6 +113,27 @@ export type PaymentStatusFilters = {
   detalharPorHora?: boolean
 }
 
+/**
+ * Uma linha por atleta no período: quanto o mês custou, quanto já entrou e
+ * quanto falta — a visão "quem deve quanto" do gestor e o rodapé do extrato
+ * de uso que vai para o atleta.
+ */
+export type PaymentStatusAthleteSummary = {
+  /** `atletaId` quando cadastrado; senão o nome (participante avulso). */
+  key: string
+  atletaId: string | null
+  atleta: string
+  telefone: string | null
+  /** Horas de reserva não canceladas nas linhas do relatório (0 quando a visão não traz horas). */
+  horas: number
+  /** Total do período sem o que foi cancelado. */
+  devido: number
+  pago: number
+  emAberto: number
+  /** Pendente se falta receber; Cancelado se tudo foi cancelado; senão Pago. */
+  status: PaymentStatusRow['status']
+}
+
 /** "Quanto um atleta deve" no mês, para os cards exibidos quando `atletaId` está setado. */
 export type AthleteDebtSummary = {
   mensal: number

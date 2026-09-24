@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useRef, useState, useTransition } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { format, getDay, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import {
@@ -12,6 +12,7 @@ import {
   Filter,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Loader2,
   Search,
   X,
@@ -21,6 +22,7 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
+  Users,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -39,7 +41,11 @@ import { cn, normalizeString } from '@/lib/utils'
 import { arenaDataTable } from '@/lib/arena-data-table'
 import { getPaymentStatusReportAction } from '@/modules/reports/actions/reportActions'
 import { searchAthletesAction } from '@/modules/loyalty/actions/loyaltyActions'
-import { buildPaymentStatusSheetData } from '@/modules/reports/payment-status-export'
+import {
+  buildAthleteSummarySheetData,
+  buildPaymentStatusSheetData,
+} from '@/modules/reports/payment-status-export'
+import { buildAppliedFiltersDescription } from '@/modules/reports/payment-status-pdf-data'
 import { PERFIL_LABEL, PERFIS_ATLETA, type PerfilAtleta } from '@/modules/athletes/types/perfil.types'
 import type {
   PaymentStatusRow,
@@ -48,6 +54,7 @@ import type {
   SportFilter,
   AthleteDebtSummary,
   PaymentStatusArenaInfo,
+  PaymentStatusAthleteSummary,
 } from '@/modules/reports/types/report.types'
 
 const PAGE_SIZE = 10
@@ -253,7 +260,7 @@ function formatDataCell(row: PaymentStatusDisplayRow) {
   return formatDate(row.data)
 }
 
-function SortableTh({
+function SortableTh<K extends string>({
   label,
   sortKey,
   activeKey,
@@ -263,10 +270,10 @@ function SortableTh({
   className,
 }: {
   label: string
-  sortKey: SortKey
-  activeKey: SortKey | null
+  sortKey: K
+  activeKey: K | null
   direction: 'asc' | 'desc'
-  onSort: (key: SortKey) => void
+  onSort: (key: K) => void
   align?: 'left' | 'right'
   className?: string
 }) {
@@ -316,6 +323,7 @@ interface Props {
   arenaId: string
   initialRows: PaymentStatusRow[]
   initialSummary: PaymentStatusSummary
+  initialAthleteSummaries: PaymentStatusAthleteSummary[]
   initialCourts: CourtFilter[]
   initialSports: SportFilter[]
   initialStartDate: string
@@ -428,10 +436,304 @@ function AthleteFilterField({
   )
 }
 
+type SecaoRecolhivel = 'filtros' | 'resumo' | 'lancamentos'
+
+const SECOES_RECOLHIDAS_STORAGE_KEY = 'relatorio-pagamentos:secoes-recolhidas'
+const SECOES_ABERTAS: Record<SecaoRecolhivel, boolean> = {
+  filtros: false,
+  resumo: false,
+  lancamentos: false,
+}
+
+/**
+ * Quais seções da tela o gestor minimizou. Fica no navegador (mesmo esquema do
+ * `sidebar-collapsed`) para a tela voltar como ele deixou; sem storage
+ * (aba anônima, bloqueio) tudo abre expandido e o botão segue funcionando.
+ */
+function useSecoesRecolhidas() {
+  const [recolhidas, setRecolhidas] = useState(SECOES_ABERTAS)
+
+  useEffect(() => {
+    try {
+      const salvo = JSON.parse(localStorage.getItem(SECOES_RECOLHIDAS_STORAGE_KEY) ?? 'null')
+      if (!salvo || typeof salvo !== 'object') return
+      const lido = { ...SECOES_ABERTAS }
+      for (const secao of Object.keys(SECOES_ABERTAS) as SecaoRecolhivel[]) {
+        if (typeof salvo[secao] === 'boolean') lido[secao] = salvo[secao]
+      }
+      // Só dá para ler o storage depois da hidratação — no SSR ele não existe.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setRecolhidas(lido)
+    } catch {
+      // Storage indisponível: segue tudo expandido.
+    }
+  }, [])
+
+  const alternar = useCallback((secao: SecaoRecolhivel) => {
+    setRecolhidas((atual) => {
+      const proximo = { ...atual, [secao]: !atual[secao] }
+      try {
+        localStorage.setItem(SECOES_RECOLHIDAS_STORAGE_KEY, JSON.stringify(proximo))
+      } catch {
+        // Sem storage o estado vale só para esta visita.
+      }
+      return proximo
+    })
+  }, [])
+
+  return [recolhidas, alternar] as const
+}
+
+/** Título clicável da seção, com o chevron que minimiza/expande o conteúdo. */
+function SectionToggle({
+  aberta,
+  onToggle,
+  controla,
+  children,
+}: {
+  aberta: boolean
+  onToggle: () => void
+  /** `id` do conteúdo que o botão mostra/esconde (acessibilidade). */
+  controla: string
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      aria-expanded={aberta}
+      aria-controls={controla}
+      title={aberta ? 'Minimizar' : 'Expandir'}
+      onClick={onToggle}
+      className="group flex min-w-0 items-center gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arena-button/40"
+    >
+      <ChevronDown
+        className={cn(
+          'h-4 w-4 shrink-0 text-arena-navy-800/30 transition-transform group-hover:text-arena-navy-800/60',
+          aberta && 'rotate-180'
+        )}
+      />
+      {children}
+    </button>
+  )
+}
+
+type SummarySortKey = 'atleta' | 'horas' | 'devido' | 'pago' | 'emAberto' | 'status'
+
+/**
+ * Ordena o Resumo por atleta pela coluna clicada. Sem coluna escolhida, fica a
+ * ordem do servidor (quem deve mais primeiro). Empate desempata pelo nome, para
+ * a ordem não "pular" entre um filtro e outro.
+ */
+function sortAthleteSummaries(
+  summaries: PaymentStatusAthleteSummary[],
+  key: SummarySortKey | null,
+  dir: 'asc' | 'desc'
+): PaymentStatusAthleteSummary[] {
+  if (!key) return summaries
+  const sentido = dir === 'asc' ? 1 : -1
+  const porNome = (a: PaymentStatusAthleteSummary, b: PaymentStatusAthleteSummary) =>
+    a.atleta.localeCompare(b.atleta, 'pt-BR', { sensitivity: 'base', numeric: true })
+  return [...summaries].sort((a, b) => {
+    const comparacao =
+      key === 'atleta'
+        ? porNome(a, b)
+        : key === 'status'
+          ? a.status.localeCompare(b.status, 'pt-BR')
+          : a[key] - b[key]
+    return comparacao * sentido || porNome(a, b)
+  })
+}
+
+/**
+ * "Quem deve quanto" no período: uma linha por atleta com o total do mês, o
+ * que já entrou e o que falta. Respeita o filtro de Status (atleta Pendente =
+ * ainda tem saldo em aberto). O PDF da linha é o extrato de uso do atleta.
+ */
+function AthleteSummaryCard({
+  arenaId,
+  competencia,
+  monthLabel,
+  summaries,
+  showHoras,
+  isPending,
+  exportingAthleteId,
+  onExportPdf,
+  sortKey,
+  sortDir,
+  onSort,
+  recolhido,
+  onToggle,
+}: {
+  arenaId: string
+  competencia: string
+  monthLabel: string
+  summaries: PaymentStatusAthleteSummary[]
+  showHoras: boolean
+  isPending: boolean
+  exportingAthleteId: string | null
+  onExportPdf: (atletaId: string, atletaNome: string) => void
+  sortKey: SummarySortKey | null
+  sortDir: 'asc' | 'desc'
+  onSort: (key: SummarySortKey) => void
+  recolhido: boolean
+  onToggle: () => void
+}) {
+  const sortProps = { activeKey: sortKey, direction: sortDir, onSort }
+  const totais = summaries.reduce(
+    (acc, s) => ({
+      horas: acc.horas + s.horas,
+      devido: acc.devido + s.devido,
+      pago: acc.pago + s.pago,
+      emAberto: acc.emAberto + s.emAberto,
+    }),
+    { horas: 0, devido: 0, pago: 0, emAberto: 0 }
+  )
+  const colSpan = showHoras ? 7 : 6
+
+  return (
+    <Card className="rounded-lg border border-slate-100 bg-white shadow-sm overflow-hidden">
+      <div
+        className={cn(
+          'flex flex-wrap items-center justify-between gap-3 px-6 py-4',
+          !recolhido && 'border-b border-slate-100'
+        )}
+      >
+        <SectionToggle aberta={!recolhido} onToggle={onToggle} controla="resumo-por-atleta">
+          <Users className="h-5 w-5 shrink-0 text-arena-button" />
+          <div className="min-w-0">
+            <h2 className="text-base font-bold text-arena-navy-800">Resumo por atleta</h2>
+            <p className="text-xs text-arena-navy-800/40">
+              {monthLabel} · total do mês, pago e em aberto por atleta
+            </p>
+          </div>
+        </SectionToggle>
+        {/* Continua visível minimizado: o essencial sem abrir a tabela. */}
+        {!isPending && summaries.length > 0 && (
+          <p className="text-xs text-arena-navy-800/50">
+            {summaries.length} atleta{summaries.length !== 1 ? 's' : ''} ·{' '}
+            <span className="font-bold text-arena-button">{formatCurrency(totais.emAberto)}</span> em aberto
+          </p>
+        )}
+      </div>
+      <div id="resumo-por-atleta" className={cn('max-h-[420px] overflow-auto px-6', recolhido && 'hidden')}>
+        <table className={arenaDataTable.table}>
+          <thead>
+            <tr className={arenaDataTable.theadRow}>
+              <SortableTh label="Atleta" sortKey="atleta" {...sortProps} />
+              {showHoras && <SortableTh label="Horas" sortKey="horas" align="right" {...sortProps} />}
+              <SortableTh label="Total do mês" sortKey="devido" align="right" {...sortProps} />
+              <SortableTh label="Pago" sortKey="pago" align="right" {...sortProps} />
+              <SortableTh label="Em aberto" sortKey="emAberto" align="right" {...sortProps} />
+              <SortableTh label="Status" sortKey="status" align="right" className="w-28" {...sortProps} />
+              <th className={cn(arenaDataTable.thRight, 'w-14')}>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isPending ? (
+              <tr>
+                <td colSpan={colSpan} className={arenaDataTable.emptyCell}>
+                  <Loader2 className="mx-auto h-5 w-5 animate-spin text-arena-button" />
+                </td>
+              </tr>
+            ) : summaries.length === 0 ? (
+              <tr>
+                <td colSpan={colSpan} className={arenaDataTable.emptyCell}>
+                  Nenhum atleta para os filtros selecionados.
+                </td>
+              </tr>
+            ) : (
+              <>
+                {summaries.map((s) => {
+                  const sc = statusConfig[s.status]
+                  return (
+                    <tr key={s.key} className={arenaDataTable.tbodyRow}>
+                      <td className={arenaDataTable.tdBold}>{s.atleta}</td>
+                      {showHoras && (
+                        <td className={cn(arenaDataTable.tdRight, 'whitespace-nowrap text-arena-navy-800/60')}>
+                          {s.horas > 0 ? formatHoras(s.horas) : '—'}
+                        </td>
+                      )}
+                      <td className={cn(arenaDataTable.tdRight, 'whitespace-nowrap text-arena-navy-800/60')}>
+                        {formatCurrency(s.devido)}
+                      </td>
+                      <td className={cn(arenaDataTable.tdRight, 'whitespace-nowrap text-green-700')}>
+                        {formatCurrency(s.pago)}
+                      </td>
+                      <td className={cn(arenaDataTable.tdRight, 'whitespace-nowrap font-black text-arena-button')}>
+                        {formatCurrency(s.emAberto)}
+                      </td>
+                      <td className={arenaDataTable.tdRight}>
+                        <Badge variant="outline" className={sc.className}>
+                          {sc.label}
+                        </Badge>
+                      </td>
+                      <td className={arenaDataTable.tdRight}>
+                        <div className="flex items-center justify-end gap-1">
+                          <SendTemplateMessageButton
+                            arenaId={arenaId}
+                            competencia={competencia}
+                            athlete={
+                              s.atletaId
+                                ? { id: s.atletaId, nome: s.atleta, telefone: s.telefone }
+                                : null
+                            }
+                          />
+                          {s.atletaId && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-arena-navy-800/40 hover:bg-arena-navy-800/5 hover:text-arena-navy-800"
+                              title="Extrato de uso deste atleta (PDF)"
+                              disabled={exportingAthleteId === s.atletaId}
+                              onClick={() => onExportPdf(s.atletaId as string, s.atleta)}
+                            >
+                              {exportingAthleteId === s.atletaId ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <FileText className="h-4 w-4" />
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+                <tr className="border-t border-slate-200 bg-slate-50/60">
+                  <td className={arenaDataTable.tdBold}>
+                    Total ({summaries.length} atleta{summaries.length !== 1 ? 's' : ''})
+                  </td>
+                  {showHoras && (
+                    <td className={cn(arenaDataTable.tdRight, 'whitespace-nowrap font-bold')}>
+                      {formatHoras(totais.horas)}
+                    </td>
+                  )}
+                  <td className={cn(arenaDataTable.tdRight, 'whitespace-nowrap font-bold')}>
+                    {formatCurrency(totais.devido)}
+                  </td>
+                  <td className={cn(arenaDataTable.tdRight, 'whitespace-nowrap font-bold text-green-700')}>
+                    {formatCurrency(totais.pago)}
+                  </td>
+                  <td className={cn(arenaDataTable.tdRight, 'whitespace-nowrap font-black text-arena-button')}>
+                    {formatCurrency(totais.emAberto)}
+                  </td>
+                  <td colSpan={2} />
+                </tr>
+              </>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  )
+}
+
 export function StatusPagamentosPageClient({
   arenaId,
   initialRows,
   initialSummary,
+  initialAthleteSummaries,
   initialCourts,
   initialSports,
   initialStartDate,
@@ -443,6 +745,8 @@ export function StatusPagamentosPageClient({
   const [rows, setRows] = useState<PaymentStatusRow[]>(initialRows)
   const [summary, setSummary] = useState<PaymentStatusSummary>(initialSummary)
   const [athleteDebt, setAthleteDebt] = useState<AthleteDebtSummary | null>(null)
+  const [athleteSummaries, setAthleteSummaries] =
+    useState<PaymentStatusAthleteSummary[]>(initialAthleteSummaries)
   const [courts] = useState<CourtFilter[]>(initialCourts)
   const [sports] = useState<SportFilter[]>(initialSports)
 
@@ -462,8 +766,13 @@ export function StatusPagamentosPageClient({
   const [sortKey, setSortKey] = useState<SortKey | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [agruparPorAtleta, setAgruparPorAtleta] = useState(false)
+  const [summarySortKey, setSummarySortKey] = useState<SummarySortKey | null>(null)
+  const [secoesRecolhidas, alternarSecao] = useSecoesRecolhidas()
+  const [summarySortDir, setSummarySortDir] = useState<'asc' | 'desc'>('asc')
 
-  const showDiaSemanaColumn = tipo === 'mensal' && detalharPorHora
+  // Extrato de uso: o dia da semana é o que o atleta confere ("toda quarta"),
+  // seja qual for o Tipo de Jogo.
+  const showDiaSemanaColumn = detalharPorHora
 
   function handleSort(key: SortKey) {
     if (sortKey === key) {
@@ -473,6 +782,15 @@ export function StatusPagamentosPageClient({
       setSortDir('asc')
     }
     setPage(1)
+  }
+
+  function handleSummarySort(key: SummarySortKey) {
+    if (summarySortKey === key) {
+      setSummarySortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSummarySortKey(key)
+      setSummarySortDir('asc')
+    }
   }
 
   const monthOptions = generateMonthOptions()
@@ -517,6 +835,7 @@ export function StatusPagamentosPageClient({
         setRows(result.rows ?? [])
         setSummary(result.summary ?? EMPTY_SUMMARY)
         setAthleteDebt(result.athleteDebt ?? null)
+        setAthleteSummaries(result.athleteSummaries ?? [])
         setPage(1)
       }
     })
@@ -525,6 +844,8 @@ export function StatusPagamentosPageClient({
   function handleDetalharChange(checked: boolean) {
     setDetalharPorHora(checked)
     if (!checked) setAgruparPorAtleta(false)
+    // A coluna Horas do resumo só existe no detalhamento.
+    if (!checked && summarySortKey === 'horas') setSummarySortKey(null)
     applyFilters({ detalharPorHora: checked })
   }
 
@@ -584,10 +905,17 @@ export function StatusPagamentosPageClient({
 
   async function handleExportExcel() {
     const { default: writeExcelFile } = await import('write-excel-file/browser')
-    const sheetData = buildPaymentStatusSheetData(sortedRows, formatDate, formatHorario)
+    const sheetData = buildPaymentStatusSheetData(sortedRows, formatDate, formatHorario, {
+      diaSemana: showDiaSemanaColumn ? formatDiaSemana : undefined,
+    })
     const { startDate, endDate } = getMonthRange(selectedMonth)
-    await writeExcelFile(sheetData, { sheet: 'Status Pagamentos' })
-      .toFile(`status-pagamentos-${startDate}-${endDate}.xlsx`)
+    await writeExcelFile([
+      { data: sheetData, sheet: 'Status Pagamentos' },
+      {
+        data: buildAthleteSummarySheetData(visibleAthleteSummaries, { horas: detalharPorHora }),
+        sheet: 'Resumo por atleta',
+      },
+    ]).toFile(`status-pagamentos-${startDate}-${endDate}.xlsx`)
   }
 
   async function handleExportPdf() {
@@ -610,8 +938,10 @@ export function StatusPagamentosPageClient({
           detalharPorHora,
         },
         athleteDebt: atleta && athleteDebt ? { nome: atleta.nome_perfil, ...athleteDebt } : null,
+        athleteSummaries: visibleAthleteSummaries,
         formatDate,
         formatHorario,
+        formatDiaSemana: showDiaSemanaColumn ? formatDiaSemana : undefined,
         formatCurrency,
         fileName: `status-pagamentos-${startDate}-${endDate}`,
       })
@@ -621,11 +951,13 @@ export function StatusPagamentosPageClient({
   }
 
   /**
-   * Mesmo PDF do botão "Exportar PDF", só que recortado para um atleta —
-   * busca de novo no servidor com os filtros atuais da tela (Período, Tipo,
-   * Espaço, Esporte, Perfil, Rateio, Detalhar por hora) mais `atletaId`, como
-   * se o gestor tivesse preenchido o filtro de Atleta com essa pessoa e
-   * clicado em Filtrar → Exportar PDF. Não mexe nos filtros visíveis da tela.
+   * Extrato de uso do atleta — o PDF que vai para ele conferir e pagar. Busca
+   * de novo no servidor com os filtros atuais da tela (Período, Tipo, Espaço,
+   * Esporte, Perfil, Rateio) mais `atletaId`, sem mexer nos filtros visíveis.
+   *
+   * Sai sempre hora a hora e com todos os status: o atleta precisa ver tudo o
+   * que jogou no mês (inclusive o que já pagou) e o rodapé com quanto falta —
+   * um filtro "Pendente" herdado da tela esconderia metade do extrato.
    */
   async function handleExportPdfForAthlete(atletaId: string, atletaNome: string) {
     setExportingAthleteId(atletaId)
@@ -640,11 +972,12 @@ export function StatusPagamentosPageClient({
         atletaId,
         perfil: perfilFiltro === 'todos' ? undefined : perfilFiltro,
         rateio: tipo === 'mensal' ? rateio : undefined,
-        detalharPorHora: detalharPorHora || undefined,
+        detalharPorHora: true,
       })
       if (!result.success) throw new Error(result.error)
 
-      const athleteRows = deriveDisplayRows(result.rows ?? [], statusFiltro, agruparPorAtleta, sortKey, sortDir)
+      const athleteRows = deriveDisplayRows(result.rows ?? [], 'todos', agruparPorAtleta, sortKey ?? 'data', sortKey ? sortDir : 'asc')
+      const resumoDoAtleta = (result.athleteSummaries ?? []).find((s) => s.atletaId === atletaId) ?? null
       const { generatePaymentStatusPdf } = await import('@/modules/reports/payment-status-pdf')
       await generatePaymentStatusPdf({
         rows: athleteRows,
@@ -658,13 +991,14 @@ export function StatusPagamentosPageClient({
           atletaNome,
           perfilLabel: perfilFiltro !== 'todos' ? PERFIL_LABEL[perfilFiltro] : null,
           rateio,
-          detalharPorHora,
+          detalharPorHora: true,
         },
-        athleteDebt: result.athleteDebt ? { nome: atletaNome, ...result.athleteDebt } : null,
+        extratoDoAtleta: { nome: atletaNome, resumo: resumoDoAtleta },
         formatDate,
         formatHorario,
+        formatDiaSemana,
         formatCurrency,
-        fileName: `status-pagamentos-${slugify(atletaNome)}-${startDate}-${endDate}`,
+        fileName: `extrato-${slugify(atletaNome)}-${startDate}-${endDate}`,
       })
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro ao exportar PDF do atleta')
@@ -678,10 +1012,40 @@ export function StatusPagamentosPageClient({
     [rows, statusFiltro, agruparPorAtleta, sortKey, sortDir]
   )
 
+  // Filtro de status → ordenação da tela. Alimenta a tabela e as exportações
+  // (Excel/PDF), que saem na mesma ordem que o gestor está vendo.
+  const visibleAthleteSummaries = useMemo(
+    () =>
+      sortAthleteSummaries(
+        statusFiltro === 'todos'
+          ? athleteSummaries
+          : athleteSummaries.filter((s) => s.status === statusFiltro),
+        summarySortKey,
+        summarySortDir
+      ),
+    [athleteSummaries, statusFiltro, summarySortKey, summarySortDir]
+  )
+
   const totalPages = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE))
   const paginatedRows = sortedRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   const monthLabel = monthOptions.find((m) => m.value === selectedMonth)?.label ?? selectedMonth
+
+  const filtrosAplicadosTexto = [
+    ...buildAppliedFiltersDescription({
+      monthLabel,
+      tipo,
+      courtName: courtId !== 'todos' ? (courts.find((c) => c.id === courtId)?.name ?? null) : null,
+      sportName: sportId !== 'todos' ? (sports.find((sp) => sp.id === sportId)?.name ?? null) : null,
+      atletaNome: atleta?.nome_perfil ?? null,
+      perfilLabel: perfilFiltro !== 'todos' ? PERFIL_LABEL[perfilFiltro] : null,
+      rateio,
+      detalharPorHora,
+    }),
+    ...(statusFiltro !== 'todos' ? [{ label: 'Status', value: statusFiltro }] : []),
+  ]
+    .map((f) => `${f.label}: ${f.value}`)
+    .join(' · ')
 
   return (
     <div className="space-y-6 max-w-screen-xl mx-auto">
@@ -789,7 +1153,25 @@ export function StatusPagamentosPageClient({
       {/* Filters */}
       <Card>
         <CardContent className="p-5">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+            <SectionToggle
+              aberta={!secoesRecolhidas.filtros}
+              onToggle={() => alternarSecao('filtros')}
+              controla="filtros-pagamentos"
+            >
+              <Filter className="h-4 w-4 shrink-0 text-arena-button" />
+              <h2 className="text-base font-bold text-arena-navy-800">Filtros</h2>
+            </SectionToggle>
+            {/* Minimizado, mostra o que está aplicado — senão o gestor perde o contexto do recorte. */}
+            {secoesRecolhidas.filtros && (
+              <p className="min-w-0 text-xs text-arena-navy-800/50">{filtrosAplicadosTexto}</p>
+            )}
+          </div>
+
+          <div
+            id="filtros-pagamentos"
+            className={cn('mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4', secoesRecolhidas.filtros && 'hidden')}
+          >
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-gray-500">Período</label>
               <Select value={selectedMonth} onValueChange={handleMonthChange}>
@@ -965,7 +1347,7 @@ export function StatusPagamentosPageClient({
             )}
           </div>
 
-          <div className="mt-4 flex justify-end">
+          <div className={cn('mt-4 flex justify-end', secoesRecolhidas.filtros && 'hidden')}>
             <Button
               variant="outline"
               size="sm"
@@ -979,13 +1361,43 @@ export function StatusPagamentosPageClient({
         </CardContent>
       </Card>
 
+      <AthleteSummaryCard
+        arenaId={arenaId}
+        competencia={selectedMonth}
+        monthLabel={monthLabel}
+        summaries={visibleAthleteSummaries}
+        showHoras={detalharPorHora}
+        isPending={isPending}
+        exportingAthleteId={exportingAthleteId}
+        onExportPdf={handleExportPdfForAthlete}
+        sortKey={summarySortKey}
+        sortDir={summarySortDir}
+        onSort={handleSummarySort}
+        recolhido={secoesRecolhidas.resumo}
+        onToggle={() => alternarSecao('resumo')}
+      />
+
       {/* Table */}
       <Card className="rounded-lg border border-slate-100 bg-white shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-          <div>
-            <h2 className="text-base font-bold text-arena-navy-800">Lançamentos</h2>
-            <p className="text-xs text-arena-navy-800/40">{monthLabel}</p>
-          </div>
+        <div
+          className={cn(
+            'flex flex-wrap items-center justify-between gap-3 px-6 py-4',
+            !secoesRecolhidas.lancamentos && 'border-b border-slate-100'
+          )}
+        >
+          <SectionToggle
+            aberta={!secoesRecolhidas.lancamentos}
+            onToggle={() => alternarSecao('lancamentos')}
+            controla="lancamentos-pagamentos"
+          >
+            <div className="min-w-0">
+              <h2 className="text-base font-bold text-arena-navy-800">Lançamentos</h2>
+              <p className="text-xs text-arena-navy-800/40">
+                {monthLabel}
+                {!isPending && ` · ${sortedRows.length} lançamento${sortedRows.length !== 1 ? 's' : ''}`}
+              </p>
+            </div>
+          </SectionToggle>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
@@ -1014,185 +1426,187 @@ export function StatusPagamentosPageClient({
           </div>
         </div>
 
-        <div className="overflow-x-auto px-6">
-          <table className={arenaDataTable.table}>
-            <thead>
-              <tr className={arenaDataTable.theadRow}>
-                <SortableTh label="Data" sortKey="data" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
-                <SortableTh label="Horário" sortKey="horario" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
-                {showDiaSemanaColumn && (
-                  <SortableTh label="Dia da Semana" sortKey="diaSemana" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
-                )}
-                <SortableTh label="Atleta" sortKey="atleta" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
-                <SortableTh label="Serviço" sortKey="servico" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
-                <SortableTh label="Espaço" sortKey="espaco" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
-                <SortableTh label="Esporte" sortKey="esporte" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
-                <SortableTh
-                  label="Valor"
-                  sortKey="valor"
-                  activeKey={sortKey}
-                  direction={sortDir}
-                  onSort={handleSort}
-                  className="text-arena-button"
-                />
-                <SortableTh
-                  label="Status"
-                  sortKey="status"
-                  activeKey={sortKey}
-                  direction={sortDir}
-                  onSort={handleSort}
-                  align="right"
-                  className="w-28"
-                />
-                <th className={cn(arenaDataTable.thRight, "w-14")}>Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isPending ? (
-                <tr>
-                  <td colSpan={showDiaSemanaColumn ? 10 : 9} className={arenaDataTable.emptyCell}>
-                    <div className="flex flex-col items-center gap-2">
-                      <Loader2 className="h-6 w-6 animate-spin text-arena-button" />
-                      Carregando lançamentos...
-                    </div>
-                  </td>
+        <div id="lancamentos-pagamentos" className={cn(secoesRecolhidas.lancamentos && 'hidden')}>
+          <div className="overflow-x-auto px-6">
+            <table className={arenaDataTable.table}>
+              <thead>
+                <tr className={arenaDataTable.theadRow}>
+                  <SortableTh label="Data" sortKey="data" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                  <SortableTh label="Horário" sortKey="horario" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                  {showDiaSemanaColumn && (
+                    <SortableTh label="Dia da Semana" sortKey="diaSemana" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                  )}
+                  <SortableTh label="Atleta" sortKey="atleta" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                  <SortableTh label="Serviço" sortKey="servico" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                  <SortableTh label="Espaço" sortKey="espaco" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                  <SortableTh label="Esporte" sortKey="esporte" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                  <SortableTh
+                    label="Valor"
+                    sortKey="valor"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={handleSort}
+                    className="text-arena-button"
+                  />
+                  <SortableTh
+                    label="Status"
+                    sortKey="status"
+                    activeKey={sortKey}
+                    direction={sortDir}
+                    onSort={handleSort}
+                    align="right"
+                    className="w-28"
+                  />
+                  <th className={cn(arenaDataTable.thRight, "w-14")}>Ações</th>
                 </tr>
-              ) : paginatedRows.length === 0 ? (
-                <tr>
-                  <td colSpan={showDiaSemanaColumn ? 10 : 9} className={arenaDataTable.emptyCell}>
-                    Nenhum lançamento encontrado para os filtros selecionados.
-                  </td>
-                </tr>
-              ) : (
-                paginatedRows.map((row) => {
-                  const sc = statusConfig[row.status]
-                  return (
-                    <tr key={row.id} className={arenaDataTable.tbodyRow}>
-                      <td className={cn(arenaDataTable.td, "whitespace-nowrap text-arena-navy-800/60")}>
-                        {formatDataCell(row)}
-                      </td>
-                      <td className={cn(arenaDataTable.td, "whitespace-nowrap text-arena-navy-800/60")}>
-                        {formatHorario(row)}
-                      </td>
-                      {showDiaSemanaColumn && (
-                        <td className={cn(arenaDataTable.td, "whitespace-nowrap text-arena-navy-800/60")}>
-                          {formatDiaSemana(row)}
-                        </td>
-                      )}
-                      <td className={arenaDataTable.tdBold}>
-                        {row.atleta ?? (
-                          <span className="font-medium text-arena-navy-800/45">Avulsa</span>
-                        )}
-                      </td>
-                      <td className={arenaDataTable.td}>
-                        <span className="inline-flex items-center rounded-full bg-arena-navy-800/5 px-2.5 py-0.5 text-xs font-medium text-arena-navy-800">
-                          {row.servico}
-                        </span>
-                      </td>
-                      <td className={cn(arenaDataTable.td, "text-arena-navy-800/60")}>
-                        {row.espaco ?? <span className="text-arena-navy-800/30">—</span>}
-                      </td>
-                      <td className={cn(arenaDataTable.td, "text-arena-navy-800/60")}>
-                        {row.esporte ?? <span className="text-arena-navy-800/30">—</span>}
-                      </td>
-                      <td className={cn(arenaDataTable.td, "whitespace-nowrap text-arena-button font-black")}>
-                        {row.valor != null ? formatCurrency(row.valor) : <span className="text-arena-navy-800/30 font-medium">—</span>}
-                      </td>
-                      <td className={arenaDataTable.tdRight}>
-                        <Badge variant="outline" className={sc.className}>
-                          {sc.label}
-                        </Badge>
-                      </td>
-                      <td className={arenaDataTable.tdRight}>
-                        <div className="flex items-center justify-end gap-1">
-                          <SendTemplateMessageButton
-                            arenaId={arenaId}
-                            competencia={selectedMonth}
-                            athlete={
-                              row.atletaId
-                                ? { id: row.atletaId, nome: row.atleta ?? "Atleta", telefone: row.telefone ?? null }
-                                : null
-                            }
-                          />
-                          {row.atletaId && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-arena-navy-800/40 hover:bg-arena-navy-800/5 hover:text-arena-navy-800"
-                              title="Exportar PDF deste Atleta"
-                              disabled={exportingAthleteId === row.atletaId}
-                              onClick={() => handleExportPdfForAthlete(row.atletaId as string, row.atleta ?? "Atleta")}
-                            >
-                              {exportingAthleteId === row.atletaId ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <FileText className="h-4 w-4" />
-                              )}
-                            </Button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="flex items-center justify-between border-t border-slate-100 px-6 py-4">
-          <p className="text-xs text-arena-navy-800/40">
-            {sortedRows.length === 0
-              ? '0 resultados'
-              : `Exibindo ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, sortedRows.length)} de ${sortedRows.length}`}
-          </p>
-          <div className="flex items-center gap-1">
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8 bg-white"
-              disabled={page === 1}
-              onClick={() => setPage((p) => p - 1)}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1)
-              .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
-              .reduce<(number | 'ellipsis')[]>((acc, p, idx, arr) => {
-                if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push('ellipsis')
-                acc.push(p)
-                return acc
-              }, [])
-              .map((p, i) =>
-                p === 'ellipsis' ? (
-                  <span key={`e-${i}`} className="px-1 text-xs text-arena-navy-800/30">…</span>
+              </thead>
+              <tbody>
+                {isPending ? (
+                  <tr>
+                    <td colSpan={showDiaSemanaColumn ? 10 : 9} className={arenaDataTable.emptyCell}>
+                      <div className="flex flex-col items-center gap-2">
+                        <Loader2 className="h-6 w-6 animate-spin text-arena-button" />
+                        Carregando lançamentos...
+                      </div>
+                    </td>
+                  </tr>
+                ) : paginatedRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={showDiaSemanaColumn ? 10 : 9} className={arenaDataTable.emptyCell}>
+                      Nenhum lançamento encontrado para os filtros selecionados.
+                    </td>
+                  </tr>
                 ) : (
-                  <Button
-                    key={p}
-                    variant="outline"
-                    size="icon"
-                    className={cn(
-                      "h-8 w-8 text-xs font-bold",
-                      page === p
-                        ? "border-transparent bg-arena-navy-800 text-white hover:bg-arena-navy-800/90 hover:text-white"
-                        : "bg-white text-arena-navy-800/60"
-                    )}
-                    onClick={() => setPage(p as number)}
-                  >
-                    {p}
-                  </Button>
-                )
-              )}
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8 bg-white"
-              disabled={page === totalPages}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+                  paginatedRows.map((row) => {
+                    const sc = statusConfig[row.status]
+                    return (
+                      <tr key={row.id} className={arenaDataTable.tbodyRow}>
+                        <td className={cn(arenaDataTable.td, "whitespace-nowrap text-arena-navy-800/60")}>
+                          {formatDataCell(row)}
+                        </td>
+                        <td className={cn(arenaDataTable.td, "whitespace-nowrap text-arena-navy-800/60")}>
+                          {formatHorario(row)}
+                        </td>
+                        {showDiaSemanaColumn && (
+                          <td className={cn(arenaDataTable.td, "whitespace-nowrap text-arena-navy-800/60")}>
+                            {formatDiaSemana(row)}
+                          </td>
+                        )}
+                        <td className={arenaDataTable.tdBold}>
+                          {row.atleta ?? (
+                            <span className="font-medium text-arena-navy-800/45">Avulsa</span>
+                          )}
+                        </td>
+                        <td className={arenaDataTable.td}>
+                          <span className="inline-flex items-center rounded-full bg-arena-navy-800/5 px-2.5 py-0.5 text-xs font-medium text-arena-navy-800">
+                            {row.servico}
+                          </span>
+                        </td>
+                        <td className={cn(arenaDataTable.td, "text-arena-navy-800/60")}>
+                          {row.espaco ?? <span className="text-arena-navy-800/30">—</span>}
+                        </td>
+                        <td className={cn(arenaDataTable.td, "text-arena-navy-800/60")}>
+                          {row.esporte ?? <span className="text-arena-navy-800/30">—</span>}
+                        </td>
+                        <td className={cn(arenaDataTable.td, "whitespace-nowrap text-arena-button font-black")}>
+                          {row.valor != null ? formatCurrency(row.valor) : <span className="text-arena-navy-800/30 font-medium">—</span>}
+                        </td>
+                        <td className={arenaDataTable.tdRight}>
+                          <Badge variant="outline" className={sc.className}>
+                            {sc.label}
+                          </Badge>
+                        </td>
+                        <td className={arenaDataTable.tdRight}>
+                          <div className="flex items-center justify-end gap-1">
+                            <SendTemplateMessageButton
+                              arenaId={arenaId}
+                              competencia={selectedMonth}
+                              athlete={
+                                row.atletaId
+                                  ? { id: row.atletaId, nome: row.atleta ?? "Atleta", telefone: row.telefone ?? null }
+                                  : null
+                              }
+                            />
+                            {row.atletaId && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-arena-navy-800/40 hover:bg-arena-navy-800/5 hover:text-arena-navy-800"
+                                title="Extrato de uso deste atleta (PDF)"
+                                disabled={exportingAthleteId === row.atletaId}
+                                onClick={() => handleExportPdfForAthlete(row.atletaId as string, row.atleta ?? "Atleta")}
+                              >
+                                {exportingAthleteId === row.atletaId ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <FileText className="h-4 w-4" />
+                                )}
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex items-center justify-between border-t border-slate-100 px-6 py-4">
+            <p className="text-xs text-arena-navy-800/40">
+              {sortedRows.length === 0
+                ? '0 resultados'
+                : `Exibindo ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, sortedRows.length)} de ${sortedRows.length}`}
+            </p>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 bg-white"
+                disabled={page === 1}
+                onClick={() => setPage((p) => p - 1)}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+                .reduce<(number | 'ellipsis')[]>((acc, p, idx, arr) => {
+                  if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push('ellipsis')
+                  acc.push(p)
+                  return acc
+                }, [])
+                .map((p, i) =>
+                  p === 'ellipsis' ? (
+                    <span key={`e-${i}`} className="px-1 text-xs text-arena-navy-800/30">…</span>
+                  ) : (
+                    <Button
+                      key={p}
+                      variant="outline"
+                      size="icon"
+                      className={cn(
+                        "h-8 w-8 text-xs font-bold",
+                        page === p
+                          ? "border-transparent bg-arena-navy-800 text-white hover:bg-arena-navy-800/90 hover:text-white"
+                          : "bg-white text-arena-navy-800/60"
+                      )}
+                      onClick={() => setPage(p as number)}
+                    >
+                      {p}
+                    </Button>
+                  )
+                )}
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 bg-white"
+                disabled={page === totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
       </Card>
