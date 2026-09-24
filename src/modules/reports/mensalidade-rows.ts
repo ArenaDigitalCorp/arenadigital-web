@@ -69,22 +69,35 @@ export function liquidacaoDaCobranca(c: MensalistaCobranca): {
  * O devido sai das cobranças ativas (é o que sobra depois de desativar o rateio
  * de alguém); sem nenhuma, vale o `valor_total` da mensalidade. Crédito aplicado
  * conta como liquidação — o atleta não deve mais aquilo.
+ *
+ * Mensalidade zerada e sem nada recebido (pausa proporcional cobrindo o mês
+ * inteiro) é **Cancelado**, não "Pendente R$ 0,00": não há o que cobrar, e é o
+ * mesmo estado que a pausa "sem cobrança" já grava no banco.
  */
 export function resumoDaMensalidade(m: MensalidadeContexto): {
   valor: number
   status: PaymentStatusRow['status']
   /** Data do pagamento mais recente, quando a mensalidade já está quitada. */
   pagoEm: string | null
+  /** Valor da competência (o que o mês custa), independente do que já entrou. */
+  devido: number
+  /** Liquidado até agora — dinheiro + crédito. */
+  pago: number
+  /** O que ainda falta receber; 0 quando quitada ou cancelada. */
+  emAberto: number
 } {
-  const settled = m.cobrancas.reduce((total, c) => total + liquidacaoDaCobranca(c).settled, 0)
-  const devido = m.cobrancas.length
-    ? m.cobrancas.reduce((total, c) => total + Number(c.valor_devido ?? 0), 0)
-    : m.valorTotal
+  const settled = round2(m.cobrancas.reduce((total, c) => total + liquidacaoDaCobranca(c).settled, 0))
+  const devido = round2(
+    m.cobrancas.length
+      ? m.cobrancas.reduce((total, c) => total + Number(c.valor_devido ?? 0), 0)
+      : m.valorTotal
+  )
   const remaining = Math.max(0, round2(devido - settled))
   const isPago = remaining <= 0.01 && settled > 0
+  const semCobranca = devido <= 0.01 && settled <= 0.01
 
-  if (m.status === 'cancelado') {
-    return { valor: round2(devido), status: 'Cancelado', pagoEm: null }
+  if (m.status === 'cancelado' || semCobranca) {
+    return { valor: devido, status: 'Cancelado', pagoEm: null, devido, pago: settled, emAberto: 0 }
   }
 
   const pagoEm =
@@ -95,10 +108,58 @@ export function resumoDaMensalidade(m: MensalidadeContexto): {
       .at(-1) ?? null
 
   return {
-    valor: isPago ? round2(settled) : remaining,
+    valor: isPago ? settled : remaining,
     status: isPago ? 'Pago' : 'Pendente',
     pagoEm: isPago ? pagoEm : null,
+    devido,
+    pago: settled,
+    emAberto: isPago ? 0 : remaining,
   }
+}
+
+/**
+ * Status de uma hora de reserva de mensalista no extrato por hora.
+ *
+ * `bookings.status` diz se a sessão está na agenda, não se o mês foi pago — o
+ * RPC de criação do plano grava o 1º mês como `confirmed` antes de qualquer
+ * pagamento. Quem sabe se o atleta pagou é a mensalidade da competência; a
+ * reserva só manda quando a própria sessão foi cancelada.
+ */
+export function statusDaReservaDeMensalista(
+  bookingStatus: string | null | undefined,
+  mensalidade: PaymentStatusRow['status']
+): PaymentStatusRow['status'] {
+  if (bookingStatus === 'cancelled') return 'Cancelado'
+  return mensalidade
+}
+
+/**
+ * Divide o valor da mensalidade entre as reservas do mês, proporcional à
+ * duração de cada uma — é o "valor da hora" do extrato do mensalista, e a soma
+ * bate ao centavo com a cobrança (a sobra do arredondamento cai na última
+ * reserva em ordem cronológica). Reserva sem duração fica fora.
+ */
+export function ratearMensalidadeNasReservas(
+  valor: number,
+  reservas: { id: string; inicioISO: string; horas: number }[]
+): Map<string, number> {
+  const validas = reservas
+    .filter((r) => r.horas > 0)
+    .sort((a, b) => a.inicioISO.localeCompare(b.inicioISO) || a.id.localeCompare(b.id))
+  const totalHoras = validas.reduce((total, r) => total + r.horas, 0)
+  const partes = new Map<string, number>()
+  if (totalHoras <= 0) return partes
+
+  let distribuido = 0
+  validas.forEach((r, index) => {
+    const parte =
+      index === validas.length - 1
+        ? round2(valor - distribuido)
+        : round2((valor * r.horas) / totalHoras)
+    distribuido = round2(distribuido + parte)
+    partes.set(r.id, parte)
+  })
+  return partes
 }
 
 /**
@@ -134,6 +195,10 @@ export function buildRateioBreakdownRows(mensalidades: MensalidadeContexto[]): P
   const rows: PaymentStatusRow[] = []
 
   for (const m of mensalidades) {
+    // Plano cancelado (ou mês zerado por pausa) vale para a recorrência e para
+    // cada parte do rateio — ninguém deve aquele mês.
+    const cancelada = resumoDaMensalidade(m).status === 'Cancelado'
+
     rows.push({
       id: `recorrencia-${m.id}`,
       data: m.competencia,
@@ -147,7 +212,7 @@ export function buildRateioBreakdownRows(mensalidades: MensalidadeContexto[]): P
       espaco: m.espaco,
       esporte: m.esporte,
       valor: null,
-      status: m.status === 'quitado' ? 'Pago' : 'Pendente',
+      status: cancelada ? 'Cancelado' : m.status === 'quitado' ? 'Pago' : 'Pendente',
     })
 
     for (const c of m.cobrancas) {
@@ -163,8 +228,8 @@ export function buildRateioBreakdownRows(mensalidades: MensalidadeContexto[]): P
         servico: 'Rateio',
         espaco: m.espaco,
         esporte: m.esporte,
-        valor: isPago ? settled : remaining,
-        status: isPago ? 'Pago' : 'Pendente',
+        valor: cancelada ? Number(c.valor_devido ?? 0) : isPago ? settled : remaining,
+        status: cancelada ? 'Cancelado' : isPago ? 'Pago' : 'Pendente',
       })
     }
   }
