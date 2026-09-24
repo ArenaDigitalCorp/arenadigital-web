@@ -10,6 +10,7 @@ import type {
   SportFilter,
   PaymentStatusFilters,
   AthleteDebtSummary,
+  PaymentStatusAthleteSummary,
 } from '@/modules/reports/types/report.types'
 import { PAYMENT_STATUS_SUMMARY_EXCLUDED_SERVICOS } from '@/modules/reports/types/report.types'
 import {
@@ -20,9 +21,18 @@ import {
 import {
   buildMensalidadeRows,
   buildRateioBreakdownRows,
+  liquidacaoDaCobranca,
+  ratearMensalidadeNasReservas,
+  resumoDaMensalidade,
+  statusDaReservaDeMensalista,
   type MensalidadeContexto,
   type MensalistaCobranca,
 } from '@/modules/reports/mensalidade-rows'
+import {
+  buildAthleteSummaries,
+  contribuicaoDaLinha,
+  type AthleteContribution,
+} from '@/modules/reports/athlete-summary'
 import { buildUsageLines, saoPauloWallClock } from '@/modules/reports/usage-lines'
 import { matchPriceDay, priceAtInstant } from '@/modules/courts/lib/court-price-resolver'
 import type { CourtPriceDay } from '@/modules/courts/types/price-table.types'
@@ -381,7 +391,7 @@ async function loadMensalidadesDaCompetencia(
   loose: LooseClient,
   arenaId: string,
   competencia: string,
-  opts: { courtId?: string; sportId?: string; atletaId?: string },
+  opts: { courtId?: string; sportId?: string; atletaId?: string; planoIds?: string[] },
   contexto: string
 ): Promise<MensalidadeContexto[]> {
   const allowedPlanoIds = await resolveAllowedPlanoIds(loose, arenaId, opts)
@@ -392,6 +402,7 @@ async function loadMensalidadesDaCompetencia(
     .eq('arena_id', arenaId)
     .eq('competencia', competencia)
   if (opts.atletaId) mensalidadeQuery = mensalidadeQuery.eq('athlete_id', opts.atletaId)
+  if (opts.planoIds) mensalidadeQuery = mensalidadeQuery.in('plano_id', opts.planoIds)
 
   const { data: mensalidadesRaw, error: mensalidadeError } = await mensalidadeQuery
   if (mensalidadeError) {
@@ -474,6 +485,135 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100
 }
 
+/** Competência (`YYYY-MM-01`) de um instante, no fuso da arena. */
+function competenciaDe(iso: string): string {
+  const wall = saoPauloWallClock(new Date(iso))
+  return `${wall.getFullYear()}-${String(wall.getMonth() + 1).padStart(2, '0')}-01`
+}
+
+/** Meia-noite de São Paulo do dia `YYYY-MM-DD` (o Brasil não tem mais horário de verão). */
+function inicioDoDiaSP(date: string): string {
+  return `${date}T00:00:00-03:00`
+}
+
+function proximaCompetencia(competencia: string): string {
+  const [ano, mes] = competencia.split('-').map(Number)
+  return mes === 12 ? `${ano + 1}-01-01` : `${ano}-${String(mes + 1).padStart(2, '0')}-01`
+}
+
+/** Mensalidade de um plano num mês, pronta para o extrato por hora. */
+interface MensalidadeDoExtrato {
+  mensalidade: MensalidadeContexto
+  resumo: ReturnType<typeof resumoDaMensalidade>
+  /** Parte do valor do mês que cabe a cada reserva (id → valor). */
+  partes: Map<string, number>
+}
+
+/** Contribuição de uma mensalidade (visão agregada) para o resumo por atleta: vale o responsável pelo plano. */
+function contribuicaoDaMensalidade(
+  m: MensalidadeContexto,
+  resumo: ReturnType<typeof resumoDaMensalidade>
+): AthleteContribution {
+  const cancelada = resumo.status === 'Cancelado'
+  return {
+    atletaId: m.atletaId,
+    atleta: m.atleta,
+    telefone: m.telefone,
+    tipo: 'financeiro',
+    devido: cancelada ? 0 : resumo.devido,
+    pago: resumo.pago,
+    emAberto: resumo.emAberto,
+    cancelado: cancelada,
+  }
+}
+
+/**
+ * No extrato por hora, a reserva de mensalista herda da mensalidade do seu mês
+ * o status (pago/pendente/cancelado) e o valor — o devido do mês rateado pela
+ * duração das reservas não canceladas do plano naquele mês.
+ *
+ * As reservas do rateio vêm de uma consulta própria, sem os filtros da tela:
+ * com Espaço filtrado, um plano de dois blocos mostraria só um, e ratear o mês
+ * inteiro nas horas de um bloco dobraria o valor delas.
+ *
+ * Chave do mapa: `<plano_id>:<competência>`. Plano sem mensalidade gerada
+ * (anterior à camada de cobrança) fica fora, e o chamador cai na tabela de preço.
+ */
+async function loadMensalidadesDoExtrato(
+  loose: LooseClient,
+  arenaId: string,
+  bookings: { plano_mensalista_id: string | null; start_time: string }[]
+): Promise<Map<string, MensalidadeDoExtrato>> {
+  const extrato = new Map<string, MensalidadeDoExtrato>()
+
+  const planosPorCompetencia = new Map<string, Set<string>>()
+  for (const b of bookings) {
+    if (!b.plano_mensalista_id || !b.start_time) continue
+    const competencia = competenciaDe(b.start_time)
+    const planos = planosPorCompetencia.get(competencia) ?? new Set<string>()
+    planos.add(b.plano_mensalista_id)
+    planosPorCompetencia.set(competencia, planos)
+  }
+  if (planosPorCompetencia.size === 0) return extrato
+
+  const mensalidades = (
+    await Promise.all(
+      [...planosPorCompetencia].map(([competencia, planos]) =>
+        loadMensalidadesDaCompetencia(
+          loose,
+          arenaId,
+          competencia,
+          { planoIds: [...planos] },
+          'getPaymentStatusReportAction:extrato'
+        )
+      )
+    )
+  ).flat()
+  if (mensalidades.length === 0) return extrato
+
+  const competencias = [...planosPorCompetencia.keys()].sort()
+  const { data: reservasDoPlano, error } = await fetchAllSupabaseRows(
+    loose
+      .from('bookings')
+      .select('id, plano_mensalista_id, start_time, end_time, status')
+      .eq('arena_id', arenaId)
+      .in('plano_mensalista_id', [...new Set(mensalidades.map((m) => m.planoId))])
+      .gte('start_time', inicioDoDiaSP(competencias[0]))
+      .lt('start_time', inicioDoDiaSP(proximaCompetencia(competencias[competencias.length - 1])))
+      .order('start_time', { ascending: true })
+      .order('id', { ascending: true })
+  )
+  if (error) console.error(`[getPaymentStatusReportAction] reservas do extrato: ${error.message}`)
+
+  const reservasPorChave = new Map<string, { id: string; inicioISO: string; horas: number }[]>()
+  for (const r of (reservasDoPlano ?? []) as {
+    id: string
+    plano_mensalista_id: string
+    start_time: string
+    end_time: string | null
+    status: string | null
+  }[]) {
+    if (r.status === 'cancelled' || !r.end_time) continue
+    const horas = (new Date(r.end_time).getTime() - new Date(r.start_time).getTime()) / 3_600_000
+    const chave = `${r.plano_mensalista_id}:${competenciaDe(r.start_time)}`
+    const lista = reservasPorChave.get(chave) ?? []
+    lista.push({ id: r.id, inicioISO: r.start_time, horas })
+    reservasPorChave.set(chave, lista)
+  }
+
+  for (const m of mensalidades) {
+    const chave = `${m.planoId}:${m.competencia}`
+    const resumo = resumoDaMensalidade(m)
+    extrato.set(chave, {
+      mensalidade: m,
+      resumo,
+      partes: ratearMensalidadeNasReservas(resumo.devido, reservasPorChave.get(chave) ?? []),
+    })
+  }
+
+  return extrato
+}
+
 /** "Quanto o atleta deve" de Mensal e de Avulso na competência — usado pelos
  * cards que só aparecem quando o filtro de Atleta está selecionado. Não
  * respeita espaço/esporte: dívida é do atleta, não de uma quadra específica. */
@@ -548,6 +688,7 @@ export async function getPaymentStatusReportAction(
   courts?: CourtFilter[]
   sports?: SportFilter[]
   athleteDebt?: AthleteDebtSummary | null
+  athleteSummaries?: PaymentStatusAthleteSummary[]
   error?: string
 }> {
   try {
@@ -707,8 +848,11 @@ export async function getPaymentStatusReportAction(
     // A mensalidade do mês entra pela cobrança, não pela transação: é o único
     // lugar que sabe o valor proporcional da estreia e se já foi recebida.
     // No extrato de ocupação ela sai — lá o mês aparece hora a hora nas reservas.
+    // Com Espaço/Esporte filtrado ela também entra (restrita aos planos com
+    // bloco ali, via `resolveAllowedPlanoIds`) — senão o mensalista aparecia
+    // pelas reservas `reservado`, que não têm preço nem status de pagamento.
     const mensalidadesDoMes =
-      sourceFlags.includeTransactions && !detalharPorHora
+      filters.tipo !== 'avulso' && !detalharPorHora
         ? await loadMensalidadesDaCompetencia(
             supabase as unknown as LooseClient,
             arenaId,
@@ -781,6 +925,21 @@ export async function getPaymentStatusReportAction(
       }
     }
 
+    // Extrato: status e valor da hora de mensalista vêm da mensalidade do mês.
+    const mensalidadesDoExtrato = detalharPorHora
+      ? await loadMensalidadesDoExtrato(
+          supabase as unknown as LooseClient,
+          arenaId,
+          bookingsFiltradas as { plano_mensalista_id: string | null; start_time: string }[]
+        )
+      : new Map<string, MensalidadeDoExtrato>()
+
+    // Resumo por atleta: as mensalidades contam pela cobrança (uma vez por
+    // plano/mês) e as horas das reservas delas entram só como uso.
+    const contribuicoesExtras: AthleteContribution[] = []
+    const linhasSemDinheiroProprio = new Set<string>()
+    const mensalidadesNoResumo = new Set<string>()
+
     const bookingRows: PaymentStatusRow[] = []
     for (const b of bookingsFiltradas as any[]) {
       let status: PaymentStatusRow['status'] = 'Pendente'
@@ -809,13 +968,20 @@ export async function getPaymentStatusReportAction(
       }
 
       const ehMensal = Boolean(b.plano_mensalista_id)
+      const doExtrato =
+        detalharPorHora && ehMensal && b.start_time
+          ? mensalidadesDoExtrato.get(`${b.plano_mensalista_id}:${competenciaDe(b.start_time)}`)
+          : undefined
+      if (doExtrato) status = statusDaReservaDeMensalista(b.status, doExtrato.resumo.status)
+
       const base = {
         // Reserva de quem não tem cadastro guarda o nome digitado pelo gestor —
         // melhor mostrá-lo do que cair no rótulo genérico "Avulsa" da tela.
         atleta: b.atleta?.nome_perfil ?? (b.athlete_name || null),
         atletaId: b.atleta?.id ?? null,
         telefone: b.atleta?.telefone ?? null,
-        servico: (ehMensal ? 'Mensal' : 'Avulso') as PaymentStatusRow['servico'],
+        // Mesmo rótulo da linha de mensalidade: é o mesmo serviço nas duas visões.
+        servico: (ehMensal ? 'Mensalista' : 'Avulso') as PaymentStatusRow['servico'],
         espaco: b.courts?.name ?? null,
         esporte: b.sports?.name ?? null,
         status,
@@ -838,6 +1004,46 @@ export async function getPaymentStatusReportAction(
       }
 
       const pricing = pricingPorEspaco.get(b.court_id)
+
+      if (doExtrato) {
+        // Sessão cancelada fica sem valor: não entrou no rateio do mês.
+        const parte = b.status === 'cancelled' ? null : doExtrato.partes.get(b.id) ?? null
+        const linhasDoMes = buildUsageLines({
+          startISO: b.start_time,
+          endISO: b.end_time,
+          valorReserva: parte,
+          bookingType: pricing?.bookingType ?? 'hourly',
+        })
+        linhasDoMes.forEach((linha, index) => {
+          const id = linhasDoMes.length > 1 ? `${b.id}-h${index}` : b.id
+          linhasSemDinheiroProprio.add(id)
+          bookingRows.push({
+            id,
+            data: linha.inicioISO,
+            fim: linha.fimISO,
+            horas: linha.horas,
+            valor: linha.valor,
+            ...base,
+          })
+          if (status !== 'Cancelado') {
+            contribuicoesExtras.push({
+              atletaId: base.atletaId,
+              atleta: base.atleta,
+              telefone: base.telefone,
+              horas: linha.horas,
+              tipo: 'uso',
+            })
+          }
+        })
+
+        const { mensalidade, resumo } = doExtrato
+        if (!mensalidadesNoResumo.has(mensalidade.id)) {
+          mensalidadesNoResumo.add(mensalidade.id)
+          contribuicoesExtras.push(contribuicaoDaMensalidade(mensalidade, resumo))
+        }
+        continue
+      }
+
       const linhas = buildUsageLines({
         startISO: b.start_time,
         endISO: b.end_time,
@@ -988,6 +1194,40 @@ export async function getPaymentStatusReportAction(
       (a, b) => new Date(b.data).getTime() - new Date(a.data).getTime()
     )
 
+    if (wantsRateioBreakdown) {
+      for (const m of mensalidadesParaLinhas) {
+        const cancelada = resumoDaMensalidade(m).status === 'Cancelado'
+        for (const c of m.cobrancas) {
+          const { settled, remaining, isPago } = liquidacaoDaCobranca(c)
+          contribuicoesExtras.push({
+            atletaId: c.atleta_id,
+            atleta: c.nome,
+            tipo: 'financeiro',
+            devido: cancelada ? 0 : Number(c.valor_devido ?? 0),
+            pago: settled,
+            emAberto: cancelada || isPago ? 0 : remaining,
+            cancelado: cancelada,
+          })
+        }
+      }
+    } else {
+      for (const m of mensalidadesParaLinhas) {
+        contribuicoesExtras.push(contribuicaoDaMensalidade(m, resumoDaMensalidade(m)))
+      }
+    }
+    for (const r of mensalidadeRows) linhasSemDinheiroProprio.add(r.id)
+
+    const athleteSummaries = buildAthleteSummaries([
+      ...contribuicoesExtras,
+      ...rows
+        .filter(
+          (r) =>
+            !linhasSemDinheiroProprio.has(r.id) &&
+            !PAYMENT_STATUS_SUMMARY_EXCLUDED_SERVICOS.includes(r.servico)
+        )
+        .map(contribuicaoDaLinha),
+    ])
+
     const athleteDebt = filters.atletaId
       ? await computeAthleteDebtSummary(
           supabase,
@@ -1041,7 +1281,7 @@ export async function getPaymentStatusReportAction(
     }
     const sports: SportFilter[] = [...sportsMap.values()]
 
-    return { success: true, rows, summary, courts, sports, athleteDebt }
+    return { success: true, rows, summary, courts, sports, athleteDebt, athleteSummaries }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro ao buscar relatório'
     return { success: false, error: message }
