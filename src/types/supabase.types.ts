@@ -9,6 +9,90 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      app_booking_request_groups: {
+        Row: {
+          operation_id: string
+          arena_id: string
+          athlete_id: string
+          request_fingerprint: string
+          request_payload: Json
+          quoted_total: number
+          created_at: string
+        }
+        Insert: {
+          operation_id: string
+          arena_id: string
+          athlete_id: string
+          request_fingerprint: string
+          request_payload: Json
+          quoted_total?: number
+          created_at?: string
+        }
+        Update: {
+          operation_id?: string
+          arena_id?: string
+          athlete_id?: string
+          request_fingerprint?: string
+          request_payload?: Json
+          quoted_total?: number
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_booking_request_groups_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "app_booking_request_groups_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "atleta"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      app_booking_request_group_items: {
+        Row: {
+          operation_id: string
+          arena_id: string
+          athlete_id: string
+          request_id: string
+          position: number
+        }
+        Insert: {
+          operation_id: string
+          arena_id: string
+          athlete_id: string
+          request_id: string
+          position: number
+        }
+        Update: {
+          operation_id?: string
+          arena_id?: string
+          athlete_id?: string
+          request_id?: string
+          position?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_booking_request_group_items_operation_id_arena_id_athlete_id_fkey"
+            columns: ["operation_id", "arena_id", "athlete_id"]
+            isOneToOne: false
+            referencedRelation: "app_booking_request_groups"
+            referencedColumns: ["operation_id", "arena_id", "athlete_id"]
+          },
+          {
+            foreignKeyName: "app_booking_request_group_items_request_id_arena_id_athlete_id_fkey"
+            columns: ["request_id", "arena_id", "athlete_id"]
+            isOneToOne: true
+            referencedRelation: "app_booking_requests"
+            referencedColumns: ["id", "arena_id", "athlete_id"]
+          },
+        ]
+      }
       app_home_content: {
         Row: {
           active: boolean
@@ -7359,6 +7443,18 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      get_app_booking_request_conflicts: {
+        Args: {
+          p_arena_id: string
+          p_request_ids: string[]
+          p_reviewer_id: string
+        }
+        Returns: {
+          request_id: string
+          has_conflict: boolean
+          start_passed: boolean
+        }[]
       }
       review_app_booking_request: {
         Args: {
