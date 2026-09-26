@@ -36,17 +36,29 @@ import {
 } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import { reviewAppBookingRequestAction } from '@/modules/bookings/actions/appBookingRequestActions'
+import {
+  getAppBookingRequestGroupsAction,
+  getAppBookingRequestsAction,
+  reviewAppBookingRequestAction,
+} from '@/modules/bookings/actions/appBookingRequestActions'
+import { formatAppBookingPrice } from '@/modules/bookings/lib/format-app-booking-price'
 import type {
   AppBookingRequestStatus,
+  AppBookingRequestGroupView,
   AppBookingRequestView,
 } from '@/modules/bookings/types/app-booking-request.types'
 
 type Filter = 'pending' | 'approved' | 'rejected' | 'expired' | 'all'
+type QueueEntry =
+  | { kind: 'group'; group: AppBookingRequestGroupView }
+  | { kind: 'single'; request: AppBookingRequestView }
 
 interface Props {
   arenaId: string
   initialRequests: AppBookingRequestView[]
+  initialGroups: AppBookingRequestGroupView[]
+  initialRequestNextOffset: number | null
+  initialGroupNextOffset: number | null
   acceptsRequests: boolean
   initialError?: string
 }
@@ -78,12 +90,6 @@ const STATUS_META: Record<AppBookingRequestStatus, {
   },
 }
 
-function formatMoney(value: number) {
-  return value > 0
-    ? value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-    : 'A consultar'
-}
-
 function formatDuration(minutes: number) {
   const hours = minutes / 60
   return `${hours}h`
@@ -95,6 +101,25 @@ function requestDate(request: AppBookingRequestView) {
 
 function requestTime(request: AppBookingRequestView) {
   return `${format(parseISO(request.startTime), 'HH:mm')}–${format(parseISO(request.endTime), 'HH:mm')}`
+}
+
+function groupStatus(group: AppBookingRequestGroupView): AppBookingRequestStatus | 'mixed' {
+  const firstStatus = group.items[0]?.status
+  return firstStatus && group.items.every((request) => request.status === firstStatus)
+    ? firstStatus
+    : 'mixed'
+}
+
+function groupMatchesFilter(group: AppBookingRequestGroupView, filter: Filter): boolean {
+  if (filter === 'all') return true
+  if (filter === 'pending') return group.items.some((request) => request.status === 'pending')
+  return group.items.every((request) => request.status === filter)
+}
+
+function GroupStatusBadge({ group }: { group: AppBookingRequestGroupView }) {
+  const status = groupStatus(group)
+  if (status !== 'mixed') return <StatusBadge status={status} />
+  return <Badge variant="outline" className="rounded-full border-sky-200 bg-sky-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-sky-800">Parcial</Badge>
 }
 
 function StatusBadge({ status }: { status: AppBookingRequestStatus }) {
@@ -135,11 +160,22 @@ function Metric({ icon: Icon, label, value, detail, tone }: {
 export function AppBookingRequestsPageClient({
   arenaId,
   initialRequests,
+  initialGroups,
+  initialRequestNextOffset,
+  initialGroupNextOffset,
   acceptsRequests,
   initialError,
 }: Props) {
   const router = useRouter()
   const [requests, setRequests] = useState(initialRequests)
+  const [groups, setGroups] = useState(initialGroups)
+  const [requestNextOffset, setRequestNextOffset] = useState(initialRequestNextOffset)
+  const [groupNextOffset, setGroupNextOffset] = useState(initialGroupNextOffset)
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [groupRejectId, setGroupRejectId] = useState<string | null>(null)
+  const [groupRejectionReason, setGroupRejectionReason] = useState('')
+  const [loadingGroupRequestId, setLoadingGroupRequestId] = useState<string | null>(null)
   const [filter, setFilter] = useState<Filter>('pending')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showReject, setShowReject] = useState(false)
@@ -148,13 +184,19 @@ export function AppBookingRequestsPageClient({
   const [isPending, startTransition] = useTransition()
 
   const selected = requests.find((request) => request.id === selectedId) ?? null
+  const selectedGroup = groups.find((group) => group.operationId === selectedGroupId) ?? null
   const pendingCount = requests.filter((request) => request.status === 'pending').length
+    + groups.filter((group) => group.items.some((request) => request.status === 'pending')).length
   const approvedToday = requests.filter(
     (request) => request.status === 'approved' && request.reviewedAt && isToday(parseISO(request.reviewedAt))
-  ).length
+  ).length + groups.filter((group) => group.items.every(
+    (request) => request.status === 'approved' && request.reviewedAt && isToday(parseISO(request.reviewedAt))
+  )).length
   const conflictCount = requests.filter(
     (request) => request.status === 'pending' && request.hasConflict
-  ).length
+  ).length + groups.filter((group) => group.items.some(
+    (request) => request.status === 'pending' && request.hasConflict
+  )).length
 
   const filtered = useMemo(() => {
     const result = filter === 'all'
@@ -168,10 +210,114 @@ export function AppBookingRequestsPageClient({
     })
   }, [filter, requests])
 
+  const filteredGroups = useMemo(() => groups.filter((group) => groupMatchesFilter(group, filter)), [filter, groups])
+  const filteredEntries = useMemo(() => {
+    const entries: QueueEntry[] = [
+      ...filteredGroups.map((group): QueueEntry => ({ kind: 'group', group })),
+      ...filtered.map((request): QueueEntry => ({ kind: 'single', request })),
+    ]
+    return entries.sort((left, right) => {
+      const leftRequests = left.kind === 'group' ? left.group.items : [left.request]
+      const rightRequests = right.kind === 'group' ? right.group.items : [right.request]
+      const leftPending = leftRequests.filter((request) => request.status === 'pending')
+      const rightPending = rightRequests.filter((request) => request.status === 'pending')
+      if (leftPending.length > 0 && rightPending.length > 0) {
+        return Math.min(...leftPending.map((request) => Date.parse(request.startTime)))
+          - Math.min(...rightPending.map((request) => Date.parse(request.startTime)))
+      }
+      const leftCreatedAt = left.kind === 'group' ? left.group.createdAt : left.request.createdAt
+      const rightCreatedAt = right.kind === 'group' ? right.group.createdAt : right.request.createdAt
+      return Date.parse(rightCreatedAt) - Date.parse(leftCreatedAt)
+    })
+  }, [filtered, filteredGroups])
+
+  async function loadMore() {
+    if (isLoadingMore || (groupNextOffset === null && requestNextOffset === null)) return
+    setIsLoadingMore(true)
+    try {
+      const [groupPage, requestPage] = await Promise.all([
+        groupNextOffset === null ? null : getAppBookingRequestGroupsAction(arenaId, groupNextOffset),
+        requestNextOffset === null ? null : getAppBookingRequestsAction(arenaId, requestNextOffset),
+      ])
+      if (groupPage && !groupPage.success) throw new Error(groupPage.error ?? 'Falha ao carregar grupos.')
+      if (requestPage && !requestPage.success) throw new Error(requestPage.error ?? 'Falha ao carregar solicitações.')
+      if (groupPage) {
+        setGroups((current) => {
+          const seen = new Set(current.map((group) => group.operationId))
+          return [...current, ...groupPage.data.filter((group) => !seen.has(group.operationId))]
+        })
+        setGroupNextOffset(groupPage.nextOffset)
+      }
+      if (requestPage) {
+        setRequests((current) => {
+          const seen = new Set(current.map((request) => request.id))
+          return [...current, ...requestPage.data.filter((request) => !seen.has(request.id))]
+        })
+        setRequestNextOffset(requestPage.nextOffset)
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível carregar mais solicitações.')
+    } finally {
+      setIsLoadingMore(false)
+    }
+  }
+
   function closeDetails() {
     setSelectedId(null)
     setShowReject(false)
     setRejectionReason('')
+  }
+
+  function closeGroupDetails() {
+    setSelectedGroupId(null)
+    setGroupRejectId(null)
+    setGroupRejectionReason('')
+  }
+
+  function reviewGroupItem(request: AppBookingRequestView, decision: 'approve' | 'reject') {
+    if (!selectedGroup) return
+    const operationId = selectedGroup.operationId
+    setLoadingGroupRequestId(request.id)
+    startTransition(async () => {
+      const result = await reviewAppBookingRequestAction({
+        arenaId,
+        requestId: request.id,
+        decision,
+        rejectionReason: decision === 'reject' ? groupRejectionReason : undefined,
+      })
+      if (!result.success || !result.status) {
+        const errorMessage = result.error ?? 'Não foi possível analisar este horário.'
+        if (errorMessage.toLowerCase().includes('conflito')) {
+          setGroups((current) => current.map((group) => group.operationId === operationId
+            ? { ...group, items: group.items.map((item) => item.id === request.id ? { ...item, hasConflict: true } : item) }
+            : group))
+        }
+        toast.error(errorMessage)
+        setLoadingGroupRequestId(null)
+        return
+      }
+
+      setGroups((current) => current.map((group) => group.operationId === operationId
+        ? {
+            ...group,
+            items: group.items.map((item) => item.id === request.id
+              ? {
+                  ...item,
+                  status: result.status as AppBookingRequestStatus,
+                  acceptedBookingId: result.bookingId ?? item.acceptedBookingId,
+                  reviewedAt: new Date().toISOString(),
+                  rejectionReason: decision === 'reject' ? groupRejectionReason || null : null,
+                  hasConflict: false,
+                }
+              : item),
+          }
+        : group))
+      toast.success(result.status === 'approved' ? 'Horário aprovado e bloqueado.' : result.status === 'rejected' ? 'Horário recusado.' : 'Este horário já passou.')
+      setGroupRejectId(null)
+      setGroupRejectionReason('')
+      setLoadingGroupRequestId(null)
+      router.refresh()
+    })
   }
 
   function review(decision: 'approve' | 'reject') {
@@ -225,7 +371,7 @@ export function AppBookingRequestsPageClient({
     { value: 'approved', label: 'Aprovadas' },
     { value: 'rejected', label: 'Recusadas' },
     { value: 'expired', label: 'Expiradas' },
-    { value: 'all', label: 'Todas', count: requests.length },
+    { value: 'all', label: 'Todas', count: requests.length + groups.length },
   ]
 
   return (
@@ -281,9 +427,9 @@ export function AppBookingRequestsPageClient({
       )}
 
       <div className="grid gap-4 md:grid-cols-3">
-        <Metric icon={CalendarClock} label="Aguardando" value={pendingCount} detail="pedidos para analisar" tone="bg-amber-500" />
-        <Metric icon={CalendarCheck2} label="Aprovadas hoje" value={approvedToday} detail="horários confirmados" tone="bg-emerald-600" />
-        <Metric icon={AlertTriangle} label="Com conflito" value={conflictCount} detail="horários já ocupados" tone="bg-rose-500" />
+        <Metric icon={CalendarClock} label="Aguardando" value={pendingCount} detail="entre pedidos carregados" tone="bg-amber-500" />
+        <Metric icon={CalendarCheck2} label="Aprovadas hoje" value={approvedToday} detail="entre pedidos carregados" tone="bg-emerald-600" />
+        <Metric icon={AlertTriangle} label="Com conflito" value={conflictCount} detail="entre pedidos carregados" tone="bg-rose-500" />
       </div>
 
       <section className="overflow-hidden rounded-3xl border border-arena-navy-800/8 bg-white shadow-sm">
@@ -313,7 +459,7 @@ export function AppBookingRequestsPageClient({
           ))}
         </div>
 
-        {filtered.length === 0 ? (
+        {filteredEntries.length === 0 ? (
           <div className="flex flex-col items-center px-6 py-20 text-center">
             <div className="flex size-16 items-center justify-center rounded-3xl bg-arena-navy-800/[0.04]">
               <CalendarClock className="size-7 text-arena-navy-800/25" />
@@ -325,52 +471,158 @@ export function AppBookingRequestsPageClient({
           </div>
         ) : (
           <div className="divide-y divide-arena-navy-800/7">
-            {filtered.map((request) => (
-              <button
-                key={request.id}
-                type="button"
-                onClick={() => setSelectedId(request.id)}
-                className="group grid w-full gap-4 px-5 py-5 text-left transition-colors hover:bg-arena-app-surface sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_auto] sm:items-center sm:px-6"
-              >
-                <div className="flex min-w-0 items-center gap-4">
-                  <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-arena-navy-800 text-sm font-black text-white shadow-sm">
-                    {(request.athlete?.nome_perfil ?? 'A').slice(0, 1).toUpperCase()}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate text-sm font-black text-arena-navy-800">
-                        {request.athlete?.nome_perfil ?? 'Atleta'}
-                      </p>
-                      <StatusBadge status={request.status} />
+            {filteredEntries.map((entry) => {
+              if (entry.kind === 'single') {
+                const request = entry.request
+                return (
+                  <button
+                    key={request.id}
+                    type="button"
+                    onClick={() => setSelectedId(request.id)}
+                    className="group grid w-full gap-4 px-5 py-5 text-left transition-colors hover:bg-arena-app-surface sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_auto] sm:items-center sm:px-6"
+                  >
+                    <div className="flex min-w-0 items-center gap-4">
+                      <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-arena-navy-800 text-sm font-black text-white shadow-sm">
+                        {(request.athlete?.nome_perfil ?? 'A').slice(0, 1).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="truncate text-sm font-black text-arena-navy-800">{request.athlete?.nome_perfil ?? 'Atleta'}</p>
+                          <StatusBadge status={request.status} />
+                        </div>
+                        <p className="mt-1 truncate text-xs font-semibold text-arena-navy-800/45">{request.court?.name ?? 'Espaço'} · {request.sport?.name ?? 'Esporte'}</p>
+                      </div>
                     </div>
-                    <p className="mt-1 truncate text-xs font-semibold text-arena-navy-800/45">
-                      {request.court?.name ?? 'Espaço'} · {request.sport?.name ?? 'Esporte'}
-                    </p>
+                    <div className="text-xs">
+                      <p className="font-black capitalize text-arena-navy-800">{requestDate(request)}</p>
+                      <p className="mt-1 font-semibold text-arena-navy-800/50">{requestTime(request)} · {formatDuration(request.durationMinutes)}</p>
+                    </div>
+                    <div className="flex items-center justify-between gap-4 sm:justify-end">
+                      {request.hasConflict && <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1 text-[10px] font-black text-rose-700"><AlertTriangle className="size-3" />Horário ocupado</span>}
+                      <p className="text-sm font-black text-arena-navy-800">{formatAppBookingPrice(request.quotedRentalPrice)}</p>
+                      <ArrowUpRight className="size-4 text-arena-navy-800/25" />
+                    </div>
+                  </button>
+                )
+              }
+              const group = entry.group
+              const firstRequest = group.items[0]
+              const hasConflict = group.items.some((request) => request.status === 'pending' && request.hasConflict)
+              return (
+                <button
+                  key={group.operationId}
+                  type="button"
+                  onClick={() => setSelectedGroupId(group.operationId)}
+                  className="group grid w-full gap-4 px-5 py-5 text-left transition-colors hover:bg-arena-app-surface sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_auto] sm:items-center sm:px-6"
+                >
+                  <div className="flex min-w-0 items-center gap-4">
+                    <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-arena-navy-800 text-sm font-black text-white shadow-sm">
+                      {(firstRequest.athlete?.nome_perfil ?? 'A').slice(0, 1).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="truncate text-sm font-black text-arena-navy-800">{firstRequest.athlete?.nome_perfil ?? 'Atleta'}</p>
+                        <GroupStatusBadge group={group} />
+                      </div>
+                      <p className="mt-1 text-xs font-semibold text-arena-navy-800/45">{group.items.length} {group.items.length === 1 ? 'horário solicitado' : 'horários solicitados'}</p>
+                    </div>
                   </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 text-xs sm:block">
-                  <p className="font-black capitalize text-arena-navy-800">{requestDate(request)}</p>
-                  <p className="mt-1 font-semibold text-arena-navy-800/50">
-                    {requestTime(request)} · {formatDuration(request.durationMinutes)}
-                  </p>
-                </div>
-
-                <div className="flex items-center justify-between gap-4 sm:justify-end">
-                  {request.hasConflict && (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1 text-[10px] font-black text-rose-700">
-                      <AlertTriangle className="size-3" />
-                      Horário ocupado
-                    </span>
-                  )}
-                  <p className="text-sm font-black text-arena-navy-800">{formatMoney(request.quotedRentalPrice)}</p>
-                  <ArrowUpRight className="size-4 text-arena-navy-800/25 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
-                </div>
-              </button>
-            ))}
+                  <div className="text-xs">
+                    <p className="font-black capitalize text-arena-navy-800">{requestDate(firstRequest)}</p>
+                    <p className="mt-1 font-semibold text-arena-navy-800/50">{requestTime(firstRequest)}{group.items.length > 1 ? ' · veja todos os horários' : ''}</p>
+                  </div>
+                  <div className="flex items-center justify-between gap-4 sm:justify-end">
+                    {hasConflict && <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1 text-[10px] font-black text-rose-700"><AlertTriangle className="size-3" />Conflito</span>}
+                    <p className="text-sm font-black text-arena-navy-800">{formatAppBookingPrice(group.quotedTotal)}</p>
+                    <ArrowUpRight className="size-4 text-arena-navy-800/25" />
+                  </div>
+                </button>
+              )
+            })}
           </div>
         )}
       </section>
+
+      {(groupNextOffset !== null || requestNextOffset !== null) && (
+        <div className="flex justify-center">
+          <Button type="button" variant="outline" onClick={loadMore} disabled={isLoadingMore}>
+            {isLoadingMore && <Loader2 className="size-4 animate-spin" />}
+            Carregar mais solicitações
+          </Button>
+        </div>
+      )}
+
+      <Dialog open={Boolean(selectedGroup)} onOpenChange={(open) => !open && closeGroupDetails()}>
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-[700px] overflow-hidden rounded-3xl border-none bg-arena-soft p-0 shadow-2xl">
+          {selectedGroup && (
+            <>
+              <div className="bg-arena-navy-800 px-6 py-6 text-white">
+                <DialogHeader>
+                  <div className="mb-3 flex items-center justify-between gap-4">
+                    <GroupStatusBadge group={selectedGroup} />
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">Recebida {formatDistanceToNowStrict(parseISO(selectedGroup.createdAt), { locale: ptBR, addSuffix: true })}</span>
+                  </div>
+                  <DialogTitle className="font-heading text-2xl font-black text-white">{selectedGroup.items[0].athlete?.nome_perfil ?? 'Atleta'}</DialogTitle>
+                  <DialogDescription className="text-sm font-medium text-white/55">{selectedGroup.items.length} {selectedGroup.items.length === 1 ? 'horário avulso solicitado' : 'horários avulsos solicitados'}</DialogDescription>
+                </DialogHeader>
+              </div>
+              <div className="max-h-[70vh] space-y-4 overflow-y-auto p-6">
+                <p className="text-sm font-medium text-arena-navy-800/60">Os horários aguardando análise continuam livres até a aprovação. A disponibilidade será conferida novamente.</p>
+                <div className="space-y-3">
+                  {selectedGroup.items.map((request) => (
+                    <div key={request.id} className="rounded-2xl border border-arena-navy-800/8 bg-white p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-black capitalize text-arena-navy-800">{requestDate(request)}</p>
+                          <p className="mt-1 text-xs font-semibold text-arena-navy-800/55">{requestTime(request)} · {request.court?.name ?? 'Espaço'} · {request.sport?.name ?? 'Esporte'}</p>
+                        </div>
+                        <div className="text-right">
+                          <StatusBadge status={request.status} />
+                          <p className="mt-2 text-sm font-black text-arena-navy-800">{formatAppBookingPrice(request.quotedRentalPrice)}</p>
+                        </div>
+                      </div>
+                      {request.status === 'pending' && request.hasConflict && <p className="mt-3 flex items-center gap-1.5 text-xs font-bold text-rose-700"><AlertTriangle className="size-3.5" />Este horário está ocupado.</p>}
+                      {request.status === 'rejected' && request.rejectionReason && <p className="mt-3 text-xs font-medium text-arena-navy-800/60">Motivo: {request.rejectionReason}</p>}
+                      {request.status === 'pending' && (
+                        <div className="mt-4 border-t border-arena-navy-800/8 pt-4">
+                          {groupRejectId === request.id ? (
+                            <div className="space-y-3">
+                              <label className="block text-xs font-bold text-arena-navy-800" htmlFor={`group-rejection-${request.id}`}>Motivo da recusa (opcional)</label>
+                              <Textarea id={`group-rejection-${request.id}`} value={groupRejectionReason} onChange={(event) => setGroupRejectionReason(event.target.value)} maxLength={500} className="min-h-20 bg-white" />
+                              <div className="flex flex-wrap justify-end gap-2">
+                                <Button variant="ghost" onClick={() => { setGroupRejectId(null); setGroupRejectionReason('') }} disabled={isPending}>Voltar</Button>
+                                <Button variant="destructive" onClick={() => reviewGroupItem(request, 'reject')} disabled={isPending}>{loadingGroupRequestId === request.id ? <Loader2 className="size-4 animate-spin" /> : <X className="size-4" />}Confirmar recusa</Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex flex-wrap justify-end gap-2">
+                              <Button variant="outline" onClick={() => setGroupRejectId(request.id)} disabled={isPending}>Recusar horário</Button>
+                              <Button className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => reviewGroupItem(request, 'approve')} disabled={isPending || request.hasConflict}>{loadingGroupRequestId === request.id ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}Aprovar horário</Button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between rounded-2xl bg-arena-navy-800 px-5 py-4 text-white">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-wider text-white/45">Total solicitado</p>
+                    <p className="mt-1 text-xs font-medium text-white/55">Sem cobrança automática</p>
+                  </div>
+                  <p className="text-xl font-black">{formatAppBookingPrice(selectedGroup.quotedTotal)}</p>
+                </div>
+                {groupStatus(selectedGroup) === 'mixed' && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-medium text-arena-navy-800/60">
+                    <p>O total solicitado é o valor original do pedido. Cada horário mantém seu próprio estado.</p>
+                    <p>Subtotal aprovado: {formatAppBookingPrice(selectedGroup.items.reduce((cents, request) => request.status === 'approved' ? cents + Math.round(request.quotedRentalPrice * 100) : cents, 0) / 100)}</p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={Boolean(selected)} onOpenChange={(open) => !open && closeDetails()}>
         <DialogContent className="w-[calc(100vw-2rem)] max-w-[620px] overflow-hidden rounded-3xl border-none bg-arena-soft p-0 shadow-2xl">
@@ -451,7 +703,7 @@ export function AppBookingRequestsPageClient({
                     <p className="text-[10px] font-black uppercase tracking-wider text-white/45">Valor estimado</p>
                     <p className="mt-1 text-xs font-medium text-white/55">Sem cobrança automática</p>
                   </div>
-                  <p className="text-xl font-black">{formatMoney(selected.quotedRentalPrice)}</p>
+                  <p className="text-xl font-black">{formatAppBookingPrice(selected.quotedRentalPrice)}</p>
                 </div>
 
                 {selected.status === 'rejected' && selected.rejectionReason && (
