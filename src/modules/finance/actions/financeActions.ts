@@ -8,6 +8,12 @@ import {
 import { SupabaseFinanceRepository } from '@/modules/finance/repositories/SupabaseFinanceRepository';
 import { revalidatePath } from 'next/cache';
 import { transactionActionSchema } from '@/modules/finance/schemas/transaction-action.schema';
+import { BOOKING_COBRANCAS_SELECT } from '@/modules/bookings/lib/booking-rateio';
+import {
+  buildAvulsoItem,
+  type AvulsoBookingRow,
+  type AvulsoReservaItem,
+} from '@/modules/finance/lib/avulsos-list';
 
 export async function getFinanceDashboardAction(arenaId: string) {
   try {
@@ -151,26 +157,7 @@ export async function deleteTransactionAction(
   }
 }
 
-export type AvulsoPendenciaItem = {
-  id: string
-  booking_id: string
-  participant_id?: string
-  cobranca_por_participante: boolean
-  start_time: string
-  end_time: string
-  price: number
-  athlete_name: string
-  atleta?: { id: string; nome_perfil: string; telefone: string | null } | null
-  court?: { id: string; name: string } | null
-  sports?: { id: string; name: string } | null
-}
-
-export type AvulsoStatus = 'pendente' | 'pago' | 'cancelado';
-
-export type AvulsoListItem = AvulsoPendenciaItem & {
-  status: AvulsoStatus;
-  pago_em?: string | null;
-};
+export type { AvulsoReservaItem, AvulsoStatus } from '@/modules/finance/lib/avulsos-list';
 
 export async function getAvulsosTodosAction(arenaId: string) {
   try {
@@ -191,14 +178,7 @@ export async function getAvulsosTodosAction(arenaId: string) {
                 atleta:athlete_id(id, nome_perfil, telefone),
                 court:court_id(id, name),
                 sports:sport_id(id, name),
-                booking_participants(
-                    id,
-                    atleta_id,
-                    valor,
-                    pago_em,
-                    funcao,
-                    atleta:atleta_id(id, nome_perfil, telefone)
-                )
+                ${BOOKING_COBRANCAS_SELECT}
             `
       )
       .eq('arena_id', arenaId)
@@ -208,70 +188,11 @@ export async function getAvulsosTodosAction(arenaId: string) {
 
     if (error) throw new Error(error.message);
 
-    const items: AvulsoListItem[] = [];
-
-    for (const booking of data ?? []) {
-      const row = booking as any;
-      const isCancelled = row.status === 'cancelled';
-      const court = Array.isArray(row.court) ? row.court[0] : row.court;
-      const sports = Array.isArray(row.sports) ? row.sports[0] : row.sports;
-
-      if (row.cobranca_por_participante) {
-        const billingParts = (row.booking_participants ?? []).filter(
-          (p: { funcao?: string }) =>
-            p.funcao === 'responsavel' || p.funcao === 'convidado'
-        );
-
-        if (billingParts.length > 0) {
-          for (const participant of billingParts) {
-            const atleta = Array.isArray(participant.atleta)
-              ? participant.atleta[0]
-              : participant.atleta;
-            const isPaid = Boolean(participant.pago_em);
-            items.push({
-              id: `${row.id}:${participant.id}`,
-              booking_id: row.id,
-              participant_id: participant.id,
-              cobranca_por_participante: true,
-              start_time: row.start_time,
-              end_time: row.end_time,
-              price: Number(participant.valor ?? row.price ?? 0),
-              athlete_name: atleta?.nome_perfil ?? row.athlete_name ?? 'Atleta',
-              status: isCancelled ? 'cancelado' : isPaid ? 'pago' : 'pendente',
-              pago_em: participant.pago_em ?? null,
-              atleta,
-              court,
-              sports,
-            });
-          }
-          continue;
-        }
-      }
-
-      items.push({
-        id: row.id,
-        booking_id: row.id,
-        cobranca_por_participante: Boolean(row.cobranca_por_participante),
-        start_time: row.start_time,
-        end_time: row.end_time,
-        price: Number(row.price ?? 0),
-        athlete_name: row.atleta?.nome_perfil ?? row.athlete_name ?? 'Atleta',
-        status: isCancelled
-          ? 'cancelado'
-          : row.status === 'confirmed'
-            ? 'pago'
-            : 'pendente',
-        pago_em: null,
-        atleta: Array.isArray(row.atleta) ? row.atleta[0] : row.atleta,
-        court,
-        sports,
-      });
-    }
-
+    const items = ((data ?? []) as unknown as AvulsoBookingRow[]).map(buildAvulsoItem);
     return { success: true, data: items };
   } catch (err) {
     const message =
       err instanceof Error ? err.message : 'Erro ao buscar cobranças avulsas';
-    return { success: false, error: message, data: [] as AvulsoListItem[] };
+    return { success: false, error: message, data: [] as AvulsoReservaItem[] };
   }
 }

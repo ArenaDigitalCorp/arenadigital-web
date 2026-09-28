@@ -13,9 +13,12 @@ import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 
 import {
+  blocosDeHora,
+  descricaoCreditoHorarioCancelado,
   descricaoCreditoJogoCancelado,
   diaCurto,
   faixaHoraria,
+  intervaloSelecionado,
 } from '../src/modules/bookings/lib/cancelamento-sessao.ts'
 
 const read = (p) => readFileSync(fileURLToPath(new URL(p, import.meta.url)), 'utf8')
@@ -99,7 +102,7 @@ test('o valor sugerido vem da tabela de preço do plano, resolvido no banco', ()
 })
 
 test('a tela avisa quando a sugestão caiu na tabela padrão', () => {
-  assert.match(modal, /quote\.origem === 'padrao'/)
+  assert.match(modal, /quoteAtual\.origem === 'padrao'/)
   assert.match(modal, /tabela padrão do espaço/)
   assert.match(modal, /Você pode ajustar o valor/, 'o valor segue editável')
 })
@@ -171,7 +174,7 @@ test('o botão só aparece em reserva de mensalista ainda ativa', () => {
     details,
     /const canCancelSessaoMensalista = isMensalista && booking\.status !== "cancelled"/
   )
-  assert.match(details, /Cancelar este dia/)
+  assert.match(details, /Cancelar dia ou horário/)
   // reserva de mensalista já confirmada (mês pago) também pode ser cancelada —
   // é justamente o caso que gera crédito
   assert.doesNotMatch(
@@ -190,4 +193,71 @@ test('o crédito aparece em Mensalistas identificado como jogo cancelado', () =>
 test('a tela de mensalistas é revalidada ao cancelar', () => {
   const body = actions.slice(actions.indexOf('export async function cancelarSessaoMensalistaAction'))
   assert.match(body, /revalidatePath\(`\/dashboard\/arenas\/\$\{parsed\.arenaId\}\/mensalistas`\)/)
+})
+
+// ── Cancelar só parte do jogo (ex.: a 1ª hora) ────────────────────────────
+
+const partialMigration = () =>
+  readFileSync(`${DB_ROOT}supabase/migrations/20260929120000_mensalista_cancel_partial_session.sql`, 'utf8')
+
+test('a sessão vira blocos de 1h para o gestor escolher o que cancelar', () => {
+  const blocos = blocosDeHora('2026-09-29T20:00:00-03:00', '2026-09-29T23:00:00-03:00')
+  assert.deepEqual(
+    blocos.map((b) => faixaHoraria(b.inicio, b.fim)),
+    ['20:00 às 21:00', '21:00 às 22:00', '22:00 às 23:00']
+  )
+  // sessão com meia hora sobrando: o último bloco é menor
+  const quebrada = blocosDeHora('2026-09-29T20:00:00-03:00', '2026-09-29T21:30:00-03:00')
+  assert.deepEqual(quebrada.map((b) => faixaHoraria(b.inicio, b.fim)), ['20:00 às 21:00', '21:00 às 21:30'])
+})
+
+test('o intervalo cancelado precisa ser contíguo', () => {
+  const blocos = blocosDeHora('2026-09-29T20:00:00-03:00', '2026-09-29T23:00:00-03:00')
+
+  const primeira = intervaloSelecionado(blocos, [0])
+  assert.equal(primeira.ok, true)
+  assert.equal(primeira.sessaoInteira, false)
+  assert.equal(faixaHoraria(primeira.inicio, primeira.fim), '20:00 às 21:00')
+
+  const meio = intervaloSelecionado(blocos, [1])
+  assert.equal(faixaHoraria(meio.inicio, meio.fim), '21:00 às 22:00')
+
+  const tudo = intervaloSelecionado(blocos, [2, 0, 1])
+  assert.equal(tudo.sessaoInteira, true)
+
+  const separados = intervaloSelecionado(blocos, [0, 2])
+  assert.equal(separados.ok, false)
+  assert.match(separados.erro, /horários seguidos/)
+
+  assert.equal(intervaloSelecionado(blocos, []).ok, false)
+})
+
+test('a descrição do crédito parcial mantém o texto combinado e diz o horário', () => {
+  assert.equal(
+    descricaoCreditoHorarioCancelado('2026-09-29T20:00:00-03:00', '2026-09-29T21:00:00-03:00'),
+    'Crédito lançado referente a jogo não realizado do dia 29/09/2026 (20:00 às 21:00)'
+  )
+})
+
+test('o cancelamento usa a RPC parcial com o intervalo escolhido', () => {
+  const body = actions.slice(actions.indexOf('export async function cancelarSessaoMensalistaAction'))
+  assert.match(body, /\.rpc\('cancel_mensalista_booking_partial_atomic'/)
+  assert.match(body, /p_cancel_start: parsed\.cancelInicio/)
+  assert.match(body, /p_cancel_end: parsed\.cancelFim/)
+  // a cotação do crédito segue a tabela do plano, agora para o intervalo escolhido
+  const quote = actions.slice(
+    actions.indexOf('export async function quoteSessaoMensalistaAction'),
+    actions.indexOf('const cancelarSessaoSchema')
+  )
+  assert.match(quote, /parsed\.intervalo\?\.inicio \?\? booking\.start_time/)
+  assert.match(modal, /aria-label="Horários a cancelar"/)
+})
+
+test('liberar o horário = encurtar/dividir a reserva; plano e mensalidade intactos', { skip: !hasDbRepo }, () => {
+  const sql = partialMigration()
+  assert.match(sql, /SET end_time = p_cancel_start/)
+  assert.match(sql, /SET start_time = p_cancel_end/)
+  assert.match(sql, /RETURN public\.cancel_mensalista_booking_atomic\(/, 'o dia inteiro delega')
+  assert.doesNotMatch(sql, /UPDATE public\.planos_mensalista|public\.mensalista_mensalidades|public\.mensalista_cobrancas/)
+  assert.doesNotMatch(sql, /public\.transactions/, 'cancelar não é evento de caixa')
 })

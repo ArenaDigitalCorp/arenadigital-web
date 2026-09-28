@@ -52,36 +52,6 @@ export async function confirmarPagamentoAvulsoAction(
     }
 }
 
-export async function confirmarPagamentoParticipanteAvulsoAction(
-    arenaId: string,
-    bookingId: string,
-    participantId: string,
-    valorOverride?: number,
-    modoPagamentoId?: string | null
-): Promise<{ success: boolean; error?: string }> {
-    try {
-        await assertBookingAccess(bookingId, arenaId)
-        const { dbUserId } = await requireAuthenticatedDbUser()
-        const supabase = getSupabaseAdmin()
-
-        const { error } = await supabase.rpc('confirm_backoffice_participant_payment', {
-            p_arena_id: arenaId,
-            p_booking_id: bookingId,
-            p_participant_id: participantId,
-            p_registered_by: dbUserId,
-            p_amount: valorOverride !== undefined && valorOverride > 0 ? valorOverride : undefined,
-            p_modo_pagamento_id: modoPagamentoId ?? undefined,
-        })
-
-        if (error) throw new Error(error.message)
-        revalidateBookingFinancePaths(arenaId)
-        return { success: true }
-    } catch (err) {
-        const message = err instanceof Error ? err.message : 'Erro ao confirmar pagamento do participante'
-        return { success: false, error: message }
-    }
-}
-
 export interface BookingConflict {
     date: string          // ISO string da reserva conflitante existente
     startTime: string     // "HH:MM" formatado
@@ -103,6 +73,20 @@ export type BackofficeBookingBundleInput = {
     slots: { start_time: string; end_time: string }[]
     services: { product_id: string; quantity: number }[]
     additionalAthleteIds: string[]
+    /**
+     * Partes do rateio (obrigatório quando `splitBilling`): `valor` é a parte da
+     * LOCAÇÃO de cada pessoa — os serviços somam na parte do responsável no banco.
+     * `atletaId` nulo = pessoa sem cadastro (identificada por `nome`).
+     */
+    rateio?: BookingRateioEntry[]
+}
+
+export type BookingRateioEntry = {
+    cobrancaId?: string | null
+    atletaId: string | null
+    nome?: string | null
+    valor: number
+    responsavel?: boolean
 }
 
 export async function saveBackofficeBookingBundleAction(
@@ -127,6 +111,25 @@ export async function saveBackofficeBookingBundleAction(
         const safeSlots = input.slots.map(({ start_time, end_time }) => ({ start_time, end_time }))
         const safeServices = input.services.map(({ product_id, quantity }) => ({ product_id, quantity }))
         const safeAdditionalAthletes = Array.from(new Set(input.additionalAthleteIds))
+        if (input.splitBilling) {
+            const rateio = input.rateio ?? []
+            if (rateio.length < 2) throw new Error('O rateio precisa de pelo menos duas pessoas')
+            if (rateio.filter((r) => r.responsavel).length !== 1) {
+                throw new Error('O rateio precisa de exatamente um responsável')
+            }
+            if (rateio.some((r) => !Number.isFinite(r.valor) || r.valor < 0)) {
+                throw new Error('Informe valores válidos para o rateio')
+            }
+        }
+        const safeRateio = input.splitBilling
+            ? (input.rateio ?? []).map((r) => ({
+                  cobranca_id: r.cobrancaId ?? null,
+                  atleta_id: r.atletaId,
+                  nome: r.nome?.trim() || null,
+                  valor: Math.round(r.valor * 100) / 100,
+                  responsavel: Boolean(r.responsavel),
+              }))
+            : null
         const rpc = getSupabaseAdmin() as unknown as {
             rpc: (
                 name: 'save_backoffice_booking_bundle_atomic',
@@ -151,8 +154,9 @@ export async function saveBackofficeBookingBundleAction(
             p_services: safeServices,
             p_responsible_athlete_id: input.athleteId ?? null,
             p_additional_athlete_ids: safeAdditionalAthletes,
-            p_participant_value: input.splitBilling ? input.rentalPrice : null,
+            p_participant_value: null,
             p_registered_by: dbUserId,
+            p_rateio: safeRateio,
         })
 
         if (error) throw new Error(error.message)

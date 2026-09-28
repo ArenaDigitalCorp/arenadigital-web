@@ -429,13 +429,21 @@ export type SessaoMensalistaQuote = {
  */
 export async function quoteSessaoMensalistaAction(
   arenaId: string,
-  bookingId: string
+  bookingId: string,
+  /** Só parte do jogo (cancelamento de horário); omitido = a sessão inteira. */
+  intervalo?: { inicio: string; fim: string }
 ): Promise<{ success: boolean; data?: SessaoMensalistaQuote; error?: string }> {
   try {
     await assertArenaBackofficeAccess(arenaId);
     const parsed = z
-      .object({ arenaId: uuidSchema, bookingId: uuidSchema })
-      .parse({ arenaId, bookingId });
+      .object({
+        arenaId: uuidSchema,
+        bookingId: uuidSchema,
+        intervalo: z
+          .object({ inicio: z.string().datetime({ offset: true }), fim: z.string().datetime({ offset: true }) })
+          .optional(),
+      })
+      .parse({ arenaId, bookingId, intervalo });
 
     const supabase = getSupabaseAdmin() as unknown as LooseClient;
 
@@ -476,11 +484,22 @@ export async function quoteSessaoMensalistaAction(
       }
     }
 
+    // O intervalo cotado precisa estar dentro da sessão.
+    const inicio = new Date(parsed.intervalo?.inicio ?? booking.start_time);
+    const fim = new Date(parsed.intervalo?.fim ?? booking.end_time);
+    if (
+      fim <= inicio ||
+      inicio < new Date(booking.start_time) ||
+      fim > new Date(booking.end_time)
+    ) {
+      throw new Error('O horário escolhido precisa estar dentro da reserva.');
+    }
+
     const { data: valor, error: quoteError } = await supabase.rpc('resolve_court_price', {
       p_court_id: booking.court_id,
       p_price_table_id: priceTableId,
-      p_start: new Date(booking.start_time).toISOString(),
-      p_end: new Date(booking.end_time).toISOString(),
+      p_start: inicio.toISOString(),
+      p_end: fim.toISOString(),
     });
     if (quoteError) throw new Error(quoteError.message);
 
@@ -512,27 +531,36 @@ export async function quoteSessaoMensalistaAction(
   }
 }
 
-const cancelarSessaoSchema = z.object({
-  arenaId: uuidSchema,
-  bookingId: uuidSchema,
-  operationId: uuidSchema,
-  lancarCredito: z.boolean(),
-  valorCredito: z.number().nonnegative().max(1_000_000),
-  descricao: z.string().trim().max(500),
-});
+const cancelarSessaoSchema = z
+  .object({
+    arenaId: uuidSchema,
+    bookingId: uuidSchema,
+    operationId: uuidSchema,
+    lancarCredito: z.boolean(),
+    valorCredito: z.number().nonnegative().max(1_000_000),
+    descricao: z.string().trim().max(500),
+    /** Parte do jogo a cancelar (ex.: só a 1ª hora). O banco valida que está dentro da reserva. */
+    cancelInicio: z.string().datetime({ offset: true }),
+    cancelFim: z.string().datetime({ offset: true }),
+  })
+  .refine((v) => new Date(v.cancelFim) > new Date(v.cancelInicio), {
+    message: 'O horário final precisa ser depois do inicial.',
+  });
 
 export type CancelarSessaoInput = z.infer<typeof cancelarSessaoSchema>;
 
 /**
- * Cancela **uma** sessão do plano e, se pedido, lança o crédito na mesma
+ * Cancela **uma** sessão do plano — inteira ou só parte dela (ex.: a 1ª hora,
+ * que fica livre para outra reserva) — e, se pedido, lança o crédito na mesma
  * transação. Não encerra o plano, não mexe na mensalidade nem nas cobranças: o
- * mês continua devido e o crédito é a compensação.
+ * mês continua devido e o crédito é a compensação. Intervalo igual à sessão
+ * inteira é o cancelamento do dia (o banco delega).
  */
 export async function cancelarSessaoMensalistaAction(
   input: unknown
 ): Promise<{
   success: boolean;
-  data?: { creditoId: string | null; valorCredito: number; saldo: number };
+  data?: { creditoId: string | null; valorCredito: number; saldo: number; parcial: boolean };
   error?: string;
 }> {
   try {
@@ -545,10 +573,12 @@ export async function cancelarSessaoMensalistaAction(
     }
 
     const supabase = getSupabaseAdmin() as unknown as LooseClient;
-    const { data, error } = await supabase.rpc('cancel_mensalista_booking_atomic', {
+    const { data, error } = await supabase.rpc('cancel_mensalista_booking_partial_atomic', {
       p_operation_id: parsed.operationId,
       p_arena_id: parsed.arenaId,
       p_booking_id: parsed.bookingId,
+      p_cancel_start: parsed.cancelInicio,
+      p_cancel_end: parsed.cancelFim,
       p_lancar_credito: parsed.lancarCredito,
       p_valor_credito: parsed.lancarCredito ? parsed.valorCredito : 0,
       p_descricao: parsed.lancarCredito ? parsed.descricao : null,
@@ -560,6 +590,7 @@ export async function cancelarSessaoMensalistaAction(
       credito_id?: string | null;
       valor_credito?: number | string;
       saldo?: number | string;
+      partial?: boolean;
     };
 
     revalidateMonthlyPlanPaths(parsed.arenaId);
@@ -571,6 +602,7 @@ export async function cancelarSessaoMensalistaAction(
         creditoId: result.credito_id ?? null,
         valorCredito: Number(result.valor_credito ?? 0),
         saldo: Number(result.saldo ?? 0),
+        parcial: Boolean(result.partial),
       },
     };
   } catch (err) {

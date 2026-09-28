@@ -37,6 +37,7 @@ import { buildUsageLines, saoPauloWallClock } from '@/modules/reports/usage-line
 import { matchPriceDay, priceAtInstant } from '@/modules/courts/lib/court-price-resolver'
 import type { CourtPriceDay } from '@/modules/courts/types/price-table.types'
 import type { PerfilAtleta } from '@/modules/athletes/types/perfil.types'
+import { restanteDoAtletaNoRateio, valorRateioNoRelatorio } from '@/modules/bookings/lib/booking-rateio'
 
 /**
  * `planos_mensalista_blocos` (blocos por recorrência) e a mensalidade/cobrança
@@ -628,7 +629,7 @@ async function computeAthleteDebtSummary(
 
   const avulsoQuery = supabase
     .from('bookings')
-    .select('id, athlete_id, price, status, plano_mensalista_id, cobranca_por_participante, booking_participants(atleta_id, funcao, valor, pago_em)')
+    .select('id, athlete_id, price, status, plano_mensalista_id, cobranca_por_participante, booking_cobrancas(atleta_id, valor_devido, valor_pago)')
     .eq('arena_id', arenaId)
     .is('plano_mensalista_id', null)
     .in('status', ['reservado', 'pending_payment'])
@@ -653,14 +654,18 @@ async function computeAthleteDebtSummary(
     athlete_id: string | null
     price: number | null
     cobranca_por_participante: boolean
-    booking_participants: Array<{ atleta_id: string; funcao: string; valor: number | null; pago_em: string | null }>
+    booking_cobrancas: Array<{ atleta_id: string | null; valor_devido: number; valor_pago: number }> | null
   }>) {
-    const participants = (b.booking_participants ?? []).filter(
-      (p) => p.funcao === 'responsavel' || p.funcao === 'convidado'
-    )
-    if (b.cobranca_por_participante && participants.length > 0) {
-      const mine = participants.find((p) => p.atleta_id === atletaId && !p.pago_em)
-      if (mine) avulso += Number(mine.valor ?? b.price ?? 0)
+    if (b.cobranca_por_participante) {
+      // Rateio: só a parte dele que ainda falta (considera pagamentos parciais).
+      avulso += restanteDoAtletaNoRateio(
+        atletaId,
+        (b.booking_cobrancas ?? []).map((c) => ({
+          atleta_id: c.atleta_id,
+          valor_devido: Number(c.valor_devido),
+          valor_pago: Number(c.valor_pago),
+        }))
+      )
     } else if (b.athlete_id === atletaId) {
       avulso += Number(b.price ?? 0)
     }
@@ -697,7 +702,7 @@ export async function getPaymentStatusReportAction(
 
     let query = supabase
       .from('bookings')
-      .select('id, start_time, end_time, status, price, athlete_name, plano_mensalista_id, court_id, sport_id, cobranca_por_participante, courts!bookings_court_id_fkey(id, name), sports(id, name), atleta:athlete_id(id, nome_perfil, telefone), booking_participants(id, atleta_id, funcao, pago_em, valor)')
+      .select('id, start_time, end_time, status, price, athlete_name, plano_mensalista_id, court_id, sport_id, cobranca_por_participante, courts!bookings_court_id_fkey(id, name), sports(id, name), atleta:athlete_id(id, nome_perfil, telefone), booking_participants(id, atleta_id, funcao), booking_cobrancas(atleta_id, valor_devido, valor_pago)')
       .eq('arena_id', arenaId)
       .order('start_time', { ascending: false })
       .order('id', { ascending: false })
@@ -893,8 +898,16 @@ export async function getPaymentStatusReportAction(
         (b: { plano_mensalista_id: string | null }) =>
           !b.plano_mensalista_id || !planosComMensalidade.has(b.plano_mensalista_id)
       )
-      .filter((b: { atleta?: { id: string } | null; booking_participants?: { atleta_id: string }[] }) => {
-        const ids = [b.atleta?.id, ...(b.booking_participants ?? []).map((p) => p.atleta_id)]
+      .filter((b: {
+        atleta?: { id: string } | null
+        booking_participants?: { atleta_id: string }[]
+        booking_cobrancas?: { atleta_id: string | null }[]
+      }) => {
+        const ids = [
+          b.atleta?.id,
+          ...(b.booking_participants ?? []).map((p) => p.atleta_id),
+          ...(b.booking_cobrancas ?? []).map((c) => c.atleta_id ?? undefined),
+        ]
         return matchesAtleta(ids, filters.atletaId) && matchesPerfil(ids, filters.perfil, perfilPorAtleta)
       })
 
@@ -946,25 +959,17 @@ export async function getPaymentStatusReportAction(
       if (b.status === 'confirmed') status = 'Pago'
       else if (b.status === 'cancelled') status = 'Cancelado'
 
-      const billingParticipants = (b.booking_participants ?? []).filter(
-        (p: { funcao?: string }) => p.funcao === 'responsavel' || p.funcao === 'convidado'
-      )
       let valor: number | null = b.price ?? null
-      if (b.cobranca_por_participante && billingParticipants.length > 0) {
-        if (b.status === 'reservado') {
-          const unpaid = billingParticipants.filter((p: { pago_em?: string | null }) => !p.pago_em)
-          valor = unpaid.reduce(
-            (sum: number, p: { valor?: number | null }) =>
-              sum + Number(p.valor ?? b.price ?? 0),
-            0
-          )
-        } else {
-          valor = billingParticipants.reduce(
-            (sum: number, p: { valor?: number | null }) =>
-              sum + Number(p.valor ?? b.price ?? 0),
-            0
-          )
-        }
+      if (b.cobranca_por_participante) {
+        // Rateio: o total vem das partes (booking_cobrancas); em reservas
+        // antigas `price` ainda guarda o valor por pessoa.
+        valor = valorRateioNoRelatorio(
+          b.status,
+          (b.booking_cobrancas ?? []).map((c: { valor_devido: number; valor_pago: number }) => ({
+            valor_devido: Number(c.valor_devido),
+            valor_pago: Number(c.valor_pago),
+          }))
+        )
       }
 
       const ehMensal = Boolean(b.plano_mensalista_id)
