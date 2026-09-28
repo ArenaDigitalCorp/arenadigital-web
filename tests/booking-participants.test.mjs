@@ -57,3 +57,23 @@ test('reserva sem participantes usa o nome do responsável', () => {
   assert.deepEqual(getBookingParticipantNames({ atleta: { nome_perfil: 'Bia' } }), ['Bia'])
   assert.equal(formatBookingParticipantLabel({ booking_participants: [] }), '—')
 })
+
+test('rateio: pessoas sem cadastro entram depois dos cadastrados', () => {
+  const booking = {
+    athlete_id: null,
+    athlete_name: 'Pedro Sem Cadastro',
+    booking_participants: [participant('osni', 'Osni Jacó da Silva')],
+    booking_cobrancas: [
+      { atleta_id: null, nome: 'Pedro Sem Cadastro', responsavel: true },
+      { atleta_id: 'osni', nome: 'Osni Jacó da Silva', responsavel: false },
+      { atleta_id: null, nome: 'Lia Visitante', responsavel: false },
+    ],
+  }
+
+  assert.deepEqual(getBookingParticipantNames(booking), [
+    'Pedro Sem Cadastro',
+    'Osni Jacó da Silva',
+    'Lia Visitante',
+  ])
+  assert.equal(formatBookingParticipantLabel(booking), 'Pedro Sem Cadastro, Osni Jacó da Silva +1')
+})

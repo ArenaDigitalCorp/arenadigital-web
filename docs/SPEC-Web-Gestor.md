@@ -1689,9 +1689,9 @@ qualquer `tipo`, inclusive `todos`) — não depende do checkbox Rateio nem do f
 de Espaço/Esporte (dívida é do atleta, não de uma quadra).
 
 - **Avulso devido:** `bookings` sem `plano_mensalista_id`, `status IN (reservado,
-  pending_payment)`, no mês; soma `price` quando o atleta é `athlete_id`, ou a fatia
-  não paga (`booking_participants.valor` sem `pago_em`) quando é convidado de reserva
-  com `cobranca_por_participante`.
+  pending_payment)`, no mês; soma `price` quando o atleta é `athlete_id` (reserva sem
+  rateio), ou — em reserva com rateio (`cobranca_por_participante`) — o que falta da
+  parte dele em `booking_cobrancas` (`valor_devido - valor_pago`, ver §40).
 - **Mensal devido:** `mensalista_cobrancas` do atleta (`atleta_id = filtro`,
   `ativo = true`) cuja mensalidade (`!inner` join) é da `arena` e `competencia` do
   mês; soma `valor_devido - valor_pago - credito_aplicado` (clampado em 0).
@@ -2741,3 +2741,77 @@ Só apresentação; nenhum contrato, RPC ou migração em `arenadigital-db`.
 `tests/booking-participants.test.mjs`: responsável vindo depois dos convidados,
 fallback por `athlete_id`, responsável ausente dos participantes e reserva sem
 participantes.
+
+## 40. Rateio na reserva avulsa (28/09/2026)
+
+Plano completo: `docs/PLANO-Rateio-Reserva-Avulsa.md`. Ordem de deploy: `arenadigital-db`
+(migrações `20260928140000`…`20260928140600`) → web.
+
+### 40.1 Modelo de dados (arenadigital-db)
+
+- `booking_cobrancas` — uma parte por pessoa: `booking_id`, `atleta_id` (NULL = sem
+  cadastro), `nome`, `responsavel` (1 por reserva), `valor_devido` (inclui
+  `valor_servicos`, só no responsável), `valor_pago`, `status` gerado
+  (`aberto`/`parcial`/`quitado`), `pago_em`. Leitura RLS por
+  `can_access_arena_backoffice`; escrita só por RPC.
+- `booking_cobranca_pagamentos` — razão de pagamentos parciais; cada pagamento espelha
+  uma `transactions` (`source_type = 'booking_cobranca_pagamento'`, categoria
+  "Reserva Avulsa", descrição `Rateio - <nome> - dd/mm/aaaa`).
+- `bookings.cobranca_por_participante` = rateio ativo. `bookings.price` = soma das
+  partes; `rental_price` = locação digitada. Reservas legadas (backfill) ainda guardam
+  o valor por pessoa em `price` até a migração de limpeza — por isso o web **nunca** lê
+  `price` como total de uma reserva com rateio (`locacaoDoRateio`, `buildAvulsoItem`,
+  `valorRateioNoRelatorio`).
+- `booking_participants` continua sendo a participação social (app/notificações); o
+  atleta cadastrado do rateio também tem linha lá. `valor`/`pago_em` de lá são só um
+  espelho para o web anterior (transição).
+
+### 40.2 RPCs (service_role)
+
+| RPC | Uso no web |
+|---|---|
+| `save_backoffice_booking_bundle_atomic(..., p_rateio jsonb)` | `saveBackofficeBookingBundleAction` — `p_rateio = [{cobranca_id?, atleta_id, nome?, valor, responsavel}]`, `p_participant_value = null` |
+| `configure_booking_rateio_atomic` | `configurarRateioAction` |
+| `add_booking_rateio_participante_atomic` | `adicionarParticipanteRateioAction` |
+| `update_booking_rateio_valores_atomic` (`[{cobranca_id, valor}]`, valor = parte da locação) | `atualizarValoresRateioAction` |
+| `remove_booking_rateio_participante_atomic` (estorno) | `removerParticipanteRateioAvulsoAction` |
+| `register_booking_cobranca_payment_atomic` (idempotente por `operationId`) | `registrarPagamentoRateioAction` |
+
+`src/modules/bookings/actions/bookingRateioActions.ts`: todas validam com zod
+(`schemas/booking-rateio.schema.ts`), exigem `assertArenaBackofficeAccess` +
+`assertBookingAccess`/`assertArenaScopedResourceAccess('booking_cobrancas')` e devolvem
+um `RateioSnapshot` (`bookingStatus`, `rateioAtivo`, `rentalPrice`, `cobrancas`).
+`confirmarPagamentoParticipanteAvulsoAction` foi removida (o banco mantém
+`confirm_backoffice_participant_payment` só para o web anterior).
+
+### 40.3 Regras puras (`src/modules/bookings/lib/booking-rateio.ts`)
+
+`dividirIgualmente` (centavos no 1º = responsável), `diferencaRateio`, `parteLocacao`
+(`devido - serviços`), `resumoRateio`, `sortCobrancas` (responsável primeiro),
+`locacaoDoRateio` (legado quando `price ≠ soma das partes`), `valorRateioNoRelatorio`
+(pendente → falta; depois → total), `restanteDoAtletaNoRateio`.
+`src/modules/finance/lib/avulsos-list.ts`: `buildAvulsoItem` (uma linha por reserva),
+`resumoAvulsos` (cards), `matchesAvulsoSearch` (inclui nomes do rateio).
+
+### 40.4 Telas
+
+- `AvulsasPageClient` + `rateio/GerenciarRateioAvulsoModal` +
+  `rateio/RegistrarPagamentoRateioModal`. A página aceita `?booking=<uuid>` para abrir o
+  rateio da reserva (link do calendário). O modal é remontado por reserva (`key`).
+- `BookingModal`: toggle "Rateio" + `rateio/RateioAvulsoField` (partes por chave
+  `resp` | atleta | `avulso:<id>`, divisão igual automática até o gestor editar);
+  serviços liberados com rateio; na edição reaproveita `cobranca_id` (o responsável só
+  quando continua o mesmo).
+- `BookingDetailsModal`: resumo do rateio lido de `booking_cobrancas` (embed no
+  `BOOKING_SELECT` do repositório) + link "Gerenciar em Avulsos"; botão "Ratear" na
+  avulsa comum pendente.
+- `booking-participants.ts`: pessoas sem cadastro do rateio entram no rótulo depois dos
+  cadastrados.
+
+### 40.5 Testes
+
+`tests/booking-rateio.test.mjs` (regras puras + lista de Avulsos; registra um resolvedor
+de `@/` só no teste), `tests/booking-participants.test.mjs` (sem cadastro no rótulo),
+`tests/atomic-booking-bundle.test.mjs` (contrato `p_rateio`/`p_participant_value: null`).
+No banco: `supabase/tests/20260928140000_booking_rateio_test.sql` (47 asserções) e
+`tests/booking-rateio.test.mjs` do `arenadigital-db`.

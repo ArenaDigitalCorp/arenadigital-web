@@ -527,6 +527,28 @@ Novo grupo expansível **"Gestão Reservas"** no menu lateral (mesmo padrão vis
 
 A seção "Cobranças Avulsas" que antes aparecia na parte de baixo da página de **Financeiro** foi removida de lá — a página de Avulsos (agora com entrada própria no menu) passa a ser o único lugar para acompanhar e confirmar cobranças avulsas. Financeiro fica só com Saldo/Entradas/Despesas do mês, o comparativo e as últimas entradas/saídas.
 
+### 5.19 Rateio na reserva avulsa (28/09/2026)
+- **Status:** Implementado (banco em `arenadigital-db` + web). Substitui a antiga "Cobrança separada por participante".
+- **Objetivo:** dividir o valor de uma reserva avulsa entre as pessoas que jogam, no mesmo molde do rateio de mensalista, com gestão posterior em **Gestão Reservas → Avulsos**.
+- **Regras:**
+  - O toggle **Rateio** no cadastro/edição da reserva (calendário) divide o **valor da locação** — o campo de valor volta a ser o total, não mais o valor por pessoa.
+  - Pessoas do rateio: o **responsável** (dono da reserva, com ou sem cadastro), **atletas cadastrados** e **pessoas sem cadastro** (só o nome), como no mensalista.
+  - **Valores livres por pessoa**; a divisão igual (centavos no responsável) é só a sugestão inicial e o botão **Dividir igualmente**. Quando a soma das partes não fecha com a locação, a tela mostra a diferença como aviso, sem bloquear.
+  - **Serviços** são permitidos com rateio e entram na parte do **responsável** (só a locação é rateada).
+  - **Pagamento parcial por pessoa** (devido / pago / falta; status Pendente, Parcial, Pago). A reserva é **confirmada automaticamente** quando todas as partes quitam.
+  - **Excluir quem já pagou** estorna o que a pessoa pagou (a entrada sai do Financeiro), após confirmação mostrando o valor. O responsável não sai do rateio; para isso, desativa-se o rateio.
+  - **Desativar o rateio** só enquanto ninguém pagou nada: a reserva volta a ser uma cobrança única do responsável.
+  - Reserva já confirmada (todos pagaram) ou cancelada: rateio só para consulta.
+  - Rateio vale para reserva de **um único horário** (a grade multi-horário continua sem rateio).
+- **Gestão Reservas → Avulsos:**
+  - Uma linha por **reserva**. Reserva com rateio mostra "Rateio · N pessoas" (expansível com cada pessoa, valor e status), "R$ pago · X/N quitaram" e status **Parcial** quando há pagamento parcial.
+  - Ações: **Gerenciar rateio** (rateio pendente), **Ver rateio** (paga/cancelada), **Ratear** e **Confirmar** (reserva comum pendente).
+  - Modal **Rateio da reserva**: resumo Locação / Pago / Falta; por pessoa, valor editável, **Registrar pagamento** (valor, data, forma, observação — parcial permitido) e lixeira (com estorno se já pagou); **Adicionar pessoa** (busca de atleta ou nome sem cadastro, com sugestão do valor que falta para fechar a locação); **Dividir igualmente**, **Salvar valores**, **Ativar/Desativar rateio**.
+  - Cards: **Reservas pendentes** (com o total a receber), **Reservas pagas**, **Total recebido** (inclui pagamentos parciais de rateio). A busca encontra também as pessoas do rateio, inclusive sem cadastro.
+- **Calendário do espaço:** o rótulo da reserva inclui as pessoas sem cadastro após os cadastrados (responsável sempre primeiro). Os **detalhes da reserva** mostram o rateio (pessoas, valores, status, total, pago e falta) e o link **Gerenciar em Avulsos**, que abre direto o rateio daquela reserva; reserva comum pendente ganha o botão **Ratear**.
+- **Relatórios (Pagamentos Reservas):** reserva com rateio vale o que falta pagar enquanto pendente e o total das partes depois; "quanto o atleta deve de Avulso" considera só a parte dele que falta (com parciais); o filtro de atleta encontra quem está no rateio.
+- **Reservas antigas** com cobrança separada foram migradas para o rateio automaticamente, mantendo quem já pagou e os lançamentos no Financeiro.
+
 - Interface simples e responsiva
 - Performance adequada para uso diário
 - Segurança no acesso e nos dados

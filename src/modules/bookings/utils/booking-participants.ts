@@ -14,7 +14,8 @@ function participantName(p: ParticipantEmbed): string | null {
 /**
  * Nomes para exibição no calendário/detalhes. O responsável pela reserva vem
  * sempre primeiro, seguido dos participantes adicionais — o banco devolve o
- * embed de `booking_participants` sem ordem garantida.
+ * embed de `booking_participants` sem ordem garantida. Pessoas sem cadastro do
+ * rateio (`booking_cobrancas` sem atleta) entram por último.
  */
 export function getBookingParticipantNames(booking: Booking | null | undefined): string[] {
     if (!booking) return []
@@ -27,9 +28,14 @@ export function getBookingParticipantNames(booking: Booking | null | undefined):
         (booking.athlete_id ? raw.find((p) => p.atleta_id === booking.athlete_id) : undefined)
     const others = raw.filter((p) => p !== responsible)
 
+    const semCadastro = (booking.booking_cobrancas ?? [])
+        .filter((c) => !c.atleta_id && !c.responsavel)
+        .map((c) => c.nome)
+
     const names = [
         (responsible && participantName(responsible)) ?? ownerName,
         ...others.map(participantName),
+        ...semCadastro,
     ].filter((n): n is string => Boolean(n))
 
     return Array.from(new Set(names))
