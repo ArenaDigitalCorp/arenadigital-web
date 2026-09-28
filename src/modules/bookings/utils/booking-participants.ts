@@ -11,21 +11,28 @@ function participantName(p: ParticipantEmbed): string | null {
     return atleta?.nome_perfil ?? null
 }
 
-/** Nomes para exibição no calendário/detalhes (participantes ou responsável legado). */
+/**
+ * Nomes para exibição no calendário/detalhes. O responsável pela reserva vem
+ * sempre primeiro, seguido dos participantes adicionais — o banco devolve o
+ * embed de `booking_participants` sem ordem garantida.
+ */
 export function getBookingParticipantNames(booking: Booking | null | undefined): string[] {
     if (!booking) return []
 
-    const raw = (booking as Booking & { booking_participants?: ParticipantEmbed[] }).booking_participants
-    if (raw?.length) {
-        const names = raw
-            .map(participantName)
-            .filter((n): n is string => Boolean(n))
-        if (names.length > 0) return Array.from(new Set(names))
-    }
+    const ownerName = booking.athlete_name || booking.atleta?.nome_perfil || null
+    const raw = (booking as Booking & { booking_participants?: ParticipantEmbed[] }).booking_participants ?? []
 
-    if (booking.athlete_name) return [booking.athlete_name]
-    if (booking.atleta?.nome_perfil) return [booking.atleta.nome_perfil]
-    return []
+    const responsible =
+        raw.find((p) => p.funcao === 'responsavel') ??
+        (booking.athlete_id ? raw.find((p) => p.atleta_id === booking.athlete_id) : undefined)
+    const others = raw.filter((p) => p !== responsible)
+
+    const names = [
+        (responsible && participantName(responsible)) ?? ownerName,
+        ...others.map(participantName),
+    ].filter((n): n is string => Boolean(n))
+
+    return Array.from(new Set(names))
 }
 
 export function formatBookingParticipantLabel(booking: Booking | null | undefined): string {

@@ -168,6 +168,13 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
 - **Navegação:** "Anterior"/"Próximo" avançam por mês (em vez de dia/semana) e "Hoje" volta ao mês corrente, mantendo o padrão já usado nas outras visões.
 - **Clicar num dia** leva para a visão **Dia** daquela data (mesma tela de agendamento por horário); **clicar numa reserva** dentro da visão de Mês abre os detalhes dela diretamente, sem trocar de visão.
 
+#### 5.5.3 Responsável sempre primeiro no nome da reserva (correção)
+- **Status:** Implementado (28/09/2026).
+- **Regra (todo o sistema):** onde uma reserva é identificada pelos nomes dos jogadores, o **responsável pela reserva** aparece sempre primeiro, seguido dos participantes adicionais. Ex.: "Iria STERTZ, Osni Jacó da Silva +9".
+- **Problema corrigido:** no calendário do espaço (Dia, Semana e Mês), reservas com vários participantes podiam exibir um convidado primeiro (ex.: "Osni Jacó da Silva, Eriéte Maria Consoni +9" numa reserva da Iria STERTZ), porque a ordem dos participantes vinda do banco não é garantida.
+- A tela de **Solicitações do app** também passou a listar o responsável primeiro entre os participantes.
+- As demais telas (Operação do dia, Gestão Reservas, detalhes da reserva, relatórios) já exibem o responsável em campo próprio e não mudaram.
+
 ---
 
 ### 5.6 Gestão de Usuários

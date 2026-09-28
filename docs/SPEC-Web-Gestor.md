@@ -2701,3 +2701,43 @@ mensalidade, rateio ao centavo, estreia proporcional, mensalidade zerada, rateio
 cancelado, resumo por atleta, colunas do Excel). `tests/payment-status-pdf.test.mjs`
 ajustado: "Horas ocupadas" continua fora do resumo do período; horas só aparecem
 no extrato e no resumo por atleta com o detalhamento ligado.
+
+## 39. Responsável sempre primeiro no rótulo da reserva (28/09/2026)
+
+### 39.1 Problema
+
+O embed `booking_participants(...)` do PostgREST não tem ordem garantida (na
+prática veio por `atleta_id`). `getBookingParticipantNames`
+(`src/modules/bookings/utils/booking-participants.ts`) usava essa ordem crua, então
+`formatBookingParticipantLabel` — rótulo dos cards de Dia/Semana/Mês e das
+"oportunidades" em `CourtCalendarPageClient.tsx` — podia começar por um convidado.
+
+### 39.2 Regra
+
+`getBookingParticipantNames(booking)` monta a lista assim:
+
+1. **Responsável:** participante com `funcao = 'responsavel'`; na falta dele, o
+   participante cujo `atleta_id = bookings.athlete_id`. Se nenhum participante for o
+   responsável, entra `bookings.athlete_name` (ou `atleta.nome_perfil`) — reservas
+   legadas em que o dono não tem linha em `booking_participants` passam a exibi-lo.
+2. **Demais participantes**, na ordem recebida.
+3. Nomes vazios são descartados e duplicados removidos (`Set`).
+
+`formatBookingParticipantLabel` não mudou: até 2 nomes separados por vírgula e
+`+N` para o restante (ex.: `Iria STERTZ, Osni Jacó da Silva +9`); lista vazia → `—`.
+
+### 39.3 Solicitações do app
+
+`getAppBookingRequestsAction` (`appBookingRequestActions.ts`) ordena
+`participants` com `role = 'responsavel'` primeiro (sort estável: o resto mantém a
+ordem), o que vale para a lista de chips em `AppBookingRequestsPageClient`.
+
+### 39.4 Sem mudança de banco
+
+Só apresentação; nenhum contrato, RPC ou migração em `arenadigital-db`.
+
+### 39.5 Testes
+
+`tests/booking-participants.test.mjs`: responsável vindo depois dos convidados,
+fallback por `athlete_id`, responsável ausente dos participantes e reserva sem
+participantes.
