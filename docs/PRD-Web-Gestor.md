@@ -168,6 +168,13 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
 - **Navegação:** "Anterior"/"Próximo" avançam por mês (em vez de dia/semana) e "Hoje" volta ao mês corrente, mantendo o padrão já usado nas outras visões.
 - **Clicar num dia** leva para a visão **Dia** daquela data (mesma tela de agendamento por horário); **clicar numa reserva** dentro da visão de Mês abre os detalhes dela diretamente, sem trocar de visão.
 
+#### 5.5.3 Responsável sempre primeiro no nome da reserva (correção)
+- **Status:** Implementado (28/09/2026).
+- **Regra (todo o sistema):** onde uma reserva é identificada pelos nomes dos jogadores, o **responsável pela reserva** aparece sempre primeiro, seguido dos participantes adicionais. Ex.: "Iria STERTZ, Osni Jacó da Silva +9".
+- **Problema corrigido:** no calendário do espaço (Dia, Semana e Mês), reservas com vários participantes podiam exibir um convidado primeiro (ex.: "Osni Jacó da Silva, Eriéte Maria Consoni +9" numa reserva da Iria STERTZ), porque a ordem dos participantes vinda do banco não é garantida.
+- A tela de **Solicitações do app** também passou a listar o responsável primeiro entre os participantes.
+- As demais telas (Operação do dia, Gestão Reservas, detalhes da reserva, relatórios) já exibem o responsável em campo próprio e não mudaram.
+
 ---
 
 ### 5.6 Gestão de Usuários
@@ -423,7 +430,7 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
 - **Problema:** o mensalista que avisava com antecedência que não ia a uma das sessões não tinha tratamento. A tela de detalhes da reserva recusava cancelar qualquer reserva de mensalista ("Gerencie via Mensalistas"), e cancelar pelo módulo de Mensalistas encerrava a recorrência inteira. Na prática o gestor ficava sem registro: ou deixava o horário ocupado, ou combinava o crédito por fora.
 - **Caso coberto:** ele comprou 4 quartas do mês, faltou à terceira e avisou antes. Quer remarcar em outro dia ou receber crédito.
 
-**Como funciona (Detalhes da reserva → "Cancelar este dia"):**
+**Como funciona (Detalhes da reserva → "Cancelar dia ou horário", antes "Cancelar este dia"):**
 - O botão aparece em reserva de mensalista que ainda não esteja cancelada — **inclusive já confirmada/paga**, que é justamente o caso em que o crédito faz sentido.
 - A confirmação diz, em destaque, que o cancelamento vale **somente para aquele jogo**: a recorrência segue ativa e a **mensalidade do mês não muda**. Mostra dia por extenso, faixa de horário, mensalista e espaço, para o gestor conferir antes de confirmar.
 - **Lançar crédito é opcional**, marcado por padrão. Desmarcado, apenas libera o horário.
@@ -433,6 +440,14 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
 **Reflexo em Mensalistas (5.12):**
 - O crédito entra no extrato do mensalista com um selo **"Jogo cancelado"**, ficando claro a que se refere mesmo meses depois, e passa a somar no saldo usado para abater mensalidades.
 - Um jogo cancelado gera **no máximo um** crédito — duplo clique ou reenvio não credita duas vezes.
+
+**Cancelar só parte do jogo (29/09/2026):**
+- **Caso coberto:** o mensalista tem 20:00–23:00 e avisa com antecedência que não vai jogar a primeira hora. A arena precisa liberar só aquela hora para vendê-la a outra pessoa.
+- No mesmo modal, a sessão aparece quebrada em **blocos de 1h** (ex.: 20:00–21:00, 21:00–22:00, 22:00–23:00), todos marcados por padrão (= o dia inteiro). O gestor desmarca o que o mensalista **ainda vai jogar**; o que ficar marcado é cancelado.
+- Os horários marcados precisam ser **seguidos** (início, meio ou fim do jogo). Para liberar horários separados, cancela-se um de cada vez.
+- O horário cancelado fica **livre imediatamente** para outra reserva (calendário, cadastro, app e oportunidades do dia). O restante do jogo continua reservado — se a hora cancelada for do meio, o jogo vira duas reservas, antes e depois dela.
+- O aviso e o botão mudam para o caso parcial ("Cancelar horário e lançar crédito"). O crédito sugerido é o valor **só das horas canceladas** pela tabela do plano, e a descrição inclui o horário: "Crédito lançado referente a jogo não realizado do dia DD/MM/AAAA (20:00 às 21:00)".
+- Como no dia inteiro, plano, mensalidade e cobranças não mudam. O valor exibido na reserva que continua (ex.: R$ 300 → R$ 200) é proporcional ao tempo, apenas informativo.
 
 ---
 
@@ -519,6 +534,28 @@ Novo grupo expansível **"Gestão Reservas"** no menu lateral (mesmo padrão vis
 - **Pré-reservas** (já existia como item solto no menu).
 
 A seção "Cobranças Avulsas" que antes aparecia na parte de baixo da página de **Financeiro** foi removida de lá — a página de Avulsos (agora com entrada própria no menu) passa a ser o único lugar para acompanhar e confirmar cobranças avulsas. Financeiro fica só com Saldo/Entradas/Despesas do mês, o comparativo e as últimas entradas/saídas.
+
+### 5.19 Rateio na reserva avulsa (28/09/2026)
+- **Status:** Implementado (banco em `arenadigital-db` + web). Substitui a antiga "Cobrança separada por participante".
+- **Objetivo:** dividir o valor de uma reserva avulsa entre as pessoas que jogam, no mesmo molde do rateio de mensalista, com gestão posterior em **Gestão Reservas → Avulsos**.
+- **Regras:**
+  - O toggle **Rateio** no cadastro/edição da reserva (calendário) divide o **valor da locação** — o campo de valor volta a ser o total, não mais o valor por pessoa.
+  - Pessoas do rateio: o **responsável** (dono da reserva, com ou sem cadastro), **atletas cadastrados** e **pessoas sem cadastro** (só o nome), como no mensalista.
+  - **Valores livres por pessoa**; a divisão igual (centavos no responsável) é só a sugestão inicial e o botão **Dividir igualmente**. Quando a soma das partes não fecha com a locação, a tela mostra a diferença como aviso, sem bloquear.
+  - **Serviços** são permitidos com rateio e entram na parte do **responsável** (só a locação é rateada).
+  - **Pagamento parcial por pessoa** (devido / pago / falta; status Pendente, Parcial, Pago). A reserva é **confirmada automaticamente** quando todas as partes quitam.
+  - **Excluir quem já pagou** estorna o que a pessoa pagou (a entrada sai do Financeiro), após confirmação mostrando o valor. O responsável não sai do rateio; para isso, desativa-se o rateio.
+  - **Desativar o rateio** só enquanto ninguém pagou nada: a reserva volta a ser uma cobrança única do responsável.
+  - Reserva já confirmada (todos pagaram) ou cancelada: rateio só para consulta.
+  - Rateio vale para reserva de **um único horário** (a grade multi-horário continua sem rateio).
+- **Gestão Reservas → Avulsos:**
+  - Uma linha por **reserva**. Reserva com rateio mostra "Rateio · N pessoas" (expansível com cada pessoa, valor e status), "R$ pago · X/N quitaram" e status **Parcial** quando há pagamento parcial.
+  - Ações: **Gerenciar rateio** (rateio pendente), **Ver rateio** (paga/cancelada), **Ratear** e **Confirmar** (reserva comum pendente).
+  - Modal **Rateio da reserva**: resumo Locação / Pago / Falta; por pessoa, valor editável, **Registrar pagamento** (valor, data, forma, observação — parcial permitido) e lixeira (com estorno se já pagou); **Adicionar pessoa** (busca de atleta ou nome sem cadastro, com sugestão do valor que falta para fechar a locação); **Dividir igualmente**, **Salvar valores**, **Ativar/Desativar rateio**.
+  - Cards: **Reservas pendentes** (com o total a receber), **Reservas pagas**, **Total recebido** (inclui pagamentos parciais de rateio). A busca encontra também as pessoas do rateio, inclusive sem cadastro.
+- **Calendário do espaço:** o rótulo da reserva inclui as pessoas sem cadastro após os cadastrados (responsável sempre primeiro). Os **detalhes da reserva** mostram o rateio (pessoas, valores, status, total, pago e falta) e o link **Gerenciar em Avulsos**, que abre direto o rateio daquela reserva; reserva comum pendente ganha o botão **Ratear**.
+- **Relatórios (Pagamentos Reservas):** reserva com rateio vale o que falta pagar enquanto pendente e o total das partes depois; "quanto o atleta deve de Avulso" considera só a parte dele que falta (com parciais); o filtro de atleta encontra quem está no rateio.
+- **Reservas antigas** com cobrança separada foram migradas para o rateio automaticamente, mantendo quem já pagou e os lançamentos no Financeiro.
 
 - Interface simples e responsiva
 - Performance adequada para uso diário

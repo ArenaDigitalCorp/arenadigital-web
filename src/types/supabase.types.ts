@@ -1725,6 +1725,161 @@ export type Database = {
           },
         ]
       }
+      booking_cobranca_pagamentos: {
+        Row: {
+          arena_id: string
+          cobranca_id: string
+          created_at: string
+          data_pagamento: string
+          id: string
+          modo_pagamento_id: string | null
+          observacao: string | null
+          registered_by: string | null
+          transaction_id: string | null
+          valor: number
+        }
+        Insert: {
+          arena_id: string
+          cobranca_id: string
+          created_at?: string
+          data_pagamento: string
+          id?: string
+          modo_pagamento_id?: string | null
+          observacao?: string | null
+          registered_by?: string | null
+          transaction_id?: string | null
+          valor: number
+        }
+        Update: {
+          arena_id?: string
+          cobranca_id?: string
+          created_at?: string
+          data_pagamento?: string
+          id?: string
+          modo_pagamento_id?: string | null
+          observacao?: string | null
+          registered_by?: string | null
+          transaction_id?: string | null
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_cobranca_pagamentos_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "booking_cobranca_pagamentos_cobranca_id_fkey"
+            columns: ["cobranca_id"]
+            isOneToOne: false
+            referencedRelation: "booking_cobrancas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "booking_cobranca_pagamentos_modo_pagamento_id_fkey"
+            columns: ["modo_pagamento_id"]
+            isOneToOne: false
+            referencedRelation: "modo_pagamento"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "booking_cobranca_pagamentos_registered_by_fkey"
+            columns: ["registered_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "booking_cobranca_pagamentos_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      booking_cobrancas: {
+        Row: {
+          arena_id: string
+          atleta_id: string | null
+          booking_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          nome: string
+          pago_em: string | null
+          responsavel: boolean
+          status: string | null
+          updated_at: string
+          valor_devido: number
+          valor_pago: number
+          valor_servicos: number
+        }
+        Insert: {
+          arena_id: string
+          atleta_id?: string | null
+          booking_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nome: string
+          pago_em?: string | null
+          responsavel?: boolean
+          status?: string | null
+          updated_at?: string
+          valor_devido: number
+          valor_pago?: number
+          valor_servicos?: number
+        }
+        Update: {
+          arena_id?: string
+          atleta_id?: string | null
+          booking_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nome?: string
+          pago_em?: string | null
+          responsavel?: boolean
+          status?: string | null
+          updated_at?: string
+          valor_devido?: number
+          valor_pago?: number
+          valor_servicos?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_cobrancas_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "booking_cobrancas_atleta_id_fkey"
+            columns: ["atleta_id"]
+            isOneToOne: false
+            referencedRelation: "atleta"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "booking_cobrancas_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "booking_cobrancas_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       booking_payment_transition_events: {
         Row: {
           booking_id: string
@@ -6288,6 +6443,56 @@ export type Database = {
         }
         Returns: Json
       }
+      add_booking_rateio_participante_atomic: {
+        Args: {
+          p_arena_id: string
+          p_atleta_id: string
+          p_booking_id: string
+          p_nome: string
+          p_registered_by: string
+          p_valor: number
+        }
+        Returns: Json
+      }
+      configure_booking_rateio_atomic: {
+        Args: {
+          p_arena_id: string
+          p_ativo: boolean
+          p_booking_id: string
+          p_registered_by: string
+        }
+        Returns: Json
+      }
+      register_booking_cobranca_payment_atomic: {
+        Args: {
+          p_arena_id: string
+          p_cobranca_id: string
+          p_data: string
+          p_modo_pagamento_id: string
+          p_observacao: string
+          p_operation_id: string
+          p_registered_by: string
+          p_valor: number
+        }
+        Returns: Json
+      }
+      remove_booking_rateio_participante_atomic: {
+        Args: {
+          p_arena_id: string
+          p_cobranca_id: string
+          p_registered_by: string
+        }
+        Returns: Json
+      }
+      update_booking_rateio_valores_atomic: {
+        Args: {
+          p_arena_id: string
+          p_booking_id: string
+          p_registered_by: string
+          p_valores: Json
+        }
+        Returns: Json
+      }
       // Adicionado manualmente — RPC nova em
       // 20260913170000_mensalista_rateio_remover_participante.sql, ainda não
       // aplicada/regerada via `pnpm db:types`. Remover este comentário quando
@@ -7512,6 +7717,7 @@ export type Database = {
           p_court_id: string
           p_operation_id: string
           p_participant_value: number
+          p_rateio?: Json
           p_recurrence_id: string
           p_registered_by: string
           p_rental_price: number

@@ -1,7 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { Calendar as CalendarIcon, Clock, Trash2, Loader2, CheckCircle2, CalendarX2 } from "lucide-react"
+import Link from "next/link"
+import { Calendar as CalendarIcon, Clock, Trash2, Loader2, CheckCircle2, CalendarX2, Users } from "lucide-react"
 import {
     Dialog,
     DialogContent,
@@ -15,11 +16,17 @@ import { ptBR } from "date-fns/locale"
 import { cn } from "@/lib/utils"
 import {
     confirmarPagamentoAvulsoAction,
-    confirmarPagamentoParticipanteAvulsoAction,
     updateBookingStatusAction,
 } from "@/modules/bookings/actions/bookingActions"
 import { ConfirmarPagamentoDialog } from "@/modules/bookings/components/ConfirmarPagamentoDialog"
 import { CancelarSessaoMensalistaModal } from "@/modules/bookings/components/CancelarSessaoMensalistaModal"
+import {
+    locacaoDoRateio,
+    resumoRateio,
+    restanteCobranca,
+    sortCobrancas,
+    toBookingCobranca,
+} from "@/modules/bookings/lib/booking-rateio"
 import { toast } from "sonner"
 import { trackAction } from "@/lib/telemetry/client"
 
@@ -52,7 +59,6 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, onEdit, bookin
     const [isCancelling, setIsCancelling] = useState(false)
     const [showCancelSessao, setShowCancelSessao] = useState(false)
     const [showConfirmPayment, setShowConfirmPayment] = useState(false)
-    const [confirmingParticipantId, setConfirmingParticipantId] = useState<string | null>(null)
     const [isConfirmingPayment, setIsConfirmingPayment] = useState(false)
 
     const arenaId = booking?.arena_id as string | undefined
@@ -132,37 +138,6 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, onEdit, bookin
         }
     }
 
-    const handleConfirmarPagamentoParticipante = async (participantId: string, valor: number) => {
-        if (!arenaId) return
-        setConfirmingParticipantId(participantId)
-        try {
-            const res = await confirmarPagamentoParticipanteAvulsoAction(
-                arenaId,
-                booking.id,
-                participantId,
-                valor
-            )
-            if (!res.success) throw new Error(res.error)
-            trackAction("booking_payment", "success", {
-                arena_id: arenaId,
-                entity_id: booking.id,
-                entity_type: "booking",
-            })
-            toast.success("Pagamento do participante confirmado!")
-            onSuccess()
-        } catch (error) {
-            trackAction("booking_payment", "failure", {
-                arena_id: arenaId,
-                entity_id: booking.id,
-                entity_type: "booking",
-                source: "exception",
-            })
-            toast.error(error instanceof Error ? error.message : "Erro ao confirmar pagamento")
-        } finally {
-            setConfirmingParticipantId(null)
-        }
-    }
-
     const sportName = booking.sports?.name || court.sports?.[0]?.name || "—"
     const wideLayout = canEdit
     const servicesSum = (booking.booking_services as any[] | undefined ?? []).reduce(
@@ -170,15 +145,17 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, onEdit, bookin
         0
     )
     const splitBilling = Boolean(booking.cobranca_por_participante)
+    // Com rateio, o total vem das partes (booking_cobrancas): em reservas antigas
+    // `price` ainda guarda o valor por pessoa.
+    const rateioCobrancas = sortCobrancas(
+        ((booking.booking_cobrancas ?? []) as Record<string, unknown>[]).map(toBookingCobranca)
+    )
+    const rateio = resumoRateio(rateioCobrancas)
     const courtPortionDisplay = splitBilling
-        ? Number(booking.price ?? 0)
+        ? locacaoDoRateio(booking, rateioCobrancas)
         : Math.max(0, (booking.price ?? 0) - servicesSum)
-    const billingParticipants = (booking.booking_participants ?? []).filter(
-        (p: { funcao?: string }) => p.funcao === "responsavel" || p.funcao === "convidado"
-    )
-    const unpaidParticipants = billingParticipants.filter(
-        (p: { pago_em?: string | null }) => !p.pago_em
-    )
+    const totalDisplay = splitBilling ? rateio.devido : Number(booking.price ?? 0)
+    const avulsosHref = `/dashboard/arenas/${booking.arena_id}/avulsas?booking=${booking.id}`
     const additionalNames: string[] = (booking.booking_participants ?? [])
         .filter(
             (p: { funcao?: string; atleta_id?: string }) =>
@@ -269,63 +246,56 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, onEdit, bookin
                             </div>
                         )}
 
-                        {splitBilling && billingParticipants.length > 0 ? (
+                        {splitBilling ? (
                             <div>
-                                <p className="text-xs font-bold uppercase tracking-wider text-arena-navy-800/40">
-                                    Participantes e pagamentos
-                                </p>
-                                <ul className="mt-2 space-y-2">
-                                    {billingParticipants.map(
-                                        (p: {
-                                            id: string
-                                            pago_em?: string | null
-                                            valor?: number | null
-                                            atleta?: { nome_perfil?: string } | null
-                                        }) => {
-                                            const nome = p.atleta?.nome_perfil ?? "Atleta"
-                                            const paid = Boolean(p.pago_em)
-                                            const valor = Number(p.valor ?? booking.price ?? 0)
-                                            const isConfirming = confirmingParticipantId === p.id
-
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <p className="text-xs font-bold uppercase tracking-wider text-arena-navy-800/40">
+                                        Rateio · {rateio.quitadas}/{rateio.pessoas} quitaram
+                                    </p>
+                                    <Link
+                                        href={avulsosHref}
+                                        className="inline-flex items-center gap-1.5 text-xs font-bold text-arena-button hover:underline"
+                                    >
+                                        <Users className="h-3.5 w-3.5" />
+                                        {avulsoReservado ? "Gerenciar em Avulsos" : "Ver em Avulsos"}
+                                    </Link>
+                                </div>
+                                {rateioCobrancas.length === 0 ? (
+                                    <p className="mt-2 text-sm font-medium text-arena-navy-800/50">
+                                        Ninguém no rateio ainda.
+                                    </p>
+                                ) : (
+                                    <ul className="mt-2 space-y-2">
+                                        {rateioCobrancas.map((c) => {
+                                            const restante = restanteCobranca(c)
                                             return (
                                                 <li
-                                                    key={p.id}
+                                                    key={c.id}
                                                     className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-arena-navy-800/8 bg-slate-50 px-3 py-2.5"
                                                 >
                                                     <div className="min-w-0">
                                                         <p className="text-sm font-semibold text-arena-navy-800">
-                                                            {nome}
+                                                            {c.nome}
+                                                            {!c.atleta_id && (
+                                                                <span className="ml-1.5 text-[10px] font-medium text-arena-navy-800/40">
+                                                                    sem cadastro
+                                                                </span>
+                                                            )}
                                                         </p>
                                                         <p className="text-xs font-medium text-arena-navy-800/50">
-                                                            {fmtBrl(valor)}
-                                                            {paid ? " · Pago" : " · Pendente"}
+                                                            {fmtBrl(c.valor_devido)}
+                                                            {c.status === "quitado"
+                                                                ? " · Pago"
+                                                                : c.status === "parcial"
+                                                                  ? ` · pago ${fmtBrl(c.valor_pago)}, falta ${fmtBrl(restante)}`
+                                                                  : " · Pendente"}
                                                         </p>
                                                     </div>
-                                                    {avulsoReservado && !paid && (
-                                                        <Button
-                                                            type="button"
-                                                            size="sm"
-                                                            disabled={isConfirming}
-                                                            onClick={() =>
-                                                                handleConfirmarPagamentoParticipante(
-                                                                    p.id,
-                                                                    valor
-                                                                )
-                                                            }
-                                                            className="h-8 rounded-lg bg-emerald-500 px-3 text-xs font-bold text-white hover:bg-emerald-600"
-                                                        >
-                                                            {isConfirming ? (
-                                                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                                            ) : (
-                                                                "Confirmar"
-                                                            )}
-                                                        </Button>
-                                                    )}
                                                 </li>
                                             )
-                                        }
-                                    )}
-                                </ul>
+                                        })}
+                                    </ul>
+                                )}
                             </div>
                         ) : additionalNames.length > 0 ? (
                             <div>
@@ -370,14 +340,14 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, onEdit, bookin
                                 <div className="space-y-2">
                                     <p className="text-xs font-bold uppercase tracking-wider text-arena-navy-800/40">
                                         {splitBilling
-                                            ? "Valor por participante"
+                                            ? "Valor da locação"
                                             : avulsoReservado
                                               ? "Valor da reserva"
                                               : "Valor pago"}
                                     </p>
                                     <div className="flex h-14 items-center rounded-xl border border-arena-navy-800/10 bg-slate-50/80 px-4">
                                         <span className="text-2xl font-black text-arena-button">
-                                            {fmtBrl(booking.price ?? 0)}
+                                            {fmtBrl(splitBilling ? courtPortionDisplay : booking.price ?? 0)}
                                         </span>
                                     </div>
                                 </div>
@@ -408,24 +378,17 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, onEdit, bookin
                                 <div className="border-t border-slate-200 pt-6">
                                     <div className="flex flex-wrap items-baseline justify-between gap-3">
                                         <span className="text-sm font-medium text-arena-navy-800/70">
-                                            {splitBilling ? "Total estimado" : "Total da reserva"}
+                                            {splitBilling ? "Total do rateio" : "Total da reserva"}
                                         </span>
                                         <span className="text-2xl font-black tracking-tight text-arena-button">
-                                            {splitBilling
-                                                ? fmtBrl(
-                                                      courtPortionDisplay *
-                                                          billingParticipants.length
-                                                  )
-                                                : fmtBrl(booking.price ?? 0)}
+                                            {fmtBrl(totalDisplay)}
                                         </span>
                                     </div>
                                     {splitBilling ? (
                                         <p className="mt-2 text-[11px] font-medium text-arena-navy-800/45">
-                                            {billingParticipants.length} participante
-                                            {billingParticipants.length !== 1 ? "s" : ""} ×{" "}
-                                            {fmtBrl(courtPortionDisplay)}
-                                            {unpaidParticipants.length > 0 &&
-                                                ` · ${unpaidParticipants.length} pendente${unpaidParticipants.length !== 1 ? "s" : ""}`}
+                                            {rateio.pessoas} pessoa{rateio.pessoas !== 1 ? "s" : ""} · pago{" "}
+                                            {fmtBrl(rateio.pago)}
+                                            {rateio.restante > 0 && ` · falta ${fmtBrl(rateio.restante)}`}
                                         </p>
                                     ) : booking.booking_services?.length > 0 ? (
                                         <p className="mt-2 text-[11px] font-medium text-arena-navy-800/45">
@@ -437,7 +400,7 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, onEdit, bookin
                         ) : (
                             <div>
                                 <p className="text-xs font-bold uppercase tracking-wider text-arena-navy-800/40">Valor</p>
-                                <p className="mt-1 text-2xl font-black text-arena-button">{fmtBrl(booking.price ?? 0)}</p>
+                                <p className="mt-1 text-2xl font-black text-arena-button">{fmtBrl(totalDisplay)}</p>
                                 {booking.booking_services?.length > 0 && (
                                     <ul className="mt-3 space-y-1.5 text-sm text-arena-navy-800/80">
                                         {(booking.booking_services as any[]).map((s: any) => (
@@ -482,6 +445,18 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, onEdit, bookin
                     )}
                     {avulsoReservado && !splitBilling && (
                         <Button
+                            asChild
+                            variant="outline"
+                            className="h-11 w-full gap-2 rounded-xl border-arena-navy-800/25 font-semibold text-arena-navy-800 hover:bg-slate-50 sm:w-auto"
+                        >
+                            <Link href={avulsosHref}>
+                                <Users className="h-4 w-4" />
+                                Ratear
+                            </Link>
+                        </Button>
+                    )}
+                    {avulsoReservado && !splitBilling && (
+                        <Button
                             type="button"
                             onClick={() => setShowConfirmPayment(true)}
                             disabled={isConfirmingPayment}
@@ -518,10 +493,10 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, onEdit, bookin
                             variant="outline"
                             onClick={() => setShowCancelSessao(true)}
                             className="h-11 w-full shrink-0 gap-2 rounded-xl border-red-200 bg-red-50 font-semibold text-red-600 hover:bg-red-100 hover:text-red-700 sm:w-auto"
-                            title="Cancela apenas o jogo deste dia, sem mexer na recorrência"
+                            title="Cancela o jogo deste dia ou só parte dele, sem mexer na recorrência"
                         >
                             <CalendarX2 className="h-4 w-4" />
-                            Cancelar este dia
+                            Cancelar dia ou horário
                         </Button>
                     )}
                 </div>
@@ -529,6 +504,7 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, onEdit, bookin
 
             {canCancelSessaoMensalista && (
                 <CancelarSessaoMensalistaModal
+                    key={showCancelSessao ? `cancelar-${booking.id}` : "cancelar-fechado"}
                     open={showCancelSessao}
                     onClose={() => setShowCancelSessao(false)}
                     onSuccess={() => {

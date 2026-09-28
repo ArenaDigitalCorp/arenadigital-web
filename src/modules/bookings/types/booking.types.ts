@@ -21,6 +21,20 @@ export type Booking = Row & {
   atleta?: { id: string; nome_perfil: string; telefone: string } | null
   booking_services?: BookingServiceEmbed[] | null
   booking_participants?: BookingParticipantEmbed[] | null
+  /** Partes do rateio (reserva avulsa com `cobranca_por_participante`). */
+  booking_cobrancas?: BookingCobrancaEmbed[] | null
+}
+
+export type BookingCobrancaEmbed = {
+  id: string
+  atleta_id: string | null
+  nome: string
+  responsavel: boolean
+  valor_devido: number
+  valor_servicos: number
+  valor_pago: number
+  status: string
+  pago_em: string | null
 }
 
 export type BookingServiceEmbed = {

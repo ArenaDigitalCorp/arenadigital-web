@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { format, parseISO } from 'date-fns'
 import { AlertTriangle, CalendarX2, Loader2 } from 'lucide-react'
 import {
   Dialog,
@@ -14,12 +15,16 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
+import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import {
+  blocosDeHora,
+  descricaoCreditoHorarioCancelado,
   descricaoCreditoJogoCancelado,
   diaCurto,
   diaExtenso,
   faixaHoraria,
+  intervaloSelecionado,
 } from '@/modules/bookings/lib/cancelamento-sessao'
 import {
   cancelarSessaoMensalistaAction,
@@ -43,10 +48,15 @@ interface Props {
 const brl = (n: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n)
 
+const hora = (iso: string) => format(parseISO(iso), 'HH:mm')
+
 /**
- * Cancela **um** jogo da recorrência — nunca a recorrência inteira nem a
+ * Cancela **um** jogo da recorrência — inteiro ou só parte dele (ex.: a 1ª
+ * hora, que fica livre para outra reserva) — nunca a recorrência nem a
  * mensalidade. O mês continua devido; o crédito (opcional) é a compensação para
  * o mensalista que avisou com antecedência e vai remarcar.
+ *
+ * O pai remonta o modal a cada abertura (`key`), então o estado nasce limpo.
  */
 export function CancelarSessaoMensalistaModal({
   open,
@@ -59,42 +69,66 @@ export function CancelarSessaoMensalistaModal({
   responsavelNome,
   espacoNome,
 }: Props) {
+  const blocos = useMemo(() => blocosDeHora(startTime, endTime), [startTime, endTime])
+  // Por padrão, o jogo inteiro — o gestor desmarca o que continua valendo.
+  const [selecionados, setSelecionados] = useState<number[]>(() => blocos.map((_, i) => i))
   const [lancarCredito, setLancarCredito] = useState(true)
   const [valor, setValor] = useState('')
-  const [descricao, setDescricao] = useState('')
-  const [quote, setQuote] = useState<SessaoMensalistaQuote | null>(null)
-  const [loadingQuote, setLoadingQuote] = useState(false)
+  const [descricaoEditada, setDescricaoEditada] = useState<string | null>(null)
+  const [quote, setQuote] = useState<{ key: string; data: SessaoMensalistaQuote | null } | null>(null)
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => {
-    if (!open) return
-    setLancarCredito(true)
-    setValor('')
-    setDescricao(descricaoCreditoJogoCancelado(startTime))
-    setQuote(null)
-    setLoadingQuote(true)
+  const intervalo = intervaloSelecionado(blocos, selecionados)
+  const parcial = intervalo.ok && !intervalo.sessaoInteira
+  const cancelInicio = intervalo.ok ? intervalo.inicio : startTime
+  const cancelFim = intervalo.ok ? intervalo.fim : endTime
+  const quoteKey = intervalo.ok ? `${intervalo.inicio}|${intervalo.fim}` : null
 
+  useEffect(() => {
+    if (!open || !intervalo.ok || !quoteKey) return
     let cancelled = false
-    void quoteSessaoMensalistaAction(arenaId, bookingId).then((res) => {
+    void quoteSessaoMensalistaAction(
+      arenaId,
+      bookingId,
+      intervalo.sessaoInteira ? undefined : { inicio: intervalo.inicio, fim: intervalo.fim }
+    ).then((res) => {
       if (cancelled) return
-      setLoadingQuote(false)
       if (!res.success || !res.data) {
         toast.error(res.error ?? 'Não foi possível calcular o valor da sessão.')
+        setQuote({ key: quoteKey, data: null })
         return
       }
-      setQuote(res.data)
+      setQuote({ key: quoteKey, data: res.data })
       setValor(res.data.valorSugerido.toFixed(2))
     })
     return () => {
       cancelled = true
     }
-  }, [open, arenaId, bookingId, startTime])
+    // intervalo é derivado de quoteKey; depender dele recriaria a cotação a cada render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, arenaId, bookingId, quoteKey])
+
+  const loadingQuote = Boolean(quoteKey) && quote?.key !== quoteKey
+  const quoteAtual = quote?.key === quoteKey ? quote.data : null
+
+  const descricaoPadrao = parcial
+    ? descricaoCreditoHorarioCancelado(cancelInicio, cancelFim)
+    : descricaoCreditoJogoCancelado(startTime)
+  const descricao = descricaoEditada ?? descricaoPadrao
 
   const valorNum = Number(valor.replace(',', '.')) || 0
   const dia = diaExtenso(startTime)
   const horario = faixaHoraria(startTime, endTime)
+  const horarioCancelado = faixaHoraria(cancelInicio, cancelFim)
+
+  const toggleBloco = (i: number) =>
+    setSelecionados((prev) => (prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i]))
 
   const handleConfirm = async () => {
+    if (!intervalo.ok) {
+      toast.error(intervalo.erro)
+      return
+    }
     if (lancarCredito && valorNum <= 0) {
       toast.error('Informe um valor de crédito maior que zero.')
       return
@@ -104,21 +138,25 @@ export function CancelarSessaoMensalistaModal({
       const res = await cancelarSessaoMensalistaAction({
         arenaId,
         bookingId,
-        // Chave de idempotência: vira o id da linha de crédito, então um duplo
-        // clique não credita duas vezes.
+        // Chave de idempotência: vira o id da linha de crédito (e, no
+        // cancelamento parcial, da parte cancelada), então um duplo clique não
+        // cancela nem credita duas vezes.
         operationId: crypto.randomUUID(),
         lancarCredito,
         valorCredito: lancarCredito ? valorNum : 0,
         descricao: lancarCredito ? descricao.trim() : '',
+        cancelInicio: new Date(intervalo.inicio).toISOString(),
+        cancelFim: new Date(intervalo.fim).toISOString(),
       })
       if (!res.success) throw new Error(res.error)
 
+      const oQue = parcial
+        ? `Horário ${horarioCancelado} do dia ${diaCurto(startTime)} cancelado e liberado`
+        : `Jogo do dia ${diaCurto(startTime)} cancelado`
       toast.success(
         lancarCredito
-          ? `Jogo do dia ${diaCurto(startTime)} cancelado e ${brl(
-              res.data?.valorCredito ?? valorNum
-            )} de crédito lançado.`
-          : `Jogo do dia ${diaCurto(startTime)} cancelado.`
+          ? `${oQue} e ${brl(res.data?.valorCredito ?? valorNum)} de crédito lançado.`
+          : `${oQue}.`
       )
       onSuccess()
       onClose()
@@ -135,7 +173,7 @@ export function CancelarSessaoMensalistaModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-arena-navy-800">
             <CalendarX2 className="h-5 w-5 text-red-500" />
-            Cancelar este dia
+            Cancelar dia ou horário
           </DialogTitle>
         </DialogHeader>
 
@@ -144,11 +182,20 @@ export function CancelarSessaoMensalistaModal({
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5">
             <p className="flex items-start gap-2 text-[13px] leading-snug text-amber-800">
               <AlertTriangle className="mt-0.5 h-4 w-4 flex-none" />
-              <span>
-                Você vai cancelar <strong>somente este jogo</strong>. A recorrência do
-                mensalista continua ativa e a mensalidade do mês <strong>não</strong> é
-                alterada.
-              </span>
+              {parcial ? (
+                <span>
+                  Você vai cancelar <strong>só {horarioCancelado}</strong> deste jogo. O restante
+                  continua reservado e o horário liberado fica disponível para outra reserva. A
+                  recorrência do mensalista continua ativa e a mensalidade do mês{' '}
+                  <strong>não</strong> é alterada.
+                </span>
+              ) : (
+                <span>
+                  Você vai cancelar <strong>somente este jogo</strong>. A recorrência do
+                  mensalista continua ativa e a mensalidade do mês <strong>não</strong> é
+                  alterada.
+                </span>
+              )}
             </p>
           </div>
 
@@ -168,7 +215,7 @@ export function CancelarSessaoMensalistaModal({
             <div className="flex justify-between gap-3">
               <dt className="text-muted-foreground">Mensalista</dt>
               <dd className="text-right font-semibold text-arena-navy-800">
-                {quote?.atletaNome ?? responsavelNome}
+                {quoteAtual?.atletaNome ?? responsavelNome}
               </dd>
             </div>
             <div className="flex justify-between gap-3">
@@ -176,6 +223,53 @@ export function CancelarSessaoMensalistaModal({
               <dd className="text-right font-semibold text-arena-navy-800">{espacoNome}</dd>
             </div>
           </dl>
+
+          {/* Quais horários cancelar (só faz sentido com mais de 1h) */}
+          {blocos.length > 1 && (
+            <div className="space-y-2 rounded-xl border border-arena-navy-800/10 p-3.5">
+              <p className="text-sm font-semibold text-arena-navy-800">O que cancelar</p>
+              <p className="text-[11.5px] leading-snug text-muted-foreground">
+                Desmarque os horários que ele ainda vai jogar. O que for cancelado fica livre
+                para outra reserva.
+              </p>
+              <div className="flex flex-wrap gap-2 pt-1" role="group" aria-label="Horários a cancelar">
+                {blocos.map((b, i) => {
+                  const marcado = selecionados.includes(i)
+                  return (
+                    <button
+                      key={b.inicio}
+                      type="button"
+                      aria-pressed={marcado}
+                      disabled={saving}
+                      onClick={() => toggleBloco(i)}
+                      className={cn(
+                        'rounded-lg border px-3 py-1.5 text-sm font-semibold tabular-nums transition-colors',
+                        marcado
+                          ? 'border-red-300 bg-red-50 text-red-700'
+                          : 'border-arena-navy-800/15 bg-white text-arena-navy-800/60 hover:bg-slate-50'
+                      )}
+                    >
+                      {hora(b.inicio)}–{hora(b.fim)}
+                    </button>
+                  )
+                })}
+              </div>
+              {!intervalo.ok ? (
+                <p className="text-[11.5px] font-medium text-red-600">{intervalo.erro}</p>
+              ) : (
+                <p className="text-[11.5px] text-muted-foreground">
+                  {parcial ? (
+                    <>
+                      Cancela <strong>{horarioCancelado}</strong>; o jogo continua no restante do
+                      horário.
+                    </>
+                  ) : (
+                    <>Todos os horários marcados: cancela o jogo inteiro.</>
+                  )}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Crédito */}
           <div className="space-y-3 rounded-xl border border-arena-navy-800/10 p-3.5">
@@ -225,17 +319,17 @@ export function CancelarSessaoMensalistaModal({
                       <Loader2 className="h-3 w-3 animate-spin" />
                       Buscando o valor da hora na tabela de preço do plano…
                     </p>
-                  ) : quote ? (
+                  ) : quoteAtual ? (
                     <p className="text-[11px] leading-snug text-muted-foreground">
-                      Valor da hora reservada
-                      {quote.tabelaNome ? (
+                      Valor {parcial ? `de ${horarioCancelado}` : 'da hora reservada'}
+                      {quoteAtual.tabelaNome ? (
                         <>
                           {' '}
-                          pela tabela <strong>{quote.tabelaNome}</strong>
+                          pela tabela <strong>{quoteAtual.tabelaNome}</strong>
                         </>
                       ) : null}
-                      : <strong>{brl(quote.valorSugerido)}</strong>.
-                      {quote.origem === 'padrao' && (
+                      : <strong>{brl(quoteAtual.valorSugerido)}</strong>.
+                      {quoteAtual.origem === 'padrao' && (
                         <>
                           {' '}
                           O plano não tem tabela de mensalista definida, então veio da
@@ -253,7 +347,7 @@ export function CancelarSessaoMensalistaModal({
                   </Label>
                   <Textarea
                     value={descricao}
-                    onChange={(e) => setDescricao(e.target.value)}
+                    onChange={(e) => setDescricaoEditada(e.target.value)}
                     rows={2}
                     className="resize-none text-sm"
                   />
@@ -273,7 +367,7 @@ export function CancelarSessaoMensalistaModal({
           <Button
             type="button"
             onClick={handleConfirm}
-            disabled={saving || (lancarCredito && loadingQuote)}
+            disabled={saving || !intervalo.ok || (lancarCredito && loadingQuote)}
             className="bg-red-500 text-white hover:bg-red-600"
           >
             {saving ? (
@@ -281,6 +375,8 @@ export function CancelarSessaoMensalistaModal({
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Cancelando…
               </>
+            ) : parcial ? (
+              lancarCredito ? 'Cancelar horário e lançar crédito' : 'Cancelar horário'
             ) : lancarCredito ? (
               'Cancelar este dia e lançar crédito'
             ) : (

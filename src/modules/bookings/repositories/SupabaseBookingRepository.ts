@@ -3,7 +3,7 @@ import type { IBookingRepository } from './IBookingRepository';
 import type { Booking, CreateBookingDTO, UpdateBookingDTO } from '../types/booking.types';
 
 const WITH_RELATIONS =
-    '*, courts!bookings_court_id_fkey(id, name), sports(id, name), atleta:athlete_id(id, nome_perfil, telefone), booking_services(id, booking_id, product_id, quantity, unit_price, products(id, name)), booking_participants(id, atleta_id, funcao, status, valor, pago_em, atleta:atleta_id(id, nome_perfil, telefone))' as const;
+    '*, courts!bookings_court_id_fkey(id, name), sports(id, name), atleta:athlete_id(id, nome_perfil, telefone), booking_services(id, booking_id, product_id, quantity, unit_price, products(id, name)), booking_participants(id, atleta_id, funcao, status, valor, pago_em, atleta:atleta_id(id, nome_perfil, telefone)), booking_cobrancas(id, atleta_id, nome, responsavel, valor_devido, valor_servicos, valor_pago, status, pago_em)' as const;
 
 type ConflictBookingRow = {
   id: string
