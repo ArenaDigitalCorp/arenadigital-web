@@ -1327,7 +1327,7 @@ componente porque é contrato com o gestor: é o que ele lê no extrato meses de
 
 ### 21.3 UI
 
-- `BookingDetailsModal` — botão **"Cancelar este dia"** quando
+- `BookingDetailsModal` — botão **"Cancelar dia ou horário"** (antes "Cancelar este dia"; ver §41 para o parcial) quando
   `isMensalista && status !== 'cancelled'`. Reserva **confirmada** (mês pago)
   também pode ser cancelada: é o caso que gera crédito.
 - `CancelarSessaoMensalistaModal` — aviso em destaque de que vale só para aquele
@@ -2815,3 +2815,60 @@ de `@/` só no teste), `tests/booking-participants.test.mjs` (sem cadastro no r�
 `tests/atomic-booking-bundle.test.mjs` (contrato `p_rateio`/`p_participant_value: null`).
 No banco: `supabase/tests/20260928140000_booking_rateio_test.sql` (47 asserções) e
 `tests/booking-rateio.test.mjs` do `arenadigital-db`.
+
+## 41. Cancelar só parte de uma sessão de mensalista (29/09/2026)
+
+Estende §21. Migração `arenadigital-db/20260929120000_mensalista_cancel_partial_session`.
+
+### 41.1 Por que encurtar/dividir a reserva
+
+Toda a disponibilidade (checagens de conflito das RPCs de reserva, grade do
+backoffice, app, oportunidades) olha o **intervalo das reservas ativas**
+(`confirmed`/`reservado`/`pending_payment`). Encurtar a reserva libera o horário em
+todos esses lugares sem tocar em nenhum deles — um "intervalo liberado" guardado à
+parte teria de ser respeitado em cada checagem.
+
+### 41.2 RPC `cancel_mensalista_booking_partial_atomic`
+
+`(p_operation_id, p_arena_id, p_booking_id, p_cancel_start, p_cancel_end,
+p_lancar_credito, p_valor_credito, p_descricao, p_registered_by) → jsonb`,
+service_role only.
+
+- Trava a reserva; exige `plano_mensalista_id`; intervalo dentro da reserva.
+- Intervalo = sessão inteira → delega a `cancel_mensalista_booking_atomic` (mesmo
+  comportamento de §21, crédito ligado à reserva original).
+- Cancelou o início → `start_time = p_cancel_end`; o fim → `end_time = p_cancel_start`;
+  o meio → a original fica com o 1º pedaço e um **novo booking** do mesmo plano recebe
+  o pedaço depois (copiando `booking_participants`).
+- A parte cancelada vira um booking `cancelled` com **id = `p_operation_id`** (histórico
+  e extrato "Cancelado"); o crédito (`mensalista_creditos.booking_id`) aponta para ele,
+  preservando "um crédito por jogo". Retry com o mesmo id devolve `idempotent: true`;
+  o mesmo id com outro intervalo → `23505`.
+- `price`/`rental_price` são rateados pela duração (a parte cancelada fica com a sobra do
+  arredondamento). Informativos: o extrato do mensalista rateia a mensalidade pela
+  duração das reservas (`ratearMensalidadeNasReservas`). Se o mês ainda não estiver
+  pago, a quitação reescreve o `price` das sessões com o valor da sessão (comportamento
+  existente da RPC de pagamento).
+- Não toca plano, mensalidade, cobranças nem `transactions`.
+
+### 41.3 Web
+
+- `cancelamento-sessao.ts`: `blocosDeHora(start, end)` (blocos de 1h a partir do
+  início; o último pode ser menor), `intervaloSelecionado(blocos, índices)` (exige
+  contiguidade; `sessaoInteira` quando todos), `descricaoCreditoHorarioCancelado`.
+- `quoteSessaoMensalistaAction(arenaId, bookingId, intervalo?)`: cota só o intervalo
+  (validado dentro da reserva) com a mesma cadeia de tabela de preço.
+- `cancelarSessaoMensalistaAction`: schema ganha `cancelInicio`/`cancelFim` e chama sempre
+  a RPC parcial (que delega no dia inteiro); devolve `parcial`.
+- `CancelarSessaoMensalistaModal`: grupo "Horários a cancelar" (blocos de 1h, todos
+  marcados por padrão), aviso/botão/descrição conforme parcial ou inteiro; a cotação é
+  refeita a cada mudança de intervalo. Remontado por abertura (`key` no
+  `BookingDetailsModal`).
+
+### 41.4 Testes
+
+`tests/mensalista-cancelar-sessao.test.mjs` (blocos, contiguidade, descrição, uso da RPC
+parcial). No banco: `supabase/tests/20260929120000_mensalista_cancel_partial_session_test.sql`
+(28 asserções: início/meio/fim, horário liberado aceita nova reserva, restante continua
+bloqueado, crédito, idempotência, validações, delegação do dia inteiro) e
+`tests/mensalista-cancel-partial.test.mjs`.

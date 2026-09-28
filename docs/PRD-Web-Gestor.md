@@ -430,7 +430,7 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
 - **Problema:** o mensalista que avisava com antecedência que não ia a uma das sessões não tinha tratamento. A tela de detalhes da reserva recusava cancelar qualquer reserva de mensalista ("Gerencie via Mensalistas"), e cancelar pelo módulo de Mensalistas encerrava a recorrência inteira. Na prática o gestor ficava sem registro: ou deixava o horário ocupado, ou combinava o crédito por fora.
 - **Caso coberto:** ele comprou 4 quartas do mês, faltou à terceira e avisou antes. Quer remarcar em outro dia ou receber crédito.
 
-**Como funciona (Detalhes da reserva → "Cancelar este dia"):**
+**Como funciona (Detalhes da reserva → "Cancelar dia ou horário", antes "Cancelar este dia"):**
 - O botão aparece em reserva de mensalista que ainda não esteja cancelada — **inclusive já confirmada/paga**, que é justamente o caso em que o crédito faz sentido.
 - A confirmação diz, em destaque, que o cancelamento vale **somente para aquele jogo**: a recorrência segue ativa e a **mensalidade do mês não muda**. Mostra dia por extenso, faixa de horário, mensalista e espaço, para o gestor conferir antes de confirmar.
 - **Lançar crédito é opcional**, marcado por padrão. Desmarcado, apenas libera o horário.
@@ -440,6 +440,14 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
 **Reflexo em Mensalistas (5.12):**
 - O crédito entra no extrato do mensalista com um selo **"Jogo cancelado"**, ficando claro a que se refere mesmo meses depois, e passa a somar no saldo usado para abater mensalidades.
 - Um jogo cancelado gera **no máximo um** crédito — duplo clique ou reenvio não credita duas vezes.
+
+**Cancelar só parte do jogo (29/09/2026):**
+- **Caso coberto:** o mensalista tem 20:00–23:00 e avisa com antecedência que não vai jogar a primeira hora. A arena precisa liberar só aquela hora para vendê-la a outra pessoa.
+- No mesmo modal, a sessão aparece quebrada em **blocos de 1h** (ex.: 20:00–21:00, 21:00–22:00, 22:00–23:00), todos marcados por padrão (= o dia inteiro). O gestor desmarca o que o mensalista **ainda vai jogar**; o que ficar marcado é cancelado.
+- Os horários marcados precisam ser **seguidos** (início, meio ou fim do jogo). Para liberar horários separados, cancela-se um de cada vez.
+- O horário cancelado fica **livre imediatamente** para outra reserva (calendário, cadastro, app e oportunidades do dia). O restante do jogo continua reservado — se a hora cancelada for do meio, o jogo vira duas reservas, antes e depois dela.
+- O aviso e o botão mudam para o caso parcial ("Cancelar horário e lançar crédito"). O crédito sugerido é o valor **só das horas canceladas** pela tabela do plano, e a descrição inclui o horário: "Crédito lançado referente a jogo não realizado do dia DD/MM/AAAA (20:00 às 21:00)".
+- Como no dia inteiro, plano, mensalidade e cobranças não mudam. O valor exibido na reserva que continua (ex.: R$ 300 → R$ 200) é proporcional ao tempo, apenas informativo.
 
 ---
 

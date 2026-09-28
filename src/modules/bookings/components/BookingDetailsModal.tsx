@@ -493,10 +493,10 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, onEdit, bookin
                             variant="outline"
                             onClick={() => setShowCancelSessao(true)}
                             className="h-11 w-full shrink-0 gap-2 rounded-xl border-red-200 bg-red-50 font-semibold text-red-600 hover:bg-red-100 hover:text-red-700 sm:w-auto"
-                            title="Cancela apenas o jogo deste dia, sem mexer na recorrência"
+                            title="Cancela o jogo deste dia ou só parte dele, sem mexer na recorrência"
                         >
                             <CalendarX2 className="h-4 w-4" />
-                            Cancelar este dia
+                            Cancelar dia ou horário
                         </Button>
                     )}
                 </div>
@@ -504,6 +504,7 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, onEdit, bookin
 
             {canCancelSessaoMensalista && (
                 <CancelarSessaoMensalistaModal
+                    key={showCancelSessao ? `cancelar-${booking.id}` : "cancelar-fechado"}
                     open={showCancelSessao}
                     onClose={() => setShowCancelSessao(false)}
                     onSuccess={() => {
