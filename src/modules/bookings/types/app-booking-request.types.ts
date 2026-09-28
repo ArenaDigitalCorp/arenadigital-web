@@ -40,3 +40,10 @@ export interface AppBookingRequestView {
   team: { id: string; nome: string } | null
   participants: AppBookingRequestParticipantView[]
 }
+
+export interface AppBookingRequestGroupView {
+  operationId: string
+  quotedTotal: number
+  createdAt: string
+  items: AppBookingRequestView[]
+}
