@@ -27,6 +27,7 @@ import { Switch } from "@/components/ui/switch"
 import {
     createArenaAsaasSubaccountAction,
     getArenaPixSplitSettingsAction,
+    reconcileArenaAsaasSubaccountAction,
     recoverArenaAsaasSubaccountCredentialAction,
     syncArenaAsaasSubaccountStatusAction,
     updateArenaPixSplitSettingsAction,
@@ -56,7 +57,7 @@ interface Props {
     onSettingsChange?: (settings: ArenaPixSplitSettings) => void
 }
 
-type BusyOperation = "create" | "recover" | "sync" | "save" | null
+type BusyOperation = "create" | "reconcile" | "recover" | "sync" | "save" | null
 
 const AUTOMATIC_INITIAL_SYNC_DELAY_MS = 15_000
 const AUTOMATIC_LOCAL_REFRESH_MS = 10_000
@@ -142,6 +143,8 @@ export function ArenaPixSplitSettingsCard({
     const [automaticUpdateError, setAutomaticUpdateError] = useState<string | null>(null)
     const automaticRefreshInFlightRef = useRef(false)
     const [showOnboarding, setShowOnboarding] = useState(!initialSettings.onboardingStarted)
+    const [reconcileAccountId, setReconcileAccountId] = useState("")
+    const [reconcileWalletId, setReconcileWalletId] = useState("")
     const [onboardingForm, setOnboardingForm] = useState({
         name: initialSettings.holderName || arenaName,
         email: registration.email,
@@ -264,11 +267,30 @@ export function ArenaPixSplitSettingsCard({
         setBusy("recover")
         try {
             const result = await recoverArenaAsaasSubaccountCredentialAction(arenaId)
-            if (!result.success) throw new Error(result.error)
             updateSettings(result.data)
+            if (!result.success) throw new Error(result.error)
             toast.success("Credencial protegida no cofre. A sincronização foi liberada.")
         } catch (error) {
             toast.error(error instanceof Error ? error.message : "Não foi possível recuperar a credencial.")
+        } finally {
+            setBusy(null)
+        }
+    }
+
+    async function handleAccountReconciliation(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault()
+        setBusy("reconcile")
+        try {
+            const result = await reconcileArenaAsaasSubaccountAction(
+                arenaId, reconcileAccountId, reconcileWalletId,
+            )
+            updateSettings(result.data)
+            if (!result.success) throw new Error(result.error)
+            setReconcileAccountId("")
+            setReconcileWalletId("")
+            toast.success("Subconta vinculada. Agora proteja a chave no cofre.")
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Não foi possível vincular a subconta.")
         } finally {
             setBusy(null)
         }
@@ -426,7 +448,7 @@ export function ArenaPixSplitSettingsCard({
                                 <dt className="text-xs text-slate-500">Webhook exclusivo</dt>
                                 <dd className={cn("flex items-center gap-1.5 text-xs font-bold", settings.webhookConfigured ? "text-emerald-700" : "text-rose-700")}>
                                     {settings.webhookConfigured ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
-                                    {settings.webhookConfigured ? "Protegido" : "Ausente"}
+                                    {settings.webhookConfigured ? "Token registrado" : "Ausente"}
                                 </dd>
                             </div>
                         </dl>
@@ -439,17 +461,35 @@ export function ArenaPixSplitSettingsCard({
                     <div className="flex gap-3">
                         <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-rose-700" aria-hidden="true" />
                         <div>
-                            <p className="text-sm font-bold text-rose-950">Proteção da credencial pendente</p>
-                            <p className="mt-1 text-xs leading-5 text-rose-800">A subconta já existe e nenhuma nova conta será criada.</p>
+                            <p className="text-sm font-bold text-rose-950">Cadastro financeiro precisa de conferência</p>
+                            <p className="mt-1 text-xs leading-5 text-rose-800">
+                                {settings.asaasAccountId
+                                    ? "A subconta foi identificada, mas a chave ainda precisa ser confirmada no cofre. Não inicie outro cadastro."
+                                    : "A tentativa de criação precisa ser conferida no Asaas antes de qualquer novo cadastro."}
+                            </p>
                         </div>
                     </div>
-                    {isPlatform ? (
+                    {isPlatform && !settings.asaasAccountId ? (
+                        <div className="grid w-full gap-3 sm:max-w-sm">
+                            <form onSubmit={handleAccountReconciliation} className="grid gap-2">
+                                <p className="text-xs text-rose-800">Confira o ID, a wallet e o CNPJ no painel do Asaas antes de vincular.</p>
+                                <Label htmlFor="asaas-reconcile-account">ID da subconta</Label>
+                                <Input id="asaas-reconcile-account" value={reconcileAccountId} onChange={(event) => setReconcileAccountId(event.target.value)} required autoComplete="off" />
+                                <Label htmlFor="asaas-reconcile-wallet">Wallet da subconta</Label>
+                                <Input id="asaas-reconcile-wallet" value={reconcileWalletId} onChange={(event) => setReconcileWalletId(event.target.value)} required autoComplete="off" />
+                                <Button type="submit" variant="outline" disabled={busy !== null}>
+                                    {busy === "reconcile" ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
+                                    Vincular conta conferida
+                                </Button>
+                            </form>
+                        </div>
+                    ) : isPlatform ? (
                         <Button type="button" variant="outline" onClick={handleCredentialRecovery} disabled={busy !== null}>
                             {busy === "recover" ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
                             Proteger credencial
                         </Button>
                     ) : (
-                        <p className="text-xs font-semibold text-rose-800">A equipe Arena Digital já foi avisada para concluir a proteção.</p>
+                        <p className="text-xs font-semibold text-rose-800">Entre em contato com a equipe Arena Digital para concluir a conferência.</p>
                     )}
                 </div>
             )}
