@@ -417,23 +417,28 @@ async function bindProvisionedAsaasAccount(
     accountId: string,
     walletId: string,
 ): Promise<ArenaPaymentAccountRow> {
-    const { data, error } = await arenaPaymentAccountsTable()
-        .update({
-            asaas_account_id: accountId,
-            asaas_wallet_id: walletId,
-            credential_recovery_pending: true,
-            updated_at: new Date().toISOString(),
-        })
-        .eq('arena_id', arenaId)
-        .eq('provider', 'asaas')
-        .contains('metadata', { asaasProvisioningRequestId: requestId })
-        .is('asaas_account_id', null)
-        .select(PAYMENT_ACCOUNT_COLUMNS)
-        .maybeSingle()
-    if (error) throw new Error(error.message)
-    if (data) return data
+    let updateError: unknown
+    try {
+        const { data, error } = await arenaPaymentAccountsTable()
+            .update({
+                asaas_account_id: accountId,
+                asaas_wallet_id: walletId,
+                credential_recovery_pending: true,
+                updated_at: new Date().toISOString(),
+            })
+            .eq('arena_id', arenaId)
+            .eq('provider', 'asaas')
+            .contains('metadata', { asaasProvisioningRequestId: requestId })
+            .is('asaas_account_id', null)
+            .select(PAYMENT_ACCOUNT_COLUMNS)
+            .maybeSingle()
+        if (error) throw new Error(error.message)
+        if (data) return data
+    } catch (error) {
+        updateError = error
+    }
 
-    // The first update may have committed despite a lost response. Accept only
+    // The update may have committed despite a lost response. Accept only
     // the same claim and exact provider identity; never overwrite a later claim.
     const current = await loadArenaPaymentAccount(arenaId)
     if (
@@ -441,6 +446,7 @@ async function bindProvisionedAsaasAccount(
         current?.asaas_account_id === accountId &&
         current.asaas_wallet_id === walletId
     ) return current
+    if (updateError) throw updateError
     throw new Error('A tentativa de provisionamento mudou. Confira a subconta no Asaas antes de continuar.')
 }
 
