@@ -2,6 +2,7 @@ import 'server-only'
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import type { CreateArenaAsaasSubaccountInput } from '@/modules/arenas/types/pix-split.types'
+import { matchesAsaasSubaccountOwnership } from '@/modules/arenas/services/asaas-subaccount-ownership'
 
 const ASAAS_WEBHOOK_EVENTS = [
   'PAYMENT_CREATED',
@@ -53,6 +54,7 @@ export type AsaasSubaccountSummary = {
 
 type AsaasSubaccountList = {
   data?: AsaasSubaccountSummary[]
+  hasMore?: boolean
 }
 
 type AsaasPixAddressKey = {
@@ -78,6 +80,7 @@ export class AsaasRequestError extends Error {
 
 type AsaasSubaccountAccessToken = {
   apiKey?: string | null
+  access_token?: string | null
 }
 
 export type AsaasAccountStatus = {
@@ -120,6 +123,9 @@ function baseUrl(): string {
 function parentApiKey(): string {
   const apiKey = process.env.ASAAS_API_KEY?.trim()
   if (!apiKey) throw new Error('A chave principal do Asaas não está configurada.')
+  if (apiKey.startsWith('\\')) {
+    throw new Error('A chave principal do Asaas contém uma barra invertida no início. Corrija a variável ASAAS_API_KEY antes de iniciar o cadastro.')
+  }
   return apiKey
 }
 
@@ -174,7 +180,18 @@ export async function findAsaasSubaccountsByDocument(cpfCnpj: string): Promise<A
     `/v3/accounts?cpfCnpj=${encodeURIComponent(document)}&limit=3`,
     parentApiKey(),
   )
-  return response.data ?? []
+  if (!Array.isArray(response.data) || response.hasMore) {
+    throw new Error('A consulta de subcontas do Asaas veio incompleta. Nenhuma tentativa foi liberada.')
+  }
+  return response.data
+}
+
+export async function getAsaasSubaccountById(accountId: string): Promise<AsaasSubaccountSummary> {
+  assertBaasEnabled()
+  return asaasRequest<AsaasSubaccountSummary>(
+    `/v3/accounts/${encodeURIComponent(accountId)}`,
+    parentApiKey(),
+  )
 }
 
 function webhookConfiguration(email: string, webhookToken: string) {
@@ -196,11 +213,18 @@ function webhookConfiguration(email: string, webhookToken: string) {
   }]
 }
 
+export function assertAsaasSubaccountProvisioningConfigured(email: string): void {
+  assertBaasEnabled()
+  parentApiKey()
+  baseUrl()
+  webhookConfiguration(email, 'preflight')
+}
+
 export async function createAsaasSubaccount(
   input: CreateArenaAsaasSubaccountInput,
   webhookToken: string,
 ): Promise<AsaasSubaccountCreation> {
-  assertBaasEnabled()
+  assertAsaasSubaccountProvisioningConfigured(input.email)
   const response = await asaasRequest<Partial<AsaasSubaccountCreation>>('/v3/accounts', parentApiKey(), {
     method: 'POST',
     body: {
@@ -219,16 +243,14 @@ export async function createAsaasSubaccount(
 export async function recoverAsaasSubaccountCredential(input: {
   accountId?: string | null
   cpfCnpj: string
+  walletId?: string | null
 }): Promise<AsaasSubaccountCreation> {
   assertBaasEnabled()
   const apiKey = parentApiKey()
   let account: AsaasSubaccountSummary | null = null
 
   if (input.accountId) {
-    account = await asaasRequest<AsaasSubaccountSummary>(
-      `/v3/accounts/${encodeURIComponent(input.accountId)}`,
-      apiKey,
-    )
+    account = await getAsaasSubaccountById(input.accountId)
   } else {
     const document = input.cpfCnpj.replace(/\D/gu, '')
     const response = await asaasRequest<AsaasSubaccountList>(
@@ -249,6 +271,13 @@ export async function recoverAsaasSubaccountCredential(input: {
   if (!account?.id || !account.walletId) {
     throw new Error('O cadastro recuperado no Asaas não possui conta e wallet válidas.')
   }
+  if (!matchesAsaasSubaccountOwnership(account, {
+    accountId: input.accountId ?? account.id,
+    walletId: input.walletId,
+    cpfCnpj: input.cpfCnpj,
+  })) {
+    throw new Error('A subconta retornada pelo Asaas não corresponde ao cadastro desta arena. A recuperação exige conferência manual.')
+  }
 
   const token = await asaasRequest<AsaasSubaccountAccessToken>(
     `/v3/accounts/${encodeURIComponent(account.id)}/accessTokens`,
@@ -258,8 +287,9 @@ export async function recoverAsaasSubaccountCredential(input: {
       body: { name: `Arena Digital recovery ${new Date().toISOString()}` },
     },
   )
-  if (!token.apiKey) throw new Error('O Asaas não devolveu a nova chave da subconta.')
-  return { id: account.id, walletId: account.walletId, apiKey: token.apiKey }
+  const recoveredKey = token.access_token || token.apiKey
+  if (!recoveredKey) throw new Error('O Asaas não devolveu a nova chave da subconta.')
+  return { id: account.id, walletId: account.walletId, apiKey: recoveredKey }
 }
 
 function apiKeyFromRpcPayload(payload: unknown): string | null {

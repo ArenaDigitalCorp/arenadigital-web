@@ -36,6 +36,8 @@ test('arena Owner or Gestor can create, read and sync their own financial onboar
 })
 
 test('credential recovery and platform fee activation remain Super Admin operations', () => {
+  assert.match(exportedFunctionBody('reconcileArenaAsaasSubaccountAction'), /assertPlatformSuperAdminAccess/u)
+  assert.match(exportedFunctionBody('releaseUncreatedArenaAsaasSubaccountAction'), /assertPlatformSuperAdminAccess/u)
   assert.match(exportedFunctionBody('recoverArenaAsaasSubaccountCredentialAction'), /assertPlatformSuperAdminAccess/u)
   assert.match(exportedFunctionBody('updateArenaPixSplitSettingsAction'), /assertPlatformSuperAdminAccess/u)
 })

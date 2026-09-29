@@ -62,18 +62,18 @@ test('new subaccounts use an exclusive webhook token and persist only its hash',
 
   const provisioningMarker = actions.indexOf('const provisioningStartedAt')
   const remoteCreation = actions.indexOf('subaccount = await createAsaasSubaccount')
-  const recoveryEnvelope = actions.indexOf('await storeCredentialRecoveryEnvelope(recoveryPayload)')
-  const recoveryBaseline = actions.indexOf('const recoveryBaseline = await updateArenaPaymentAccount')
-  const credentialStore = actions.indexOf('await storeSubaccountCredentials', remoteCreation)
+  const preflight = actions.indexOf('assertAsaasSubaccountProvisioningConfigured(parsed.email)')
+  const claim = actions.indexOf("'claim_arena_asaas_subaccount_provisioning'", preflight)
+  const credentialPersistence = actions.indexOf('const credentialResult = await persistCreatedAsaasCredential', remoteCreation)
   const accountBaseline = actions.indexOf('const baseline = await saveArenaPaymentAccount')
   assert.ok(
-    provisioningMarker >= 0 &&
+    preflight >= 0 &&
+      claim > preflight &&
+      provisioningMarker > claim &&
       remoteCreation > provisioningMarker &&
-      recoveryEnvelope > remoteCreation &&
-      recoveryBaseline > recoveryEnvelope &&
-      credentialStore > recoveryBaseline &&
-      accountBaseline > credentialStore,
-    'provisioning and encrypted recovery must be durable before the returned credential is vaulted',
+      credentialPersistence > remoteCreation &&
+      accountBaseline > credentialPersistence,
+    'validate configuration before claiming and persist the returned credential before finishing onboarding',
   )
   assert.match(actions, /createCipheriv\('aes-256-gcm'/u)
   assert.match(actions, /store_arena_asaas_credential_recovery/u)
@@ -86,8 +86,20 @@ test('new subaccounts use an exclusive webhook token and persist only its hash',
   assert.match(actions, /claim_arena_asaas_subaccount_provisioning/u)
   assert.match(actions, /release_arena_asaas_subaccount_provisioning/u)
   assert.match(actions, /error\.status === 401/u)
-  assert.match(actions, /\[400, 422\]\.includes\(error\.status\)/u)
-  assert.match(actions, /asaas_recovery_found_no_account/u)
+  assert.doesNotMatch(actions, /\[400, 422\]\.includes\(error\.status\)/u)
+  assert.match(actions, /reconcileArenaAsaasSubaccountAction/u)
+  assert.match(actions, /matchesAsaasSubaccountOwnership\(remote/u)
+  assert.match(actions, /Confira a subconta no Asaas e vincule o ID e a wallet/u)
+  assert.match(service, /token\.access_token \|\| token\.apiKey/u)
+  assert.match(service, /matchesAsaasSubaccountOwnership/u)
+  const releaseBody = actions.slice(
+    actions.indexOf('export async function releaseUncreatedArenaAsaasSubaccountAction'),
+    actions.indexOf('export async function recoverArenaAsaasSubaccountCredentialAction'),
+  )
+  assert.match(releaseBody, /elapsed < 15 \* 60_000/u)
+  assert.match(releaseBody, /findAsaasSubaccountsByDocument/u)
+  assert.match(releaseBody, /if \(matches\.length > 0\)/u)
+  assert.match(releaseBody, /releaseProvisioningOrThrow/u)
 })
 
 test('status sync uses subaccount runtime credentials and approval guards activation', async () => {
