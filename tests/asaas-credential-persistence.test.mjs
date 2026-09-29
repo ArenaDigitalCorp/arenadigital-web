@@ -25,10 +25,11 @@ test('new subaccount binds ownership before storing a matching recovery envelope
   assert.deepEqual(calls, ['ownership', 'envelope', 'vault', 'cleanup'])
 })
 
-test('a failed ownership write falls back to the atomic Vault RPC without recreating the subaccount', async () => {
+test('a failed ownership write never exposes the key to another provisioning claim', async () => {
   const { calls, steps } = flow('ownership')
-  assert.deepEqual(await persistCreatedAsaasCredential(steps), { protected: true })
-  assert.deepEqual(calls, ['ownership', 'vault'])
+  const result = await persistCreatedAsaasCredential(steps)
+  assert.equal(result.protected, false)
+  assert.deepEqual(calls, ['ownership'])
 })
 
 test('a failed envelope write falls back to the Vault instead of discarding the one-time key', async () => {
@@ -44,7 +45,7 @@ test('a failed Vault write leaves the recovery envelope in place and blocks acti
   assert.deepEqual(calls, ['ownership', 'envelope', 'vault'])
 })
 
-test('if both durable writes fail, recovery remains required and the flow never creates another account', async () => {
+test('a failed ownership write stops before all credential writes', async () => {
   const { calls, steps } = flow('ownership')
   steps.storeVaultCredentials = async () => {
     calls.push('vault')
@@ -52,7 +53,7 @@ test('if both durable writes fail, recovery remains required and the flow never 
   }
   const result = await persistCreatedAsaasCredential(steps)
   assert.equal(result.protected, false)
-  assert.deepEqual(calls, ['ownership', 'vault'])
+  assert.deepEqual(calls, ['ownership'])
 })
 
 test('a cleanup failure does not hide a confirmed Vault write', async () => {

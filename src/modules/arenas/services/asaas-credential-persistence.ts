@@ -13,15 +13,20 @@ export async function persistCreatedAsaasCredential(steps: {
 }): Promise<CredentialPersistenceResult> {
   try {
     await steps.bindOwnership()
+  } catch (error) {
+    // A stale provisioning attempt must never write its key into the current arena.
+    return { protected: false, error }
+  }
+  try {
     await steps.storeRecoveryEnvelope()
-  } catch (initialError) {
+  } catch (envelopeError) {
     // The Vault RPC can persist the account, wallet and secret atomically.
-    // This fallback also covers an unavailable recovery-envelope RPC.
+    // Only an unavailable recovery-envelope RPC may use this fallback.
     try {
       await steps.storeVaultCredentials()
       return { protected: true }
     } catch {
-      return { protected: false, error: initialError }
+      return { protected: false, error: envelopeError }
     }
   }
 

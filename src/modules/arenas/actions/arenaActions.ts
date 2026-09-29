@@ -25,7 +25,6 @@ import {
     assertAsaasSubaccountProvisioningConfigured,
     createAsaasSubaccount,
     ensureArenaAsaasPixKey,
-    findAsaasSubaccountsByDocument,
     getAsaasSubaccountById,
     getArenaAsaasOnboardingSnapshot,
     recoverAsaasSubaccountCredential,
@@ -286,8 +285,11 @@ type ArenaPaymentAccountSelect = {
 
 type ArenaPaymentAccountMutation = {
     eq(column: string, value: string): ArenaPaymentAccountMutation
+    contains(column: string, value: Record<string, string>): ArenaPaymentAccountMutation
+    is(column: string, value: null): ArenaPaymentAccountMutation
     select(columns: string): {
         single(): Promise<{ data: ArenaPaymentAccountRow; error: SupabaseErrorLike | null }>
+        maybeSingle(): Promise<{ data: ArenaPaymentAccountRow | null; error: SupabaseErrorLike | null }>
     }
 }
 
@@ -409,18 +411,37 @@ async function saveArenaPaymentAccount(
     return data
 }
 
-async function updateArenaPaymentAccount(
+async function bindProvisionedAsaasAccount(
     arenaId: string,
-    payload: Partial<ArenaPaymentAccountRow>,
+    requestId: string,
+    accountId: string,
+    walletId: string,
 ): Promise<ArenaPaymentAccountRow> {
     const { data, error } = await arenaPaymentAccountsTable()
-        .update(payload)
+        .update({
+            asaas_account_id: accountId,
+            asaas_wallet_id: walletId,
+            credential_recovery_pending: true,
+            updated_at: new Date().toISOString(),
+        })
         .eq('arena_id', arenaId)
         .eq('provider', 'asaas')
+        .contains('metadata', { asaasProvisioningRequestId: requestId })
+        .is('asaas_account_id', null)
         .select(PAYMENT_ACCOUNT_COLUMNS)
-        .single()
+        .maybeSingle()
     if (error) throw new Error(error.message)
-    return data
+    if (data) return data
+
+    // The first update may have committed despite a lost response. Accept only
+    // the same claim and exact provider identity; never overwrite a later claim.
+    const current = await loadArenaPaymentAccount(arenaId)
+    if (
+        provisioningRequestId(current?.metadata ?? null) === requestId &&
+        current?.asaas_account_id === accountId &&
+        current.asaas_wallet_id === walletId
+    ) return current
+    throw new Error('A tentativa de provisionamento mudou. Confira a subconta no Asaas antes de continuar.')
 }
 
 async function recordPaymentAudit(input: {
@@ -430,6 +451,7 @@ async function recordPaymentAudit(input: {
     newValue: Record<string, unknown>
     metadata?: Record<string, unknown>
     source?: 'arena_self_service' | 'super_admin_backoffice'
+    required?: boolean
 }): Promise<void> {
     const { error } = await getSupabaseAdmin().from('audit_logs').insert({
         entity_type: 'arena_payment_account',
@@ -444,7 +466,10 @@ async function recordPaymentAudit(input: {
             ...input.metadata,
         },
     })
-    if (error) console.error(`[${input.action}] Failed to record audit event`, error.message)
+    if (error) {
+        if (input.required) throw new Error('Não foi possível registrar a conferência da subconta. Tente novamente.')
+        console.error(`[${input.action}] Failed to record audit event`, error.message)
+    }
 }
 
 type ArenaFinancialOnboardingAccess = {
@@ -909,12 +934,9 @@ export async function createArenaAsaasSubaccountAction(
         }
         const credentialResult = await persistCreatedAsaasCredential({
             bindOwnership: async () => {
-                await updateArenaPaymentAccount(parsedArenaId, {
-                    asaas_account_id: subaccount.id,
-                    asaas_wallet_id: subaccount.walletId,
-                    credential_recovery_pending: true,
-                    updated_at: new Date().toISOString(),
-                })
+                await bindProvisionedAsaasAccount(
+                    parsedArenaId, provisioningRequestId, subaccount.id, subaccount.walletId,
+                )
             },
             storeRecoveryEnvelope: () => storeCredentialRecoveryEnvelope(recoveryPayload),
             storeVaultCredentials: () => storeSubaccountCredentials(
@@ -1022,65 +1044,31 @@ export async function reconcileArenaAsaasSubaccountAction(
         })) {
             throw new Error('ID, wallet ou documento não correspondem à arena no Asaas. Nenhum vínculo foi alterado.')
         }
-        const updated = await updateArenaPaymentAccount(arenaId, {
-            asaas_account_id: accountId,
-            asaas_wallet_id: walletId,
-            credential_recovery_pending: true,
-            updated_at: new Date().toISOString(),
+        const requestId = provisioningRequestId(account.metadata)
+        if (!requestId) throw new Error('A tentativa não possui identificador de provisionamento. Investigue antes de vincular.')
+        await recordPaymentAudit({
+            arenaId,
+            actorId: profile.dbUserId,
+            action: 'asaas_subaccount_manual_reconciliation_attempt',
+            newValue: { asaas_account_id: accountId, asaas_wallet_id: walletId },
+            metadata: { reason: 'super_admin_confirmed_provider_identity' },
+            required: true,
         })
+        const updated = account.asaas_account_id === accountId && account.asaas_wallet_id === walletId
+            ? account
+            : await bindProvisionedAsaasAccount(arenaId, requestId, accountId, walletId)
         await recordPaymentAudit({
             arenaId,
             actorId: profile.dbUserId,
             action: 'asaas_subaccount_manually_reconciled',
             newValue: { asaas_account_id: accountId, asaas_wallet_id: walletId },
             metadata: { reason: 'super_admin_confirmed_provider_identity' },
+            required: true,
         })
         revalidatePixSplitPaths(arenaId)
         return { success: true, data: mapPixSplitSettings(updated) }
     } catch (err) {
         const message = err instanceof Error ? err.message : 'Não foi possível conciliar a subconta Asaas'
-        const account = authorized ? await loadArenaPaymentAccount(arenaId).catch(() => null) : null
-        return { success: false, data: mapPixSplitSettings(account), error: message }
-    }
-}
-
-export async function releaseUncreatedArenaAsaasSubaccountAction(
-    arenaId: string,
-    confirmedDocument: string,
-): Promise<PixSplitActionResult> {
-    let authorized = false
-    try {
-        const profile = await assertPlatformSuperAdminAccess()
-        authorized = true
-        const account = await loadArenaPaymentAccount(arenaId)
-        const requestId = provisioningRequestId(account?.metadata ?? null)
-        if (!account?.holder_document || !requestId || account.asaas_account_id || account.asaas_api_key_secret_id) {
-            throw new Error('Não há uma tentativa sem subconta vinculada que possa ser liberada.')
-        }
-        if (confirmedDocument.replace(/\D/gu, '') !== account.holder_document.replace(/\D/gu, '')) {
-            throw new Error('Confirme o CNPJ da arena antes de liberar a tentativa.')
-        }
-        const elapsed = Date.now() - Date.parse(account.updated_at ?? '')
-        if (!Number.isFinite(elapsed) || elapsed < 15 * 60_000) {
-            throw new Error('Aguarde 15 minutos após a tentativa para conferir se o Asaas criou a subconta.')
-        }
-        const matches = await findAsaasSubaccountsByDocument(account.holder_document)
-        if (matches.length > 0) {
-            throw new Error('Há subconta para este CNPJ no Asaas. Confira o ID e a wallet; a tentativa não foi liberada.')
-        }
-        await releaseProvisioningOrThrow(arenaId, requestId, 'asaas_manual_no_remote_account_confirmed')
-        await recordPaymentAudit({
-            arenaId,
-            actorId: profile.dbUserId,
-            action: 'asaas_subaccount_provisioning_manually_released',
-            newValue: { onboarding_status: 'NOT_STARTED' },
-            metadata: { reason: 'super_admin_confirmed_no_remote_account' },
-        })
-        const updated = await loadArenaPaymentAccount(arenaId)
-        revalidatePixSplitPaths(arenaId)
-        return { success: true, data: mapPixSplitSettings(updated) }
-    } catch (err) {
-        const message = err instanceof Error ? err.message : 'Não foi possível liberar a tentativa Asaas'
         const account = authorized ? await loadArenaPaymentAccount(arenaId).catch(() => null) : null
         return { success: false, data: mapPixSplitSettings(account), error: message }
     }

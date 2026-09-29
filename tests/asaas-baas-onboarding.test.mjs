@@ -92,14 +92,9 @@ test('new subaccounts use an exclusive webhook token and persist only its hash',
   assert.match(actions, /Confira a subconta no Asaas e vincule o ID e a wallet/u)
   assert.match(service, /token\.access_token \|\| token\.apiKey/u)
   assert.match(service, /matchesAsaasSubaccountOwnership/u)
-  const releaseBody = actions.slice(
-    actions.indexOf('export async function releaseUncreatedArenaAsaasSubaccountAction'),
-    actions.indexOf('export async function recoverArenaAsaasSubaccountCredentialAction'),
-  )
-  assert.match(releaseBody, /elapsed < 15 \* 60_000/u)
-  assert.match(releaseBody, /findAsaasSubaccountsByDocument/u)
-  assert.match(releaseBody, /if \(matches\.length > 0\)/u)
-  assert.match(releaseBody, /releaseProvisioningOrThrow/u)
+  assert.match(actions, /\.contains\('metadata', \{ asaasProvisioningRequestId: requestId \}\)/u)
+  assert.match(actions, /\.is\('asaas_account_id', null\)/u)
+  assert.doesNotMatch(actions, /releaseUncreatedArenaAsaasSubaccountAction/u)
 })
 
 test('status sync uses subaccount runtime credentials and approval guards activation', async () => {

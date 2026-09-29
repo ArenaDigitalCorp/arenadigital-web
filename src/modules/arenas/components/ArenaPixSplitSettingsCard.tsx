@@ -29,7 +29,6 @@ import {
     getArenaPixSplitSettingsAction,
     reconcileArenaAsaasSubaccountAction,
     recoverArenaAsaasSubaccountCredentialAction,
-    releaseUncreatedArenaAsaasSubaccountAction,
     syncArenaAsaasSubaccountStatusAction,
     updateArenaPixSplitSettingsAction,
 } from "@/modules/arenas/actions/arenaActions"
@@ -58,7 +57,7 @@ interface Props {
     onSettingsChange?: (settings: ArenaPixSplitSettings) => void
 }
 
-type BusyOperation = "create" | "reconcile" | "release" | "recover" | "sync" | "save" | null
+type BusyOperation = "create" | "reconcile" | "recover" | "sync" | "save" | null
 
 const AUTOMATIC_INITIAL_SYNC_DELAY_MS = 15_000
 const AUTOMATIC_LOCAL_REFRESH_MS = 10_000
@@ -146,8 +145,6 @@ export function ArenaPixSplitSettingsCard({
     const [showOnboarding, setShowOnboarding] = useState(!initialSettings.onboardingStarted)
     const [reconcileAccountId, setReconcileAccountId] = useState("")
     const [reconcileWalletId, setReconcileWalletId] = useState("")
-    const [showManualRelease, setShowManualRelease] = useState(false)
-    const [releaseDocument, setReleaseDocument] = useState("")
     const [onboardingForm, setOnboardingForm] = useState({
         name: initialSettings.holderName || arenaName,
         email: registration.email,
@@ -294,24 +291,6 @@ export function ArenaPixSplitSettingsCard({
             toast.success("Subconta vinculada. Agora proteja a chave no cofre.")
         } catch (error) {
             toast.error(error instanceof Error ? error.message : "Não foi possível vincular a subconta.")
-        } finally {
-            setBusy(null)
-        }
-    }
-
-    async function handleManualRelease(event: FormEvent<HTMLFormElement>) {
-        event.preventDefault()
-        setBusy("release")
-        try {
-            const result = await releaseUncreatedArenaAsaasSubaccountAction(arenaId, releaseDocument)
-            updateSettings(result.data)
-            if (!result.success) throw new Error(result.error)
-            setShowManualRelease(false)
-            setReleaseDocument("")
-            setShowOnboarding(true)
-            toast.success("Tentativa liberada após a conferência. Você pode iniciar um novo cadastro.")
-        } catch (error) {
-            toast.error(error instanceof Error ? error.message : "Não foi possível liberar a tentativa.")
         } finally {
             setBusy(null)
         }
@@ -503,20 +482,6 @@ export function ArenaPixSplitSettingsCard({
                                     Vincular conta conferida
                                 </Button>
                             </form>
-                            <Button type="button" variant="ghost" onClick={() => setShowManualRelease(!showManualRelease)} disabled={busy !== null}>
-                                Não existe subconta no Asaas?
-                            </Button>
-                            {showManualRelease && (
-                                <form onSubmit={handleManualRelease} className="grid gap-2 border-t border-rose-200 pt-3">
-                                    <p className="text-xs text-rose-800">Confira no Asaas que nenhuma subconta foi criada para este CNPJ. Depois de 15 minutos, digite o CNPJ para liberar uma nova tentativa.</p>
-                                    <Label htmlFor="asaas-release-document">Confirme o CNPJ da arena</Label>
-                                    <Input id="asaas-release-document" value={releaseDocument} onChange={(event) => setReleaseDocument(event.target.value)} required autoComplete="off" />
-                                    <Button type="submit" variant="outline" disabled={busy !== null}>
-                                        {busy === "release" ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
-                                        Liberar tentativa sem conta
-                                    </Button>
-                                </form>
-                            )}
                         </div>
                     ) : isPlatform ? (
                         <Button type="button" variant="outline" onClick={handleCredentialRecovery} disabled={busy !== null}>
