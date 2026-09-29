@@ -1327,7 +1327,7 @@ componente porque é contrato com o gestor: é o que ele lê no extrato meses de
 
 ### 21.3 UI
 
-- `BookingDetailsModal` — botão **"Cancelar este dia"** quando
+- `BookingDetailsModal` — botão **"Cancelar dia ou horário"** (antes "Cancelar este dia"; ver §41 para o parcial) quando
   `isMensalista && status !== 'cancelled'`. Reserva **confirmada** (mês pago)
   também pode ser cancelada: é o caso que gera crédito.
 - `CancelarSessaoMensalistaModal` — aviso em destaque de que vale só para aquele
@@ -1689,9 +1689,9 @@ qualquer `tipo`, inclusive `todos`) — não depende do checkbox Rateio nem do f
 de Espaço/Esporte (dívida é do atleta, não de uma quadra).
 
 - **Avulso devido:** `bookings` sem `plano_mensalista_id`, `status IN (reservado,
-  pending_payment)`, no mês; soma `price` quando o atleta é `athlete_id`, ou a fatia
-  não paga (`booking_participants.valor` sem `pago_em`) quando é convidado de reserva
-  com `cobranca_por_participante`.
+  pending_payment)`, no mês; soma `price` quando o atleta é `athlete_id` (reserva sem
+  rateio), ou — em reserva com rateio (`cobranca_por_participante`) — o que falta da
+  parte dele em `booking_cobrancas` (`valor_devido - valor_pago`, ver §40).
 - **Mensal devido:** `mensalista_cobrancas` do atleta (`atleta_id = filtro`,
   `ativo = true`) cuja mensalidade (`!inner` join) é da `arena` e `competencia` do
   mês; soma `valor_devido - valor_pago - credito_aplicado` (clampado em 0).
@@ -2701,3 +2701,174 @@ mensalidade, rateio ao centavo, estreia proporcional, mensalidade zerada, rateio
 cancelado, resumo por atleta, colunas do Excel). `tests/payment-status-pdf.test.mjs`
 ajustado: "Horas ocupadas" continua fora do resumo do período; horas só aparecem
 no extrato e no resumo por atleta com o detalhamento ligado.
+
+## 39. Responsável sempre primeiro no rótulo da reserva (28/09/2026)
+
+### 39.1 Problema
+
+O embed `booking_participants(...)` do PostgREST não tem ordem garantida (na
+prática veio por `atleta_id`). `getBookingParticipantNames`
+(`src/modules/bookings/utils/booking-participants.ts`) usava essa ordem crua, então
+`formatBookingParticipantLabel` — rótulo dos cards de Dia/Semana/Mês e das
+"oportunidades" em `CourtCalendarPageClient.tsx` — podia começar por um convidado.
+
+### 39.2 Regra
+
+`getBookingParticipantNames(booking)` monta a lista assim:
+
+1. **Responsável:** participante com `funcao = 'responsavel'`; na falta dele, o
+   participante cujo `atleta_id = bookings.athlete_id`. Se nenhum participante for o
+   responsável, entra `bookings.athlete_name` (ou `atleta.nome_perfil`) — reservas
+   legadas em que o dono não tem linha em `booking_participants` passam a exibi-lo.
+2. **Demais participantes**, na ordem recebida.
+3. Nomes vazios são descartados e duplicados removidos (`Set`).
+
+`formatBookingParticipantLabel` não mudou: até 2 nomes separados por vírgula e
+`+N` para o restante (ex.: `Iria STERTZ, Osni Jacó da Silva +9`); lista vazia → `—`.
+
+### 39.3 Solicitações do app
+
+`getAppBookingRequestsAction` (`appBookingRequestActions.ts`) ordena
+`participants` com `role = 'responsavel'` primeiro (sort estável: o resto mantém a
+ordem), o que vale para a lista de chips em `AppBookingRequestsPageClient`.
+
+### 39.4 Sem mudança de banco
+
+Só apresentação; nenhum contrato, RPC ou migração em `arenadigital-db`.
+
+### 39.5 Testes
+
+`tests/booking-participants.test.mjs`: responsável vindo depois dos convidados,
+fallback por `athlete_id`, responsável ausente dos participantes e reserva sem
+participantes.
+
+## 40. Rateio na reserva avulsa (28/09/2026)
+
+Plano completo: `docs/PLANO-Rateio-Reserva-Avulsa.md`. Ordem de deploy: `arenadigital-db`
+(migrações `20260928140000`…`20260928140600`) → web.
+
+### 40.1 Modelo de dados (arenadigital-db)
+
+- `booking_cobrancas` — uma parte por pessoa: `booking_id`, `atleta_id` (NULL = sem
+  cadastro), `nome`, `responsavel` (1 por reserva), `valor_devido` (inclui
+  `valor_servicos`, só no responsável), `valor_pago`, `status` gerado
+  (`aberto`/`parcial`/`quitado`), `pago_em`. Leitura RLS por
+  `can_access_arena_backoffice`; escrita só por RPC.
+- `booking_cobranca_pagamentos` — razão de pagamentos parciais; cada pagamento espelha
+  uma `transactions` (`source_type = 'booking_cobranca_pagamento'`, categoria
+  "Reserva Avulsa", descrição `Rateio - <nome> - dd/mm/aaaa`).
+- `bookings.cobranca_por_participante` = rateio ativo. `bookings.price` = soma das
+  partes; `rental_price` = locação digitada. Reservas legadas (backfill) ainda guardam
+  o valor por pessoa em `price` até a migração de limpeza — por isso o web **nunca** lê
+  `price` como total de uma reserva com rateio (`locacaoDoRateio`, `buildAvulsoItem`,
+  `valorRateioNoRelatorio`).
+- `booking_participants` continua sendo a participação social (app/notificações); o
+  atleta cadastrado do rateio também tem linha lá. `valor`/`pago_em` de lá são só um
+  espelho para o web anterior (transição).
+
+### 40.2 RPCs (service_role)
+
+| RPC | Uso no web |
+|---|---|
+| `save_backoffice_booking_bundle_atomic(..., p_rateio jsonb)` | `saveBackofficeBookingBundleAction` — `p_rateio = [{cobranca_id?, atleta_id, nome?, valor, responsavel}]`, `p_participant_value = null` |
+| `configure_booking_rateio_atomic` | `configurarRateioAction` |
+| `add_booking_rateio_participante_atomic` | `adicionarParticipanteRateioAction` |
+| `update_booking_rateio_valores_atomic` (`[{cobranca_id, valor}]`, valor = parte da locação) | `atualizarValoresRateioAction` |
+| `remove_booking_rateio_participante_atomic` (estorno) | `removerParticipanteRateioAvulsoAction` |
+| `register_booking_cobranca_payment_atomic` (idempotente por `operationId`) | `registrarPagamentoRateioAction` |
+
+`src/modules/bookings/actions/bookingRateioActions.ts`: todas validam com zod
+(`schemas/booking-rateio.schema.ts`), exigem `assertArenaBackofficeAccess` +
+`assertBookingAccess`/`assertArenaScopedResourceAccess('booking_cobrancas')` e devolvem
+um `RateioSnapshot` (`bookingStatus`, `rateioAtivo`, `rentalPrice`, `cobrancas`).
+`confirmarPagamentoParticipanteAvulsoAction` foi removida (o banco mantém
+`confirm_backoffice_participant_payment` só para o web anterior).
+
+### 40.3 Regras puras (`src/modules/bookings/lib/booking-rateio.ts`)
+
+`dividirIgualmente` (centavos no 1º = responsável), `diferencaRateio`, `parteLocacao`
+(`devido - serviços`), `resumoRateio`, `sortCobrancas` (responsável primeiro),
+`locacaoDoRateio` (legado quando `price ≠ soma das partes`), `valorRateioNoRelatorio`
+(pendente → falta; depois → total), `restanteDoAtletaNoRateio`.
+`src/modules/finance/lib/avulsos-list.ts`: `buildAvulsoItem` (uma linha por reserva),
+`resumoAvulsos` (cards), `matchesAvulsoSearch` (inclui nomes do rateio).
+
+### 40.4 Telas
+
+- `AvulsasPageClient` + `rateio/GerenciarRateioAvulsoModal` +
+  `rateio/RegistrarPagamentoRateioModal`. A página aceita `?booking=<uuid>` para abrir o
+  rateio da reserva (link do calendário). O modal é remontado por reserva (`key`).
+- `BookingModal`: toggle "Rateio" + `rateio/RateioAvulsoField` (partes por chave
+  `resp` | atleta | `avulso:<id>`, divisão igual automática até o gestor editar);
+  serviços liberados com rateio; na edição reaproveita `cobranca_id` (o responsável só
+  quando continua o mesmo).
+- `BookingDetailsModal`: resumo do rateio lido de `booking_cobrancas` (embed no
+  `BOOKING_SELECT` do repositório) + link "Gerenciar em Avulsos"; botão "Ratear" na
+  avulsa comum pendente.
+- `booking-participants.ts`: pessoas sem cadastro do rateio entram no rótulo depois dos
+  cadastrados.
+
+### 40.5 Testes
+
+`tests/booking-rateio.test.mjs` (regras puras + lista de Avulsos; registra um resolvedor
+de `@/` só no teste), `tests/booking-participants.test.mjs` (sem cadastro no rótulo),
+`tests/atomic-booking-bundle.test.mjs` (contrato `p_rateio`/`p_participant_value: null`).
+No banco: `supabase/tests/20260928140000_booking_rateio_test.sql` (47 asserções) e
+`tests/booking-rateio.test.mjs` do `arenadigital-db`.
+
+## 41. Cancelar só parte de uma sessão de mensalista (29/09/2026)
+
+Estende §21. Migração `arenadigital-db/20260929120000_mensalista_cancel_partial_session`.
+
+### 41.1 Por que encurtar/dividir a reserva
+
+Toda a disponibilidade (checagens de conflito das RPCs de reserva, grade do
+backoffice, app, oportunidades) olha o **intervalo das reservas ativas**
+(`confirmed`/`reservado`/`pending_payment`). Encurtar a reserva libera o horário em
+todos esses lugares sem tocar em nenhum deles — um "intervalo liberado" guardado à
+parte teria de ser respeitado em cada checagem.
+
+### 41.2 RPC `cancel_mensalista_booking_partial_atomic`
+
+`(p_operation_id, p_arena_id, p_booking_id, p_cancel_start, p_cancel_end,
+p_lancar_credito, p_valor_credito, p_descricao, p_registered_by) → jsonb`,
+service_role only.
+
+- Trava a reserva; exige `plano_mensalista_id`; intervalo dentro da reserva.
+- Intervalo = sessão inteira → delega a `cancel_mensalista_booking_atomic` (mesmo
+  comportamento de §21, crédito ligado à reserva original).
+- Cancelou o início → `start_time = p_cancel_end`; o fim → `end_time = p_cancel_start`;
+  o meio → a original fica com o 1º pedaço e um **novo booking** do mesmo plano recebe
+  o pedaço depois (copiando `booking_participants`).
+- A parte cancelada vira um booking `cancelled` com **id = `p_operation_id`** (histórico
+  e extrato "Cancelado"); o crédito (`mensalista_creditos.booking_id`) aponta para ele,
+  preservando "um crédito por jogo". Retry com o mesmo id devolve `idempotent: true`;
+  o mesmo id com outro intervalo → `23505`.
+- `price`/`rental_price` são rateados pela duração (a parte cancelada fica com a sobra do
+  arredondamento). Informativos: o extrato do mensalista rateia a mensalidade pela
+  duração das reservas (`ratearMensalidadeNasReservas`). Se o mês ainda não estiver
+  pago, a quitação reescreve o `price` das sessões com o valor da sessão (comportamento
+  existente da RPC de pagamento).
+- Não toca plano, mensalidade, cobranças nem `transactions`.
+
+### 41.3 Web
+
+- `cancelamento-sessao.ts`: `blocosDeHora(start, end)` (blocos de 1h a partir do
+  início; o último pode ser menor), `intervaloSelecionado(blocos, índices)` (exige
+  contiguidade; `sessaoInteira` quando todos), `descricaoCreditoHorarioCancelado`.
+- `quoteSessaoMensalistaAction(arenaId, bookingId, intervalo?)`: cota só o intervalo
+  (validado dentro da reserva) com a mesma cadeia de tabela de preço.
+- `cancelarSessaoMensalistaAction`: schema ganha `cancelInicio`/`cancelFim` e chama sempre
+  a RPC parcial (que delega no dia inteiro); devolve `parcial`.
+- `CancelarSessaoMensalistaModal`: grupo "Horários a cancelar" (blocos de 1h, todos
+  marcados por padrão), aviso/botão/descrição conforme parcial ou inteiro; a cotação é
+  refeita a cada mudança de intervalo. Remontado por abertura (`key` no
+  `BookingDetailsModal`).
+
+### 41.4 Testes
+
+`tests/mensalista-cancelar-sessao.test.mjs` (blocos, contiguidade, descrição, uso da RPC
+parcial). No banco: `supabase/tests/20260929120000_mensalista_cancel_partial_session_test.sql`
+(28 asserções: início/meio/fim, horário liberado aceita nova reserva, restante continua
+bloqueado, crédito, idempotência, validações, delegação do dia inteiro) e
+`tests/mensalista-cancel-partial.test.mjs`.

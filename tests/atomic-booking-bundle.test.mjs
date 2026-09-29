@@ -42,7 +42,11 @@ test('server action authorizes tenant scope and allowlists bundle fields', () =>
   assert.match(bundle, /p_registered_by: dbUserId/)
   assert.doesNotMatch(bundle, /p_registered_by: input\./)
   assert.match(bundle, /p_responsible_athlete_id: input\.athleteId/)
-  assert.match(bundle, /p_participant_value: input\.splitBilling \? input\.rentalPrice : null/)
+  // Rateio: o valor por pessoa legado nunca é enviado; as partes vão em p_rateio,
+  // montadas campo a campo (sem repassar o objeto do cliente).
+  assert.match(bundle, /p_participant_value: null/)
+  assert.match(bundle, /p_rateio: safeRateio/)
+  assert.match(bundle, /cobranca_id: r\.cobrancaId \?\? null,\s+atleta_id: r\.atletaId,\s+nome: r\.nome\?\.trim\(\) \|\| null,\s+valor: Math\.round\(r\.valor \* 100\) \/ 100,\s+responsavel: Boolean\(r\.responsavel\)/)
   assert.doesNotMatch(bundle, /p_participant_value: input\.participant/)
   assert.match(bundle, /rpc\('save_backoffice_booking_bundle_atomic'/)
 })

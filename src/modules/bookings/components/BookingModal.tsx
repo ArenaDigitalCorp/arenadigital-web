@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Search,
   X,
@@ -46,7 +46,20 @@ import {
   getBookingsByArenaAction,
   saveBackofficeBookingBundleAction,
 } from '@/modules/bookings/actions/bookingActions';
-import type { BookingConflict } from '@/modules/bookings/actions/bookingActions';
+import type {
+  BookingConflict,
+  BookingRateioEntry,
+} from '@/modules/bookings/actions/bookingActions';
+import {
+  RateioAvulsoField,
+  type RateioPessoa,
+} from '@/modules/bookings/components/rateio/RateioAvulsoField';
+import {
+  dividirIgualmente,
+  locacaoDoRateio,
+  parteLocacao,
+  toBookingCobranca,
+} from '@/modules/bookings/lib/booking-rateio';
 import type { Booking } from '@/modules/bookings/types/booking.types';
 import { getProductsByArenaAction } from '@/modules/products/actions/stockActions';
 import {
@@ -296,6 +309,14 @@ export function BookingModal({
   >([]);
   const [splitBillingPerParticipant, setSplitBillingPerParticipant] =
     useState(false);
+  // Rateio: pessoas sem cadastro (só nome) e a parte da locação de cada pessoa,
+  // por chave ('resp' | id do atleta | 'avulso:<id>'). Enquanto o gestor não
+  // mexe nos valores, a divisão igual é recalculada sozinha.
+  const [rateioSemCadastro, setRateioSemCadastro] = useState<
+    { key: string; nome: string; cobrancaId?: string; pago: number }[]
+  >([]);
+  const [rateioValores, setRateioValores] = useState<Record<string, string>>({});
+  const [rateioEditado, setRateioEditado] = useState(false);
 
   // Mensal
   const [diaSemana, setDiaSemana] = useState<string>(
@@ -463,13 +484,35 @@ export function BookingModal({
       const svcSum = mapped.reduce((a, l) => a + l.quantity * l.unitPrice, 0);
       const isSplit = existingBooking.cobranca_por_participante ?? false;
       setSplitBillingPerParticipant(isSplit);
+      const cobrancasExistentes = (existingBooking.booking_cobrancas ?? []).map((c) =>
+        toBookingCobranca(c as unknown as Record<string, unknown>)
+      );
       setCourtPrice(
         String(
           isSplit
-            ? existingBooking.price ?? 0
+            ? locacaoDoRateio(existingBooking, cobrancasExistentes)
             : Math.max(0, (existingBooking.price ?? 0) - svcSum)
         )
       );
+      setRateioSemCadastro(
+        cobrancasExistentes
+          .filter((c) => !c.atleta_id && !c.responsavel)
+          .map((c) => ({
+            key: `avulso:${c.id}`,
+            nome: c.nome,
+            cobrancaId: c.id,
+            pago: c.valor_pago,
+          }))
+      );
+      setRateioValores(
+        Object.fromEntries(
+          cobrancasExistentes.map((c) => [
+            c.responsavel ? 'resp' : (c.atleta_id ?? `avulso:${c.id}`),
+            parteLocacao(c).toFixed(2),
+          ])
+        )
+      );
+      setRateioEditado(isSplit);
       const extra = (existingBooking.booking_participants ?? [])
         .filter((p) => p.funcao === 'convidado')
         .map((p) => ({
@@ -503,6 +546,9 @@ export function BookingModal({
     setIncludeServices(false);
     setAdditionalParticipants([]);
     setSplitBillingPerParticipant(false);
+    setRateioSemCadastro([]);
+    setRateioValores({});
+    setRateioEditado(false);
     setDiaSemana(String(selectedDate.getDay()));
     // Pré-marca a célula clicada — o fluxo de "um clique, uma reserva" continua
     // idêntico; o gestor só ganha a opção de marcar mais horários/quadras.
@@ -537,18 +583,6 @@ export function BookingModal({
     bookingType,
   ]);
 
-  useEffect(() => {
-    if (!existingBooking && additionalParticipants.length === 0) {
-      setSplitBillingPerParticipant(false);
-    }
-  }, [additionalParticipants.length, existingBooking]);
-
-  useEffect(() => {
-    if (splitBillingPerParticipant && includeServices) {
-      setIncludeServices(false);
-      setServiceLines([]);
-    }
-  }, [splitBillingPerParticipant, includeServices]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -905,8 +939,114 @@ export function BookingModal({
     setAvulsoBlocoOverrides((prev) => ({ ...prev, [blocoKey]: valor }));
   };
 
+  // ── Rateio (reserva avulsa de um único horário) ─────────────────────────
+  const existingCobrancas = useMemo(
+    () =>
+      (existingBooking?.booking_cobrancas ?? []).map((c) =>
+        toBookingCobranca(c as unknown as Record<string, unknown>)
+      ),
+    [existingBooking]
+  );
+  const locacaoRateio = existingBooking
+    ? Number(String(courtPrice).replace(',', '.')) || 0
+    : (resumoBlocosAvulso[0]?.valor ?? 0);
+  const responsavelNome = selectedAthlete?.nome_perfil ?? search.trim();
+  const rateioPessoas = useMemo<RateioPessoa[]>(() => {
+    const pagoDe = (pred: (c: (typeof existingCobrancas)[number]) => boolean) =>
+      existingCobrancas.find(pred)?.valor_pago ?? 0;
+    return [
+      {
+        key: 'resp',
+        nome: responsavelNome || 'Responsável',
+        responsavel: true,
+        semCadastro: !selectedAthlete,
+        pago: pagoDe((c) => c.responsavel),
+      },
+      ...additionalParticipants.map((a) => ({
+        key: a.id,
+        nome: a.nome_perfil,
+        responsavel: false,
+        semCadastro: false,
+        pago: pagoDe((c) => !c.responsavel && c.atleta_id === a.id),
+      })),
+      ...rateioSemCadastro.map((p) => ({
+        key: p.key,
+        nome: p.nome,
+        responsavel: false,
+        semCadastro: true,
+        pago: p.pago,
+      })),
+    ];
+  }, [existingCobrancas, responsavelNome, selectedAthlete, additionalParticipants, rateioSemCadastro]);
+
+  const dividirRateioIgualmente = useCallback(() => {
+    const partes = dividirIgualmente(locacaoRateio, rateioPessoas.length);
+    setRateioValores(
+      Object.fromEntries(rateioPessoas.map((p, i) => [p.key, partes[i].toFixed(2)]))
+    );
+  }, [locacaoRateio, rateioPessoas]);
+
+  useEffect(() => {
+    if (splitBillingPerParticipant && !rateioEditado) dividirRateioIgualmente();
+  }, [splitBillingPerParticipant, rateioEditado, dividirRateioIgualmente]);
+
+  const parteRateio = (key: string) =>
+    Number((rateioValores[key] ?? '0').replace(',', '.') || '0');
+  const somaPartesRateio = rateioPessoas.reduce(
+    (s, p) => s + (Number.isFinite(parteRateio(p.key)) ? parteRateio(p.key) : 0),
+    0
+  );
+
+  /** Valida o rateio antes de salvar; devolve a mensagem de erro, se houver. */
+  const validarRateio = (): string | null => {
+    if (rateioPessoas.length < 2) return 'Adicione pelo menos mais uma pessoa ao rateio';
+    if (!responsavelNome) return 'Informe o nome do responsável';
+    if (rateioPessoas.some((p) => !Number.isFinite(parteRateio(p.key)) || parteRateio(p.key) < 0)) {
+      return 'Informe um valor válido para cada pessoa do rateio';
+    }
+    return null;
+  };
+
+  const buildRateioPayload = (): BookingRateioEntry[] => {
+    const respExistente = existingCobrancas.find((c) => c.responsavel);
+    return rateioPessoas.map((p) => {
+      const valor = Math.round(parteRateio(p.key) * 100) / 100;
+      if (p.responsavel) {
+        return {
+          // Só reaproveita a cobrança se o responsável continua o mesmo.
+          cobrancaId:
+            respExistente && respExistente.atleta_id === (selectedAthlete?.id ?? null)
+              ? respExistente.id
+              : null,
+          atletaId: selectedAthlete?.id ?? null,
+          nome: selectedAthlete ? null : responsavelNome,
+          valor,
+          responsavel: true,
+        };
+      }
+      if (p.semCadastro) {
+        return {
+          cobrancaId: rateioSemCadastro.find((x) => x.key === p.key)?.cobrancaId ?? null,
+          atletaId: null,
+          nome: p.nome,
+          valor,
+        };
+      }
+      return {
+        cobrancaId:
+          existingCobrancas.find((c) => !c.responsavel && c.atleta_id === p.key)?.id ?? null,
+        atletaId: p.key,
+        valor,
+      };
+    });
+  };
+
+  const rateioNovoAtivo =
+    !existingBooking && resumoBlocosAvulso.length === 1 && splitBillingPerParticipant;
   const totalAvulsoMultiDisplay =
-    resumoBlocosAvulso.reduce((sum, b) => sum + (Number.isFinite(b.valor) ? b.valor : 0), 0) +
+    (rateioNovoAtivo
+      ? somaPartesRateio
+      : resumoBlocosAvulso.reduce((sum, b) => sum + (Number.isFinite(b.valor) ? b.valor : 0), 0)) +
     sumBookingServiceLines(serviceLines);
 
   // Tabelas de preço de cada espaço que entrou na recorrência. São por quadra,
@@ -1121,16 +1261,9 @@ export function BookingModal({
       return;
     }
     if (splitBillingPerParticipant) {
-      if (!selectedAthlete?.id) {
-        toast.error(
-          'Para cobrança separada, o responsável precisa ser um atleta cadastrado'
-        );
-        return;
-      }
-      if (additionalParticipants.length === 0) {
-        toast.error(
-          'Adicione pelo menos um participante para cobrança separada'
-        );
+      const erroRateio = validarRateio();
+      if (erroRateio) {
+        toast.error(erroRateio);
         return;
       }
     }
@@ -1171,6 +1304,7 @@ export function BookingModal({
         slots,
         services: servicePayload,
         additionalAthleteIds: additionalParticipants.map((p) => p.id),
+        rateio: splitBillingPerParticipant ? buildRateioPayload() : undefined,
       });
       if (!result.success) {
         trackAction('booking_save', 'failure', { arena_id: arenaId });
@@ -1196,11 +1330,11 @@ export function BookingModal({
       toast.success(
         isRecurring
           ? splitBillingPerParticipant
-            ? 'Agenda criada! Confirme o pagamento de cada participante em Financeiro → Cobranças Avulsas.'
-            : 'Agenda criada! Confirme os pagamentos em Financeiro → Cobranças Avulsas.'
+            ? 'Agenda criada! Acompanhe o rateio em Gestão Reservas → Avulsos.'
+            : 'Agenda criada! Confirme os pagamentos em Gestão Reservas → Avulsos.'
           : splitBillingPerParticipant
-            ? 'Reserva criada! Confirme o pagamento de cada participante em Financeiro → Cobranças Avulsas.'
-            : 'Reserva criada! Confirme o pagamento em Financeiro → Cobranças Avulsas.'
+            ? 'Reserva criada! Acompanhe o rateio em Gestão Reservas → Avulsos.'
+            : 'Reserva criada! Confirme o pagamento em Gestão Reservas → Avulsos.'
       );
       onSuccess();
       onClose();
@@ -1238,18 +1372,11 @@ export function BookingModal({
       toast.error('Informe um valor válido para todos os horários escolhidos');
       return;
     }
-    const cobrancaSeparada = resumoBlocosAvulso.length === 1 && splitBillingPerParticipant;
+    const cobrancaSeparada = rateioNovoAtivo;
     if (cobrancaSeparada) {
-      if (!selectedAthlete?.id) {
-        toast.error(
-          'Para cobrança separada, o responsável precisa ser um atleta cadastrado'
-        );
-        return;
-      }
-      if (additionalParticipants.length === 0) {
-        toast.error(
-          'Adicione pelo menos um participante para cobrança separada'
-        );
+      const erroRateio = validarRateio();
+      if (erroRateio) {
+        toast.error(erroRateio);
         return;
       }
     }
@@ -1276,6 +1403,7 @@ export function BookingModal({
           slots: [{ start_time: startISO, end_time: endISO }],
           services: servicePayload,
           additionalAthleteIds: additionalParticipants.map((p) => p.id),
+          rateio: cobrancaSeparada ? buildRateioPayload() : undefined,
         });
         resultados.push({ ok: result.success, error: result.error, bloco });
       }
@@ -1303,8 +1431,10 @@ export function BookingModal({
       if (falhas.length === 0) {
         toast.success(
           sucesso.length === 1
-            ? 'Reserva criada! Confirme o pagamento em Financeiro → Cobranças Avulsas.'
-            : `${sucesso.length} reservas criadas! Confirme os pagamentos em Financeiro → Cobranças Avulsas.`
+            ? cobrancaSeparada
+              ? 'Reserva criada! Acompanhe o rateio em Gestão Reservas → Avulsos.'
+              : 'Reserva criada! Confirme o pagamento em Gestão Reservas → Avulsos.'
+            : `${sucesso.length} reservas criadas! Confirme os pagamentos em Gestão Reservas → Avulsos.`
         );
         onSuccess();
         onClose();
@@ -1439,6 +1569,9 @@ export function BookingModal({
     setIncludeServices(false);
     setAdditionalParticipants([]);
     setSplitBillingPerParticipant(false);
+    setRateioSemCadastro([]);
+    setRateioValores({});
+    setRateioEditado(false);
     setPriceTables([]);
     setAvulsoPriceTableId('');
     setAvulsoSuggested(null);
@@ -1665,16 +1798,9 @@ export function BookingModal({
     () => sumBookingServiceLines(serviceLines),
     [serviceLines]
   );
-  const hasPaidParticipants = Boolean(
-    existingBooking?.booking_participants?.some(
-      (p) =>
-        (p.funcao === 'responsavel' || p.funcao === 'convidado') && p.pago_em
-    )
-  );
-  const participantCount = 1 + additionalParticipants.length;
+  const hasPaidParticipants = existingCobrancas.some((c) => c.valor_pago > 0);
   const totalDisplay =
-    (Number(courtPrice) || 0) *
-      (splitBillingPerParticipant ? participantCount : 1) +
+    (splitBillingPerParticipant ? somaPartesRateio : Number(courtPrice) || 0) +
     servicesSumDisplay;
   const fmtBrl = (n: number) =>
     new Intl.NumberFormat('pt-BR', {
@@ -1776,7 +1902,7 @@ export function BookingModal({
                         onRegisterNew={() => setIsAthleteModalOpen(true)}
                         disabled={isSaving}
                       />
-                      {additionalParticipants.length > 0 && !isMultiBlocoAvulso && (
+                      {!isMultiBlocoAvulso && (
                         <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
                           <div className="flex items-start gap-3">
                             <button
@@ -1784,6 +1910,7 @@ export function BookingModal({
                               onClick={() => {
                                 if (hasPaidParticipants) return;
                                 setSplitBillingPerParticipant((prev) => !prev);
+                                setRateioEditado(false);
                               }}
                               disabled={hasPaidParticipants}
                               className={cn(
@@ -1805,21 +1932,52 @@ export function BookingModal({
                             </button>
                             <div className="min-w-0 flex-1 space-y-0.5">
                               <Label className="text-sm font-bold text-arena-navy-800">
-                                Cobrança separada por participante
+                                Rateio
                               </Label>
                               <p className="text-[10px] font-medium leading-snug text-arena-navy-800/40">
-                                Cada pessoa terá sua própria cobrança e entrada no
-                                financeiro. A reserva só é confirmada quando todos
-                                pagarem.
+                                Divide a locação entre as pessoas — com ou sem
+                                cadastro, valores livres. Cada uma tem sua cobrança,
+                                pode pagar aos poucos e a reserva é confirmada
+                                quando todos quitarem. Serviços ficam na parte do
+                                responsável.
                               </p>
                               {hasPaidParticipants && (
                                 <p className="text-[10px] font-semibold leading-snug text-amber-700">
-                                  Não é possível alterar este modo após confirmar
-                                  pagamentos de participantes.
+                                  Já há pagamentos: o rateio não pode ser desligado
+                                  e quem pagou só sai pela exclusão com estorno em
+                                  Gestão Reservas → Avulsos.
                                 </p>
                               )}
                             </div>
                           </div>
+                          {splitBillingPerParticipant && (
+                            <div className="mt-4 border-t border-slate-200 pt-4">
+                              <RateioAvulsoField
+                                pessoas={rateioPessoas}
+                                valores={rateioValores}
+                                locacao={locacaoRateio}
+                                servicos={servicesSumDisplay}
+                                disabled={isSaving}
+                                onValorChange={(key, valor) => {
+                                  setRateioEditado(true);
+                                  setRateioValores((prev) => ({ ...prev, [key]: valor }));
+                                }}
+                                onDividirIgualmente={() => {
+                                  setRateioEditado(true);
+                                  dividirRateioIgualmente();
+                                }}
+                                onAddSemCadastro={(nome) =>
+                                  setRateioSemCadastro((prev) => [
+                                    ...prev,
+                                    { key: `avulso:${crypto.randomUUID()}`, nome, pago: 0 },
+                                  ])
+                                }
+                                onRemoveSemCadastro={(key) =>
+                                  setRateioSemCadastro((prev) => prev.filter((p) => p.key !== key))
+                                }
+                              />
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1995,7 +2153,7 @@ export function BookingModal({
                     >
                       <Label className="text-xs font-bold uppercase text-arena-navy-800/40 tracking-wider">
                         {splitBillingPerParticipant
-                          ? 'Valor por participante'
+                          ? 'Valor da locação'
                           : 'Valor pago'}
                       </Label>
                       <div className="relative">
@@ -2146,18 +2304,14 @@ export function BookingModal({
                         <button
                           type="button"
                           onClick={() => {
-                            if (splitBillingPerParticipant) return;
                             setIncludeServices((prev) => {
                               if (prev) setServiceLines([]);
                               return !prev;
                             });
                           }}
-                          disabled={splitBillingPerParticipant}
                           className={cn(
                             'relative mt-0.5 h-6 w-12 shrink-0 rounded-full transition-colors',
-                            includeServices ? 'bg-arena-button' : 'bg-gray-200',
-                            splitBillingPerParticipant &&
-                              'cursor-not-allowed opacity-40'
+                            includeServices ? 'bg-arena-button' : 'bg-gray-200'
                           )}
                           aria-pressed={includeServices}
                         >
@@ -2209,11 +2363,12 @@ export function BookingModal({
                         {fmtBrl(existingBooking ? totalDisplay : totalAvulsoMultiDisplay)}
                       </span>
                     </div>
-                    {existingBooking && splitBillingPerParticipant ? (
+                    {(existingBooking ? splitBillingPerParticipant : rateioNovoAtivo) ? (
                       <p className="mt-2 text-[11px] font-medium text-arena-navy-800/45">
-                        {participantCount} participante
-                        {participantCount !== 1 ? 's' : ''} ×{' '}
-                        {fmtBrl(Number(courtPrice) || 0)}
+                        Rateio entre {rateioPessoas.length} pessoa
+                        {rateioPessoas.length !== 1 ? 's' : ''}
+                        {servicesSumDisplay > 0 &&
+                          ` · serviços ${fmtBrl(servicesSumDisplay)} na parte do responsável`}
                       </p>
                     ) : existingBooking && serviceLines.length > 0 ? (
                       <p className="mt-2 text-[11px] font-medium text-arena-navy-800/45">

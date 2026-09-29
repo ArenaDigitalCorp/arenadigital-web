@@ -191,13 +191,16 @@ async function mapRequestRows(
       court: one(row.court),
       sport: one(row.sport),
       team: one(row.team),
-      participants: (row.participants ?? []).map((participant) => ({
-        id: participant.id,
-        athleteId: participant.athlete_id,
-        role: participant.role,
-        teamId: participant.team_id,
-        athlete: one(participant.athlete),
-      })),
+      // Responsável sempre primeiro; o embed não tem ordem garantida.
+      participants: (row.participants ?? [])
+        .map((participant) => ({
+          id: participant.id,
+          athleteId: participant.athlete_id,
+          role: participant.role,
+          teamId: participant.team_id,
+          athlete: one(participant.athlete),
+        }))
+        .sort((a, b) => Number(b.role === 'responsavel') - Number(a.role === 'responsavel')),
     }
   })
 }
