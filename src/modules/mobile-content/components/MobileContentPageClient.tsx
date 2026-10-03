@@ -51,17 +51,6 @@ function toOptionalValue(value: string) {
   return value === NONE_VALUE || value.trim() === "" ? null : value
 }
 
-function toOptionalNumber(value: string) {
-  if (value.trim() === "") return null
-  const parsed = Number(value.replace(",", "."))
-  return Number.isFinite(parsed) ? parsed : null
-}
-
-function formatMoney(value: number | null) {
-  if (value == null) return "Sem preço"
-  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
-}
-
 function formatDateTime(value: string | null | undefined) {
   if (!value) return "Sem prazo"
   return new Date(value).toLocaleDateString("pt-BR", {
@@ -113,7 +102,6 @@ function OptionSelect({
 export function MobileContentPageClient({
   arenaId,
   arenaName,
-  courts,
   sports,
   athletes,
   initialPromotions,
@@ -126,17 +114,7 @@ export function MobileContentPageClient({
   const [openGames, setOpenGames] = useState(initialOpenGames)
   const [isPending, startTransition] = useTransition()
 
-  const [promotionDraft, setPromotionDraft] = useState({
-    title: "",
-    description: "",
-    image_url: "",
-    price: "",
-    original_price: "",
-    court_id: NONE_VALUE,
-    sport_id: NONE_VALUE,
-    priority: "0",
-    active: true,
-  })
+  const [promotionDraft, setPromotionDraft] = useState({ title: "", image_url: "" })
 
   const [highlightDraft, setHighlightDraft] = useState({
     title: "",
@@ -177,14 +155,11 @@ export function MobileContentPageClient({
     startTransition(async () => {
       const result = await upsertArenaPromotionAction(arenaId, {
         title: promotionDraft.title.trim(),
-        description: promotionDraft.description.trim() || null,
-        image_url: promotionDraft.image_url.trim() || null,
-        price: toOptionalNumber(promotionDraft.price),
-        original_price: toOptionalNumber(promotionDraft.original_price),
-        court_id: toOptionalValue(promotionDraft.court_id),
-        sport_id: toOptionalValue(promotionDraft.sport_id),
-        priority: Number(promotionDraft.priority || 0),
-        active: promotionDraft.active,
+        image_url: promotionDraft.image_url.trim(),
+        court_id: null,
+        sport_id: null,
+        priority: 0,
+        active: true,
       })
 
       if (!result.success) {
@@ -192,8 +167,8 @@ export function MobileContentPageClient({
         return
       }
 
-      toast.success("Promoção salva para o app.")
-      setPromotionDraft((draft) => ({ ...draft, title: "", description: "", image_url: "", price: "", original_price: "" }))
+      toast.success("Divulgação de horário publicada no app.")
+      setPromotionDraft({ title: "", image_url: "" })
       await refreshPromotions()
     })
   }
@@ -273,7 +248,7 @@ export function MobileContentPageClient({
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-bold text-gray-900">Conteúdo do app</h1>
         <p className="text-sm text-gray-500">
-          Publique promoções, destaques e vagas abertas da {arenaName}.
+          Publique horários disponíveis, destaques e vagas abertas da {arenaName}.
         </p>
       </div>
 
@@ -281,7 +256,7 @@ export function MobileContentPageClient({
         value={activeTab}
         onChange={setActiveTab}
         tabs={[
-          { label: "Promoções", value: "promotions" },
+          { label: "Horários disponíveis", value: "promotions" },
           { label: "Destaques", value: "highlights" },
           { label: "Jogos abertos", value: "open-games" },
         ]}
@@ -293,43 +268,18 @@ export function MobileContentPageClient({
             <form className="space-y-4" onSubmit={savePromotion}>
               <div className="flex items-center gap-2">
                 <Megaphone className="h-4 w-4 text-arena-orange" />
-                <h2 className="font-bold text-gray-900">Nova promoção</h2>
+                <h2 className="font-bold text-gray-900">Divulgação de horário</h2>
               </div>
-              <Field label="Título">
-                <Input required value={promotionDraft.title} onChange={(event) => setPromotionDraft((draft) => ({ ...draft, title: event.target.value }))} />
+              <Field label="Horário disponível">
+                <Input aria-label="Horário disponível" placeholder="Hoje, 19h às 20h" required maxLength={160} value={promotionDraft.title} onChange={(event) => setPromotionDraft((draft) => ({ ...draft, title: event.target.value }))} />
               </Field>
-              <Field label="Descrição">
-                <Textarea value={promotionDraft.description} onChange={(event) => setPromotionDraft((draft) => ({ ...draft, description: event.target.value }))} />
+              <Field label="Imagem">
+                <Input aria-label="Imagem da divulgação" type="url" placeholder="https://…" required value={promotionDraft.image_url} onChange={(event) => setPromotionDraft((draft) => ({ ...draft, image_url: event.target.value }))} />
               </Field>
-              <Field label="Imagem URL">
-                <Input value={promotionDraft.image_url} onChange={(event) => setPromotionDraft((draft) => ({ ...draft, image_url: event.target.value }))} />
-              </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Preço">
-                  <Input inputMode="decimal" value={promotionDraft.price} onChange={(event) => setPromotionDraft((draft) => ({ ...draft, price: event.target.value }))} />
-                </Field>
-                <Field label="Preço original">
-                  <Input inputMode="decimal" value={promotionDraft.original_price} onChange={(event) => setPromotionDraft((draft) => ({ ...draft, original_price: event.target.value }))} />
-                </Field>
-              </div>
-              <Field label="Espaço">
-                <OptionSelect value={promotionDraft.court_id} onChange={(court_id) => setPromotionDraft((draft) => ({ ...draft, court_id }))} options={courts} placeholder="Todos os espaços" />
-              </Field>
-              <Field label="Esporte">
-                <OptionSelect value={promotionDraft.sport_id} onChange={(sport_id) => setPromotionDraft((draft) => ({ ...draft, sport_id }))} options={sports} placeholder="Todos os esportes" />
-              </Field>
-              <div className="grid grid-cols-[1fr_auto] items-end gap-3">
-                <Field label="Prioridade">
-                  <Input type="number" value={promotionDraft.priority} onChange={(event) => setPromotionDraft((draft) => ({ ...draft, priority: event.target.value }))} />
-                </Field>
-                <div className="flex h-10 items-center gap-2">
-                  <Switch checked={promotionDraft.active} onCheckedChange={(active) => setPromotionDraft((draft) => ({ ...draft, active }))} />
-                  <span className="text-sm font-medium text-gray-600">Ativa</span>
-                </div>
-              </div>
+              <p className="text-xs leading-relaxed text-gray-500">Use o endereço da imagem do horário. Ao tocar no anúncio, o atleta abre a reserva desta arena.</p>
               <Button type="submit" disabled={isPending} className="w-full bg-arena-navy-800 text-white hover:bg-[#001D2C]">
                 <Plus className="h-4 w-4" />
-                Salvar promoção
+                Publicar horário
               </Button>
             </form>
           </Card>
@@ -342,13 +292,13 @@ export function MobileContentPageClient({
                     <h3 className="font-bold text-gray-900">{promotion.title}</h3>
                     <Badge variant={promotion.active ? "default" : "secondary"}>{promotion.active ? "Ativa" : "Pausada"}</Badge>
                   </div>
-                  <p className="text-sm text-gray-500">{promotion.description || "Sem descrição"} · {formatMoney(promotion.price)}</p>
+                  <p className="text-sm text-gray-500">{promotion.description || "Horário disponível para reserva"}</p>
                   <p className="text-xs text-gray-400">{promotion.courts?.name ?? "Todos os espaços"} · {promotion.sports?.name ?? "Todos os esportes"} · expira {formatDateTime(promotion.ends_at)}</p>
                 </div>
                 <Switch checked={promotion.active} onCheckedChange={(active) => togglePromotion(promotion, active)} />
               </Card>
             ))}
-            {promotions.length === 0 && <Card className="p-8 text-center text-sm text-gray-500">Nenhuma promoção publicada.</Card>}
+            {promotions.length === 0 && <Card className="p-8 text-center text-sm text-gray-500">Nenhum horário divulgado.</Card>}
           </div>
         </div>
       )}
