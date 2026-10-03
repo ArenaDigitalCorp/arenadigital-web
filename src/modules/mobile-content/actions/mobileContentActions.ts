@@ -166,6 +166,7 @@ export async function upsertArenaPromotionAction(
   try {
     await assertArenaAdminAccess(arenaId)
     const parsed = arenaPromotionActionSchema.parse(input)
+    if (!parsed.id && !parsed.image_url) throw new Error('Informe a imagem da divulgação de horário.')
     if (parsed.court_id) await assertCourtAccess(parsed.court_id, arenaId)
     const supabase = getSupabaseAdmin() as any
     const payload = {
@@ -173,10 +174,9 @@ export async function upsertArenaPromotionAction(
       court_id: parsed.court_id ?? null,
       sport_id: parsed.sport_id ?? null,
       title: parsed.title,
-      description: parsed.description ?? null,
+      ...(!parsed.id || parsed.description !== undefined ? { description: parsed.description ?? null } : {}),
       image_url: parsed.image_url ?? null,
-      price: parsed.price ?? null,
-      original_price: parsed.original_price ?? null,
+      ...(!parsed.id ? { price: null, original_price: null } : {}),
       starts_at: parsed.starts_at ?? new Date().toISOString(),
       ends_at: parsed.ends_at ?? null,
       weekday: parsed.weekday ?? null,
@@ -195,7 +195,7 @@ export async function upsertArenaPromotionAction(
     revalidateMobileContent(arenaId)
     return { success: true, data: data as MobilePromotion }
   } catch (err) {
-    return { success: false, data: null, error: normalizeError(err, 'Erro ao salvar promoção') }
+    return { success: false, data: null, error: normalizeError(err, 'Erro ao salvar divulgação de horário') }
   }
 }
 
