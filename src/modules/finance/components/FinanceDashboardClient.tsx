@@ -16,6 +16,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { TransactionForm } from "@/modules/finance/components/TransactionForm";
+import { formatLaunchDate } from "@/lib/format";
 
 interface Props {
     arenaId: string;
@@ -301,7 +302,7 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                             <div key={t.id} className="bg-[#FFF8F1] p-4 rounded-xl flex items-center justify-between">
                                 <div>
                                     <p className="text-arena-navy-800 font-bold text-sm">{t.category} - {t.description}</p>
-                                    <p className="text-arena-navy-800/40 text-xs font-medium">{new Date(t.launch_date).toLocaleDateString('pt-BR')}</p>
+                                    <p className="text-arena-navy-800/40 text-xs font-medium">{formatLaunchDate(t.launch_date)}</p>
                                     {t.atleta?.nome_perfil && (
                                         <span className="inline-flex items-center gap-1 mt-1 bg-blue-50 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded">
                                             👤 {t.atleta.nome_perfil}
@@ -333,7 +334,7 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                             <div key={t.id} className="bg-[#FFF8F1] p-4 rounded-xl flex items-center justify-between">
                                 <div>
                                     <p className="text-arena-navy-800 font-bold text-sm">{t.category} - {t.description}</p>
-                                    <p className="text-arena-navy-800/40 text-xs font-medium">{new Date(t.launch_date).toLocaleDateString('pt-BR')}</p>
+                                    <p className="text-arena-navy-800/40 text-xs font-medium">{formatLaunchDate(t.launch_date)}</p>
                                 </div>
                                 <div className="text-right">
                                     <p className="text-arena-button font-black text-sm">- {formatCurrency(t.total_value)}</p>

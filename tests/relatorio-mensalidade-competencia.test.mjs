@@ -86,6 +86,26 @@ test('sem cobrança ativa, o devido é o valor da própria mensalidade', () => {
   assert.equal(status, 'Pendente')
 })
 
+test('rateio: o devido é o total do grupo, não a soma das partes', () => {
+  // Total ajustado para R$ 500 (5 jogos) com as partes declaradas em 200 + 200;
+  // um participante já pagou 150. Falta 350 do grupo, não 250.
+  const { valor, status, devido, emAberto } = resumoDaMensalidade(
+    mensalidade({
+      valorTotal: 500,
+      status: 'parcial',
+      cobrancas: [
+        cobranca({ id: 'cob-caco', valor_devido: 200 }),
+        cobranca({ id: 'cob-bia', valor_devido: 200, valor_pago: 150 }),
+      ],
+    })
+  )
+
+  assert.equal(devido, 500)
+  assert.equal(valor, 350)
+  assert.equal(emAberto, 350)
+  assert.equal(status, 'Pendente')
+})
+
 test('mensalidade cancelada não entra como cobrança do mês', () => {
   const [row] = buildMensalidadeRows([mensalidade({ status: 'cancelado' })])
 

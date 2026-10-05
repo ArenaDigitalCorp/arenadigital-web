@@ -65,6 +65,36 @@ export type PaymentStatusSummary = {
   totalHoras: number
 }
 
+/**
+ * Movimento de crédito de mensalista no período — seção própria do relatório.
+ * Crédito não é dinheiro em caixa: fica fora dos lançamentos, dos cards e do
+ * "Resumo por atleta" (ver `mensalista-credit-rows.ts`).
+ */
+export type PaymentStatusCreditRow = {
+  id: string
+  /** Quando o movimento foi registrado (ISO). */
+  data: string
+  atleta: string | null
+  atletaId: string | null
+  /** Rótulo pronto: "Lançamento", "Uso em mensalidade", "Retirada"… */
+  tipo: string
+  /** Com sinal: positivo entra no saldo, negativo consome. */
+  valor: number
+  /** Recorrência a que o gestor vinculou o crédito ("Quadra 04 · Qua · 20:00 às 21:00"); `null` sem vínculo. */
+  recorrencia: string | null
+  descricao: string | null
+}
+
+/** Uma opção do filtro Recorrência — um grupo de que o atleta filtrado faz parte. */
+export type RecorrenciaFiltro = {
+  id: string
+  /** "Quadra 04 · Qua · 20:00 às 21:00". */
+  label: string
+  /** Nome do responsável, quando o atleta filtrado só participa do grupo; `null` se é dele. */
+  responsavel: string | null
+  cancelada: boolean
+}
+
 export type CourtFilter = { id: string; name: string }
 export type SportFilter = { id: string; name: string }
 export type AthleteFilter = { id: string; nome_perfil: string }
@@ -97,6 +127,15 @@ export type PaymentStatusFilters = {
   atletaId?: string
   /** Perfil do atleta na arena (Cliente padrão/Mensalista/Professor) — casa como responsável OU participante, igual `atletaId`. */
   perfil?: PerfilAtleta
+  /**
+   * Recorrência (`planos_mensalista.id`) — a tela só oferece com um Atleta
+   * filtrado, listando os grupos de que ele faz parte. Recorta o relatório
+   * àquele grupo: mensalidade e sessões dele (mesmo quando o atleta é só
+   * participante), créditos vinculados a ele e a dívida de Mensal só dele.
+   * Avulso, comanda, rotativo e lançamento manual saem — não pertencem a
+   * recorrência nenhuma.
+   */
+  planoId?: string
   /**
    * Só tem efeito com `tipo: 'mensal'`. Troca as linhas agregadas de
    * "Mensalista" (uma por transação) pela quebra linha a linha: uma

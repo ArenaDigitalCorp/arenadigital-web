@@ -46,6 +46,8 @@ export const lancarCreditoSchema = z.object({
   operationId: uuidSchema,
   valor: z.number().finite().refine((v) => v !== 0, 'Informe um valor de crédito'),
   descricao: z.string().trim().max(400).nullable(),
+  /** Recorrência a que o crédito se refere (opcional, só identifica — o saldo é do atleta). */
+  planoId: uuidSchema.nullable().default(null),
 })
 
 export const retirarCreditoSchema = z.object({
@@ -54,6 +56,8 @@ export const retirarCreditoSchema = z.object({
   operationId: uuidSchema,
   valor: z.number().finite().positive('Informe um valor de retirada').max(100_000_000),
   descricao: z.string().trim().max(400).nullable(),
+  /** Subconta de onde sai a retirada: a recorrência, ou `null` para o crédito geral. */
+  planoId: uuidSchema.nullable().default(null),
 })
 
 export const setEncerramentoSchema = z.object({
@@ -97,4 +101,23 @@ export const reajustarValorSchema = z.object({
    */
   competencia: z.string().regex(/^\d{4}-\d{2}-01$/),
   observacao: z.string().trim().max(400).nullable(),
+})
+
+/** "Ajustar mensalidades do mês": o que o gestor confirmou, para UMA competência. */
+export const reajusteMesLoteSchema = z.object({
+  arenaId: uuidSchema,
+  operationId: uuidSchema,
+  competencia: competenciaSchema,
+  observacao: z.string().trim().max(400).nullable(),
+  itens: z
+    .array(
+      z.object({
+        planoId: uuidSchema,
+        novoValor: z.number().finite().min(0).max(100_000_000),
+        /** Valor da mensalidade que o gestor viu — o banco ignora a linha se ele mudou. */
+        valorEsperado: z.number().finite().min(0).max(100_000_000),
+      })
+    )
+    .min(1, 'Selecione ao menos um ajuste')
+    .max(500, 'No máximo 500 ajustes por vez'),
 })

@@ -30,7 +30,16 @@ interface Props {
   /** Athletes that can receive credit — responsible + rateio participants. */
   atletas: { id: string; nome: string }[]
   defaultAtletaId: string
+  /**
+   * Recorrências ativas a que o crédito pode ser vinculado (opcional), com os
+   * atletas que participam de cada uma — o seletor só oferece as do atleta
+   * escolhido, a mesma regra que o RPC valida.
+   */
+  recorrencias: { id: string; label: string; atletaIds: string[] }[]
 }
+
+/** Radix Select não aceita `value=""` — este é o "sem vínculo". */
+const SEM_VINCULO = 'sem-vinculo'
 
 export function LancarCreditoModal({
   open,
@@ -39,8 +48,10 @@ export function LancarCreditoModal({
   arenaId,
   atletas,
   defaultAtletaId,
+  recorrencias,
 }: Props) {
   const [atletaId, setAtletaId] = useState(defaultAtletaId)
+  const [planoId, setPlanoId] = useState(SEM_VINCULO)
   const [valor, setValor] = useState('')
   const [descricao, setDescricao] = useState('')
   const [saving, setSaving] = useState(false)
@@ -48,12 +59,23 @@ export function LancarCreditoModal({
   useEffect(() => {
     if (open) {
       setAtletaId(defaultAtletaId)
+      setPlanoId(SEM_VINCULO)
       setValor('')
       setDescricao('')
     }
   }, [open, defaultAtletaId])
 
   const valorNum = Number(valor.replace(',', '.')) || 0
+  const recorrenciasDoAtleta = recorrencias.filter((r) => r.atletaIds.includes(atletaId))
+  const vinculada = planoId !== SEM_VINCULO
+
+  const handleAtletaChange = (id: string) => {
+    setAtletaId(id)
+    // Trocar de atleta pode tirar a recorrência escolhida das opções.
+    if (!recorrencias.some((r) => r.id === planoId && r.atletaIds.includes(id))) {
+      setPlanoId(SEM_VINCULO)
+    }
+  }
 
   const handleSave = async () => {
     if (valorNum <= 0) {
@@ -68,6 +90,7 @@ export function LancarCreditoModal({
         operationId: crypto.randomUUID(),
         valor: Number(valorNum.toFixed(2)),
         descricao: descricao.trim() || null,
+        planoId: vinculada ? planoId : null,
       })
       if (res.success) {
         toast.success('Crédito lançado.')
@@ -93,7 +116,7 @@ export function LancarCreditoModal({
             <label className="text-xs font-bold text-arena-navy-800/60 uppercase">
               Atleta
             </label>
-            <Select value={atletaId} onValueChange={setAtletaId}>
+            <Select value={atletaId} onValueChange={handleAtletaChange}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -106,6 +129,30 @@ export function LancarCreditoModal({
               </SelectContent>
             </Select>
           </div>
+
+          {recorrenciasDoAtleta.length > 0 && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-arena-navy-800/60 uppercase">
+                Recorrência{' '}
+                <span className="font-medium normal-case text-arena-navy-800/40">
+                  (opcional)
+                </span>
+              </label>
+              <Select value={planoId} onValueChange={setPlanoId}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={SEM_VINCULO}>Geral (sem vínculo)</SelectItem>
+                  {recorrenciasDoAtleta.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-arena-navy-800/60 uppercase">
@@ -138,8 +185,9 @@ export function LancarCreditoModal({
           </div>
 
           <p className="text-[11px] text-arena-navy-800/40">
-            O crédito fica disponível para abater de mensalidades futuras deste
-            atleta nesta arena.
+            {vinculada
+              ? 'O crédito fica separado para esta recorrência: no pagamento da mensalidade dela, é usado antes do crédito geral, e só pode ser retirado daqui. Aparece identificado no extrato e nos relatórios.'
+              : 'O crédito vai para o saldo geral do atleta e abate mensalidades futuras dele nesta arena.'}
           </p>
         </div>
 
