@@ -199,6 +199,10 @@ export function RegistrarPagamentoModal({
                     className="pl-9"
                   />
                 </div>
+                <p className="text-[11px] text-arena-navy-800/40">
+                  Sai primeiro do crédito desta recorrência, depois do geral e, se
+                  faltar, do de outras recorrências. O extrato mostra de onde saiu.
+                </p>
               </div>
             )}
 

@@ -1,5 +1,6 @@
 import type { Database } from '@/types/supabase.types'
 import type { PlanoMensalistaComDetalhes } from '@/modules/bookings/types/booking.types'
+import type { SubcontaCredito } from '@/modules/mensalistas/credito-recorrencia'
 
 export type { PlanoMensalistaComDetalhes }
 
@@ -20,11 +21,18 @@ export interface ReajusteRow {
   plano_id: string
   valor_anterior: number
   valor_novo: number
-  escopo: 'mes_atual' | 'mes_seguinte'
+  escopo: 'mes_atual' | 'mes_seguinte' | 'somente_mes'
   competencia_vigencia: string
   observacao: string | null
   registered_by: string | null
   created_at: string
+  /** Lote do "Ajustar mensalidades do mês" que aplicou este ajuste; null = reajuste individual. */
+  lote_id?: string | null
+  /** Jogos do mês anterior e do mês ajustado, no momento do ajuste em lote. */
+  ocorrencias_anterior?: number | null
+  ocorrencias_competencia?: number | null
+  /** Valor que a tela sugeriu (o `valor_novo` é o que o gestor confirmou). */
+  valor_sugerido?: number | null
 }
 
 /** Uma linha do histórico de pausas de uma recorrência.
@@ -61,6 +69,12 @@ export interface RecorrenciaResumo {
   /** Participantes adicionais vinculados à reserva na criação do plano — sugeridos
    *  como participantes do rateio quando ele ainda não foi configurado. */
   participantesSugeridos: { id: string; nome: string }[]
+  /**
+   * Crédito ainda vinculado a esta recorrência, por atleta (responsável primeiro).
+   * É o saldo da subconta desta recorrência de cada atleta
+   * (`mensalista_credito_saldo_recorrencia`).
+   */
+  creditoVinculado: { atletaId: string; nome: string; valor: number }[]
 }
 
 /** Aggregated view of one responsible athlete for a competência. */
@@ -116,6 +130,12 @@ export interface AtrasoCompetencia {
   cobrancas: CobrancaRow[]
 }
 
+/** Movimento de crédito com o rótulo da recorrência vinculada, quando houver. */
+export interface CreditoComRecorrencia extends CreditoRow {
+  /** "Quadra 04 · Qua · 20:00 às 21:00"; `null` quando o crédito não tem vínculo. */
+  recorrenciaLabel: string | null
+}
+
 export interface PagamentoComContexto extends PagamentoRow {
   cobrancaNome: string
   competencia: string
@@ -128,8 +148,10 @@ export interface MensalistaDetalhe {
   /** Competências anteriores ao mês corrente ainda em aberto (fora do mês visualizado). */
   atrasos: AtrasoCompetencia[]
   historicoPagamentos: PagamentoComContexto[]
-  creditos: CreditoRow[]
+  creditos: CreditoComRecorrencia[]
   creditoSaldo: number
+  /** Subcontas do crédito do responsável com saldo (geral primeiro) — de onde a retirada pode sair. */
+  creditoSubcontas: SubcontaCredito[]
   /** Saldo do programa de fidelidade do atleta nesta arena. */
   fidelidade: { moeda: string | null; saldo: number }
 }
@@ -150,4 +172,69 @@ export interface RegistrarPagamentoInput {
   data: string
   modoPagamentoId: string | null
   observacao: string | null
+}
+
+/** Uma recorrência na prévia do "Ajustar mensalidades do mês" (mensalista_reajuste_mes_preview). */
+export interface ReajusteMesLinha {
+  planoId: string
+  athleteId: string
+  atleta: string
+  /** "Quadra 04 · Qua · 20:00 às 21:00". */
+  recorrencia: string
+  /** Plano por blocos: o valor já acompanha os jogos do mês sozinho — fora da edição. */
+  porBlocos: boolean
+  valorMensal: number
+  sessoesPorMes: number
+  /** Valor do contrato por jogo (valor_mensal ÷ sessoes_por_mes). */
+  valorPorJogo: number | null
+  /** Jogos do mês anterior, descontadas pausas. */
+  jogosAnterior: number
+  /** Quanto foi cobrado no mês anterior (null se não houve mensalidade). */
+  valorAnterior: number | null
+  jogos: number
+  jogosEmPausa: number
+  jogosLiquidos: number
+  estreia: boolean
+  encerra: boolean
+  mensalidadeId: string
+  mensalidadeStatus: string
+  rateio: boolean
+  valorAtual: number
+  /** Dinheiro + crédito já recebidos na mensalidade do mês. */
+  valorPago: number
+  /** valor por jogo × jogos líquidos; null em plano por blocos ou sem jogos de contrato. */
+  valorSugerido: number | null
+}
+
+export interface ReajusteMesPreview {
+  /** `YYYY-MM`. */
+  competencia: string
+  linhas: ReajusteMesLinha[]
+}
+
+export type ReajusteMesItemStatus =
+  | 'ok'
+  | 'quitada'
+  | 'cancelada'
+  | 'alterada'
+  | 'abaixo_do_pago'
+  | 'inativo'
+  | 'sem_mensalidade'
+  | 'duplicado'
+  | 'sem_alteracao'
+  | 'nao_encontrado'
+
+export interface ReajusteMesLoteResultado {
+  loteId: string
+  competencia: string
+  aplicados: number
+  ignorados: number
+  impacto: number
+  itens: {
+    planoId: string
+    status: ReajusteMesItemStatus
+    valorAnterior: number | null
+    valorNovo: number | null
+  }[]
+  idempotent: boolean
 }

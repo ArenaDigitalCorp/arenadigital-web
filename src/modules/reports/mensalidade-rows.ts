@@ -66,9 +66,11 @@ export function liquidacaoDaCobranca(c: MensalistaCobranca): {
 /**
  * Quanto a mensalidade do mês representa e em que estado está.
  *
- * O devido sai das cobranças ativas (é o que sobra depois de desativar o rateio
- * de alguém); sem nenhuma, vale o `valor_total` da mensalidade. Crédito aplicado
- * conta como liquidação — o atleta não deve mais aquilo.
+ * O devido é sempre o `valor_total` da mensalidade — a mesma referência da tela
+ * de Mensalistas e do status gravado no banco. No rateio flexível (13/09/2026)
+ * o valor de cada parte é só informativo (pode ser 0, "ainda não sei") e o
+ * ajuste do mês em lote muda o total do grupo; somar as partes subcontava o
+ * mês. Crédito aplicado conta como liquidação — o atleta não deve mais aquilo.
  *
  * Mensalidade zerada e sem nada recebido (pausa proporcional cobrindo o mês
  * inteiro) é **Cancelado**, não "Pendente R$ 0,00": não há o que cobrar, e é o
@@ -87,11 +89,7 @@ export function resumoDaMensalidade(m: MensalidadeContexto): {
   emAberto: number
 } {
   const settled = round2(m.cobrancas.reduce((total, c) => total + liquidacaoDaCobranca(c).settled, 0))
-  const devido = round2(
-    m.cobrancas.length
-      ? m.cobrancas.reduce((total, c) => total + Number(c.valor_devido ?? 0), 0)
-      : m.valorTotal
-  )
+  const devido = round2(m.valorTotal)
   const remaining = Math.max(0, round2(devido - settled))
   const isPago = remaining <= 0.01 && settled > 0
   const semCobranca = devido <= 0.01 && settled <= 0.01

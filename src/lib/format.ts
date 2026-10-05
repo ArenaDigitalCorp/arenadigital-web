@@ -37,3 +37,31 @@ export function formatDate(value: string | null | undefined): string {
 export function toCompetencia(date: Date = new Date()): string {
   return format(date, 'yyyy-MM')
 }
+
+/**
+ * `transactions.launch_date` exatamente à meia-noite UTC é um lançamento "só
+ * data" (mensalidade, reserva, lançamento manual): vale o dia UTC, não o dia
+ * anterior que a conversão para Brasília daria. Qualquer outro valor é um
+ * instante (comanda, rotativo). Mesma regra de get_arena_finance_* no banco.
+ */
+export function lancamentoSoData(iso: string | null | undefined): boolean {
+  if (!iso) return false
+  const d = new Date(iso)
+  return (
+    !Number.isNaN(d.getTime()) &&
+    d.getUTCHours() === 0 &&
+    d.getUTCMinutes() === 0 &&
+    d.getUTCSeconds() === 0 &&
+    d.getUTCMilliseconds() === 0
+  )
+}
+
+/** Data de um lançamento do caixa em `dd/MM/yyyy`, respeitando lançamentos "só data". */
+export function formatLaunchDate(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  if (lancamentoSoData(iso)) {
+    const [ano, mes, dia] = new Date(iso).toISOString().slice(0, 10).split('-')
+    return `${dia}/${mes}/${ano}`
+  }
+  return new Date(iso).toLocaleDateString('pt-BR')
+}

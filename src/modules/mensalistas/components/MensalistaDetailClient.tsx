@@ -21,6 +21,7 @@ import {
   TrendingUp,
   Wallet,
   CalendarX2,
+  Repeat,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -52,6 +53,12 @@ import { RetirarCreditoModal } from './RetirarCreditoModal'
 import { EncerramentoModal } from './EncerramentoModal'
 import { ReajustarValorModal } from './ReajustarValorModal'
 import { PausarPlanoModal } from './PausarPlanoModal'
+import {
+  CREDITO_TIPO_LABEL,
+  SUBCONTA_GERAL_LABEL,
+  formatRecorrenciaLabel,
+  type RecorrenciaParaRotulo,
+} from '@/modules/mensalistas/credito-recorrencia'
 import type {
   CobrancaRow,
   CreditoRow,
@@ -69,14 +76,6 @@ const DIAS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
  */
 function creditoBookingId(credito: CreditoRow): string | null {
   return (credito as CreditoRow & { booking_id?: string | null }).booking_id ?? null
-}
-
-const CREDITO_TIPO_LABEL: Record<string, string> = {
-  lancamento: 'Lançamento',
-  uso: 'Uso em mensalidade',
-  retirada: 'Retirada',
-  estorno: 'Estorno',
-  ajuste: 'Ajuste',
 }
 
 interface Props {
@@ -359,6 +358,25 @@ export function MensalistaDetailClient({
     return Array.from(map, ([id, nome]) => ({ id, nome }))
   }, [athleteId, resumo.nome, recorrencias])
 
+  // Recorrências que podem receber o vínculo do crédito: as não canceladas,
+  // com quem participa de cada uma (responsável + rateio do mês).
+  const recorrenciasParaCredito = useMemo(
+    () =>
+      recorrencias
+        .filter((rec) => rec.plano.status !== 'cancelado')
+        .map((rec) => ({
+          id: rec.plano.id,
+          label: formatRecorrenciaLabel(rec.plano as unknown as RecorrenciaParaRotulo),
+          atletaIds: [
+            rec.plano.athlete_id,
+            ...rec.cobrancas
+              .map((c) => c.atleta_id)
+              .filter((id): id is string => Boolean(id)),
+          ],
+        })),
+    [recorrencias]
+  )
+
   const recorrenciasOrdenadas = useMemo(() => {
     const rank = (s: RecorrenciaPagamentoStatus) => (s === 'pendente' ? 0 : s === 'pago' ? 1 : 2)
     return recorrencias
@@ -574,9 +592,20 @@ export function MensalistaDetailClient({
             : 0
           const isOpen = expandedPlanoIds.has(p.id)
           const valorMesAtual = m ? Number(m.valor_total) : Number(p.valor_mensal)
-          const isProporcional =
+          const valorDiferenteDoPlano =
             !!m && Math.abs(valorMesAtual - Number(p.valor_mensal)) > 0.01
+          // Valor do mês mudado por um ajuste "somente este mês" (individual ou
+          // em lote, ex.: mês com 5 jogos) não é pró-rata: mostra "Ajustado".
+          const ajusteDoMes = valorDiferenteDoPlano
+            ? rec.reajustes.find(
+                (r) => r.escopo === 'somente_mes' && r.competencia_vigencia.startsWith(competencia)
+              ) ?? null
+            : null
+          const isProporcional = valorDiferenteDoPlano && !ajusteDoMes
           const pausaAtiva = rec.pausas.find((pa) => pa.status === 'ativa') ?? null
+          const creditoVinculadoTotal = rec.creditoVinculado.reduce((total, c) => total + c.valor, 0)
+          // Nome só aparece quando o crédito não é (só) do responsável desta tela.
+          const creditoDeOutros = rec.creditoVinculado.some((c) => c.atletaId !== athleteId)
           return (
             <Card key={p.id} className="border-none shadow-sm bg-white overflow-hidden">
               <div
@@ -625,8 +654,21 @@ export function MensalistaDetailClient({
                   )}
                   <span className="font-bold text-arena-button">
                     {formatCurrency(valorMesAtual)}
-                    {isProporcional ? ' este mês' : '/mês'}
+                    {valorDiferenteDoPlano ? ' este mês' : '/mês'}
                   </span>
+                  {ajusteDoMes && (
+                    <>
+                      <Badge className="bg-sky-100 text-sky-700 border-none font-bold text-[10px] uppercase">
+                        Ajustado
+                      </Badge>
+                      <span className="text-arena-navy-800/40 text-xs font-medium">
+                        valor do plano: {formatCurrency(p.valor_mensal)}/mês
+                        {ajusteDoMes.ocorrencias_anterior != null &&
+                          ajusteDoMes.ocorrencias_competencia != null &&
+                          ` · ${ajusteDoMes.ocorrencias_anterior} → ${ajusteDoMes.ocorrencias_competencia} jogos`}
+                      </span>
+                    </>
+                  )}
                   {isProporcional && (
                     <>
                       <Badge className="bg-amber-100 text-amber-700 border-none font-bold text-[10px] uppercase">
@@ -656,6 +698,22 @@ export function MensalistaDetailClient({
                     <Badge className="bg-gray-100 text-gray-500 border-none font-bold text-[10px] uppercase">
                       Cancelado
                     </Badge>
+                  )}
+                  {creditoVinculadoTotal > 0 && (
+                    <span
+                      className="flex items-center gap-1.5 text-xs font-semibold text-sky-700"
+                      title={`Saldo do crédito desta recorrência — ${rec.creditoVinculado
+                        .map((c) => `${c.nome}: ${formatCurrency(c.valor)}`)
+                        .join(' · ')}. No pagamento da mensalidade, ele é usado antes do crédito geral.`}
+                    >
+                      <Wallet className="h-3.5 w-3.5 text-sky-500" />
+                      Crédito {formatCurrency(creditoVinculadoTotal)}
+                      {creditoDeOutros && (
+                        <span className="font-medium text-sky-700/70">
+                          ({rec.creditoVinculado.map((c) => c.nome.split(' ')[0]).join(', ')})
+                        </span>
+                      )}
+                    </span>
                   )}
                 </div>
 
@@ -957,8 +1015,19 @@ export function MensalistaDetailClient({
                               {formatCurrency(r.valor_anterior)} → {formatCurrency(r.valor_novo)}
                             </span>
                             <span className="text-arena-navy-800/50">
-                              a partir de {formatCompetenciaShort(r.competencia_vigencia)}
+                              {r.escopo === 'somente_mes' ? 'somente' : 'a partir de'}{' '}
+                              {formatCompetenciaShort(r.competencia_vigencia)}
                             </span>
+                            {r.lote_id && (
+                              <span
+                                className="rounded-full bg-arena-button/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-arena-button"
+                                title="Aplicado pelo Ajustar mensalidades do mês"
+                              >
+                                Em lote
+                                {r.ocorrencias_anterior != null && r.ocorrencias_competencia != null &&
+                                  ` · ${r.ocorrencias_anterior} → ${r.ocorrencias_competencia} jogos`}
+                              </span>
+                            )}
                             {r.observacao && (
                               <span className="text-arena-navy-800/45">— {r.observacao}</span>
                             )}
@@ -1270,7 +1339,7 @@ export function MensalistaDetailClient({
               <table className={arenaDataTable.table}>
                 <thead>
                   <tr className={arenaDataTable.theadRow}>
-                    {['Data', 'Tipo', 'Valor', 'Descrição'].map((h) => (
+                    {['Data', 'Tipo', 'Valor', 'Crédito de', 'Descrição'].map((h) => (
                       <th key={h} className={arenaDataTable.th}>
                         {h}
                       </th>
@@ -1280,7 +1349,7 @@ export function MensalistaDetailClient({
                 <tbody>
                   {creditos.length === 0 && (
                     <tr>
-                      <td colSpan={4} className={arenaDataTable.emptyCell}>
+                      <td colSpan={5} className={arenaDataTable.emptyCell}>
                         Nenhum crédito lançado.
                       </td>
                     </tr>
@@ -1297,6 +1366,25 @@ export function MensalistaDetailClient({
                         )}
                       >
                         {formatCurrency(c.valor)}
+                      </td>
+                      <td className={arenaDataTable.td}>
+                        {c.recorrenciaLabel ? (
+                          <span
+                            className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-bold text-sky-700"
+                            title={
+                              Number(c.valor) < 0
+                                ? 'Saiu do crédito desta recorrência'
+                                : 'Entrou no crédito desta recorrência'
+                            }
+                          >
+                            <Repeat className="h-3 w-3" />
+                            {c.recorrenciaLabel}
+                          </span>
+                        ) : (
+                          <span className="text-xs font-medium text-arena-navy-800/40">
+                            {SUBCONTA_GERAL_LABEL}
+                          </span>
+                        )}
                       </td>
                       <td className={cn(arenaDataTable.td, 'text-arena-navy-800/60')}>
                         <div className="flex flex-wrap items-center gap-1.5">
@@ -1351,6 +1439,7 @@ export function MensalistaDetailClient({
         arenaId={arenaId}
         atletas={atletasParaCredito}
         defaultAtletaId={athleteId}
+        recorrencias={recorrenciasParaCredito}
       />
       <RetirarCreditoModal
         open={retiradaOpen}
@@ -1360,6 +1449,7 @@ export function MensalistaDetailClient({
         atletaId={athleteId}
         atletaNome={resumo.nome}
         saldo={creditoSaldo}
+        subcontas={detalhe.creditoSubcontas}
       />
       <EncerramentoModal
         open={!!encerramentoTarget}
