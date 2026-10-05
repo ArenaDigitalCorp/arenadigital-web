@@ -3,6 +3,7 @@
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { assertArenaAdminAccess } from '@/lib/server-auth'
 import { fetchAllSupabaseRows } from '@/lib/supabase-pagination'
+import { lancamentoSoData } from '@/lib/format'
 import type {
   PaymentStatusRow,
   PaymentStatusSummary,
@@ -11,6 +12,8 @@ import type {
   PaymentStatusFilters,
   AthleteDebtSummary,
   PaymentStatusAthleteSummary,
+  PaymentStatusCreditRow,
+  RecorrenciaFiltro,
 } from '@/modules/reports/types/report.types'
 import { PAYMENT_STATUS_SUMMARY_EXCLUDED_SERVICOS } from '@/modules/reports/types/report.types'
 import {
@@ -34,6 +37,11 @@ import {
   type AthleteContribution,
 } from '@/modules/reports/athlete-summary'
 import { buildUsageLines, saoPauloWallClock } from '@/modules/reports/usage-lines'
+import {
+  buildMensalistaCreditRows,
+  type MensalistaCreditoMovimento,
+} from '@/modules/reports/mensalista-credit-rows'
+import { buildRecorrenciaOptions, type PlanoDoFiltro } from '@/modules/reports/recorrencia-filtro'
 import { matchPriceDay, priceAtInstant } from '@/modules/courts/lib/court-price-resolver'
 import type { CourtPriceDay } from '@/modules/courts/types/price-table.types'
 import type { PerfilAtleta } from '@/modules/athletes/types/perfil.types'
@@ -482,6 +490,81 @@ async function loadMensalidadesDaCompetencia(
   )
 }
 
+/**
+ * Movimentos de crédito de mensalista do período, com a recorrência vinculada,
+ * e — com um atleta filtrado — o saldo atual dele.
+ *
+ * Seção à parte do relatório (crédito não é dinheiro em caixa). Segue os
+ * filtros que fazem sentido para crédito: Tipo = Avulso não tem crédito de
+ * mensalista; Espaço/Esporte só deixam os créditos vinculados a uma recorrência
+ * daquele escopo (o sem vínculo não pertence a espaço nenhum); Atleta e Perfil
+ * casam pelo dono do crédito.
+ */
+async function loadCreditosDeMensalista(
+  loose: LooseClient,
+  arenaId: string,
+  filters: PaymentStatusFilters,
+  perfilPorAtleta: Map<string, PerfilAtleta>
+): Promise<{ creditos: PaymentStatusCreditRow[]; creditoSaldo: number | null }> {
+  if (filters.tipo === 'avulso') return { creditos: [], creditoSaldo: null }
+
+  let query = loose
+    .from('mensalista_creditos')
+    .select(
+      'id, tipo, valor, descricao, created_at, plano_id, atleta:atleta_id(id, nome_perfil), plano:plano_id(dia_semana, horario_inicio, horario_fim, court:court_id(name), blocos:planos_mensalista_blocos(dia_semana, horario_inicio, horario_fim, court:court_id(name)))'
+    )
+    .eq('arena_id', arenaId)
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
+  // `created_at` é instante: o mês vai da meia-noite de São Paulo do 1º dia
+  // ao fim do último — em UTC puro, um crédito das 22h do dia 30 cairia no mês seguinte.
+  if (filters.startDate) query = query.gte('created_at', inicioDoDiaSP(filters.startDate))
+  if (filters.endDate) query = query.lte('created_at', `${filters.endDate}T23:59:59.999-03:00`)
+  if (filters.atletaId) query = query.eq('atleta_id', filters.atletaId)
+  // Recorrência filtrada: só os movimentos da subconta dela.
+  if (filters.planoId) query = query.eq('plano_id', filters.planoId)
+
+  const [{ data, error }, allowedPlanoIds, saldoResult] = await Promise.all([
+    fetchAllSupabaseRows<MensalistaCreditoMovimento & { plano_id: string | null }>(query),
+    resolveAllowedPlanoIds(loose, arenaId, filters),
+    !filters.atletaId
+      ? Promise.resolve({ data: null, error: null })
+      : filters.planoId
+        ? // Recorrência filtrada: o saldo é o da subconta dela.
+          loose
+            .from('mensalista_credito_saldo_recorrencia')
+            .select('saldo')
+            .eq('arena_id', arenaId)
+            .eq('atleta_id', filters.atletaId)
+            .eq('plano_id', filters.planoId)
+            .maybeSingle()
+        : loose
+            .from('mensalista_credito_saldo')
+            .select('saldo')
+            .eq('arena_id', arenaId)
+            .eq('atleta_id', filters.atletaId)
+            .maybeSingle(),
+  ])
+
+  // Fonte complementar: falhar aqui não pode derrubar o relatório.
+  if (error) {
+    console.error(`[getPaymentStatusReportAction] Falha na fonte "mensalista_creditos": ${error.message}`)
+    return { creditos: [], creditoSaldo: null }
+  }
+
+  const movimentos = (data ?? []).filter(
+    (m) =>
+      (!allowedPlanoIds || (m.plano_id != null && allowedPlanoIds.has(m.plano_id))) &&
+      matchesPerfil([m.atleta?.id], filters.perfil, perfilPorAtleta)
+  )
+
+  const saldo = (saldoResult.data as { saldo: number | string | null } | null)?.saldo
+  return {
+    creditos: buildMensalistaCreditRows(movimentos),
+    creditoSaldo: filters.atletaId ? round2(Number(saldo ?? 0)) : null,
+  }
+}
+
 function round2(value: number): number {
   return Math.round(value * 100) / 100
 }
@@ -617,13 +700,16 @@ async function loadMensalidadesDoExtrato(
 
 /** "Quanto o atleta deve" de Mensal e de Avulso na competência — usado pelos
  * cards que só aparecem quando o filtro de Atleta está selecionado. Não
- * respeita espaço/esporte: dívida é do atleta, não de uma quadra específica. */
+ * respeita espaço/esporte: dívida é do atleta, não de uma quadra específica.
+ * Com uma recorrência filtrada, o Mensal é só a parte dele naquele grupo e o
+ * Avulso é zero (reserva avulsa não pertence a recorrência). */
 async function computeAthleteDebtSummary(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   arenaId: string,
   atletaId: string,
   competenciaStart: string,
-  competenciaEnd: string
+  competenciaEnd: string,
+  planoId?: string
 ): Promise<AthleteDebtSummary> {
   const loose = supabase as unknown as LooseClient
 
@@ -636,15 +722,19 @@ async function computeAthleteDebtSummary(
     .gte('start_time', competenciaStart)
     .lte('start_time', competenciaEnd + 'T23:59:59')
 
-  const cobrancaQuery = loose
+  let cobrancaQuery = loose
     .from('mensalista_cobrancas')
-    .select('id, valor_devido, valor_pago, credito_aplicado, ativo, mensalidade:mensalidade_id!inner(arena_id, competencia)')
+    .select('id, valor_devido, valor_pago, credito_aplicado, ativo, mensalidade:mensalidade_id!inner(arena_id, competencia, plano_id)')
     .eq('atleta_id', atletaId)
     .eq('ativo', true)
     .eq('mensalidade.arena_id', arenaId)
     .eq('mensalidade.competencia', competenciaStart)
+  if (planoId) cobrancaQuery = cobrancaQuery.eq('mensalidade.plano_id', planoId)
 
-  const [avulsoResult, cobrancaResult] = await Promise.all([avulsoQuery, cobrancaQuery])
+  const [avulsoResult, cobrancaResult] = await Promise.all([
+    planoId ? Promise.resolve({ data: [], error: null }) : avulsoQuery,
+    cobrancaQuery,
+  ])
 
   if (avulsoResult.error) console.error(`[computeAthleteDebtSummary] avulso: ${avulsoResult.error.message}`)
   if (cobrancaResult.error) console.error(`[computeAthleteDebtSummary] mensal: ${cobrancaResult.error.message}`)
@@ -683,6 +773,73 @@ async function computeAthleteDebtSummary(
   return { mensal: round2(mensal), avulso: round2(avulso) }
 }
 
+/**
+ * Recorrências de que o atleta faz parte na arena — opções do filtro
+ * "Recorrência", que a tela só mostra com um Atleta filtrado. "Fazer parte" é
+ * ser o responsável, estar no rateio de alguma mensalidade ou ser participante
+ * das reservas do plano. Inclui as canceladas: o relatório olha meses passados.
+ */
+export async function listRecorrenciasDoAtletaAction(
+  arenaId: string,
+  atletaId: string
+): Promise<{ success: boolean; data?: RecorrenciaFiltro[]; error?: string }> {
+  try {
+    await assertArenaAdminAccess(arenaId)
+    const loose = getSupabaseAdmin() as unknown as LooseClient
+    const planoSelect =
+      'id, athlete_id, athlete_name, status, dia_semana, horario_inicio, horario_fim, court:court_id(name), blocos:planos_mensalista_blocos(dia_semana, horario_inicio, horario_fim, court:court_id(name))'
+
+    const [comoResponsavel, noRateio, nasReservas] = await Promise.all([
+      loose.from('planos_mensalista').select(planoSelect).eq('arena_id', arenaId).eq('athlete_id', atletaId),
+      fetchAllSupabaseRows<{ mensalidade: { plano_id: string } | null }>(
+        loose
+          .from('mensalista_cobrancas')
+          .select('id, mensalidade:mensalidade_id!inner(plano_id)')
+          .eq('arena_id', arenaId)
+          .eq('atleta_id', atletaId)
+          .order('id', { ascending: true })
+      ),
+      fetchAllSupabaseRows<{ booking: { plano_mensalista_id: string | null } | null }>(
+        loose
+          .from('booking_participants')
+          .select('id, booking:booking_id!inner(plano_mensalista_id, arena_id)')
+          .eq('atleta_id', atletaId)
+          .eq('booking.arena_id', arenaId)
+          .not('booking.plano_mensalista_id', 'is', null)
+          .order('id', { ascending: true })
+      ),
+    ])
+    if (comoResponsavel.error) throw new Error(comoResponsavel.error.message)
+    if (noRateio.error) throw new Error(noRateio.error.message)
+    if (nasReservas.error) throw new Error(nasReservas.error.message)
+
+    const planos = (comoResponsavel.data ?? []) as PlanoDoFiltro[]
+    const jaCarregados = new Set(planos.map((p) => p.id))
+    const deOutros = [
+      ...new Set(
+        [
+          ...(noRateio.data ?? []).map((c) => c.mensalidade?.plano_id),
+          ...(nasReservas.data ?? []).map((b) => b.booking?.plano_mensalista_id),
+        ].filter((id): id is string => Boolean(id) && !jaCarregados.has(id as string))
+      ),
+    ]
+    if (deOutros.length > 0) {
+      const { data, error } = await loose
+        .from('planos_mensalista')
+        .select(planoSelect)
+        .eq('arena_id', arenaId)
+        .in('id', deOutros)
+      if (error) throw new Error(error.message)
+      planos.push(...((data ?? []) as PlanoDoFiltro[]))
+    }
+
+    return { success: true, data: buildRecorrenciaOptions(planos, atletaId) }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Erro ao listar recorrências do atleta'
+    return { success: false, error: message }
+  }
+}
+
 export async function getPaymentStatusReportAction(
   arenaId: string,
   filters: PaymentStatusFilters = {}
@@ -694,6 +851,10 @@ export async function getPaymentStatusReportAction(
   sports?: SportFilter[]
   athleteDebt?: AthleteDebtSummary | null
   athleteSummaries?: PaymentStatusAthleteSummary[]
+  /** Movimentos de crédito de mensalista do período — seção à parte, fora dos totais. */
+  creditos?: PaymentStatusCreditRow[]
+  /** Saldo atual de crédito do atleta filtrado (da subconta, com recorrência filtrada); `null` sem atleta. */
+  creditoSaldo?: number | null
   error?: string
 }> {
   try {
@@ -713,6 +874,7 @@ export async function getPaymentStatusReportAction(
     if (filters.sportId) query = query.eq('sport_id', filters.sportId)
     if (filters.tipo === 'avulso') query = query.is('plano_mensalista_id', null)
     if (filters.tipo === 'mensal') query = query.not('plano_mensalista_id', 'is', null)
+    if (filters.planoId) query = query.eq('plano_mensalista_id', filters.planoId)
 
     let stationPaymentsQuery = supabase
       .from('station_payments')
@@ -844,11 +1006,23 @@ export async function getPaymentStatusReportAction(
       ? await loadPerfilPorAtleta(supabase, arenaId)
       : new Map<string, PerfilAtleta>()
 
+    const { creditos, creditoSaldo } = await loadCreditosDeMensalista(
+      supabase as unknown as LooseClient,
+      arenaId,
+      filters,
+      perfilPorAtleta
+    )
+
+    // Recorrência filtrada manda no escopo do mensal: a mensalidade e as
+    // sessões são as DO GRUPO, inclusive quando o atleta filtrado só participa
+    // (a mensalidade é do responsável e o filtro de atleta a esconderia).
     const escopoMensalista = {
       courtId: filters.courtId,
       sportId: filters.sportId,
-      atletaId: filters.atletaId,
+      atletaId: filters.planoId ? undefined : filters.atletaId,
+      planoIds: filters.planoId ? [filters.planoId] : undefined,
     }
+    const atletaDasReservas = filters.planoId ? undefined : filters.atletaId
 
     // A mensalidade do mês entra pela cobrança, não pela transação: é o único
     // lugar que sabe o valor proporcional da estreia e se já foi recebida.
@@ -908,7 +1082,7 @@ export async function getPaymentStatusReportAction(
           ...(b.booking_participants ?? []).map((p) => p.atleta_id),
           ...(b.booking_cobrancas ?? []).map((c) => c.atleta_id ?? undefined),
         ]
-        return matchesAtleta(ids, filters.atletaId) && matchesPerfil(ids, filters.perfil, perfilPorAtleta)
+        return matchesAtleta(ids, atletaDasReservas) && matchesPerfil(ids, filters.perfil, perfilPorAtleta)
       })
 
     // Grade de preço só é necessária no extrato, e só para reserva de mensalista
@@ -1173,7 +1347,9 @@ export async function getPaymentStatusReportAction(
 
     const transactionRows: PaymentStatusRow[] = transacoesFiltradas.map((t: any) => ({
       id: `transaction-${t.id}`,
-      data: t.launch_date,
+      // Lançamento "só data" (meia-noite UTC) vira `YYYY-MM-DD`: a tela lê como
+      // o próprio dia, e não o anterior em Brasília. Instante segue como veio.
+      data: lancamentoSoData(t.launch_date) ? String(t.launch_date).slice(0, 10) : t.launch_date,
       // `launch_date` é uma data (guardada à meia-noite): sem rótulo da
       // recorrência, a coluna Horário mostra "—" em vez de um horário fantasma.
       horario: horarioPorTransacao.get(t.id) ?? null,
@@ -1239,7 +1415,8 @@ export async function getPaymentStatusReportAction(
           arenaId,
           filters.atletaId,
           filters.startDate ?? '',
-          filters.endDate ?? filters.startDate ?? ''
+          filters.endDate ?? filters.startDate ?? '',
+          filters.planoId
         )
       : null
 
@@ -1286,7 +1463,7 @@ export async function getPaymentStatusReportAction(
     }
     const sports: SportFilter[] = [...sportsMap.values()]
 
-    return { success: true, rows, summary, courts, sports, athleteDebt, athleteSummaries }
+    return { success: true, rows, summary, courts, sports, athleteDebt, athleteSummaries, creditos, creditoSaldo }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro ao buscar relatório'
     return { success: false, error: message }

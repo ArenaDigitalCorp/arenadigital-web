@@ -14,6 +14,7 @@ import type {
   PaymentStatusSummary,
   PaymentStatusArenaInfo,
   PaymentStatusAthleteSummary,
+  PaymentStatusCreditRow,
 } from '@/modules/reports/types/report.types'
 import { buildAppliedFiltersDescription, formatArenaAddressLine, type AppliedFiltersInput } from '@/modules/reports/payment-status-pdf-data'
 
@@ -64,6 +65,14 @@ export interface GeneratePaymentStatusPdfInput {
    * no lugar do resumo do período, horas no mês / total / pago / em aberto.
    */
   extratoDoAtleta?: { nome: string; resumo: PaymentStatusAthleteSummary | null } | null
+  /**
+   * Movimentos de crédito de mensalista do período — tabela própria depois dos
+   * lançamentos, fora dos totais (crédito não é pagamento). A coluna
+   * "Crédito de" diz a subconta de cada movimento (a recorrência ou o geral).
+   */
+  creditos?: PaymentStatusCreditRow[]
+  /** Saldo atual de crédito do atleta (extrato) — entra no "Resumo do mês" quando há saldo. */
+  creditoSaldo?: number | null
   formatDate: (iso: string) => string
   formatHorario: (row: PaymentStatusRow) => string
   /** Presente no extrato por hora: acrescenta a coluna "Dia" (Seg, Ter…). */
@@ -82,6 +91,8 @@ export async function generatePaymentStatusPdf(input: GeneratePaymentStatusPdfIn
     athleteDebt,
     athleteSummaries,
     extratoDoAtleta,
+    creditos = [],
+    creditoSaldo = null,
     formatDate,
     formatHorario,
     formatDiaSemana,
@@ -182,6 +193,13 @@ export async function generatePaymentStatusPdf(input: GeneratePaymentStatusPdfIn
           `Situação: ${r.status}`,
         ]
       : ['Nenhum valor em aberto ou pago neste período.']
+    if (creditoSaldo != null && Math.abs(creditoSaldo) >= 0.01) {
+      partes.push(
+        filtros.recorrenciaLabel
+          ? `Saldo de crédito nesta recorrência: ${formatCurrency(creditoSaldo)}`
+          : `Saldo de crédito: ${formatCurrency(creditoSaldo)}`
+      )
+    }
     doc.text(partes.join('     ·     '), marginX, y)
     y += 20
   } else {
@@ -209,7 +227,10 @@ export async function generatePaymentStatusPdf(input: GeneratePaymentStatusPdfIn
 
     if (athleteDebt) {
       doc.text(
-        `${athleteDebt.nome} deve neste mês: ${formatCurrency(athleteDebt.mensal)} de Mensal   ·   ${formatCurrency(athleteDebt.avulso)} de Avulso`,
+        // Com recorrência filtrada não há Avulso (reserva avulsa não é de grupo nenhum).
+        filtros.recorrenciaLabel
+          ? `${athleteDebt.nome} deve neste mês nesta recorrência: ${formatCurrency(athleteDebt.mensal)}`
+          : `${athleteDebt.nome} deve neste mês: ${formatCurrency(athleteDebt.mensal)} de Mensal   ·   ${formatCurrency(athleteDebt.avulso)} de Avulso`,
         marginX,
         y
       )
@@ -331,6 +352,74 @@ export async function generatePaymentStatusPdf(input: GeneratePaymentStatusPdfIn
     columnStyles: { [valorColIndex]: { halign: 'right' } },
     didParseCell: pintarStatus(head.length - 1),
   })
+
+  // ── Créditos de mensalista: fora dos totais, com a recorrência vinculada ──
+  if (creditos.length > 0) {
+    y = finalY() + 22
+    // Título sem espaço para ao menos uma linha da tabela embaixo: começa na próxima página.
+    if (y > doc.internal.pageSize.getHeight() - 90) {
+      doc.addPage()
+      y = 40
+    }
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8.5)
+    doc.setTextColor(90)
+    doc.text('Créditos de mensalista', marginX, y)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(140)
+    doc.text(
+      'Crédito não é pagamento: abate mensalidades e não entra nos totais acima.',
+      marginX + doc.getTextWidth('Créditos de mensalista') + 10,
+      y
+    )
+    y += 6
+
+    // No extrato todas as linhas são do mesmo atleta — a coluna sairia repetida.
+    const comAtleta = !extratoDoAtleta
+    const creditoHead = [
+      'Data',
+      ...(comAtleta ? ['Atleta'] : []),
+      'Movimento',
+      'Crédito de',
+      'Descrição',
+      'Valor',
+    ]
+    const creditoBody = creditos.map((c) => [
+      formatDate(c.data),
+      ...(comAtleta ? [c.atleta ?? '—'] : []),
+      c.tipo,
+      c.recorrencia ?? 'Geral',
+      c.descricao ?? '—',
+      formatCurrency(c.valor),
+    ])
+    const creditoValorCol = creditoHead.length - 1
+    const recorrenciaCol = creditoHead.indexOf('Crédito de')
+
+    autoTable(doc, {
+      ...tableStyles,
+      head: [creditoHead],
+      body: creditoBody,
+      startY: y,
+      columnStyles: { [creditoValorCol]: { halign: 'right' } },
+      didParseCell: (data: {
+        section: string
+        row: { index: number }
+        column: { index: number }
+        cell: { styles: { textColor: unknown; fontStyle: unknown } }
+      }) => {
+        if (data.section !== 'body') return
+        const credito = creditos[data.row.index]
+        if (data.column.index === recorrenciaCol && credito?.recorrencia) {
+          data.cell.styles.textColor = [3, 105, 161]
+          data.cell.styles.fontStyle = 'bold'
+        }
+        if (data.column.index === creditoValorCol && credito) {
+          data.cell.styles.textColor = credito.valor < 0 ? [185, 28, 28] : [21, 128, 61]
+          data.cell.styles.fontStyle = 'bold'
+        }
+      },
+    })
+  }
 
   // Rodapé depois de tudo desenhado — só aí o total de páginas é conhecido.
   const pageCount = doc.getNumberOfPages()

@@ -1,5 +1,6 @@
 import type {
   PaymentStatusAthleteSummary,
+  PaymentStatusCreditRow,
   PaymentStatusRow,
 } from '@/modules/reports/types/report.types'
 
@@ -87,5 +88,36 @@ export function buildAthleteSummarySheetData(
       round2(total.emAberto),
       '',
     ],
+  ]
+}
+
+export const MENSALISTA_CREDIT_EXPORT_HEADERS = [
+  'Data',
+  'Atleta',
+  'Movimento',
+  'Crédito de',
+  'Descrição',
+  'Valor',
+] as const
+
+/**
+ * Aba "Créditos de mensalista" — os movimentos de crédito do período, com a
+ * recorrência a que cada um foi vinculado. Valor com sinal (uso/retirada
+ * negativos), como no extrato da tela do mensalista.
+ */
+export function buildMensalistaCreditSheetData(
+  creditos: PaymentStatusCreditRow[],
+  formatData: (iso: string) => string,
+): Array<Array<string | number>> {
+  return [
+    [...MENSALISTA_CREDIT_EXPORT_HEADERS],
+    ...creditos.map((c) => [
+      formatData(c.data),
+      c.atleta ?? '—',
+      c.tipo,
+      c.recorrencia ?? 'Geral',
+      c.descricao ?? '—',
+      c.valor,
+    ]),
   ]
 }

@@ -2872,3 +2872,322 @@ parcial). No banco: `supabase/tests/20260929120000_mensalista_cancel_partial_ses
 (28 asserções: início/meio/fim, horário liberado aceita nova reserva, restante continua
 bloqueado, crédito, idempotência, validações, delegação do dia inteiro) e
 `tests/mensalista-cancel-partial.test.mjs`.
+
+## 42. Crédito de mensalista por recorrência — subcontas (04/10/2026)
+
+Estende §18 (crédito manual) e §26–§38 (Relatório de Pagamentos). Migrações
+`arenadigital-db/20261004150000_mensalista_credito_recorrencia`,
+`20261004160000_mensalista_credito_subcontas` e
+`20261004160010_mensalista_credito_retirada_subconta`. Ordem de deploy: **DB → web**
+(as RPCs novas aceitam as chamadas antigas: lançar sem vínculo e retirar do geral).
+
+### 42.1 Banco
+
+- `mensalista_creditos.plano_id uuid NULL REFERENCES planos_mensalista(id) ON DELETE SET NULL`
+  (+ índice parcial `idx_mensalista_creditos_plano`). Informativo: a view
+  `mensalista_credito_saldo` e `register_mensalista_payment_atomic` não mudam, e o saldo
+  segue `SUM(valor)` por atleta/arena.
+- `launch_mensalista_credit_atomic(p_operation_id, p_arena_id, p_atleta_id, p_valor,
+  p_descricao, p_registered_by, p_plano_id uuid DEFAULT NULL) → jsonb`, service_role only.
+  A assinatura antiga (6 args) é **dropada**: duas sobrecargas deixariam o PostgREST
+  sem saber qual chamar. Com `p_plano_id` informado:
+  - plano inexistente ou de outra arena → `P0002`;
+  - plano `cancelado` → `55000`;
+  - atleta que não é o `athlete_id` do plano nem tem `mensalista_cobrancas` em alguma
+    mensalidade dele → `22023` ("Atleta nao participa desta recorrencia").
+  - Idempotência: o mesmo `p_operation_id` com outro `p_plano_id` → `23505`. O retorno
+    ganha `plano_id`.
+
+#### 42.1.1 Subcontas (`20261004160000`, `20261004160010`)
+
+- **Modelo:** `mensalista_creditos.plano_id` deixa de ser só informativo e passa a ser a
+  **subconta** de todo movimento (NULL = geral). Saldo da subconta = `SUM(valor)` dela;
+  saldo do atleta = soma das subcontas (`mensalista_credito_saldo` inalterada).
+- **View `mensalista_credito_saldo_recorrencia`** `(arena_id, atleta_id, plano_id, saldo)`,
+  `security_invoker = true`, SELECT para `authenticated`/`service_role`.
+- **Trigger `mensalista_creditos_rotear_subconta`** (BEFORE INSERT, função
+  `private.mensalista_credito_rotear`, SECURITY DEFINER, sem EXECUTE para ninguém). Age só
+  quando a linha chega sem `plano_id`:
+  - entrada com `booking_id` → `bookings.plano_mensalista_id`; entrada com `cobranca_id`
+    (excedente) → `mensalidade.plano_id` da cobrança;
+  - saída com `cobranca_id` (`uso`) → distribui pelas subcontas com saldo > 0, na ordem
+    `plano da mensalidade` → geral → demais (`MIN(created_at)`, depois `plano_id`). A própria
+    linha fica com a parte da geral (ou com a primeira vinculada); as outras partes são
+    INSERTs extras com `plano_id` já preenchido e a mesma `cobranca_id`, então
+    `remove_mensalista_rateio_participante_atomic` (que apaga por `cobranca_id`) continua
+    revertendo tudo. Faltando saldo → `55000`.
+  - qualquer saída com subconta definida (retirada, ajuste, parte de uso) não pode deixar
+    a subconta negativa → `55000` ("Saldo insuficiente nesta subconta de credito").
+  - Assim, `register_mensalista_payment_atomic` e `cancel_mensalista_booking*_atomic` não
+    foram reescritas.
+- **`withdraw_mensalista_credit_atomic(..., p_registered_by, p_plano_id uuid DEFAULT NULL)`**:
+  DROP da sobrecarga de 6 args. Limite = saldo **da subconta** (antes, do total); a linha
+  `retirada` grava `plano_id`; idempotência compara `plano_id`; retorno com `plano_id` e
+  `saldo_subconta`.
+- **Sem backfill:** o histórico fica na geral, coerente com usos/retiradas antigos.
+
+### 42.2 Web — mensalistas
+
+- `credito-recorrencia.ts` (puro): `CREDITO_TIPO_LABEL` (movido do
+  `MensalistaDetailClient`) e `formatRecorrenciaLabel(plano)`:
+  `"Quadra 04 · Qua · 20:00 às 21:00"`. Recorrência com vários blocos lista todas as
+  faixas (`"Quadra 04 · Qua 20:00 às 21:00 / Sex 20:00 às 21:00"`, ou a quadra de cada
+  faixa entre parênteses quando variam).
+- `lancarCreditoSchema.planoId: uuid | null` (default `null`); `lancarCreditoAction`
+  envia `p_plano_id` só quando há vínculo.
+- `getMensalistaDetailAction`: `creditos: CreditoComRecorrencia[]` (`CreditoRow` +
+  `recorrenciaLabel`). O rótulo vem dos planos já carregados do responsável; plano de
+  outro responsável (atleta participante do rateio de lá) é buscado à parte.
+- `LancarCreditoModal`: prop `recorrencias: { id, label, atletaIds }[]` (não canceladas;
+  `atletaIds` = responsável + `cobrancas.atleta_id` do mês). O select "Recorrência
+  (opcional)" só aparece quando o atleta escolhido tem alguma; o valor sentinela
+  `sem-vinculo` existe porque o Radix Select não aceita `""`.
+- `MensalistaDetailClient`: coluna **Recorrência** no extrato de créditos (selo sky
+  com ícone `Repeat`).
+- **Subcontas no detalhe:** `credito-recorrencia.ts` ganha `SubcontaCredito { planoId,
+  label, saldo }`, `SUBCONTA_GERAL_LABEL` e `montarSubcontas(saldos, labelDoPlano)` (só
+  saldo ≥ 0,01; geral primeiro, depois por rótulo). `getMensalistaDetailAction` lê
+  `mensalista_credito_saldo_recorrencia` duas vezes: as subcontas do responsável
+  (`MensalistaDetalhe.creditoSubcontas`, para a retirada) e as subcontas de **outros**
+  atletas nos planos dele (`plano_id IN planos AND atleta_id <> responsável AND saldo > 0`,
+  nomes de `atleta`). Com isso, monta `RecorrenciaResumo.creditoVinculado:
+  { atletaId, nome, valor }[]` (responsável primeiro).
+- **Selo no cabeçalho da recorrência:** item de texto sky com `Wallet` depois dos badges
+  ("Crédito R$ X", primeiros nomes entre parênteses quando há saldo de outro atleta),
+  `title` com o valor por pessoa.
+- **Extrato de créditos:** coluna "Crédito de" (selo da recorrência ou "Geral").
+- **`RetirarCreditoModal`:** prop `subcontas`; campo "Retirar de" (Select com
+  `label — saldo` quando há mais de uma; texto fixo quando há uma). Limite e "saldo após"
+  são os da subconta. Sentinela `geral` no Select. `retirarCreditoSchema.planoId` (default
+  `null`) → `p_plano_id` (omitido quando geral).
+- **`RegistrarPagamentoModal`:** texto sob "Aplicar crédito" com a ordem de transbordo.
+- **`LancarCreditoModal`:** opção "Geral (sem vínculo)" e textos de ajuda conforme a escolha.
+
+### 42.3 Web — Relatório de Pagamentos
+
+- Tipo `PaymentStatusCreditRow { id, data, atleta, atletaId, tipo, valor, recorrencia,
+  descricao }`. **Não** é `PaymentStatusRow`: fica fora de `rows`, `summary` e
+  `athleteSummaries`.
+- `mensalista-credit-rows.ts` (puro): `buildMensalistaCreditRows(movimentos)` em ordem
+  cronológica, com o rótulo de tipo e de recorrência.
+- `reportActions.loadCreditosDeMensalista`: `mensalista_creditos` do período, com
+  `created_at` entre a meia-noite de São Paulo do início e `endDate T23:59:59.999-03:00`,
+  atleta e `plano:plano_id(... blocos ...)` embutidos. Filtros: `tipo = 'avulso'` → vazio;
+  `courtId`/`sportId` → só `plano_id` em `resolveAllowedPlanoIds`; `atletaId` por
+  `atleta_id`; `perfil` por `matchesPerfil`. Com `atletaId`, devolve `creditoSaldo` (view
+  de saldo; com `planoId`, o saldo da subconta em `mensalista_credito_saldo_recorrencia`).
+  Erro na fonte só loga e devolve vazio, como as demais fontes complementares.
+  `getPaymentStatusReportAction` passa a devolver `creditos` e `creditoSaldo`.
+- `StatusPagamentosPageClient`: `MensalistaCreditsCard` (seção recolhível `creditos`,
+  renderizada quando há movimentos ou saldo ≠ 0), aba Excel via
+  `buildMensalistaCreditSheetData` e repasse ao PDF.
+- `payment-status-pdf.ts`: inputs `creditos` e `creditoSaldo`. A tabela "Créditos de
+  mensalista" vem depois dos lançamentos (sem a coluna Atleta no extrato), com a coluna
+  "Crédito de" (recorrência em negrito azul, ou "Geral") e o valor verde/vermelho pelo
+  sinal. No extrato, "Saldo de crédito" (ou "... nesta recorrência", com `planoId`) entra
+  no "Resumo do mês" quando `|saldo| ≥ 0,01`.
+
+### 42.4 Testes
+
+`tests/mensalista-credito-recorrencia.test.mjs` (rótulo simples/blocos/quadras
+diferentes, linhas do relatório, aba do Excel, schemas de lançamento e retirada, repasse do
+`p_plano_id`, crédito fora de `rows`, `montarSubcontas`). No banco também
+`supabase/tests/20261004160000_mensalista_credito_subcontas_test.sql` (24 asserções:
+excedente e jogo cancelado na recorrência de origem, uso com transbordo
+quarta → geral → sexta em 3 linhas da mesma cobrança, retirada por subconta,
+idempotência, limite da subconta, chamada antiga retira do geral, ajuste/insert direto
+barrados, soma das subcontas = saldo) e `tests/mensalista-credito-subcontas.test.mjs`. No banco: `supabase/tests/20261004150000_mensalista_credito_recorrencia_test.sql`
+(18 asserções: ACL, sobrecarga antiga removida, chamada antiga sem vínculo, vínculo do
+responsável e do participante, idempotência, recusas, saldo único, `ON DELETE SET NULL`)
+e `tests/mensalista-credito-recorrencia.test.mjs` (estático).
+
+## 43. Relatório de Pagamentos — filtro de Recorrência (04/10/2026)
+
+Só web, sem migração. Depende de `mensalista_creditos.plano_id` (§42) apenas para
+filtrar a seção de créditos.
+
+### 43.1 Contrato
+
+- `PaymentStatusFilters.planoId?: string` (`planos_mensalista.id`).
+- `RecorrenciaFiltro { id, label, responsavel: string | null, cancelada }`.
+- `listRecorrenciasDoAtletaAction(arenaId, atletaId)` → `{ success, data?: RecorrenciaFiltro[] }`
+  (`assertArenaAdminAccess`). União de: `planos_mensalista.athlete_id = atleta`;
+  `mensalista_cobrancas.atleta_id = atleta` → `mensalidade.plano_id`;
+  `booking_participants.atleta_id = atleta` → `booking.plano_mensalista_id` (não nulo, mesma
+  arena). Planos de fora são buscados com `.eq('arena_id')`. As duas fontes de vínculo
+  são paginadas por `fetchAllSupabaseRows`.
+- `recorrencia-filtro.ts` (puro): `buildRecorrenciaOptions(planos, atletaId)` (deduplica;
+  ordena canceladas por último, depois as do próprio atleta, depois dia/horário) e
+  `formatRecorrenciaOption` ("… · grupo de Bia · cancelada").
+
+### 43.2 Recorte em `getPaymentStatusReportAction`
+
+- `resolveReportSourceFlags`: `planoId` conta como `booking_scoped`, igual a
+  `courtId`/`sportId` (sem `station_payments`, rotativo e `transactions`).
+- `bookings`: `.eq('plano_mensalista_id', planoId)`. O `matchesAtleta` das reservas deixa
+  de exigir o atleta (`atletaDasReservas = undefined`), porque as sessões do grupo valem
+  mesmo para quem só participa. Perfil continua valendo.
+- Mensalidades: `escopoMensalista = { atletaId: undefined, planoIds: [planoId] }`. Sem
+  isso, `loadMensalidadesDaCompetencia` filtraria por `athlete_id` (o responsável) e o
+  participante ficaria sem a mensalidade do grupo.
+- `loadCreditosDeMensalista`: `.eq('plano_id', planoId)`. `creditoSaldo` segue o total do
+  atleta.
+- `computeAthleteDebtSummary(..., planoId)`: as cobranças do atleta recebem
+  `.eq('mensalidade.plano_id', planoId)` (o embed inclui `plano_id`), e a consulta de
+  avulso não roda (Avulso = 0).
+- Sem `atletaId`, a action aceita `planoId` do mesmo jeito. A exigência de atleta é da
+  tela; os dados continuam presos a `arena_id`, então nada vaza.
+
+### 43.3 UI (`StatusPagamentosPageClient`)
+
+- Estado `planoId` (`'todas'` = sem filtro), `recorrencias`, `carregandoRecorrencias` e
+  `recorrenciasDoAtletaRef` (descarta a resposta de um atleta já trocado).
+- Ao escolher atleta: zera `planoId` e chama `listRecorrenciasDoAtletaAction`. Ao limpar:
+  zera tudo. `applyFilters` só envia `planoId` com atleta.
+- O select fica logo depois do `AthleteFilterField`. Fica desabilitado com Tipo = Avulso,
+  durante o carregamento ou sem opções. `handleTipoChange('avulso')` limpa a recorrência.
+- `recorrenciaLabel` (`formatRecorrenciaOption`) vai para `buildAppliedFiltersDescription`
+  (tela, PDF geral e extrato). O extrato por atleta repassa `planoId`.
+- Cards de dívida: com recorrência, só o de Mensal (com o rótulo da recorrência). No PDF
+  geral, a linha de dívida vira "deve neste mês nesta recorrência".
+
+### 43.4 Testes
+
+`tests/relatorio-filtro-recorrencia.test.mjs`: ordem/dedupe/rótulo das opções,
+`resolveReportSourceFlags` com `planoId`, filtros aplicados e o recorte na action
+(reservas, mensalidade sem `atletaId`, créditos, dívida).
+
+## 44. Ajustar mensalidades do mês em lote (04/10/2026)
+
+Plano: `docs/PLANO-Reajuste-Mensal-em-Lote.md`. Migrações `arenadigital-db/20261004170000`–`20261004170030`.
+Ordem de deploy: **DB → web**. Tudo é aditivo: nenhuma RPC existente muda de assinatura.
+
+### 44.1 Banco
+
+- **`mensalista_reajustes_lote`** `(id = p_operation_id, arena_id, competencia [dia 1], observacao,
+  total_itens, aplicados, ignorados, impacto numeric(12,2), resultado jsonb, registered_by, created_at)`.
+  RLS: SELECT via `can_access_arena_backoffice`, escrita só pela RPC (service_role).
+- **`planos_mensalista_reajustes`** ganha `lote_id` (FK, `ON DELETE SET NULL`), `ocorrencias_anterior`,
+  `ocorrencias_competencia` (smallint) e `valor_sugerido`.
+- **`private.mensalista_ocorrencias_competencia(plano, competência)`** → `(ocorrencias, em_pausa, liquidas,
+  estreia, encerra)`:
+  - percorre `private.mensalista_plan_blocks` no intervalo `[max(1º dia, data_inicio), min(fim do mês,
+    mês de encerramento previsto/efetivo))`;
+  - `em_pausa` = datas dentro de uma pausa `ativa`;
+  - `encerra` = mês ≥ mês do encerramento.
+- **`public.mensalista_reajuste_mes_preview(arena, competência)`** (SQL, STABLE, só leitura, service_role):
+  - **Entram:** recorrências `ativo` com mensalidade na competência.
+  - **Colunas:** identificação, contrato (`valor_mensal`, `sessoes_por_mes`, `valor_por_jogo`), jogos do
+    mês anterior e do mês (líquidos e em pausa), `valor_anterior`, mensalidade (`id`, `status`,
+    `rateio`, `valor_total`), `valor_pago` (soma de `valor_pago + credito_aplicado`) e `valor_sugerido`.
+  - **Sugestão:** `NULL` em blocos ou sem `sessoes_por_mes`; `valor_mensal` quando os jogos líquidos =
+    `sessoes_por_mes`; senão `round(round(valor_mensal/sessoes,2) × jogos, 2)`, mesmo arredondamento do
+    pró-rata da estreia.
+- **`public.reajustar_mensalidades_mes_lote_atomic(op, arena, competência, itens jsonb, observacao,
+  registered_by)`** — itens `{plano_id, novo_valor, valor_esperado}`, 1 a 500:
+  1. **Contrato:** item sem campo, negativo ou acima de 1e8 → `22023` para tudo.
+  2. **Trava:** advisory lock por arena + competência.
+  3. **Idempotência:** o mesmo `op` devolve o resultado gravado; o mesmo `op` em outra arena ou mês →
+     `23505`.
+  4. **Materializa** a competência (`generate_mensalista_mensalidades_atomic`).
+  5. **Por item**, `FOR UPDATE` no plano e na mensalidade, com motivos `duplicado`, `nao_encontrado`,
+     `inativo`, `sem_mensalidade`, `quitada`, `cancelada`, `alterada` (valor diferente do esperado),
+     `sem_alteracao` e `abaixo_do_pago` (com pagamento e `novo ≤ pago`).
+  6. **Aplica** `valor_total` e status `parcial`/`aberto`. Sem rateio, também o `valor_devido` da
+     cobrança ativa. Com rateio, a diferença vai para a cobrança ativa do responsável
+     (`atleta_id = planos.athlete_id`), com `GREATEST(pago + crédito, devido + Δ, 0)`; sem parte
+     dele, só o total (`20261004180000`).
+  7. **Audita** em `planos_mensalista_reajustes` (`escopo = 'somente_mes'`, `valor_anterior` = total do
+     mês, `lote_id`, jogos, sugerido).
+  8. **Grava** o resumo no lote e devolve `{lote_id, competencia, aplicados, ignorados, impacto, itens[],
+     idempotent}`.
+  - **Nunca** altera `planos_mensalista.valor_mensal`.
+
+### 44.2 Web
+
+- **Tipos** (`mensalista.types.ts`): `ReajusteMesLinha`, `ReajusteMesPreview`, `ReajusteMesItemStatus`,
+  `ReajusteMesLoteResultado`. `ReajusteRow` ganha `lote_id`, `ocorrencias_*`, `valor_sugerido` e o escopo
+  `somente_mes`. Hand-patch de `supabase.types.ts` (tabela, colunas, 2 RPCs).
+- **`reajusteMesLoteSchema`**: `competencia` `YYYY-MM`, itens com `valorEsperado`, de 1 a 500.
+- **Actions** (`assertArenaBackofficeAccess` + `requireAuthenticatedDbUser`):
+  - `getReajusteMesPreviewAction(arenaId, competencia)`: gera a competência e chama a prévia. O rótulo
+    sai de `formatRecorrenciaLabel`.
+  - `aplicarReajusteMesLoteAction(input)`: repassa `operationId`, itens e `valor_esperado`, depois
+    `revalidateMensalistaPaths`.
+- **`reajuste-mes.ts`** (puro): `editavel`, `precisaAnalise`, `selos`, `selecionadaPorPadrao`,
+  `valorInicial`, `arredondar` (`centavos`/`real`/`cinco`), `validarNovoValor` (`invalido`,
+  `abaixo_do_pago`), `semAlteracao`, `variacaoJogos`, `parseValor` (formato pt-BR), `impacto` e os
+  rótulos de selo e de motivo.
+- **`AjustarMensalidadesMesModal`**:
+  - **Etapas:** `editar` → `revisar` → `resultado`. Grade responsiva (cartões no celular), cabeçalho
+    fixo, esqueleto ao carregar, erro com "Tentar de novo" e estados vazios.
+  - **Comportamento:** editar o valor marca a linha; trocar o arredondamento só refaz as linhas não
+    editadas.
+  - **Idempotência:** o `operationId` nasce ao entrar em "revisar" e se mantém em nova tentativa após
+    falha, para não reaplicar.
+  - **Ao aplicar:** com `aplicados > 0`, chama `onApplied` (`router.refresh` + recontagem).
+- **`MensalistasOverviewClient`**: botão com o contador carregado depois da página (prévia do mês
+  exibido) e o modal.
+- **`MensalistaDetailClient`**: o histórico mostra "somente {mês}" para `somente_mes` e o selo
+  "Em lote · N → M jogos".
+
+### 44.3 Testes
+
+- **Web:** `tests/mensalista-reajuste-mes.test.mjs` (seleção e selos, quitada/blocos, arredondamento,
+  parcial, `parseValor`, impacto, schema, ordem gerar → prévia e `valor_esperado`).
+  `tests/mensalista-actions-atomic.test.mjs` com as contagens subidas (13 autorizações, 6
+  `operation_id`).
+- **Banco:**
+  - `supabase/tests/20261004170000_mensalista_reajuste_mes_lote_test.sql` — 23 asserções: prévia com
+    4 → 5 quartas, sem mudança, pausa, estreia, encerramento, blocos, rateio/quitada/parcial; lote com
+    todos os motivos, total do rateio, plano intocado, auditoria, idempotência, `23505`, parcial acima
+    do pago e contrato;
+  - `tests/mensalista-reajuste-mes-lote.test.mjs` (estático).
+
+## 45. Verificação em homologação e correções de alinhamento (04/10/2026)
+
+### 45.1 Como foi verificado
+
+- **Integridade (só leitura, todos os dados de homolog):**
+  - sem rateio: `valor_devido` = `valor_total`;
+  - status × pago (dinheiro + crédito);
+  - `cobranca.credito_aplicado` = soma dos pagamentos = −soma dos `uso` do extrato;
+  - pagamento em dinheiro ↔ exatamente 1 `transactions` (`mensalista_pagamento`, mesmo valor), sem entradas órfãs;
+  - view de saldo = soma do extrato = soma das subcontas, sem subconta negativa;
+  - lote: `aplicados`/`impacto` = histórico.
+- **Ponta a ponta (59 verificações):** numa arena de teste isolada ("[QA Claude]"), chamando as
+  actions reais do web (`mensalistaActions`, `reportActions`, `financeActions`, `bookings/mensalistaActions`)
+  contra homolog, com autenticação substituída por um stub que só autoriza a arena de teste. Tudo
+  é apagado no fim (dados, assinatura interna e login temporário).
+- **Telas:** navegador headless com sessão do gestor de teste: visão geral (contador do botão),
+  modal de ajuste (celular e desktop), detalhe (selos, extrato, histórico, retirada), relatório
+  (créditos, filtro de recorrência, card de dívida) e Financeiro (painel e entradas).
+
+### 45.2 Correções
+
+- **Criação de plano sem entrada no caixa** — `arenadigital-db/20261004180010`:
+  `create_monthly_plan_atomic` e `create_monthly_plan_blocks_atomic` recriadas idênticas às vigentes
+  (`20260801200010`, `20260912130000`), só sem o `INSERT` em `transactions` (`monthly_plan_month`).
+  O pgTAP `tests/atomic_monthly_plans.sql` foi atualizado: a criação posta 0 e só a confirmação
+  legada posta.
+- **Limpeza das entradas fantasmas** — `20261004180020`:
+  - alvo: `transactions` `monthly_plan_month` com `created_at = planos_mensalista.created_at` (mesma
+    transação da criação) e sem `mensalista_pagamentos.transaction_id` apontando para elas;
+  - antes do `DELETE`, copia as linhas para `private.mensalista_lancamentos_criacao_removidos` (com
+    `removido_em`).
+
+  Em homolog, removeu 12 entradas (R$ 8.820).
+- **Data do lançamento no Financeiro** — `20261004180030` + web:
+  - a regra: `launch_date` exatamente à meia-noite UTC é "só data" (mensalidade, reserva, rateio,
+    manual) e vale o dia UTC; o resto é instante (comanda, rotativo) e vale o dia em `America/Sao_Paulo`;
+  - no banco, `get_arena_finance_daily_totals` e `get_arena_finance_summary` reescritas com essa
+    regra, mesma assinatura, pgTAP `20261004180030_financeiro_data_do_lancamento_test.sql`;
+  - no web, `lancamentoSoData` e `formatLaunchDate` em `src/lib/format.ts`, usados em
+    `FinanceDashboardClient` (últimas entradas e saídas) e `TransactionsPageClient`. Em
+    `reportActions`, as linhas de transação "só data" viram `YYYY-MM-DD`.
+- **Relatório × rateio** — `mensalidade-rows.ts`: `resumoDaMensalidade.devido = valorTotal` (antes,
+  soma das cobranças ativas). Teste novo em `tests/relatorio-mensalidade-competencia.test.mjs`.
+- **Lote × rateio** — `20261004180000` (ver §44.1).
+- **Selo "Ajustado"** — `MensalistaDetailClient`: com `valor_total ≠ valor_mensal` e reajuste
+  `somente_mes` da competência, o selo "Ajustado" (sky) mostra "valor do plano · N → M jogos". O
+  selo "Proporcional" fica para os demais casos.

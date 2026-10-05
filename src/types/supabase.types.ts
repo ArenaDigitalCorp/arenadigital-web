@@ -2835,6 +2835,7 @@ export type Database = {
           created_at: string
           descricao: string | null
           id: string
+          plano_id: string | null
           registered_by: string | null
           tipo: string
           valor: number
@@ -2846,6 +2847,7 @@ export type Database = {
           created_at?: string
           descricao?: string | null
           id?: string
+          plano_id?: string | null
           registered_by?: string | null
           tipo: string
           valor: number
@@ -2857,6 +2859,7 @@ export type Database = {
           created_at?: string
           descricao?: string | null
           id?: string
+          plano_id?: string | null
           registered_by?: string | null
           tipo?: string
           valor?: number
@@ -2881,6 +2884,13 @@ export type Database = {
             columns: ["cobranca_id"]
             isOneToOne: false
             referencedRelation: "mensalista_cobrancas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mensalista_creditos_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "planos_mensalista"
             referencedColumns: ["id"]
           },
           {
@@ -2963,11 +2973,15 @@ export type Database = {
           created_at: string
           escopo: string
           id: string
+          lote_id: string | null
           observacao: string | null
+          ocorrencias_anterior: number | null
+          ocorrencias_competencia: number | null
           plano_id: string
           registered_by: string | null
           valor_anterior: number
           valor_novo: number
+          valor_sugerido: number | null
         }
         Insert: {
           arena_id: string
@@ -2975,11 +2989,15 @@ export type Database = {
           created_at?: string
           escopo: string
           id?: string
+          lote_id?: string | null
           observacao?: string | null
+          ocorrencias_anterior?: number | null
+          ocorrencias_competencia?: number | null
           plano_id: string
           registered_by?: string | null
           valor_anterior: number
           valor_novo: number
+          valor_sugerido?: number | null
         }
         Update: {
           arena_id?: string
@@ -2987,13 +3005,24 @@ export type Database = {
           created_at?: string
           escopo?: string
           id?: string
+          lote_id?: string | null
           observacao?: string | null
+          ocorrencias_anterior?: number | null
+          ocorrencias_competencia?: number | null
           plano_id?: string
           registered_by?: string | null
           valor_anterior?: number
           valor_novo?: number
+          valor_sugerido?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "planos_mensalista_reajustes_lote_id_fkey"
+            columns: ["lote_id"]
+            isOneToOne: false
+            referencedRelation: "mensalista_reajustes_lote"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "planos_mensalista_reajustes_arena_id_fkey"
             columns: ["arena_id"]
@@ -3147,6 +3176,63 @@ export type Database = {
             columns: ["transaction_id"]
             isOneToOne: false
             referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mensalista_reajustes_lote: {
+        Row: {
+          aplicados: number
+          arena_id: string
+          competencia: string
+          created_at: string
+          id: string
+          ignorados: number
+          impacto: number
+          observacao: string | null
+          registered_by: string | null
+          resultado: Json
+          total_itens: number
+        }
+        Insert: {
+          aplicados?: number
+          arena_id: string
+          competencia: string
+          created_at?: string
+          id: string
+          ignorados?: number
+          impacto?: number
+          observacao?: string | null
+          registered_by?: string | null
+          resultado?: Json
+          total_itens?: number
+        }
+        Update: {
+          aplicados?: number
+          arena_id?: string
+          competencia?: string
+          created_at?: string
+          id?: string
+          ignorados?: number
+          impacto?: number
+          observacao?: string | null
+          registered_by?: string | null
+          resultado?: Json
+          total_itens?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mensalista_reajustes_lote_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mensalista_reajustes_lote_registered_by_fkey"
+            columns: ["registered_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -5950,6 +6036,37 @@ export type Database = {
           },
         ]
       }
+      mensalista_credito_saldo_recorrencia: {
+        Row: {
+          arena_id: string | null
+          atleta_id: string | null
+          plano_id: string | null
+          saldo: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mensalista_creditos_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mensalista_creditos_atleta_id_fkey"
+            columns: ["atleta_id"]
+            isOneToOne: false
+            referencedRelation: "atleta"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mensalista_creditos_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "planos_mensalista"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rotativo_credito_saldo: {
         Row: {
           arena_id: string | null
@@ -7195,6 +7312,7 @@ export type Database = {
           p_atleta_id: string
           p_descricao: string
           p_operation_id: string
+          p_plano_id?: string
           p_registered_by: string
           p_valor: number
         }
@@ -7815,6 +7933,46 @@ export type Database = {
       set_internal_test_plan_for_arena: {
         Args: { enabled?: boolean; target_arena_id: string }
         Returns: undefined
+      }
+      mensalista_reajuste_mes_preview: {
+        Args: { p_arena_id: string; p_competencia: string }
+        Returns: {
+          athlete_id: string
+          athlete_name: string
+          court_name: string | null
+          dia_semana: number
+          encerra: boolean
+          estreia: boolean
+          horario_fim: string
+          horario_inicio: string
+          jogos: number
+          jogos_anterior: number
+          jogos_em_pausa: number
+          jogos_liquidos: number
+          mensalidade_id: string
+          mensalidade_status: string
+          plano_id: string
+          por_blocos: boolean
+          rateio: boolean
+          sessoes_por_mes: number
+          valor_anterior: number | null
+          valor_atual: number
+          valor_mensal: number
+          valor_pago: number
+          valor_por_jogo: number | null
+          valor_sugerido: number | null
+        }[]
+      }
+      reajustar_mensalidades_mes_lote_atomic: {
+        Args: {
+          p_arena_id: string
+          p_competencia: string
+          p_itens: Json
+          p_observacao: string | null
+          p_operation_id: string
+          p_registered_by: string
+        }
+        Returns: Json
       }
       reajustar_plano_mensalista_atomic: {
         Args: {
@@ -8593,6 +8751,7 @@ export type Database = {
           p_atleta_id: string
           p_descricao: string
           p_operation_id: string
+          p_plano_id?: string
           p_registered_by: string
           p_valor: number
         }
