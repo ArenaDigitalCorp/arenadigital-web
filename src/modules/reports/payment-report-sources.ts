@@ -40,7 +40,9 @@ type BookingLike = {
 }
 
 export function resolveReportSourceFlags(filters: PaymentStatusFilters = {}): ReportSourceFlags {
-  const bookingScoped = Boolean(filters.courtId || filters.sportId)
+  // Recorrência recorta como Espaço/Esporte: só o que tem reserva/plano entra —
+  // comanda, rotativo e lançamento manual não pertencem a grupo nenhum.
+  const bookingScoped = Boolean(filters.courtId || filters.sportId || filters.planoId)
   const tipo = filters.tipo
 
   if (bookingScoped) {

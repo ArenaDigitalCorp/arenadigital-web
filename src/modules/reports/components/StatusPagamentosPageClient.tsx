@@ -23,6 +23,7 @@ import {
   ArrowDown,
   ArrowUpDown,
   Users,
+  Repeat,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -39,10 +40,15 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from 'sonner'
 import { cn, normalizeString } from '@/lib/utils'
 import { arenaDataTable } from '@/lib/arena-data-table'
-import { getPaymentStatusReportAction } from '@/modules/reports/actions/reportActions'
+import {
+  getPaymentStatusReportAction,
+  listRecorrenciasDoAtletaAction,
+} from '@/modules/reports/actions/reportActions'
+import { formatRecorrenciaOption } from '@/modules/reports/recorrencia-filtro'
 import { searchAthletesAction } from '@/modules/loyalty/actions/loyaltyActions'
 import {
   buildAthleteSummarySheetData,
+  buildMensalistaCreditSheetData,
   buildPaymentStatusSheetData,
 } from '@/modules/reports/payment-status-export'
 import { buildAppliedFiltersDescription } from '@/modules/reports/payment-status-pdf-data'
@@ -55,6 +61,8 @@ import type {
   AthleteDebtSummary,
   PaymentStatusArenaInfo,
   PaymentStatusAthleteSummary,
+  PaymentStatusCreditRow,
+  RecorrenciaFiltro,
 } from '@/modules/reports/types/report.types'
 
 const PAGE_SIZE = 10
@@ -329,6 +337,7 @@ interface Props {
   initialStartDate: string
   initialEndDate: string
   arenaInfo: PaymentStatusArenaInfo
+  initialCreditos?: PaymentStatusCreditRow[]
 }
 
 /** Combobox de atleta único, com busca — casa reserva/mensalidade como responsável ou participante. */
@@ -436,13 +445,14 @@ function AthleteFilterField({
   )
 }
 
-type SecaoRecolhivel = 'filtros' | 'resumo' | 'lancamentos'
+type SecaoRecolhivel = 'filtros' | 'resumo' | 'lancamentos' | 'creditos'
 
 const SECOES_RECOLHIDAS_STORAGE_KEY = 'relatorio-pagamentos:secoes-recolhidas'
 const SECOES_ABERTAS: Record<SecaoRecolhivel, boolean> = {
   filtros: false,
   resumo: false,
   lancamentos: false,
+  creditos: false,
 }
 
 /**
@@ -729,6 +739,117 @@ function AthleteSummaryCard({
   )
 }
 
+/**
+ * Créditos de mensalista do período. Ficam fora dos lançamentos e de todos os
+ * totais da tela — crédito não é dinheiro em caixa, só abate mensalidade (e o
+ * abatimento já aparece na linha da mensalidade). A coluna Recorrência mostra
+ * a que grupo o gestor vinculou o crédito, para quem joga em mais de um.
+ */
+function MensalistaCreditsCard({
+  creditos,
+  monthLabel,
+  saldo,
+  saldoLabel,
+  recolhido,
+  onToggle,
+}: {
+  creditos: PaymentStatusCreditRow[]
+  monthLabel: string
+  /** Saldo atual do atleta filtrado; `null` sem filtro de atleta. */
+  saldo: number | null
+  /** "Saldo atual" ou, com recorrência filtrada, "Saldo nesta recorrência". */
+  saldoLabel: string
+  recolhido: boolean
+  onToggle: () => void
+}) {
+  return (
+    <Card className="rounded-lg border border-slate-100 bg-white shadow-sm overflow-hidden">
+      <div
+        className={cn(
+          'flex flex-wrap items-center justify-between gap-3 px-6 py-4',
+          !recolhido && 'border-b border-slate-100'
+        )}
+      >
+        <SectionToggle aberta={!recolhido} onToggle={onToggle} controla="creditos-mensalista">
+          <Wallet className="h-5 w-5 shrink-0 text-sky-600" />
+          <div className="min-w-0">
+            <h2 className="text-base font-bold text-arena-navy-800">Créditos de mensalista</h2>
+            <p className="text-xs text-arena-navy-800/40">
+              {monthLabel} · {creditos.length} movimento{creditos.length !== 1 ? 's' : ''} · fora dos totais
+              (crédito não é pagamento)
+            </p>
+          </div>
+        </SectionToggle>
+        {saldo != null && (
+          <p className="text-xs text-arena-navy-800/50">
+            {saldoLabel}: <span className="font-bold text-sky-600">{formatCurrency(saldo)}</span>
+          </p>
+        )}
+      </div>
+      <div id="creditos-mensalista" className={cn('overflow-x-auto px-6', recolhido && 'hidden')}>
+        <table className={arenaDataTable.table}>
+          <thead>
+            <tr className={arenaDataTable.theadRow}>
+              <th className={arenaDataTable.th}>Data</th>
+              <th className={arenaDataTable.th}>Atleta</th>
+              <th className={arenaDataTable.th}>Movimento</th>
+              <th className={arenaDataTable.th}>Crédito de</th>
+              <th className={arenaDataTable.th}>Descrição</th>
+              <th className={arenaDataTable.thRight}>Valor</th>
+            </tr>
+          </thead>
+          <tbody>
+            {creditos.length === 0 ? (
+              <tr>
+                <td colSpan={6} className={arenaDataTable.emptyCell}>
+                  Nenhum movimento de crédito neste período.
+                </td>
+              </tr>
+            ) : (
+              creditos.map((c) => (
+                <tr key={c.id} className={arenaDataTable.tbodyRow}>
+                  <td className={cn(arenaDataTable.td, 'whitespace-nowrap text-arena-navy-800/60')}>
+                    {formatDate(c.data)}
+                  </td>
+                  <td className={arenaDataTable.tdBold}>
+                    {c.atleta ?? <span className="font-medium text-arena-navy-800/45">—</span>}
+                  </td>
+                  <td className={cn(arenaDataTable.td, 'whitespace-nowrap')}>{c.tipo}</td>
+                  <td className={arenaDataTable.td}>
+                    {c.recorrencia ? (
+                      <span
+                        className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-bold text-sky-700"
+                        title={c.valor < 0 ? 'Saiu do crédito desta recorrência' : 'Entrou no crédito desta recorrência'}
+                      >
+                        <Repeat className="h-3 w-3" />
+                        {c.recorrencia}
+                      </span>
+                    ) : (
+                      <span className="text-xs font-medium text-arena-navy-800/40">Geral</span>
+                    )}
+                  </td>
+                  <td className={cn(arenaDataTable.td, 'text-arena-navy-800/60')}>
+                    {c.descricao ?? <span className="text-arena-navy-800/30">—</span>}
+                  </td>
+                  <td
+                    className={cn(
+                      arenaDataTable.tdRight,
+                      'whitespace-nowrap font-bold',
+                      c.valor < 0 ? 'text-red-500' : 'text-emerald-600'
+                    )}
+                  >
+                    {formatCurrency(c.valor)}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  )
+}
+
 export function StatusPagamentosPageClient({
   arenaId,
   initialRows,
@@ -738,6 +859,7 @@ export function StatusPagamentosPageClient({
   initialSports,
   initialStartDate,
   arenaInfo,
+  initialCreditos = [],
 }: Props) {
   const now = new Date()
   const currentMonth = format(now, 'yyyy-MM')
@@ -747,6 +869,8 @@ export function StatusPagamentosPageClient({
   const [athleteDebt, setAthleteDebt] = useState<AthleteDebtSummary | null>(null)
   const [athleteSummaries, setAthleteSummaries] =
     useState<PaymentStatusAthleteSummary[]>(initialAthleteSummaries)
+  const [creditos, setCreditos] = useState<PaymentStatusCreditRow[]>(initialCreditos)
+  const [creditoSaldo, setCreditoSaldo] = useState<number | null>(null)
   const [courts] = useState<CourtFilter[]>(initialCourts)
   const [sports] = useState<SportFilter[]>(initialSports)
 
@@ -756,6 +880,13 @@ export function StatusPagamentosPageClient({
   const [sportId, setSportId] = useState<string>('todos')
   const [atleta, setAtleta] = useState<{ id: string; nome_perfil: string } | null>(null)
   const [perfilFiltro, setPerfilFiltro] = useState<PerfilAtleta | 'todos'>('todos')
+  // Recorrência: só existe com um Atleta filtrado — as opções são os grupos dele.
+  const [planoId, setPlanoId] = useState<string>('todas')
+  const [recorrencias, setRecorrencias] = useState<RecorrenciaFiltro[]>([])
+  const [carregandoRecorrencias, setCarregandoRecorrencias] = useState(false)
+  // Atleta cujas recorrências estão sendo buscadas — descarta a resposta de
+  // um atleta que o gestor já trocou.
+  const recorrenciasDoAtletaRef = useRef<string | null>(null)
   const [statusFiltro, setStatusFiltro] = useState<'todos' | PaymentStatusRow['status']>('todos')
   const [rateio, setRateio] = useState(false)
   const [detalharPorHora, setDetalharPorHora] = useState(false)
@@ -801,6 +932,7 @@ export function StatusPagamentosPageClient({
     courtId: string
     sportId: string
     atletaId: string | null
+    planoId: string | null
     perfil: PerfilAtleta | 'todos'
     rateio: boolean
     detalharPorHora: boolean
@@ -813,6 +945,7 @@ export function StatusPagamentosPageClient({
       courtId,
       sportId,
       atletaId: atleta?.id ?? null,
+      planoId: planoId === 'todas' ? null : planoId,
       perfil: perfilFiltro,
       rateio,
       detalharPorHora,
@@ -827,6 +960,7 @@ export function StatusPagamentosPageClient({
         courtId: state.courtId === 'todos' ? undefined : state.courtId,
         sportId: state.sportId === 'todos' ? undefined : state.sportId,
         atletaId: state.atletaId ?? undefined,
+        planoId: state.atletaId && state.planoId ? state.planoId : undefined,
         perfil: state.perfil === 'todos' ? undefined : state.perfil,
         rateio: state.tipo === 'mensal' ? state.rateio : undefined,
         detalharPorHora: state.detalharPorHora || undefined,
@@ -836,6 +970,8 @@ export function StatusPagamentosPageClient({
         setSummary(result.summary ?? EMPTY_SUMMARY)
         setAthleteDebt(result.athleteDebt ?? null)
         setAthleteSummaries(result.athleteSummaries ?? [])
+        setCreditos(result.creditos ?? [])
+        setCreditoSaldo(result.creditoSaldo ?? null)
         setPage(1)
       }
     })
@@ -864,7 +1000,14 @@ export function StatusPagamentosPageClient({
     setTipo(t)
     // Rateio só faz sentido com Tipo = Mensal — sai do ar (e some do filtro) nos outros.
     if (t !== 'mensal' && rateio) setRateio(false)
-    applyFilters({ tipo: t, rateio: t === 'mensal' ? rateio : false })
+    // Recorrência é mensal: com Avulso ela não tem o que mostrar.
+    const limpaRecorrencia = t === 'avulso' && planoId !== 'todas'
+    if (limpaRecorrencia) setPlanoId('todas')
+    applyFilters({
+      tipo: t,
+      rateio: t === 'mensal' ? rateio : false,
+      ...(limpaRecorrencia ? { planoId: null } : {}),
+    })
   }
 
   function handleCourtChange(v: string) {
@@ -877,14 +1020,40 @@ export function StatusPagamentosPageClient({
     applyFilters({ sportId: v })
   }
 
+  async function carregarRecorrencias(atletaId: string) {
+    recorrenciasDoAtletaRef.current = atletaId
+    setRecorrencias([])
+    setCarregandoRecorrencias(true)
+    try {
+      const result = await listRecorrenciasDoAtletaAction(arenaId, atletaId)
+      if (recorrenciasDoAtletaRef.current !== atletaId) return
+      if (result.success) setRecorrencias(result.data ?? [])
+      else toast.error(result.error ?? 'Erro ao carregar as recorrências do atleta')
+    } finally {
+      if (recorrenciasDoAtletaRef.current === atletaId) setCarregandoRecorrencias(false)
+    }
+  }
+
   function handleAtletaSelect(a: { id: string; nome_perfil: string }) {
     setAtleta(a)
-    applyFilters({ atletaId: a.id })
+    // Recorrência é do atleta anterior: volta para "Todas" e busca as do novo.
+    setPlanoId('todas')
+    void carregarRecorrencias(a.id)
+    applyFilters({ atletaId: a.id, planoId: null })
   }
 
   function handleAtletaClear() {
     setAtleta(null)
-    applyFilters({ atletaId: null })
+    setPlanoId('todas')
+    recorrenciasDoAtletaRef.current = null
+    setRecorrencias([])
+    setCarregandoRecorrencias(false)
+    applyFilters({ atletaId: null, planoId: null })
+  }
+
+  function handleRecorrenciaChange(v: string) {
+    setPlanoId(v)
+    applyFilters({ planoId: v === 'todas' ? null : v })
   }
 
   function handlePerfilChange(v: string) {
@@ -915,6 +1084,9 @@ export function StatusPagamentosPageClient({
         data: buildAthleteSummarySheetData(visibleAthleteSummaries, { horas: detalharPorHora }),
         sheet: 'Resumo por atleta',
       },
+      ...(creditos.length > 0
+        ? [{ data: buildMensalistaCreditSheetData(creditos, formatDate), sheet: 'Créditos de mensalista' }]
+        : []),
     ]).toFile(`status-pagamentos-${startDate}-${endDate}.xlsx`)
   }
 
@@ -933,12 +1105,14 @@ export function StatusPagamentosPageClient({
           courtName: courtId !== 'todos' ? (courts.find((c) => c.id === courtId)?.name ?? null) : null,
           sportName: sportId !== 'todos' ? (sports.find((s) => s.id === sportId)?.name ?? null) : null,
           atletaNome: atleta?.nome_perfil ?? null,
+          recorrenciaLabel,
           perfilLabel: perfilFiltro !== 'todos' ? PERFIL_LABEL[perfilFiltro] : null,
           rateio,
           detalharPorHora,
         },
         athleteDebt: atleta && athleteDebt ? { nome: atleta.nome_perfil, ...athleteDebt } : null,
         athleteSummaries: visibleAthleteSummaries,
+        creditos,
         formatDate,
         formatHorario,
         formatDiaSemana: showDiaSemanaColumn ? formatDiaSemana : undefined,
@@ -970,6 +1144,8 @@ export function StatusPagamentosPageClient({
         courtId: courtId === 'todos' ? undefined : courtId,
         sportId: sportId === 'todos' ? undefined : sportId,
         atletaId,
+        // O grupo filtrado vale também para o extrato (a parte desse atleta nele).
+        planoId: recorrenciaSelecionada?.id,
         perfil: perfilFiltro === 'todos' ? undefined : perfilFiltro,
         rateio: tipo === 'mensal' ? rateio : undefined,
         detalharPorHora: true,
@@ -989,11 +1165,14 @@ export function StatusPagamentosPageClient({
           courtName: courtId !== 'todos' ? (courts.find((c) => c.id === courtId)?.name ?? null) : null,
           sportName: sportId !== 'todos' ? (sports.find((s) => s.id === sportId)?.name ?? null) : null,
           atletaNome,
+          recorrenciaLabel,
           perfilLabel: perfilFiltro !== 'todos' ? PERFIL_LABEL[perfilFiltro] : null,
           rateio,
           detalharPorHora: true,
         },
         extratoDoAtleta: { nome: atletaNome, resumo: resumoDoAtleta },
+        creditos: result.creditos ?? [],
+        creditoSaldo: result.creditoSaldo ?? null,
         formatDate,
         formatHorario,
         formatDiaSemana,
@@ -1030,6 +1209,9 @@ export function StatusPagamentosPageClient({
   const paginatedRows = sortedRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   const monthLabel = monthOptions.find((m) => m.value === selectedMonth)?.label ?? selectedMonth
+  const recorrenciaSelecionada =
+    atleta && planoId !== 'todas' ? (recorrencias.find((r) => r.id === planoId) ?? null) : null
+  const recorrenciaLabel = recorrenciaSelecionada ? formatRecorrenciaOption(recorrenciaSelecionada) : null
 
   const filtrosAplicadosTexto = [
     ...buildAppliedFiltersDescription({
@@ -1038,6 +1220,7 @@ export function StatusPagamentosPageClient({
       courtName: courtId !== 'todos' ? (courts.find((c) => c.id === courtId)?.name ?? null) : null,
       sportName: sportId !== 'todos' ? (sports.find((sp) => sp.id === sportId)?.name ?? null) : null,
       atletaNome: atleta?.nome_perfil ?? null,
+      recorrenciaLabel,
       perfilLabel: perfilFiltro !== 'todos' ? PERFIL_LABEL[perfilFiltro] : null,
       rateio,
       detalharPorHora,
@@ -1117,7 +1300,7 @@ export function StatusPagamentosPageClient({
 
       {/* Quanto o atleta filtrado deve no mês — só aparece com Atleta selecionado */}
       {atleta && athleteDebt && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className={cn('grid grid-cols-1 gap-4', !recorrenciaSelecionada && 'sm:grid-cols-2')}>
           <Card>
             <CardContent className="p-5 flex items-start gap-4">
               <div className="p-2 bg-indigo-50 rounded-lg">
@@ -1128,11 +1311,16 @@ export function StatusPagamentosPageClient({
                   {atleta.nome_perfil} deve de Mensal
                 </p>
                 <p className="text-2xl font-bold text-gray-900 mt-0.5">{formatCurrency(athleteDebt.mensal)}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{monthLabel}</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {monthLabel}
+                  {recorrenciaSelecionada && ` · ${recorrenciaSelecionada.label}`}
+                </p>
               </div>
             </CardContent>
           </Card>
 
+          {/* Avulso não pertence a recorrência nenhuma — com uma filtrada, o card some. */}
+          {!recorrenciaSelecionada && (
           <Card>
             <CardContent className="p-5 flex items-start gap-4">
               <div className="p-2 bg-teal-50 rounded-lg">
@@ -1147,6 +1335,7 @@ export function StatusPagamentosPageClient({
               </div>
             </CardContent>
           </Card>
+          )}
         </div>
       )}
 
@@ -1211,6 +1400,43 @@ export function StatusPagamentosPageClient({
               onSelect={handleAtletaSelect}
               onClear={handleAtletaClear}
             />
+
+            {/* Só com um atleta filtrado: os grupos de que ele faz parte. */}
+            {atleta && (
+              <div className="flex flex-col gap-1">
+                <label
+                  className={cn('text-xs font-medium', tipo === 'avulso' ? 'text-gray-300' : 'text-gray-500')}
+                >
+                  Recorrência
+                </label>
+                <Select
+                  value={planoId}
+                  onValueChange={handleRecorrenciaChange}
+                  disabled={tipo === 'avulso' || carregandoRecorrencias || recorrencias.length === 0}
+                >
+                  <SelectTrigger className="h-9" title={recorrenciaLabel ?? undefined}>
+                    {carregandoRecorrencias ? (
+                      <span className="flex items-center gap-2 text-arena-navy-800/50">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Carregando…
+                      </span>
+                    ) : recorrencias.length === 0 ? (
+                      <span className="text-arena-navy-800/40">Nenhuma recorrência</span>
+                    ) : (
+                      <SelectValue />
+                    )}
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todas">Todas as recorrências</SelectItem>
+                    {recorrencias.map((r) => (
+                      <SelectItem key={r.id} value={r.id}>
+                        {formatRecorrenciaOption(r)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-gray-500">Status Pagamento</label>
@@ -1610,6 +1836,17 @@ export function StatusPagamentosPageClient({
           </div>
         </div>
       </Card>
+
+      {(creditos.length > 0 || (creditoSaldo ?? 0) !== 0) && (
+        <MensalistaCreditsCard
+          creditos={creditos}
+          monthLabel={monthLabel}
+          saldo={creditoSaldo}
+          saldoLabel={recorrenciaSelecionada ? 'Saldo nesta recorrência' : 'Saldo atual'}
+          recolhido={secoesRecolhidas.creditos}
+          onToggle={() => alternarSecao('creditos')}
+        />
+      )}
     </div>
   )
 }

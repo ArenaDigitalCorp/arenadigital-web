@@ -17,12 +17,19 @@ import {
   reajustarValorSchema,
   pausarPlanoSchema,
   removerPausaSchema,
+  reajusteMesLoteSchema,
   competenciaSchema,
   uuidSchema,
 } from '@/modules/mensalistas/schemas/mensalista.schema'
+import {
+  formatRecorrenciaLabel,
+  montarSubcontas,
+  type RecorrenciaParaRotulo,
+} from '@/modules/mensalistas/credito-recorrencia'
 import type {
   AtrasoCompetencia,
   CobrancaRow,
+  CreditoComRecorrencia,
   CreditoRow,
   MensalidadeRow,
   MensalistaDetalhe,
@@ -34,6 +41,10 @@ import type {
   PlanoMensalistaComDetalhes,
   ReajusteRow,
   RecorrenciaResumo,
+  ReajusteMesItemStatus,
+  ReajusteMesLinha,
+  ReajusteMesLoteResultado,
+  ReajusteMesPreview,
   SituacaoPagamento,
   StatusPlano,
 } from '@/modules/mensalistas/types/mensalista.types'
@@ -378,7 +389,83 @@ export async function getMensalistaDetailAction(
       return { success: false, error: 'Mensalista não encontrado' }
     }
     const mensalidades = (mensalidadesData ?? []) as MensalidadeRow[]
-    const creditos = (creditosData ?? []) as CreditoRow[]
+    const creditosRaw = (creditosData ?? []) as CreditoRow[]
+
+    // Crédito vinculado a uma recorrência mostra qual é ("Quadra 04 · Qua ·
+    // 20:00 às 21:00"). Quase sempre é um plano deste responsável (já
+    // carregado); o vínculo a um plano de outro responsável (o atleta é
+    // participante do rateio de lá) é buscado à parte.
+    const recorrenciaLabelByPlano = new Map<string, string>(
+      planos.map((p) => [p.id, formatRecorrenciaLabel(p as unknown as RecorrenciaParaRotulo)])
+    )
+    const planoIdsDeFora = [
+      ...new Set(
+        creditosRaw
+          .map((c) => c.plano_id)
+          .filter((id): id is string => Boolean(id) && !recorrenciaLabelByPlano.has(id as string))
+      ),
+    ]
+    if (planoIdsDeFora.length > 0) {
+      const { data: planosDeFora, error: planosDeForaError } = await supabase
+        .from('planos_mensalista')
+        .select(PLANO_SELECT)
+        .in('id', planoIdsDeFora)
+      if (planosDeForaError) throw new Error(planosDeForaError.message)
+      for (const p of (planosDeFora ?? []) as unknown as (RecorrenciaParaRotulo & { id: string })[]) {
+        recorrenciaLabelByPlano.set(p.id, formatRecorrenciaLabel(p))
+      }
+    }
+    const creditos: CreditoComRecorrencia[] = creditosRaw.map((c) => ({
+      ...c,
+      recorrenciaLabel: c.plano_id ? recorrenciaLabelByPlano.get(c.plano_id) ?? null : null,
+    }))
+
+    // Subcontas do crédito (geral + uma por recorrência), direto do banco: cada
+    // movimento grava a sua e nenhuma fica negativa. As do responsável vão
+    // para a retirada; as vinculadas a planos dele — inclusive de quem só
+    // participa do rateio — viram o selo de crédito no cabeçalho da recorrência.
+    const [{ data: subcontasData, error: subcontasError }, { data: deOutrosData, error: deOutrosError }] =
+      await Promise.all([
+        supabase
+          .from('mensalista_credito_saldo_recorrencia')
+          .select('plano_id, saldo')
+          .eq('arena_id', parsedArena)
+          .eq('atleta_id', parsedAthlete),
+        supabase
+          .from('mensalista_credito_saldo_recorrencia')
+          .select('atleta_id, plano_id, saldo')
+          .eq('arena_id', parsedArena)
+          .in('plano_id', planos.map((p) => p.id))
+          .neq('atleta_id', parsedAthlete)
+          .gt('saldo', 0),
+      ])
+    if (subcontasError) throw new Error(subcontasError.message)
+    if (deOutrosError) throw new Error(deOutrosError.message)
+
+    const creditoSubcontas = montarSubcontas(subcontasData ?? [], (id) => recorrenciaLabelByPlano.get(id))
+
+    const creditoPorRecorrencia = new Map<string, { atletaId: string; valor: number }[]>()
+    for (const s of creditoSubcontas) {
+      if (s.planoId) creditoPorRecorrencia.set(s.planoId, [{ atletaId: parsedAthlete, valor: s.saldo }])
+    }
+    const deOutros = (deOutrosData ?? []).filter(
+      (s): s is { atleta_id: string; plano_id: string; saldo: number } =>
+        Boolean(s.atleta_id && s.plano_id) && Number(s.saldo) >= 0.01
+    )
+    for (const s of deOutros) {
+      const lista = creditoPorRecorrencia.get(s.plano_id) ?? []
+      lista.push({ atletaId: s.atleta_id, valor: round2(Number(s.saldo)) })
+      creditoPorRecorrencia.set(s.plano_id, lista)
+    }
+    const nomeDoAtleta = new Map<string, string>()
+    if (deOutros.length > 0) {
+      const { data: atletasData, error: atletasError } = await supabase
+        .from('atleta')
+        .select('id, nome_perfil')
+        .in('id', [...new Set(deOutros.map((s) => s.atleta_id))])
+      if (atletasError) throw new Error(atletasError.message)
+      for (const a of atletasData ?? []) nomeDoAtleta.set(a.id, a.nome_perfil)
+    }
 
     let cobrancas: CobrancaRow[] = []
     if (mensalidades.length > 0) {
@@ -570,6 +657,21 @@ export async function getMensalistaDetailAction(
         reajustes: reajustesByPlano.get(plano.id) ?? [],
         pausas: pausasByPlano.get(plano.id) ?? [],
         participantesSugeridos: participantesSugeridosByPlano.get(plano.id) ?? [],
+        // O responsável primeiro; depois quem participa, pelo nome.
+        creditoVinculado: (creditoPorRecorrencia.get(plano.id) ?? [])
+          .map(({ atletaId, valor }) => ({
+            atletaId,
+            nome:
+              atletaId === parsedAthlete
+                ? plano.atleta?.nome_perfil ?? plano.athlete_name
+                : nomeDoAtleta.get(atletaId) ?? 'Participante',
+            valor: round2(valor),
+          }))
+          .sort(
+            (a, b) =>
+              Number(a.atletaId !== parsedAthlete) - Number(b.atletaId !== parsedAthlete) ||
+              a.nome.localeCompare(b.nome, 'pt-BR')
+          ),
       }
     })
 
@@ -639,6 +741,7 @@ export async function getMensalistaDetailAction(
         historicoPagamentos,
         creditos,
         creditoSaldo,
+        creditoSubcontas,
         fidelidade,
       },
     }
@@ -800,6 +903,8 @@ export async function lancarCreditoAction(
         p_valor: parsed.valor,
         p_descricao: parsed.descricao,
         p_registered_by: dbUserId,
+        // Omitido (undefined) = sem vínculo: o RPC usa o DEFAULT NULL.
+        p_plano_id: parsed.planoId ?? undefined,
       }
     )
     if (error) throw new Error(error.message)
@@ -830,6 +935,8 @@ export async function retirarCreditoAction(
         p_valor: parsed.valor,
         p_descricao: parsed.descricao,
         p_registered_by: dbUserId,
+        // Omitido (undefined) = subconta geral: o RPC usa o DEFAULT NULL.
+        p_plano_id: parsed.planoId ?? undefined,
       }
     )
     if (error) throw new Error(error.message)
@@ -1010,6 +1117,131 @@ export async function removerPausaMensalistaAction(
   } catch (err) {
     const message =
       err instanceof Error ? err.message : 'Erro ao remover a pausa'
+    return { success: false, error: message }
+  }
+}
+
+/**
+ * Prévia do "Ajustar mensalidades do mês": cada recorrência ativa com os jogos
+ * do mês anterior e deste, o valor atual e o sugerido. Materializa a
+ * competência antes (como a tela de Mensalistas já faz ao abrir um mês), para
+ * o gestor poder preparar o mês seguinte antes da virada.
+ */
+export async function getReajusteMesPreviewAction(
+  arenaId: string,
+  competencia: string
+): Promise<{ success: boolean; data?: ReajusteMesPreview; error?: string }> {
+  try {
+    await assertArenaBackofficeAccess(arenaId)
+    const { dbUserId } = await requireAuthenticatedDbUser()
+    const parsedArena = uuidSchema.parse(arenaId)
+    const parsedComp = competenciaSchema.parse(competencia)
+    const competenciaDate = `${parsedComp}-01`
+    const supabase = getSupabaseAdmin()
+
+    const { error: genError } = await supabase.rpc('generate_mensalista_mensalidades_atomic', {
+      p_arena_id: parsedArena,
+      p_competencia: competenciaDate,
+      p_registered_by: dbUserId,
+    })
+    if (genError) throw new Error(genError.message)
+
+    const { data, error } = await supabase.rpc('mensalista_reajuste_mes_preview', {
+      p_arena_id: parsedArena,
+      p_competencia: competenciaDate,
+    })
+    if (error) throw new Error(error.message)
+
+    const linhas: ReajusteMesLinha[] = (data ?? []).map((row) => ({
+      planoId: row.plano_id,
+      athleteId: row.athlete_id,
+      atleta: row.athlete_name,
+      recorrencia: formatRecorrenciaLabel({
+        dia_semana: row.dia_semana,
+        horario_inicio: row.horario_inicio,
+        horario_fim: row.horario_fim,
+        court: { name: row.court_name },
+      }),
+      porBlocos: row.por_blocos,
+      valorMensal: Number(row.valor_mensal),
+      sessoesPorMes: row.sessoes_por_mes,
+      valorPorJogo: row.valor_por_jogo == null ? null : Number(row.valor_por_jogo),
+      jogosAnterior: row.jogos_anterior,
+      valorAnterior: row.valor_anterior == null ? null : Number(row.valor_anterior),
+      jogos: row.jogos,
+      jogosEmPausa: row.jogos_em_pausa,
+      jogosLiquidos: row.jogos_liquidos,
+      estreia: row.estreia,
+      encerra: row.encerra,
+      mensalidadeId: row.mensalidade_id,
+      mensalidadeStatus: row.mensalidade_status,
+      rateio: row.rateio,
+      valorAtual: Number(row.valor_atual),
+      valorPago: Number(row.valor_pago),
+      valorSugerido: row.valor_sugerido == null ? null : Number(row.valor_sugerido),
+    }))
+
+    return { success: true, data: { competencia: parsedComp, linhas } }
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : 'Erro ao carregar as mensalidades do mês'
+    return { success: false, error: message }
+  }
+}
+
+/**
+ * Aplica o que o gestor confirmou no "Ajustar mensalidades do mês" — só a
+ * cobrança daquela competência (o valor do plano não muda). O `operationId`
+ * vem do cliente: reenviar o mesmo lote não reaplica nada.
+ */
+export async function aplicarReajusteMesLoteAction(
+  input: unknown
+): Promise<{ success: boolean; data?: ReajusteMesLoteResultado; error?: string }> {
+  try {
+    const parsed = reajusteMesLoteSchema.parse(input)
+    await assertArenaBackofficeAccess(parsed.arenaId)
+    const { dbUserId } = await requireAuthenticatedDbUser()
+
+    const { data, error } = await getSupabaseAdmin().rpc(
+      'reajustar_mensalidades_mes_lote_atomic',
+      {
+        p_operation_id: parsed.operationId,
+        p_arena_id: parsed.arenaId,
+        p_competencia: `${parsed.competencia}-01`,
+        p_itens: parsed.itens.map((item) => ({
+          plano_id: item.planoId,
+          novo_valor: item.novoValor,
+          valor_esperado: item.valorEsperado,
+        })),
+        p_observacao: parsed.observacao,
+        p_registered_by: dbUserId,
+      }
+    )
+    if (error) throw new Error(error.message)
+
+    const row = (data ?? {}) as Record<string, unknown>
+    const itens = (Array.isArray(row.itens) ? row.itens : []) as Record<string, unknown>[]
+    revalidateMensalistaPaths(parsed.arenaId)
+    return {
+      success: true,
+      data: {
+        loteId: String(row.lote_id ?? parsed.operationId),
+        competencia: String(row.competencia ?? parsed.competencia),
+        aplicados: Number(row.aplicados ?? 0),
+        ignorados: Number(row.ignorados ?? 0),
+        impacto: Number(row.impacto ?? 0),
+        itens: itens.map((item) => ({
+          planoId: String(item.plano_id),
+          status: String(item.status) as ReajusteMesItemStatus,
+          valorAnterior: item.valor_anterior == null ? null : Number(item.valor_anterior),
+          valorNovo: item.valor_novo == null ? null : Number(item.valor_novo),
+        })),
+        idempotent: Boolean(row.idempotent ?? false),
+      },
+    }
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : 'Erro ao ajustar as mensalidades do mês'
     return { success: false, error: message }
   }
 }

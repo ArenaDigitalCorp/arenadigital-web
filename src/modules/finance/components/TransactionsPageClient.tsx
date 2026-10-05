@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/dialog";
 import { TransactionForm, TransactionData } from "@/modules/finance/components/TransactionForm";
 import { toast } from "sonner";
+import { formatLaunchDate } from "@/lib/format";
 
 interface Props {
     arenaId: string;
@@ -173,7 +174,7 @@ export function TransactionsPageClient({ arenaId, type }: Props) {
                                 <TableCell className={cn(arenaDataTable.td, "text-arena-navy-800/60")}>{formatCurrency(t.unit_value)}</TableCell>
                                 <TableCell className={cn(arenaDataTable.td, "text-arena-navy-800/60")}>{formatCurrency(t.discount)}</TableCell>
                                 <TableCell className={cn(arenaDataTable.td, "text-arena-button font-black")}>{formatCurrency(t.total_value)}</TableCell>
-                                <TableCell className={cn(arenaDataTable.td, "text-arena-navy-800/60")}>{new Date(t.launch_date).toLocaleDateString('pt-BR')}</TableCell>
+                                <TableCell className={cn(arenaDataTable.td, "text-arena-navy-800/60")}>{formatLaunchDate(t.launch_date)}</TableCell>
                                 <TableCell className={cn(arenaDataTable.td, "text-arena-navy-800/60")}>
                                     {t.modo_pagamento?.nome
                                         ? <span className="bg-purple-50 text-purple-700 text-[10px] font-bold px-2 py-0.5 rounded">{t.modo_pagamento.nome}</span>

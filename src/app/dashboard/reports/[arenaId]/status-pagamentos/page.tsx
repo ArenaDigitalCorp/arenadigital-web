@@ -65,6 +65,7 @@ export default async function StatusPagamentosPage({
       initialStartDate={startDate}
       initialEndDate={endDate}
       arenaInfo={arenaInfo}
+      initialCreditos={result.creditos ?? []}
     />
   )
 }

@@ -371,7 +371,7 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
   - **Mensalidade do mês:** sem rateio → 1 linha (devido / pago / restante) com **Registrar pagamento**; com rateio → uma linha por participante (pago, crédito aplicado, data) com **Registrar pagamento** por pessoa, mais um resumo fixo **Pago / Falta** acima da lista (calculado sobre o valor total da mensalidade, não sobre uma fatia individual).
   - **Registrar pagamento acima do devido:** o valor em dinheiro pode passar do valor da cobrança. Quando isso acontece, o modal pergunta se o gestor quer que o excedente vire **crédito**: **sim** → a cobrança fica quitada no valor exato e o excedente entra como saldo de crédito; **não** → o pagamento é registrado como está (acima do devido). Se a parcela for de um **participante avulso** (sem cadastro), o crédito é lançado para o **responsável pela recorrência**. O dinheiro total recebido entra no **Financeiro** da arena nos dois casos; o crédito lançado não gera lançamento de caixa (só é receita quando aplicado).
   - **Histórico de pagamentos:** todos os pagamentos de todas as competências — data, competência, participante, valor em dinheiro, valor em crédito, observação (paginado).
-  - **Créditos:** extrato do crédito manual do atleta (data, tipo, valor com sinal, descrição) + saldo atual.
+  - **Créditos:** extrato do crédito manual do atleta (data, tipo, valor com sinal, **recorrência vinculada**, descrição) + saldo atual. Ver §5.20.
 - **Rateio da mensalidade (incremental — revisado em 13/09/2026):**
   - Ativar o rateio **não exige declarar quem vai participar nem quanto cada um vai pagar** de antemão — isso raramente é previsível no início do mês. Ativar só mostra o **valor total devido**, fixo.
   - Participantes (**atletas cadastrados** na arena ou **nomes avulsos**, texto livre) entram **um a um, ao longo do mês**, conforme aparecem. Cada um registra o que está pagando naquele momento — sem precisar de um valor "cheio" pré-combinado.
@@ -380,7 +380,7 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
   - **Excluir participante** (ícone de lixeira): tira a pessoa do rateio **e reverte** o que havia sido lançado para ela — o dinheiro some do Financeiro da arena e o crédito envolvido (consumido ou excedente concedido) é desfeito. Pede confirmação antes, mostrando o valor que será revertido. Bloqueado quando a mensalidade já está **quitada** (nesse ponto as reservas do mês já foram confirmadas e o mês seguinte já rolou — desfazer isso está fora do escopo da exclusão).
   - **Desativar rateio** colapsa de volta para uma única cobrança do responsável pela recorrência, cobrindo o que ainda falta.
 - **Pagamento parcial:** com ou sem rateio, todo mês tem devido / pago / restante. O gestor pode registrar pagamentos parciais; o mês fica **Parcial** até quitar. Ao quitar o mês, as reservas daquele mês são confirmadas e a agenda "rola" um mês à frente (respeitando a previsão de encerramento).
-- **Crédito manual:** botão **Lançar crédito** registra um valor em R$ para um atleta (responsável ou participante do rateio). O saldo fica sempre visível para o gestor e pode ser **abatido** no registro de um pagamento futuro. Um lançamento de crédito **não** entra no caixa; só vira receita quando é usado.
+- **Crédito manual:** botão **Lançar crédito** registra um valor em R$ para um atleta (responsável ou participante do rateio) e, opcionalmente, o **vincula a uma das recorrências** dele (§5.20). O saldo fica sempre visível para o gestor e pode ser **abatido** no registro de um pagamento futuro. Um lançamento de crédito **não** entra no caixa; só vira receita quando é usado.
 - **Retirada de crédito:** botão **Retirar crédito** desconta um valor do saldo do responsável, registrado como movimento "Retirada" no extrato de créditos. Não pode ultrapassar o saldo disponível e pode ser feita em **várias parcelas** até zerar o crédito (ex.: crédito de R$ 500 → retirada de R$ 200 num mês, R$ 200 no seguinte, R$ 100 depois). Cada retirada fica no histórico com data, valor e observação. Também não gera lançamento no caixa.
 - **Pausar plano (viagem/afastamento temporário):** botão **Pausar plano** grava um período (data início/fim) em que a recorrência libera o horário — ao contrário do encerramento, é **reversível**: a recorrência volta a gerar reservas e mensalidades normalmente assim que o período termina, sem nenhuma ação manual.
   - O gestor escolhe a **cobrança do(s) mês(es)** tocados pelo período: **cobrar integralmente** (o mensalista paga como se nada tivesse mudado), **cobrar valor proporcional** (desconta as sessões dentro da pausa) ou **não cobrar nada** (zera a cobrança daquele mês).
@@ -391,6 +391,7 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
 - **Previsão de encerramento:** botão **Encerrar** grava o mês a partir do qual a recorrência vai acabar + uma observação. As reservas ainda não confirmadas a partir desse mês são canceladas, liberando o horário. O encerramento **definitivo** continua sendo o cancelamento do plano.
 - **Cancelamento definitivo (Cancelar plano):** encerra a recorrência agora — marca o plano `cancelado` e cancela **todas** as reservas futuras a partir de agora, sejam elas "reservado" (mês ainda não confirmado) ou já **confirmed** (ex.: o restante do mês corrente). *Corrigido em 13/09/2026:* antes, as sessões já confirmadas do mês corrente sobreviviam ao cancelamento e continuavam ocupando o calendário — a tela de Mensalistas mostrava a recorrência como cancelada, mas a agenda seguia como se ela existisse. Valores já recebidos não são estornados automaticamente (usar crédito/retirada manual se precisar compensar o atleta).
 - **Integração financeira:** cada pagamento em dinheiro gera uma entrada em `Financeiro` na categoria "Mensalidade" (aparece nos relatórios de pagamento). O painel "Cobranças Pendentes — Mensalistas" do Financeiro passa a levar ao detalhe do mensalista.
+  - **Criar o plano não lança dinheiro no caixa** (corrigido em 04/10/2026, §5.23). A 1ª mensalidade nasce em aberto e só entra no Financeiro quando o pagamento é registrado.
 - **Cadastro assistido (BookingModal → aba Mensal):**
   - O modal mostra, sem exigir cálculo do gestor, **quantas recorrências ainda cabem no mês corrente** a partir de hoje (data + intervalo) e as reservas que serão criadas neste mês (confirmadas) vs. a cadência dos próximos 2 meses (reservado).
   - Quando há tabela de preço além da Padrão, um seletor **Tabela de preço** (default = Mensalista) alimenta a **sugestão** de `valor/sessão` e de `valor mensal` — sempre editável.
@@ -510,6 +511,8 @@ Lista, mês a mês, todo lançamento financeiro da arena — reservas avulsas, m
   - Excel e PDF do detalhamento ganham a coluna **Dia**.
   - **Seções minimizáveis:** Filtros, Resumo por atleta e Lançamentos têm um chevron no título para minimizar ou expandir. Minimizadas, continuam mostrando o essencial: Filtros exibe a lista do que está aplicado (período, perfil, status…), o Resumo mostra quantos atletas e o total em aberto, e Lançamentos mostra a quantidade de lançamentos. A escolha fica salva no navegador, então a tela volta como o gestor deixou. Os filtros e as exportações continuam valendo com as seções minimizadas.
   - Limitação conhecida: no detalhamento, com pagamento **parcial**, o card "Pagamentos Pendentes" soma o valor das horas (o mês inteiro), não só o que falta. O valor exato em aberto está no Resumo por atleta.
+- **Créditos de mensalista** (04/10/2026): seção própria abaixo dos lançamentos, com a recorrência a que cada crédito foi vinculado. Vai também para o Excel e para os PDFs (geral e extrato do atleta) e fica fora de todos os totais. Ver §5.20.
+- **Filtro de Recorrência** (04/10/2026): aparece com um Atleta filtrado e recorta o relatório a um dos grupos de mensalista dele. Ver §5.21.
 
 ---
 
@@ -557,6 +560,37 @@ A seção "Cobranças Avulsas" que antes aparecia na parte de baixo da página d
 - **Relatórios (Pagamentos Reservas):** reserva com rateio vale o que falta pagar enquanto pendente e o total das partes depois; "quanto o atleta deve de Avulso" considera só a parte dele que falta (com parciais); o filtro de atleta encontra quem está no rateio.
 - **Reservas antigas** com cobrança separada foram migradas para o rateio automaticamente, mantendo quem já pagou e os lançamentos no Financeiro.
 
+### 5.20 Crédito de mensalista por recorrência — subcontas (04/10/2026)
+- **Status:** Implementado (banco em `arenadigital-db` + web), branch `feat/mensalistas` / `feature/mensalistas`. Ainda não promovido.
+- **Objetivo:** quando um atleta participa de **dois ou mais grupos** de mensalista (ex.: quarta 20h–21h e sexta 20h–21h), saber **de qual grupo é cada crédito**, conseguir **retirar o crédito de um grupo específico** e manter tudo **equilibrado e rastreável**.
+- **Subcontas.** O crédito do atleta é dividido em uma subconta **Geral** e uma por **recorrência**. Todo movimento (lançamento, uso, retirada) fica registrado numa subconta, e nenhuma subconta pode ficar negativa. O saldo total do atleta é a soma das subcontas.
+- **Lançar crédito:** o modal tem o campo **Recorrência (opcional)**, com "Geral (sem vínculo)" por padrão e as recorrências **ativas** de que o atleta escolhido participa (como responsável ou no rateio do mês), no formato "Quadra 04 · Qua · 20:00 às 21:00". Trocar o atleta limpa a escolha se a recorrência não for dele.
+- **Créditos automáticos nascem na recorrência de origem:** o crédito de um **jogo cancelado** vai para a subconta da recorrência do jogo, e o **excedente** de um pagamento vai para a subconta da recorrência da mensalidade paga.
+- **Uso do crédito no pagamento (automático, com transbordo):** ao aplicar crédito na mensalidade de uma recorrência, ele sai **primeiro da subconta daquela recorrência**, depois da **Geral** e, se ainda faltar, da subconta de **outras recorrências** (a mais antiga primeiro). Quando o uso passa por mais de uma subconta, o extrato mostra uma linha para cada uma. O modal de pagamento avisa essa ordem embaixo do campo "Aplicar crédito".
+- **Retirar crédito:** o modal tem o campo **Retirar de**, com cada subconta e o saldo dela ("Geral — R$ 50,00", "Quadra 04 · Qua · 20:00 às 21:00 — R$ 100,00"). A retirada sai **só** da subconta escolhida e não pode passar do saldo dela, mesmo que o atleta tenha saldo em outras. Com uma só subconta com saldo, ela já vem escolhida.
+- **Créditos (detalhe do mensalista):** o extrato tem a coluna **Crédito de**. Mostra o selo da recorrência em que o movimento entrou ou de onde saiu, ou "Geral".
+- **Crédito no cabeçalho da recorrência:** em "Recorrências e mensalidade do mês", a recorrência com saldo na sua subconta mostra, discretamente ao lado do status, "Crédito R$ 100,00". Quando há saldo de um participante do rateio nessa recorrência, o primeiro nome aparece entre parênteses. O tooltip mostra quanto é de cada pessoa. O valor é o **saldo exato da subconta**: aplicado na mensalidade do grupo, diminui ou some; retirado, também.
+- **Relatórios → Pagamentos Reservas:** seção **Créditos de mensalista** abaixo dos lançamentos, com data, atleta, movimento (lançamento, uso, retirada…), **Crédito de** (recorrência ou Geral), descrição e valor com sinal. Com um atleta filtrado, mostra também o **saldo atual**; com uma recorrência filtrada (§5.21), mostra só os movimentos da subconta dela e o **saldo nesta recorrência**.
+  - Fica **fora de todos os totais** (cards, Resumo por atleta e lançamentos): crédito não é pagamento. O abatimento já aparece na linha da mensalidade, então somar o crédito contaria o mesmo dinheiro duas vezes.
+  - Filtros: Tipo = Avulso não mostra créditos; Espaço/Esporte mostram só os movimentos de subcontas de recorrências daquele espaço/esporte; Atleta e Perfil casam pelo dono do crédito.
+  - **Excel:** aba "Créditos de mensalista". **PDF geral:** tabela "Créditos de mensalista" depois dos lançamentos. **PDF do atleta (extrato de uso):** a mesma tabela, sem a coluna Atleta, mais o **saldo de crédito** no "Resumo do mês" quando houver saldo (o da recorrência, se ela estiver filtrada).
+- **Regras do vínculo:** a recorrência precisa ser da arena, não estar cancelada e o atleta precisa ser o responsável por ela ou participar do rateio dela. Apagar a recorrência mantém o crédito: a subconta dela passa para a Geral.
+- **Dados anteriores:** os créditos que já existiam ficam todos na subconta **Geral**, coerentes com os usos e retiradas antigos, que também não tinham subconta. Nada é redistribuído retroativamente.
+
+### 5.21 Relatório de Pagamentos — filtro de Recorrência (04/10/2026)
+- **Status:** Implementado (só web), branch `feat/mensalistas`. Ainda não promovido.
+- **Objetivo:** quando o atleta participa de dois ou mais grupos de mensalista, ver o relatório de **um grupo só** — mensalidade, sessões, créditos vinculados e quanto ele deve naquele grupo.
+- **Quando aparece:** o campo **Recorrência** surge logo depois do Atleta, **somente com um Atleta filtrado**. As opções são **todas as recorrências de que o atleta faz parte**: como responsável, no rateio de alguma mensalidade ou como participante das reservas do plano. Entram também as canceladas, porque o relatório consulta meses passados.
+  - Formato da opção: "Quadra 04 · Qua · 20:00 às 21:00", com "grupo de {responsável}" quando o grupo é de outra pessoa e "cancelada" quando for o caso. Ordem: ativas primeiro, depois as do próprio atleta, e então por dia e horário.
+  - O padrão é **Todas as recorrências**, com o relatório como antes. Trocar ou limpar o atleta volta para "Todas".
+  - Fica desabilitado com Tipo de Jogo = **Avulso** (recorrência é mensal), e escolher Avulso limpa a recorrência. Atleta sem nenhuma recorrência mostra "Nenhuma recorrência".
+- **O que muda com uma recorrência escolhida:**
+  - **Mensal:** a mensalidade e as sessões são as **daquele grupo**, mesmo quando o atleta filtrado só participa dele (sem o filtro, só aparecem as mensalidades em que ele é o responsável). Na visão agregada, a linha é a mensalidade do grupo; para ver a parte de cada um, use **Rateio — Ver linha a linha**.
+  - **Fora do recorte:** reservas avulsas, comandas, rotativo e lançamentos manuais, que não pertencem a recorrência nenhuma.
+  - **Créditos de mensalista:** só os vinculados a essa recorrência. O saldo exibido continua sendo o saldo total do atleta.
+  - **Card de dívida:** "{atleta} deve de Mensal" passa a ser só a parte dele naquele grupo, com o nome da recorrência abaixo. O card de Avulso some.
+  - **Exportações:** a recorrência entra nos **filtros aplicados** do PDF e do resumo minimizado. O **PDF por atleta (extrato)** respeita a recorrência escolhida, e no PDF geral a linha de dívida vira "deve neste mês nesta recorrência".
+
 - Interface simples e responsiva
 - Performance adequada para uso diário
 - Segurança no acesso e nos dados
@@ -564,6 +598,46 @@ A seção "Cobranças Avulsas" que antes aparecia na parte de baixo da página d
 - Disponibilidade 24/7
 
 ---
+
+### 5.22 Ajustar mensalidades do mês em lote (04/10/2026)
+- **Status:** Implementado (banco em `arenadigital-db` + web), branch `feat/mensalistas` / `feature/mensalistas`. Ainda não promovido. Plano: `docs/PLANO-Reajuste-Mensal-em-Lote.md`.
+- **Problema:** a recorrência comum (uma faixa: dia e horário) cobra o mesmo valor todo mês, tenha o mês 4 ou 5 jogos. O ajuste existia só por recorrência, no detalhe de cada mensalista — inviável com muitos mensalistas e repetido todo mês. (A recorrência por blocos, de professor, já acompanha os jogos do mês sozinha.)
+- **Entrada:** botão **"Ajustar mensalidades do mês"** na tela inicial de Mensalistas, ao lado do seletor de mês, com um contador de quantas recorrências do mês exibido **precisam de análise**.
+- **Modal:**
+  - **Navegação de mês** própria, para preparar o mês seguinte antes da virada.
+  - **Resumo:** recorrências · com mudança de jogos · precisam de análise.
+  - **Filtros e ações:** "Precisam de análise" (padrão) ou "Todas", busca por mensalista ou recorrência, **arredondamento** das sugestões (centavos — padrão —, R$ 1 ou R$ 5) e "Usar sugestão nos selecionados".
+  - **Uma linha por recorrência:** mensalista e recorrência; **jogos do mês anterior → deste mês**, com seta para cima ou para baixo; valor do mês anterior; valor atual, com o **valor por jogo** embaixo; **novo valor editável**, pré-preenchido com a sugestão e com "voltar à sugestão"; diferença; e os selos de situação.
+  - **Celular:** as linhas viram cartões empilhados.
+  - **Revisão:** confirmação com cada ajuste (de → para) e o **impacto no mês**.
+  - **Resultado:** quantos foram ajustados e, para os que ficaram de fora, o motivo.
+- **Jogos do mês:** dias da recorrência dentro do mês, a partir do início do plano, sem os meses do encerramento e sem os dias em **pausa**. Um jogo cancelado com crédito não reduz a contagem (já foi compensado pelo crédito).
+- **Sugestão:** valor do contrato por jogo (valor mensal ÷ jogos do contrato) × jogos do mês. Exemplo: dezembro/2026 tem 5 quartas, então uma quarta de R$ 400 por 4 jogos sugere R$ 500. Quando o mês tem os jogos do contrato, a sugestão é o próprio valor mensal.
+- **Precisa de análise** = o valor cobrado no mês é diferente da sugestão.
+- **Seleção:** a linha comum com diferença vem **marcada**. Vêm **desmarcadas, com selo**: **Rateio** (ajusta o total do grupo e a diferença vai para a parte do **responsável**, sem ficar abaixo do que ele já pagou; o gestor redistribui no rateio se quiser), **Parcial** (o novo valor precisa ficar **acima do já pago**), **Pausa**, **Estreia** (já é proporcional) e **Encerra**. **Quitada** e **cancelada** não se editam.
+- **Só o mês:** o ajuste muda **apenas a cobrança daquele mês**. O valor do plano continua o mesmo, e no mês seguinte a mensalidade volta a nascer pelo valor do plano. Para mudar o preço de vez, continua valendo o "Reajustar valor" da recorrência.
+- **Segurança da operação mensal:**
+  - aplicar duas vezes (ex.: clique duplo, nova tentativa) não duplica nada;
+  - a linha que outra pessoa alterou depois que o modal abriu é ignorada e avisada;
+  - dois gestores aplicando o mesmo mês ao mesmo tempo não se atropelam;
+  - um item com problema não derruba os demais.
+- **Histórico:** o "Histórico de reajustes" da recorrência mostra o ajuste como **"somente {mês}"** com o selo **"Em lote · 4 → 5 jogos"**. Corrigido junto: o ajuste "somente este mês" do reajuste individual aparecia como "a partir de".
+- **Quem pode:** gestor e atendente (o mesmo do reajuste individual).
+- **Reflexos:** a visão geral, o detalhe, o Financeiro e Relatórios → Pagamentos leem o valor da mensalidade do mês e refletem o ajuste sem mudança.
+
+### 5.23 Verificação em homologação e correções de alinhamento (04/10/2026)
+- **O que foi verificado:** com as migrações aplicadas em homologação, rodamos:
+  - uma varredura de integridade em todos os dados de mensalistas (mensalidade × cobranças × status, pagamentos × caixa, crédito usado × aplicado, subcontas × saldo, lotes × histórico);
+  - um teste de ponta a ponta numa arena de teste isolada (59 verificações, pelas mesmas ações das telas: crédito, pagamentos, retiradas, rateio, ajuste em lote, visão geral, detalhe, relatório de Pagamentos e Financeiro);
+  - a conferência visual das telas no navegador.
+
+  Os dados de teste foram removidos ao final.
+- **Corrigido — Financeiro mostrava dinheiro que ninguém pagou:** criar um plano de mensalista lançava no caixa uma entrada com o valor mensal **cheio** (herança do modelo antigo, em que o 1º mês era dado como pago). Isso inflava "Entradas" e o saldo e, quando o atleta pagava de verdade, o mês contava **duas vezes**. A criação não lança mais nada, e as entradas já gravadas desse jeito foram removidas do caixa (com cópia de segurança, reversível). As entradas antigas legítimas, ligadas a um pagamento, foram mantidas.
+- **Corrigido — Financeiro com data um dia antes:** pagamentos de mensalidade, reservas e lançamentos manuais apareciam no Financeiro com o dia anterior (05/11 virava 04/11), e um pagamento do dia 1º caía no **mês anterior** nos cards e no gráfico. Agora o Financeiro e o relatório de Pagamentos mostram e somam o lançamento no dia registrado. Comandas e rotativo, que guardam a hora real, continuam no dia de Brasília.
+- **Corrigido — relatório com mensalidade em rateio:** o relatório de Pagamentos somava as partes de cada participante em vez do **total da mensalidade**. Com o rateio flexível (partes informativas) e com o ajuste em lote, ele subcontava o que falta. Agora usa o total, igual à tela de Mensalistas.
+- **Corrigido — ajuste em lote com rateio:** a diferença do ajuste passa a ir para a parte do responsável (§5.22). Assim o rateio linha a linha e o "deve de Mensal" continuam batendo com o total.
+- **Ajustado — selo do mês ajustado:** na tela do mensalista, o mês alterado por um ajuste "somente este mês" (individual ou em lote) mostra **"Ajustado"**, com "valor do plano: R$ X/mês · 4 → 5 jogos". Antes aparecia "Proporcional / mês cheio", que é o selo da estreia.
+- **Ajustado — textos do modal de ajuste:** singular de "precisa de análise", seletor de arredondamento sem corte e exemplo de observação genérico.
 
 ## 7. Restrições Técnicas
 

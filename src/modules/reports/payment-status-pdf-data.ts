@@ -15,6 +15,8 @@ export interface AppliedFiltersInput {
   courtName?: string | null
   sportName?: string | null
   atletaNome?: string | null
+  /** Rótulo da recorrência filtrada ("Quadra 04 · Qua · 20:00 às 21:00"). */
+  recorrenciaLabel?: string | null
   perfilLabel?: string | null
   rateio: boolean
   detalharPorHora: boolean
@@ -37,6 +39,7 @@ export function buildAppliedFiltersDescription(input: AppliedFiltersInput): Appl
     filtros.push({ label: 'Tipo de Jogo', value: input.tipo === 'avulso' ? 'Avulso' : 'Mensal' })
   }
   if (input.atletaNome) filtros.push({ label: 'Atleta', value: input.atletaNome })
+  if (input.recorrenciaLabel) filtros.push({ label: 'Recorrência', value: input.recorrenciaLabel })
   if (input.perfilLabel) filtros.push({ label: 'Perfil de Atleta', value: input.perfilLabel })
   if (input.courtName) filtros.push({ label: 'Espaço', value: input.courtName })
   if (input.sportName) filtros.push({ label: 'Esporte', value: input.sportName })
