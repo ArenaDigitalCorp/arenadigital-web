@@ -81,10 +81,10 @@ export function ArenaProvider({ children }: { children: React.ReactNode }) {
         if (state.status !== 'success') return;
         const pathSegments = pathname.split('/').filter(Boolean);
         const routeArena = state.data.find((arena) => pathSegments.includes(arena.id));
-        if (routeArena && routeArena.id !== selectedArena) {
+        if (routeArena) {
             setSelectedArena(routeArena.id);
         }
-    }, [pathname, selectedArena, state]);
+    }, [pathname, state]);
 
     const arenas = state.status === 'success' ? state.data : [];
     const isLoadingArenas = state.status === 'idle' || state.status === 'loading';

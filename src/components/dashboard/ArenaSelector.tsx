@@ -1,5 +1,6 @@
 "use client"
 
+import { useRouter } from "next/navigation";
 import { useArena } from "@/contexts/ArenaContext";
 import {
   Select,
@@ -13,6 +14,14 @@ import { cn } from "@/lib/utils";
 
 export function ArenaSelector({ isCollapsed }: { isCollapsed?: boolean }) {
     const { arenas, selectedArena, setSelectedArena, isLoadingArenas } = useArena();
+
+    const router = useRouter();
+
+    const selectArena = (arenaId: string) => {
+        if (arenaId === selectedArena || !arenas.some((arena) => arena.id === arenaId)) return;
+        setSelectedArena(arenaId);
+        router.push("/dashboard");
+    };
 
     if (isLoadingArenas) {
         return (
@@ -51,27 +60,29 @@ export function ArenaSelector({ isCollapsed }: { isCollapsed?: boolean }) {
 
     return (
         <div data-tutorial="arena-selector" className={cn(isCollapsed ? "mb-4 flex w-full justify-center px-0" : "mb-6 px-0")}>
-            {isCollapsed ? (
-                <div
-                    title={arenas.find(a => a.id === selectedArena)?.name ?? ""}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-white/10 text-sm font-bold text-white/70"
+            <Select value={selectedArena} onValueChange={selectArena}>
+                <SelectTrigger
+                    aria-label="Selecionar arena"
+                    title={arenas.find((arena) => arena.id === selectedArena)?.name}
+                    className={cn(
+                        "bg-white/5 border-white/10 text-white focus:ring-white/20",
+                        isCollapsed ? "h-10 w-10 justify-center px-0 [&>svg]:hidden" : "w-full",
+                    )}
                 >
-                    {(arenas.find(a => a.id === selectedArena)?.name ?? "A").charAt(0).toUpperCase()}
-                </div>
-            ) : (
-                <Select value={selectedArena} onValueChange={setSelectedArena}>
-                    <SelectTrigger className="w-full bg-white/5 border-white/10 text-white focus:ring-white/20">
+                    {isCollapsed ? (
+                        <span>{(arenas.find((arena) => arena.id === selectedArena)?.name ?? "A").charAt(0).toUpperCase()}</span>
+                    ) : (
                         <SelectValue placeholder="Selecione uma arena" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {arenas.map((arena) => (
-                            <SelectItem key={arena.id} value={arena.id}>
-                                {arena.name}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            )}
+                    )}
+                </SelectTrigger>
+                <SelectContent>
+                    {arenas.map((arena) => (
+                        <SelectItem key={arena.id} value={arena.id}>
+                            {arena.name}
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
         </div>
     );
 }
