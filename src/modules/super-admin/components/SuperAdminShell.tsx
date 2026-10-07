@@ -126,10 +126,10 @@ function Brand() {
 
 export function SuperAdminShell({
   children,
-  canReturnToOwnedArena,
+  canReturnToArena,
 }: {
   children: React.ReactNode
-  canReturnToOwnedArena: boolean
+  canReturnToArena: boolean
 }) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -164,14 +164,14 @@ export function SuperAdminShell({
           </div>
 
           <div className="p-4 pt-0">
-            {canReturnToOwnedArena && (
+            {canReturnToArena && (
               <Link
                 href="/dashboard"
                 onClick={() => setMobileOpen(false)}
                 className="mb-3 flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2.5 text-xs font-semibold text-slate-300 transition hover:border-orange-400/30 hover:bg-white/[.055] hover:text-white"
               >
                 <ArrowLeft className="h-4 w-4 text-orange-300" />
-                Voltar para minha arena
+                Acessar minhas arenas
               </Link>
             )}
             <div className="flex items-center gap-2 border-t border-white/10 px-1 pt-3 text-[11px] font-medium text-slate-500">

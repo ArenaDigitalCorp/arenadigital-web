@@ -11,8 +11,8 @@ test('administrative identities land in the correct workspace after authenticati
     source('src/app/auth/callback/route.ts'),
   ])
 
-  assert.match(actions, /const ownsArena = platformAccessLevel === 'super_admin'/)
-  assert.match(actions, /platformAccessLevel === 'super_admin' && !ownsArena[\s\S]{0,80}'\/admin\/overview'/)
+  assert.match(actions, /const hasArenaAccess = platformAccessLevel === 'super_admin'/)
+  assert.match(actions, /platformAccessLevel === 'super_admin' && !hasArenaAccess[\s\S]{0,80}'\/admin\/overview'/)
   assert.match(actions, /platformAccessLevel === 'platform_admin'[\s\S]{0,80}'\/dashboard\/admin\/platform'/)
   assert.match(signIn, /webAccess\.data\?\.adminDestination \?\? redirectTo/)
   assert.match(callback, /webAccess\.data\?\.adminDestination \?\? next/)

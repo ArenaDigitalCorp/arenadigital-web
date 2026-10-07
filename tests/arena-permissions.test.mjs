@@ -38,25 +38,19 @@ test('arena capability matrix keeps management and ownership boundaries explicit
   assert.equal(canManageArenaSubscription(subjects.manager), true)
 })
 
-test('platform identities stay isolated while a super admin can access only a directly owned arena', async () => {
+test('platform identities require explicit ownership or membership to access arenas', async () => {
   const serverAuth = await source('src/lib/server-auth.ts')
   assert.match(serverAuth, /Platform administrators cannot access customer arena backoffices/)
   assert.doesNotMatch(serverAuth, /role: 'PlatformAdmin'/)
   assert.match(serverAuth, /if \(!access\.isOwner\)/)
 
   const arenaAccess = exportedFunctionBody(serverAuth, 'assertArenaAccess')
-  const ownedArenaDecision = arenaAccess.indexOf('if (ownedArena)')
-  const superAdminDenial = arenaAccess.indexOf("if (platformAccessLevel === 'super_admin')")
-  const membershipLookup = arenaAccess.indexOf('fetchArenaMembershipByArenaAndUser')
-  assert.ok(ownedArenaDecision !== -1 && ownedArenaDecision < superAdminDenial)
-  assert.ok(superAdminDenial < membershipLookup)
-  assert.match(arenaAccess, /Super administrators can only access arenas they directly own/)
+  assert.doesNotMatch(arenaAccess, /Super administrators can only access/)
+  assert.match(arenaAccess, /fetchArenaMembershipByArenaAndUser/)
 
   const arenasApi = await source('src/app/api/arenas/route.ts')
-  assert.match(arenasApi, /getPlatformAccessLevel\(dbUserId\)/)
-  assert.match(arenasApi, /platformAccessLevel === 'super_admin'[\s\S]{0,100}Promise\.resolve\(\{ data: \[\], error: null \}\)/)
-  assert.doesNotMatch(arenasApi, /platformArenasResult/)
-  assert.doesNotMatch(arenasApi, /role: 'PlatformAdmin'/)
+  assert.match(arenasApi, /fetchArenaMembershipsByUser\(supabase, dbUserId, true\)/)
+  assert.doesNotMatch(arenasApi, /platformArenasResult|role: 'PlatformAdmin'/)
 
   const adminArenaPage = await source('src/app/admin/arenas/[id]/page.tsx')
   assert.doesNotMatch(adminArenaPage, /\/dashboard\/arenas\/\$\{arena\.id\}/)
