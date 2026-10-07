@@ -134,11 +134,15 @@ export async function requireAuthenticatedDbUser(): Promise<AuthenticatedDbUser>
 }
 
 export async function hasWebBackofficeAccess(dbUserId: string): Promise<boolean> {
-  const supabase = getSupabaseAdmin()
   const platformAccessLevel = await getPlatformAccessLevel(dbUserId)
 
   if (platformAccessLevel === 'platform_admin' || platformAccessLevel === 'super_admin') return true
 
+  return hasExplicitArenaAccess(dbUserId)
+}
+
+export async function hasExplicitArenaAccess(dbUserId: string): Promise<boolean> {
+  const supabase = getSupabaseAdmin()
   if (await hasDirectArenaOwnership(dbUserId)) return true
 
   const { data: linkedArena, error: linkedArenaError } = await supabase
@@ -235,10 +239,6 @@ export async function assertArenaAccess(arenaId: string): Promise<ArenaAccessPro
       assignedStationId: null,
       arenaUserId: null,
     }
-  }
-
-  if (platformAccessLevel === 'super_admin') {
-    throw new AuthorizationError('Super administrators can only access arenas they directly own', 403)
   }
 
   const { data: linkedArena, error: linkedError } = await fetchArenaMembershipByArenaAndUser(

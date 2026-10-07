@@ -19,8 +19,10 @@ type ArenaSummary = {
 export async function GET() {
   try {
     const { dbUserId } = await requireAuthenticatedDbUser()
+    if (await getPlatformAccessLevel(dbUserId) === 'platform_admin') {
+      return NextResponse.json([])
+    }
     const supabase = getSupabaseAdmin()
-    const platformAccessLevel = await getPlatformAccessLevel(dbUserId)
 
     const [ownedArenasResult, linkedArenasResult] = await Promise.all([
       supabase
@@ -28,9 +30,7 @@ export async function GET() {
         .select('id, name')
         .eq('owner_id', dbUserId)
         .order('name'),
-      platformAccessLevel === 'super_admin'
-        ? Promise.resolve({ data: [], error: null })
-        : fetchArenaMembershipsByUser(supabase, dbUserId, true),
+      fetchArenaMembershipsByUser(supabase, dbUserId, true),
     ])
 
     if (ownedArenasResult.error) {
