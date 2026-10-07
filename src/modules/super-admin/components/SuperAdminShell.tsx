@@ -54,6 +54,7 @@ const NAVIGATION: Array<{ label: string; items: NavigationItem[] }> = [
   {
     label: "Sistema",
     items: [
+      { href: "/admin/catalog", label: "Esportes e níveis", description: "Modalidades e classificação", icon: Database },
       { href: "/admin/settings", label: "Configurações", description: "Governança global", icon: Settings2 },
     ],
   },
