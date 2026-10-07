@@ -3355,16 +3355,22 @@ export type Database = {
       }
       nivel_habilidade_esporte: {
         Row: {
+          is_active: boolean
+          sort_order: number
           id: string
           id_esporte: string
           nivel: string
         }
         Insert: {
+          is_active?: boolean
+          sort_order?: number
           id?: string
           id_esporte: string
           nivel: string
         }
         Update: {
+          is_active?: boolean
+          sort_order?: number
           id?: string
           id_esporte?: string
           nivel?: string
@@ -4716,16 +4722,25 @@ export type Database = {
       }
       sports: {
         Row: {
+          category: string
+          is_active: boolean
+          requires_level: boolean
           created_at: string
           id: string
           name: string
         }
         Insert: {
+          category?: string
+          is_active?: boolean
+          requires_level?: boolean
           created_at?: string
           id?: string
           name: string
         }
         Update: {
+          category?: string
+          is_active?: boolean
+          requires_level?: boolean
           created_at?: string
           id?: string
           name?: string
