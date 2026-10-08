@@ -47,6 +47,8 @@ import {
 import type { PaymentHistoryItem } from '@/modules/payments/usecases/get-payment-history.usecase';
 import type { ArenaBillingAddress } from '@/modules/arenas/usecases/get-arena-billing-address.usecase';
 import type { ArenaSubscription } from '@/modules/payments/usecases/get-subscription.usecase';
+import type { PaymentProvider } from '@/modules/payments/gateway/payment-gateway.interface';
+import { AsaasProviderNotice } from '@/components/payments/asaas-provider-notice';
 
 type SetupData = {
   cardCollection: CardCollectionContext;
@@ -75,6 +77,7 @@ interface Props {
   billingAddress: ArenaBillingAddress;
   plans: SubscriptionPlanOption[];
   planSelectionEnabled: boolean;
+  paymentProvider: PaymentProvider;
 }
 
 const PLAN_PRESENTATION: Record<UserSelectablePlanKey, PlanPresentation> = {
@@ -235,6 +238,7 @@ export function SubscriptionPageClient({
   billingAddress,
   plans,
   planSelectionEnabled,
+  paymentProvider,
 }: Props) {
   const [subscription, setSubscription] =
     useState<ArenaSubscription>(initialSubscription);
@@ -438,6 +442,8 @@ export function SubscriptionPageClient({
           Gerencie seu plano, forma de pagamento e historico de cobranca.
         </p>
       </div>
+
+      {paymentProvider === 'asaas' && <AsaasProviderNotice />}
 
       {planSelectionEnabled &&
         !isPartnerSubscription &&

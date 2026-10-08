@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge"
 import { format, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { cn } from "@/lib/utils"
+import { AsaasProviderNotice } from "@/components/payments/asaas-provider-notice"
 import {
     confirmarPagamentoAvulsoAction,
     updateBookingStatusAction,
@@ -239,10 +240,13 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, onEdit, bookin
                         </div>
 
                         {mobilePixPending && (
-                            <div className="rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-medium text-orange-900">
+                            <div className="space-y-3">
+                              <div className="rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-medium text-orange-900">
                                 Esta reserva foi criada pelo app e está aguardando pagamento Pix. O horário fica
-                                bloqueado temporariamente e será confirmado automaticamente pelo webhook do Asaas após o
-                                pagamento.
+                                bloqueado temporariamente e será confirmado automaticamente após a confirmação do
+                                pagamento pelo Asaas.
+                              </div>
+                              <AsaasProviderNotice />
                             </div>
                         )}
 

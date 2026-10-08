@@ -38,6 +38,7 @@ import type {
     AsaasCompanyType,
 } from "@/modules/arenas/types/pix-split.types"
 import { cn } from "@/lib/utils"
+import { AsaasProviderNotice } from "@/components/payments/asaas-provider-notice"
 
 interface Props {
     arenaId: string
@@ -348,7 +349,7 @@ export function ArenaPixSplitSettingsCard({
                         <h3 id="receiving-account-title" className="mt-1 text-base font-bold text-arena-navy-800">Conta de recebimento</h3>
                         <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
                             {settings.onboardingStarted
-                                ? "A validação é acompanhada automaticamente. Você só precisa agir se o Asaas solicitar algum documento."
+                                ? "Acompanhe a validação do Asaas e as solicitações de documentos abaixo."
                                 : isPlatform
                                     ? "Onboarding financeiro da arena e configuração da taxa da plataforma."
                                     : "Confirme os dados da empresa para ativar o recebimento das reservas online."}
@@ -384,6 +385,8 @@ export function ArenaPixSplitSettingsCard({
                 </div>
             </div>
 
+            <AsaasProviderNotice className="mt-5" />
+
             {settings.onboardingStarted && (
                 <div className="mt-7 grid gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(280px,.72fr)]">
                     <section aria-labelledby="asaas-validation-title">
@@ -415,6 +418,11 @@ export function ArenaPixSplitSettingsCard({
                                     Enviar documentos solicitados
                                 </a>
                             </Button>
+                        )}
+                        {!settings.onboardingUrl && settings.documentationStatus === "PENDING" && settings.asaasAccountId && (
+                            <p className="mt-4 text-xs leading-5 text-slate-600" role="status">
+                                O Asaas ainda não disponibilizou um link de envio neste painel. Use “Atualizar agora” para consultar novamente. Confirme com o suporte financeiro Asaas como concluir a documentação desta conta, sem reiniciar o cadastro.
+                            </p>
                         )}
                     </section>
 
@@ -618,7 +626,7 @@ export function ArenaPixSplitSettingsCard({
                         ? "A conta foi aprovada, mas o recebimento está desativado. Fale com o suporte da Arena Digital para revisar a operação."
                         : isRejected
                             ? "O cadastro foi recusado pelo Asaas e o recebimento permanece bloqueado. Revise os status acima e siga a ação solicitada antes de tentar novamente."
-                            : "O recebimento permanece bloqueado enquanto o Asaas analisa o cadastro. Se houver uma pendência, a ação necessária aparecerá acima."}
+                            : "O recebimento permanece bloqueado até a aprovação do Asaas. Confira os status e conclua as pendências indicadas acima."}
                 </div>
             )}
         </section>

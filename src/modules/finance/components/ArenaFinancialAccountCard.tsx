@@ -32,6 +32,7 @@ import type {
   ArenaPixKeyType,
 } from '@/modules/finance/types/arena-financial-account.types'
 import { cn } from '@/lib/utils'
+import { AsaasProviderNotice } from '@/components/payments/asaas-provider-notice'
 
 const PIX_KEY_TYPES: Array<{ value: ArenaPixKeyType; label: string }> = [
   { value: 'CNPJ', label: 'CNPJ' },
@@ -188,12 +189,14 @@ export function ArenaFinancialAccountCard({ arenaId }: { arenaId: string }) {
         <Button className="mt-4" variant="outline" onClick={() => void load()}>
           Tentar novamente
         </Button>
+        <AsaasProviderNotice className="mt-4" />
       </Card>
     )
   }
 
   return (
     <>
+      <AsaasProviderNotice className="mb-6" />
       {!overview.accountReady && (
         <Card className="mb-6 flex flex-col gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -286,9 +289,10 @@ export function ArenaFinancialAccountCard({ arenaId }: { arenaId: string }) {
           <DialogHeader>
             <DialogTitle>Destino Pix dos saques</DialogTitle>
             <DialogDescription>
-              A chave será armazenada no cofre do backend. Depois de salva, somente a versão mascarada ficará visível.
+              Informe uma chave Pix da própria arena para receber os saques processados pelo Asaas. Depois de salva, ela será exibida parcialmente para proteger seus dados.
             </DialogDescription>
           </DialogHeader>
+          <AsaasProviderNotice />
           <div className="grid gap-4 py-2">
             <label className="grid gap-2 text-sm font-bold text-arena-navy-800">
               Tipo da chave
@@ -326,9 +330,10 @@ export function ArenaFinancialAccountCard({ arenaId }: { arenaId: string }) {
           <DialogHeader>
             <DialogTitle>Confirmar saque Pix</DialogTitle>
             <DialogDescription>
-              Confira o valor. A solicitação será registrada com uma chave idempotente antes da transferência.
+              Confira o valor e o destino. A transferência Pix será processada pelo Asaas.
             </DialogDescription>
           </DialogHeader>
+          <AsaasProviderNotice />
           <div className="rounded-2xl bg-slate-50 p-5">
             <label className="grid gap-2 text-sm font-bold text-arena-navy-800">
               Valor do saque
