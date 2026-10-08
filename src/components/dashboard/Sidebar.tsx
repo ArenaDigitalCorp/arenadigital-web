@@ -17,6 +17,7 @@ import {
     Package,
     BarChart2,
     ClipboardList,
+    GraduationCap,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -52,6 +53,7 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
     const loyaltyHref = selectedArena ? `/dashboard/loyalty/${selectedArena}` : "/dashboard/loyalty";
     const rotativoHref = selectedArena ? `/dashboard/rotativo/${selectedArena}` : "/dashboard/rotativo";
     const athletesHref = selectedArena ? `/dashboard/athletes/${selectedArena}` : "/dashboard/athletes";
+    const turmasHref = selectedArena ? `/dashboard/turmas/${selectedArena}` : "/dashboard/turmas";
     const mensalistasHref = selectedArena ? `/dashboard/arenas/${selectedArena}/mensalistas` : "/dashboard/arenas";
     const preReservasHref = selectedArena ? `/dashboard/arenas/${selectedArena}/pre-reservas` : "/dashboard/arenas";
     const avulsasHref = selectedArena ? `/dashboard/arenas/${selectedArena}/avulsas` : "/dashboard/arenas";
@@ -118,6 +120,13 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                 tutorialKey: "athletes",
                 href: athletesHref,
                 isActive: (p: string) => p.startsWith("/dashboard/athletes/"),
+            },
+            {
+                icon: GraduationCap,
+                label: "Turmas",
+                tutorialKey: "turmas",
+                href: turmasHref,
+                isActive: (p: string) => p.startsWith("/dashboard/turmas/"),
             },
             {
                 icon: Store,
