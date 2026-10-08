@@ -3191,3 +3191,233 @@ Ordem de deploy: **DB → web**. Tudo é aditivo: nenhuma RPC existente muda de 
 - **Selo "Ajustado"** — `MensalistaDetailClient`: com `valor_total ≠ valor_mensal` e reajuste
   `somente_mes` da competência, o selo "Ajustado" (sky) mostra "valor do plano · N → M jogos". O
   selo "Proporcional" fica para os demais casos.
+
+## 46. Gestão de Turmas (07–08/10/2026)
+
+**Status:** integrado ao banco (`arenadigital-db`, §46.5); sem dados fictícios. As decisões de produto
+de 07/10/2026 (plano §5) estão aplicadas.
+
+### 46.1 Rotas e acesso
+
+- `src/app/dashboard/turmas/page.tsx` redireciona via `resolveDashboardDefaultRoute('turmas')`. A
+  seção `'turmas'` foi adicionada ao tipo `DashboardSection` e leva à arena principal.
+- `src/app/dashboard/turmas/[arenaId]/page.tsx` (server component):
+  - chama `assertArenaBackofficeAccess(arenaId)`;
+  - em caso de falha, redireciona para `/dashboard/settings/arenas`;
+  - renderiza `TurmasPageClient`.
+- Menu (`Sidebar.tsx`): item "Turmas" (`GraduationCap`, `tutorialKey: "turmas"`), depois de Atletas.
+  Fica ativo em `/dashboard/turmas/*`. Para Caixa, o menu continua substituído pelos itens de estação.
+
+### 46.2 Contratos (`src/modules/turmas/types.ts`)
+
+Ponto de partida para o banco.
+
+- `Turma`:
+  - `id`, `codigo`, `professorId`, `esporteId`, `nivelIds[]`, `criadaEm`;
+  - `vagas: number | null` — nulo = sem limite;
+  - `status: 'ativa' | 'encerrada'`, `encerradaEm`, `motivoEncerramento`;
+  - `recorrencia: RecorrenciaTurma`, `matriculas[]`.
+- `codigo` (+ `codigoPrefixo`, `codigoSequencia`): gerado pelo banco (`SIGLA-000`), imutável e nunca
+  reaproveitado (a numeração conta as turmas encerradas). A tela mostra a prévia com
+  `proximoCodigo(esporte, turmas)`. Por isso o esporte também fica imutável depois da criação.
+- `RecorrenciaTurma { recorrenciaId, trechos: TrechoHorario[], criadaPelaTurma }`:
+  - `TrechoHorario { blocoId, inicio, fim, bloco }` é a parte usada de um bloco da recorrência (pode
+    ser o bloco inteiro), com o bloco embutido para mostrar dia e espaço mesmo com a recorrência já
+    inativa;
+  - o dia e o espaço vêm do bloco; a faixa vem do trecho.
+- `RecorrenciaExistente { id, responsavelId, responsavelNome, perfil, dataInicio, criadaPelaTurmaId, encerraAPartirDe, valorMensal, blocos[], usoPorBloco }`.
+  `encerraAPartirDe` espelha `planos_mensalista.data_encerramento_prevista` (1º dia do mês).
+- `BlocoHorario { id, espacoId, diaSemana (0=dom…6=sáb, como planos_mensalista.dia_semana), inicio, fim }`.
+- `Espaco { id, nome, ativo, tabelaTurma: { id, tipo: 'Professor' | 'Padrão' } | null }`: a tabela com
+  que a recorrência criada pela turma é cotada.
+- `Atleta { ..., email | null, membro }` e `Professor.professorDesde: string | null` (nulo = perfil só
+  sugerido).
+- `Matricula { id, atletaId, entrada, saida | null, motivoSaida | null }`: um período de vínculo; a
+  reentrada cria uma nova matrícula.
+
+### 46.3 Regras implementadas (`lib.ts` e componentes)
+
+- **Trechos:**
+  - `blocosDaTurma` resolve os horários efetivos (bloco + faixa do trecho);
+  - `usaTrechoParcial` marca "parte do bloco";
+  - `primeiraFaixaLivre(bloco, ocupados)` sugere o primeiro intervalo de pelo menos 30 min sem
+    turma ativa.
+- **Validação do trecho:** `inicio ≥ bloco.inicio`, `fim ≤ bloco.fim` e `fim > inicio` (bloqueia).
+- **Sobreposição com o trecho de outra turma ativa no mesmo bloco:** não bloqueia, mas exige
+  confirmação.
+  - O bloco mostra um `role="alert"` vermelho, e o rodapé, "Atenção: horário sobreposto com …".
+  - `salvar()` sem confirmação troca o rodapé por um `role="alertdialog"`. A ação principal é "Voltar
+    e ajustar horário"; a secundária, "Salvar mesmo assim", chama `salvar(true)`.
+  - Mudar trecho, bloco ou recorrência desfaz o pedido de confirmação.
+- **Novo horário:**
+  - conflito com qualquer bloco de recorrência, no mesmo espaço e dia com `inicio < outro.fim &&
+    outro.inicio < fim`, **bloqueia**;
+  - ao salvar, `create_turma_atomic`/`update_turma_atomic` criam a recorrência do professor pelo RPC
+    de Mensalistas. A turma passa a apontar para ela com trechos = blocos inteiros e
+    `criadaPelaTurma = true`.
+- **Preço e mensalidade (turma que vira mensalista):** sem cálculo próprio. Usa o mesmo código do
+  cadastro de recorrência (`BookingModal`):
+  - os horários novos são em hora cheia (`HORAS_INICIO`/`HORAS_FIM`). `paraBlocoMensalista`
+    converte cada um no `Bloco` de `src/modules/bookings/lib/mensalista-blocos.ts`;
+  - o valor de cada aula vem de `quoteMonthlyBlocksAction` (servidor, `resolve_court_price`) com a
+    tabela `Espaco.tabelaTurma`;
+  - `resumirPlano(blocos, valores, inicioVigencia, agora)` dá horas e valor por semana, reservas
+    do mês de referência, `valorMesCheio` (sugestão do valor mensal) e `variacaoMensal`;
+  - 1ª mensalidade = `valorMensal × fracaoPrimeiroMes(blocos, inicioVigencia, agora)`, por
+    minutos e contra o mês de referência, descontando a aula de hoje já passada. Só é exibida
+    quando difere do mensal;
+  - `inicioVigencia` = data escolhida, que precisa ser ≥ hoje. `agora` é capturado uma vez ao abrir
+    o formulário, como no `BookingModal`;
+  - o valor mensal é editável (`valorMensalManual`; nulo = acompanha a tabela);
+  - o `valorMensal` vai em `p_nova_recorrencia.valor_mensal`; a 1ª mensalidade proporcional é
+    gerada pelo banco (`generate_mensalista_mensalidades_atomic`).
+- **Vagas:**
+  - o limite precisa ser inteiro ≥ 1 e não pode ficar abaixo da ocupação: alunos ativos na edição,
+    alunos iniciais na criação;
+  - `TurmaAlunosModal` bloqueia o vínculo quando `ativos ≥ vagas`.
+- **Encerrar** (`EncerrarTurmaDialog`):
+  - data ≥ `criadaEm` e ≥ a maior entrada entre os alunos ativos, e motivo opcional (até 120
+    caracteres);
+  - grava `status = 'encerrada'`, `encerradaEm` e `motivoEncerramento`;
+  - fecha as matrículas ativas com `saida = encerradaEm` e `motivoSaida = 'Turma encerrada'`;
+  - **encerrar a recorrência junto** (opcional):
+    - `encerramentoDaRecorrencia(turma, turmas, catalogo)` devolve `bloqueio` quando a recorrência
+      é de outra pessoa, é usada por outra turma ativa ou já tem `encerraAPartirDe`;
+    - sem bloqueio, a opção vem marcada se `criadaPelaTurma`;
+    - dois modos em rádio (`OpcaoEncerramento`), enviados como
+      `recorrencia: { modo: 'agora' } | { modo: 'mes', aPartirDe } | null`:
+      - **A partir de hoje** (`agora`, padrão): só habilitado com `data ≤ hoje`; com data futura
+        fica desabilitado e o modo efetivo passa para `mes`. Mostra a próxima aula prevista,
+        calculada por `proximaAula(recorrencia.blocos, agora)` (primeiro início ≥ agora nos
+        próximos 7 dias). O banco aplica `cancel_monthly_plan_atomic`, a regra do "Cancelar plano":
+        plano `cancelado` e as próximas reservas, inclusive as confirmadas, liberadas. O toast traz
+        quantas aulas foram liberadas;
+      - **A partir de um mês** (`mes`): o mês sai de `mesesDeEncerramento(data)`: 1º dia do mês
+        seguinte ao encerramento, 12 opções, como no `EncerramentoModal` de Mensalistas. Confirmar
+        grava `encerraAPartirDe` na recorrência;
+    - recorrência com `encerraAPartirDe` sai da seleção de turmas novas (`recorrenciaDisponivel`),
+      deixa de gerar conflito para novo horário com `dataInicio ≥ encerraAPartirDe` e ganha o selo
+      no detalhe do professor.
+- **Visibilidade:**
+  - `turmasAtivas()` alimenta o contador da aba, o grid padrão, as contagens e a aba Professores;
+  - `TurmasTab` só lista as encerradas com o chip "Mostrar encerradas" (desligado por padrão), em
+    linha esmaecida, com o selo "Encerrada em" e apenas a ação de histórico;
+  - `TurmaAlunosModal` abre encerrada em modo consulta, na aba Histórico.
+- **Professor:**
+  - `resumoProfessor` conta só turmas ativas e traz `turmasEncerradas` à parte;
+  - os alunos são distintos;
+  - os minutos por semana são a soma dos trechos.
+- **Aba Atletas** (`AtletasTab`, `AtletaDetalheModal`):
+  - `resumosDeAtletas(turmas, catalogo)` agrupa as matrículas de todas as turmas (ativas e
+    encerradas) por atleta e devolve `ResumoAtleta`:
+    - `periodos` e `ativos` (sem saída e com a turma ativa);
+    - `esportes` do perfil com o nível;
+    - `professores` distintos das turmas atuais e `minutosSemana`;
+    - `alunoDesde` e `ultimaMovimentacao` (entradas e saídas ordenadas; na mesma data, saída antes
+      de entrada);
+    - `nivelForaEm` (códigos) e `situacao` (`em-turma` | `ex-aluno`).
+  - `nivelNaTurma(atleta, turma, catalogo)` compara o nível do atleta no esporte com os níveis da
+    turma. É usado na grid, na ficha e nos alunos da turma.
+  - Navegação entre modais em `TurmasPageClient`: `abrirTurma` fecha professor e atleta e abre
+    "Alunos da turma"; `abrirAtleta` fecha a turma e abre a ficha. `TurmaAlunosModal` recebe
+    `onAbrirAtleta`.
+- **Ordenação:** `Ordenavel` + `useOrdenacao(itens, ordemInicial, valores)` em todas as tabelas.
+  - Clicar na coluna ativa inverte o sentido.
+  - Compara números de forma numérica e textos com `localeCompare('pt-BR', { numeric: true })`.
+
+### 46.4 Integração com o banco (`src/modules/turmas`)
+
+- **`actions.ts`** (`'use server'`, cliente destipado `loose()` como em `priceTableActions`, porque as
+  tabelas ainda não estão em `supabase.types.ts`):
+  - `getTurmasPageDataAction(arenaId)` → `TurmasPageData { catalogo, turmas }`, em paralelo:
+    - `sports` + `nivel_habilidade_esporte` (só `category = 'sport'`);
+    - `courts` + `court_price_tables` → `Espaco.tabelaTurma` (Professor ativa, senão Padrão/default; a
+      mesma escolha de `private.turma_tabela_preco_professor`, usada só na cotação da prévia);
+    - `atleta` da arena (`arenas_atleta!inner`, e-mail de `users`, níveis de `atleta_esportes`, via
+      `fetchAllSupabaseRows`) e `list_atleta_perfis` (professores = perfil efetivo `professor`;
+      `professorDesde` = `perfil_definido_em` em Brasília);
+    - `list_turma_recorrencias` (blocos e `usoPorBloco`);
+    - `turmas` com `turma_niveis` e `turma_horarios` (o bloco embutido por
+      `planos_mensalista_blocos`);
+    - `turma_alunos` (paginado).
+
+    Atletas referenciados por turmas que já saíram da arena entram com `membro = false`.
+  - `criarTurmaAction`, `editarTurmaAction`, `encerrarTurmaAction`, `vincularAlunoAction`,
+    `desvincularAlunoAction`:
+    - validam com `schemas.ts` (zod);
+    - checam `assertArenaBackofficeAccess` e passam `p_registered_by` = usuário da sessão;
+    - chamam a RPC e fazem `revalidatePath('/dashboard/turmas/[arenaId]')`;
+    - devolvem `ResultadoTurma<T>` (`{ success, data }` ou `{ success: false, error, sobreposicao? }`).
+- **`schemas.ts`**:
+  - `horariosTurmaSchema`: `existente` (trechos `HH:MM`) ou `nova` (blocos em hora cheia, `dataInicio`,
+    `valorMensal > 0`);
+  - `paramsHorarios` monta `p_plano_id` / `p_trechos` / `p_nova_recorrencia`;
+  - `encerrarTurmaSchema.recorrencia`: `recorrenciaNoEncerramentoSchema` (`agora` | `mes` +
+    `aPartirDe`) ou `null`. `encerrarTurmaAction` manda `p_recorrencia_a_partir_de` só no modo `mes`
+    e `p_encerrar_recorrencia_agora: true` só no modo `agora` (o parâmetro novo não é enviado nos
+    demais casos, para seguir compatível com bancos sem a migração `20261008120000`). Devolve
+    `{ alunosDesvinculados, recorrenciaAPartirDe, recorrenciaCanceladaAgora, reservasCanceladas }`.
+- **`erros.ts`**:
+  - `traduzirErroTurma`: `23P01` → `{ tipo: 'sobreposicao', turmas }` (códigos do `DETAIL`);
+  - os demais erros recebem `corrigirAcentos`, porque as mensagens do banco vêm sem acento.
+- **Página** (`app/dashboard/turmas/[arenaId]/page.tsx`): server component que carrega os dados e
+  mostra o erro com "Tentar novamente"; `loading.tsx` com skeleton.
+- **`TurmasPageClient`**:
+  - recebe `dados` e não guarda cópia;
+  - depois de cada gravação, `router.refresh()` dentro de `useTransition`, com indicador "Atualizando…".
+- **Formulário**:
+  - id da turma gerado ao abrir (idempotência);
+  - código previsto por `proximoCodigo` (a sequência real vem do banco);
+  - a cotação do novo horário usa `quoteMonthlyBlocksAction` (debounce de 250 ms) com
+    `intervaloDeCotacao` e a tabela do espaço;
+  - a sobreposição apontada pelo servidor abre a mesma confirmação da tela.
+- **Alunos**:
+  - id do período gerado ao abrir (idempotência);
+  - entrada e saída gravadas aparecem na hora (`entradasLocais` / `saidasLocais`, mescladas aos
+    dados do servidor sem duplicar).
+- **Testes**: `tests/turmas.test.mjs` cobre tradução de erros, schemas, prévia de código, trechos,
+  aba Atletas e o contrato das ações (acesso, RPCs, nenhuma escrita direta em tabela, sem dados
+  fictícios).
+
+### 46.5 Banco (`arenadigital-db`, branch `feature/gestao-turmas`)
+
+Contrato: `arenadigital-db/schema-contracts/arena.turmas.md`. Migrações `20261007230000`–`20261007230040`
+(aditivas) e `20261008120000_encerrar_turma_recorrencia_agora.sql` (novo parâmetro
+`p_encerrar_recorrencia_agora boolean DEFAULT false` em `encerrar_turma_atomic`; a assinatura de 6
+parâmetros é removida). Testes: pgTAP `supabase/tests/20261007230000_turmas_test.sql` (36 verificações),
+`supabase/tests/20261008120000_encerrar_turma_recorrencia_agora_test.sql` (9) e `tests/turmas.test.mjs`.
+
+- **Tabelas**:
+  - `turmas`: `codigo` gerado de `codigo_prefixo` + `codigo_sequencia`; `professor_atleta_id`,
+    `esporte_id`, `plano_mensalista_id`, `recorrencia_criada_pela_turma`, `data_criacao`, `vagas`,
+    `status`, `encerrada_em`, `motivo_encerramento`;
+  - `turma_niveis`;
+  - `turma_horarios` (`bloco_id`, `horario_inicio`, `horario_fim`);
+  - `turma_alunos` (`data_entrada`, `data_saida`, `motivo_saida`).
+- **FKs compostas**:
+  - nível ↔ esporte da turma;
+  - bloco ↔ recorrência da turma;
+  - recorrência ↔ arena;
+  - filhas ↔ arena da turma.
+  
+  Professor e alunos → `atleta(id)`, nunca `arenas_atleta`, por causa da exclusão de conta.
+- **Coluna nova** `sports.sigla` (prefixo do código), preenchida com BT, FUT, VOL, FTV, TEN, PAD, PKB e PIL.
+- **RPCs** (service_role):
+
+  | RPC | Mapeia o protótipo |
+  |---|---|
+  | `create_turma_atomic` | `TurmaFormModal` (criar), com `p_turma_id` como id da operação |
+  | `update_turma_atomic` | `TurmaFormModal` (editar) |
+  | `encerrar_turma_atomic` | `EncerrarTurmaDialog`: encerra a recorrência junto a partir de um mês (`p_recorrencia_a_partir_de` → `set_mensalista_termination_atomic`) ou a partir de hoje (`p_encerrar_recorrencia_agora` → `cancel_monthly_plan_atomic`, só com a turma encerrando até hoje) |
+  | `list_turma_recorrencias` | "Usar recorrência existente" (blocos e uso por turmas) |
+  | `vincular_turma_aluno_atomic` / `desvincular_turma_aluno_atomic` | `TurmaAlunosModal` |
+- **Sobreposição sem confirmação** → `SQLSTATE 23P01`, com os códigos no `DETAIL`. O web pede a confirmação
+  e chama de novo com `p_confirmar_sobreposicao = true`.
+- **Nova recorrência**: `p_nova_recorrencia = {blocos, data_inicio, valor_mensal}`.
+  - O `valor_mensal` é o "Valor mensal cobrado" da tela, sugerido por `resumirPlano`.
+  - O banco cria o plano com `create_monthly_plan_blocks_atomic(..., p_effective_date = data_inicio,
+    p_price_table_id = tabela Professor do espaço)`.
+- **Leitura**:
+  - turmas, níveis, horários e alunos por `select` com service role (FKs permitem embed do PostgREST);
+  - professores por `list_atleta_perfis`.
+

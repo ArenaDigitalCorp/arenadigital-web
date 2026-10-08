@@ -12,6 +12,7 @@ import { getArenaBillingAddress } from '@/modules/arenas/usecases/get-arena-bill
 import { getPaymentHistory } from '@/modules/payments/usecases/get-payment-history.usecase'
 import { getSubscription } from '@/modules/payments/usecases/get-subscription.usecase'
 import { SubscriptionPageClient } from '@/modules/payments/components/SubscriptionPageClient'
+import { getPaymentGateway } from '@/modules/payments/gateway'
 
 function normalizeFeatures(features: unknown) {
   if (!Array.isArray(features)) return []
@@ -48,6 +49,7 @@ export default async function SubscriptionArenaPage({
       initialPaymentHistory={paymentHistory}
       billingAddress={billingAddress}
       planSelectionEnabled={planSelectionEnabled}
+      paymentProvider={getPaymentGateway().providerName}
       plans={plans.flatMap((plan) => {
         const parsedPlanKey = userSelectablePlanKeySchema.safeParse(plan.key)
         if (!parsedPlanKey.success) return []
