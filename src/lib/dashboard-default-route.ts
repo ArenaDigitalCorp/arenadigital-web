@@ -12,6 +12,7 @@ type DashboardSection =
   | 'loyalty'
   | 'rotativo'
   | 'athletes'
+  | 'turmas'
   | 'users'
   | 'subscription'
   | 'whatsapp'
@@ -140,6 +141,8 @@ export async function resolveDashboardDefaultRoute(section: DashboardSection): P
       return `/dashboard/rotativo/${primaryArena.arenaId}`
     case 'athletes':
       return `/dashboard/athletes/${primaryArena.arenaId}`
+    case 'turmas':
+      return `/dashboard/turmas/${primaryArena.arenaId}`
     case 'notifications':
       return `/dashboard/notifications/${primaryArena.arenaId}`
     default:
