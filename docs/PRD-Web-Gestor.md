@@ -639,6 +639,52 @@ A seção "Cobranças Avulsas" que antes aparecia na parte de baixo da página d
 - **Ajustado — selo do mês ajustado:** na tela do mensalista, o mês alterado por um ajuste "somente este mês" (individual ou em lote) mostra **"Ajustado"**, com "valor do plano: R$ X/mês · 4 → 5 jogos". Antes aparecia "Proporcional / mês cheio", que é o selo da estreia.
 - **Ajustado — textos do modal de ajuste:** singular de "precisa de análise", seletor de arredondamento sem corte e exemplo de observação genérico.
 
+### 5.24 Gestão de Turmas (07/10/2026)
+- **Status:** **Implementado** (08/10/2026): banco em `arenadigital-db` (aplicado em homologação) e tela integrada, branches `feature/gestao-turmas` (db) / `feat/gestao-turmas` (web). Ainda não promovido. Plano, decisões, arquitetura e perguntas em aberto: `docs/PLANO-Gestao-de-Turmas.md`.
+- **Problema:** a arena não tem onde registrar as turmas de aula: professor, esporte e níveis, horário recorrente, vagas e alunos. Também não sabe quantas turmas e alunos cada professor tem.
+- **Entrada:** menu **Turmas**, logo abaixo de Atletas, com duas abas.
+- **Aba Turmas:**
+  - grid com código, professor, esporte, níveis, horários, **alunos / vagas** (com o selo "Lotada") e data de criação, com todas as colunas ordenáveis;
+  - filtros por texto, esporte e professor.
+- **Cadastro da turma:**
+  - **código gerado pelo sistema** (`SIGLA-000`, ex.: BT-001), **único por arena**: não pode ser alterado nem é reaproveitado. É por ele que o atleta vai encontrar as turmas no app, em outra feature, junto com o nome da arena;
+  - **esporte**: escolhido na criação e travado depois, porque a sigla forma o código;
+  - **professor responsável**: atleta com perfil Professor;
+  - **um ou mais níveis** do esporte;
+  - **data de criação**;
+  - **limite de vagas opcional**: se definido, é respeitado; em branco, a turma fica aberta;
+  - **recorrência**, em uma de duas opções:
+    - usar uma recorrência de espaço que já existe, **inteira ou só parte de um bloco** (ex.: 19h–20h de um bloco 19h–21h). Se o trecho bater com o de outra turma, aparece um **alerta vermelho em destaque** e, ao salvar, uma confirmação que recomenda voltar e ajustar, mas permite **salvar mesmo assim**;
+    - criar um horário recorrente novo, em hora cheia, que **reserva o espaço** criando a recorrência do professor (a turma "vira mensalista"), cobrada pela tabela de preço **Professor** do espaço ou, se não houver, pela **Padrão**. Conflito de horário bloqueia.
+      - O gestor escolhe o **início da recorrência**: hoje ou uma data futura.
+      - A tela mostra o **mesmo resumo do cadastro de mensalista**, calculado pela mesma regra das reservas: subtotal pela tabela, mensalidade, variação conforme o calendário, **1ª mensalidade proporcional** ao que sobra do mês de início e valor mensal editável.
+      - Exemplo: terça 13h–14h a R$ 90/h começando em 21/10 → 1ª mensalidade de R$ 90 (só a terça 27/10) e R$ 360 a partir de novembro.
+- **Encerrar turma** (não há exclusão):
+  - pede data e motivo;
+  - os alunos ativos saem na data do encerramento e o histórico fica preservado;
+  - a turma encerrada **não aparece na visão padrão** nem nas contagens; só no filtro "Mostrar encerradas", para consulta;
+  - **oferece encerrar a recorrência junto**, pelas mesmas regras de Mensalistas, em uma de duas opções:
+    - **a partir de hoje** (padrão): como o "Cancelar plano". A recorrência é cancelada na hora e a próxima aula prevista (mostrada no diálogo) e as seguintes, inclusive as já confirmadas deste mês, voltam para revenda. Valores já recebidos não são estornados automaticamente. Só disponível quando a turma encerra até hoje;
+    - **a partir de um mês**: como o "Prever encerramento", cancelando as reservas ainda não confirmadas desse mês em diante.
+    - Vem marcado quando a recorrência foi criada pela turma.
+    - Fica indisponível, com o motivo, quando a recorrência é de outra pessoa, é usada por outra turma ativa ou já tem encerramento marcado.
+- **Alunos da turma:**
+  - vincular atleta com **data de entrada**, bloqueado quando a turma está lotada;
+  - desvincular com **data de saída** e motivo opcional;
+  - **histórico** de todos os períodos, inclusive de quem saiu e voltou;
+  - aviso quando o nível do atleta está fora dos níveis da turma.
+- **Aba Professores:**
+  - atletas com perfil Professor, com contato, esportes, **nº de turmas ativas**, alunos ativos, aulas/semana e "professor desde", com todas as colunas ordenáveis;
+  - filtros Com turmas / Sem turmas e atalhos **Mais turmas / Menos turmas**;
+  - detalhe com dados gerais, horários recorrentes do professor (com o trecho que cada turma usa) e as turmas pelas quais responde.
+- **Aba Atletas:**
+  - todos os atletas que **fazem ou já fizeram parte** de alguma turma, com esportes e nível em cada um, turmas atuais, professores, aulas por semana, "aluno desde", última movimentação e situação (Em turma / Ex-aluno), com todas as colunas ordenáveis;
+  - filtros por texto, esporte, professor e situação, e o atalho **"Nível fora da turma"** para achar quem está em turma de nível diferente do seu;
+  - ficha do atleta com dados, esportes e níveis do perfil (comparados com os níveis das turmas), turmas atuais e o histórico completo de entradas e saídas, inclusive de turmas encerradas;
+  - o código da turma abre os alunos dela, e o nome do aluno na turma abre a ficha do atleta.
+- **Fora do escopo:** cobrança dos alunos da turma.
+- **Próximo passo:** aplicar em homologação a migração `20261008120000_encerrar_turma_recorrencia_agora.sql` (opção "a partir de hoje"), revisar e abrir os PRs (db antes do web) e fechar as perguntas que restam no plano (§6).
+
 ## 7. Restrições Técnicas
 
 - Autenticação obrigatória via Supabase Auth
