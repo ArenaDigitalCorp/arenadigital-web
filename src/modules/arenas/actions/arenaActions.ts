@@ -4,7 +4,6 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID }
 import { revalidatePath } from 'next/cache'
 import { getLocationPointFromAddress } from '@/lib/geocoding'
 import {
-    AuthorizationError,
     assertArenaAdminAccess,
     assertArenaBackofficeAccess,
     assertArenaCreationAccess,
@@ -31,6 +30,11 @@ import {
 } from '@/modules/arenas/services/asaas-baas.service'
 import { persistCreatedAsaasCredential } from '@/modules/arenas/services/asaas-credential-persistence'
 import { matchesAsaasSubaccountOwnership } from '@/modules/arenas/services/asaas-subaccount-ownership'
+import { safeAsaasOnboardingUrl } from '@/modules/arenas/domain/asaas-documents'
+import {
+    assertArenaFinancialOnboardingAccess as assertFinancialOnboardingAccess,
+    type ArenaFinancialOnboardingAccess,
+} from '@/modules/arenas/services/financial-onboarding-access'
 import { arenaSchema } from '@/modules/arenas/schemas/arena.schema'
 import {
     appBookingModeAcceptsPreBookings,
@@ -478,39 +482,14 @@ async function recordPaymentAudit(input: {
     }
 }
 
-type ArenaFinancialOnboardingAccess = {
-    dbUserId: string
-    source: 'arena_self_service' | 'super_admin_backoffice'
-}
-
 async function assertArenaFinancialOnboardingAccess(
     arenaId: string,
 ): Promise<ArenaFinancialOnboardingAccess> {
-    let arenaAccessError: unknown
-    try {
-        const profile = await assertArenaAdminAccess(arenaId)
-        return { dbUserId: profile.dbUserId, source: 'arena_self_service' }
-    } catch (error) {
-        if (!(error instanceof AuthorizationError) || error.status !== 403) throw error
-        arenaAccessError = error
-    }
-
-    try {
-        const profile = await assertPlatformSuperAdminAccess()
-        return { dbUserId: profile.dbUserId, source: 'super_admin_backoffice' }
-    } catch {
-        throw arenaAccessError
-    }
+    return assertFinancialOnboardingAccess(arenaId)
 }
 
 function safeOnboardingUrl(value: string | null): string | null {
-    if (!value) return null
-    try {
-        const url = new URL(value)
-        return url.protocol === 'https:' ? url.toString() : null
-    } catch {
-        return null
-    }
+    return safeAsaasOnboardingUrl(value)
 }
 
 function normalizeOnboardingStatus(status: string | null): ArenaAsaasOnboardingStatus {

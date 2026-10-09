@@ -10,6 +10,10 @@ const card = readFileSync(
   new URL('../src/modules/arenas/components/ArenaPixSplitSettingsCard.tsx', import.meta.url),
   'utf8',
 )
+const accessService = readFileSync(
+  new URL('../src/modules/arenas/services/financial-onboarding-access.ts', import.meta.url),
+  'utf8',
+)
 const editPage = readFileSync(
   new URL('../src/app/dashboard/arenas/[id]/edit/page.tsx', import.meta.url),
   'utf8',
@@ -28,8 +32,9 @@ function exportedFunctionBody(name) {
 
 test('arena Owner or Gestor can create, read and sync their own financial onboarding', () => {
   assert.match(actions, /function assertArenaFinancialOnboardingAccess/u)
-  assert.match(actions, /assertArenaAdminAccess\(arenaId\)/u)
-  assert.match(actions, /assertPlatformSuperAdminAccess\(\)/u)
+  assert.match(accessService, /assertArenaAdminAccess\(arenaId\)/u)
+  assert.match(accessService, /assertPlatformSuperAdminAccess\(\)/u)
+  assert.match(actions, /return assertFinancialOnboardingAccess\(arenaId\)/u)
   assert.match(exportedFunctionBody('getArenaPixSplitSettingsAction'), /assertArenaFinancialOnboardingAccess/u)
   assert.match(exportedFunctionBody('createArenaAsaasSubaccountAction'), /assertArenaFinancialOnboardingAccess/u)
   assert.match(exportedFunctionBody('syncArenaAsaasSubaccountStatusAction'), /assertArenaFinancialOnboardingAccess/u)
@@ -55,6 +60,6 @@ test('arena edit exposes onboarding without exposing platform operational contro
 })
 
 test('self-service financial changes are identified in the audit trail', () => {
-  assert.match(actions, /source: 'arena_self_service'/u)
+  assert.match(accessService, /source: 'arena_self_service'/u)
   assert.match(actions, /source: profile\.source/u)
 })
