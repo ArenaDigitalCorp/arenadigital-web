@@ -8,6 +8,24 @@ import {
 const providerPosts = harness => harness.providerRequests.filter(call => call.request.method === 'POST')
 const claims = harness => harness.rpcCalls.filter(call => call.name === 'claim_arena_asaas_document_upload')
 
+test('an API-method refusal reaches the owner as a safe instruction and keeps failed upload retry guards', async () => {
+  const h = documentFlowHarness({ uploadStatus: 400, uploadBody: JSON.stringify({ errors: [{
+    code: 'invalid_object', description: 'Esse tipo de documento não pode ser enviado via API. synthetic-private-provider-detail',
+  }] }) })
+  const response = await h.route.POST(uploadRequest(), routeContext())
+  assert.equal(response.status, 409)
+  const body = await response.json()
+  assert.equal(body.code, 'provider_document_api_unavailable')
+  assert.equal(body.data.status, 'failed')
+  assert.match(body.error, /suporte do Asaas/u)
+  assert.ok(!JSON.stringify(body).includes('synthetic-private'))
+  assert.equal(body.providerDiagnostics, undefined)
+  assert.equal(h.state.attempts.get(TEST_REQUEST_ID).reason_code, 'provider_rejected')
+  assert.deepEqual(Array.from(h.logs.at(-1)[2].provider_error_codes), ['invalid_object'])
+  await assert.rejects(h.service.uploadArenaAsaasDocument(documentInput({ requestId: TEST_SECOND_REQUEST_ID })), { code: 'explicit_retry_required' })
+  assert.equal(providerPosts(h).length, 1)
+})
+
 test('an eligible document is claimed durably before exactly one provider upload, then marked submitted without approval', async () => {
   const h = documentFlowHarness()
   const result = await h.service.uploadArenaAsaasDocument(documentInput())
@@ -234,4 +252,28 @@ test('provider and database failures return only safe errors and reason codes to
     assert.ok(!serialized.includes('synthetic-test.pdf'))
     assert.ok(!serialized.includes('%PDF'))
   }
+})
+
+test('a provider validation rejection exposes a neutral message and logs only allowlisted diagnostic codes', async () => {
+  const h = documentFlowHarness({ uploadStatus: 400, uploadBody: JSON.stringify({ errors: [
+    { code: 'invalid_action', description: 'synthetic-private-provider-detail' },
+    { code: 'synthetic-private-unknown-code', description: 'synthetic-private-file-name.pdf' },
+  ] }) })
+  const response = await h.route.POST(uploadRequest(), routeContext())
+  assert.equal(response.status, 422)
+  const body = await response.json()
+  assert.ok(!/formato|extens[aã]o/iu.test(body.error))
+  assert.equal(body.code, 'provider_document_rejected')
+  assert.equal(body.data.status, 'failed')
+  assert.equal(h.state.attempts.get(TEST_REQUEST_ID).reason_code, 'provider_rejected')
+  const diagnostic = h.logs.find(entry => entry[1] === 'arena_asaas_documents.upload.rejected')[2]
+  assert.equal(diagnostic.request_id, TEST_REQUEST_ID)
+  assert.equal(diagnostic.provider_http_status, 400)
+  assert.deepEqual(Array.from(diagnostic.provider_error_codes), ['invalid_action', 'unclassified'])
+  assert.equal(body.providerDiagnostics, undefined)
+  assert.ok(!JSON.stringify({ body, logs: h.logs }).includes('synthetic-private'))
+  assert.equal(providerPosts(h).length, 1)
+  const replay = await h.service.uploadArenaAsaasDocument(documentInput())
+  assert.equal(replay.status, 'failed')
+  assert.equal(providerPosts(h).length, 1)
 })
