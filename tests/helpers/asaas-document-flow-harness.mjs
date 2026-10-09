@@ -113,7 +113,7 @@ export function documentFlowHarness(options = {}) {
       if (request.method === 'POST') {
         if (options.uploadWait) await options.uploadWait
         if (options.uploadThrows) throw new Error('synthetic-private-provider-network-detail')
-        return new Response('synthetic-private-provider-response', { status: options.uploadStatus ?? 200 })
+        return new Response(options.uploadBody ?? 'synthetic-private-provider-response', { status: options.uploadStatus ?? 200 })
       }
       return Response.json({ data: state.groups })
     },
