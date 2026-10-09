@@ -22,7 +22,7 @@ Componente reutilizável: `src/components/payments/asaas-provider-notice.tsx`.
 ## Lacunas e decisões pendentes
 
 - Termos de uso e política de privacidade ainda não identificam especificamente a jornada financeira Asaas. Revisar a cláusula de responsabilidade, compartilhamento de dados/KYC, canais de atendimento e instrumento BaaS com o Asaas e o responsável jurídico antes de publicar textos vinculantes.
-- O contrato atual de onboarding expõe status agregado e link de envio; não expõe a lista dos documentos solicitados ou upload direto. A ausência do link não comprova ausência de solicitação. Confirmar a jornada operacional com o Asaas antes de implementar uma nova coleta de documentos.
+- O contrato original de onboarding expõe status agregado e link. A entrega local posterior acrescenta lista e upload para os grupos compatíveis sem link, conforme a documentação oficial; veja [onboarding de documentos](asaas-document-onboarding.md). A ausência de link não comprova ausência de solicitação e não exige aguardar um link por padrão.
 - Relatórios, comprovantes e comunicações financeiras precisam de auditoria por origem do pagamento: há registros manuais e outras integrações. Não adicionar selo genericamente em todos os lançamentos nem identificar uma cobrança manual como processada pelo Asaas.
 - Ainda faltam análise/contrato/homologação do Asaas, confirmação do aproveitamento da subconta existente e informações empresariais/de volume fornecidas pelos responsáveis.
 - Prints locais não são evidências de disponibilidade em produção. Capturar URLs publicadas e telas reais aprovadas após promoção autorizada.
