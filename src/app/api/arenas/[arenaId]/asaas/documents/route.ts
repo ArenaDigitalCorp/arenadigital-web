@@ -55,7 +55,14 @@ export async function POST(request: Request, context: RouteContext) {
     const upload = await uploadArenaAsaasDocument({ arenaId, actorId: access.dbUserId, ...uploadRequest })
     return observer.respond(NextResponse.json({ success: true, data: upload }))
   } catch (error) {
-    observer.log('warn', 'arena_asaas_documents.upload.rejected', { reason_code: error instanceof AsaasDocumentError ? error.code : 'request_rejected' })
+    observer.log('warn', 'arena_asaas_documents.upload.rejected', {
+      reason_code: error instanceof AsaasDocumentError ? error.code : 'request_rejected',
+      ...(error instanceof AsaasDocumentUploadError ? {
+        request_id: error.requestId,
+        provider_http_status: error.providerDiagnostics?.httpStatus,
+        provider_error_codes: error.providerDiagnostics?.errorCodes,
+      } : {}),
+    })
     return observer.respond(errorResponse(error))
   }
 }
