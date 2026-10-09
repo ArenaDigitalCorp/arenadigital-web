@@ -19,6 +19,8 @@ O playbook e o checklist solicitam identificação do prestador, selo individual
 
 Componente reutilizável: `src/components/payments/asaas-provider-notice.tsx`.
 
+Apresentação compacta: selo oficial remoto à esquerda e identificação do prestador visível ao lado, em faixa discreta. Os contatos ficam em “Suporte do pagamento”, com expansão nativa por teclado e áreas de interação de pelo menos 44 pixels. Em espaços estreitos, a faixa pode quebrar em linhas para preservar a leitura. As inserções e condições por provedor permanecem iguais; a página pública conserva a explicação completa dos serviços. A página pública foi revisada localmente em Chromium headless a 320 e 1280 pixels: selo remoto carregado, sem rolagem horizontal, suporte aberto por Enter e contatos com altura mínima de 44 pixels. As telas protegidas não foram revalidadas com sessão real nesta alteração.
+
 ## Lacunas e decisões pendentes
 
 - Termos de uso e política de privacidade ainda não identificam especificamente a jornada financeira Asaas. Revisar a cláusula de responsabilidade, compartilhamento de dados/KYC, canais de atendimento e instrumento BaaS com o Asaas e o responsável jurídico antes de publicar textos vinculantes.
