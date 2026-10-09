@@ -111,7 +111,7 @@ type RuntimeCredentialRpcClient = {
   ): Promise<{ data: unknown; error: { message: string } | null }>
 }
 
-function baseUrl(): string {
+export function asaasBaseUrl(): string {
   const explicit = process.env.ASAAS_BASE_URL?.trim()
   if (explicit) return explicit.replace(/\/$/u, '')
   const environment = process.env.ASAAS_ENV?.trim().toLowerCase()
@@ -148,7 +148,7 @@ function errorMessage(status: number, payload: unknown): string {
 }
 
 async function asaasRequest<T>(path: string, apiKey: string, init: { method?: 'GET' | 'POST'; body?: unknown } = {}): Promise<T> {
-  const response = await fetch(`${baseUrl()}${path}`, {
+  const response = await fetch(`${asaasBaseUrl()}${path}`, {
     method: init.method ?? 'GET',
     headers: {
       accept: 'application/json',
@@ -216,7 +216,7 @@ function webhookConfiguration(email: string, webhookToken: string) {
 export function assertAsaasSubaccountProvisioningConfigured(email: string): void {
   assertBaasEnabled()
   parentApiKey()
-  baseUrl()
+  asaasBaseUrl()
   webhookConfiguration(email, 'preflight')
 }
 
@@ -303,7 +303,7 @@ function apiKeyFromRpcPayload(payload: unknown): string | null {
   return null
 }
 
-async function loadSubaccountApiKey(arenaId: string): Promise<string> {
+export async function loadSubaccountApiKey(arenaId: string): Promise<string> {
   const rpc = getSupabaseAdmin() as unknown as RuntimeCredentialRpcClient
   const { data, error } = await rpc.rpc('get_arena_asaas_runtime_credentials', { p_arena_id: arenaId })
   if (error) throw new Error(`Não foi possível acessar a credencial protegida da subconta: ${error.message}`)

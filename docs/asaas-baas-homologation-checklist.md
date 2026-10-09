@@ -1,6 +1,6 @@
 # Preparação da homologação BaaS — Arena Digital
 
-Status: preparação técnica local; **não submetido, não homologado e não publicado**.
+Status: a identificação do Asaas foi publicada na entrega anterior. As melhorias de documentos estão implementadas e validadas; a publicação é acompanhada pelos PRs e deployments dos ambientes. **Não há confirmação da homologação BaaS nem submissão do checklist.**
 Data da auditoria: 8 de outubro de 2026.
 
 ## Fontes e limites
@@ -16,7 +16,7 @@ Data da auditoria: 8 de outubro de 2026.
 
 O Pix de reservas é emitido no contexto da subconta da arena, usando sua credencial protegida. O split envia a comissão para a carteira da plataforma. A emissão depende da aprovação/ativação da subconta. Evidência: `arenadigital-db/supabase/functions/booking-pix-payment/index.ts` e `_shared/asaas-runtime.ts`.
 
-Tipo de mudança: identificação do prestador e orientação de suporte na interface, sem alterações no modelo financeiro, taxas, RLS, autenticação, contratos de API, migrations ou dados.
+A entrega anterior adicionou identificação do prestador e suporte na interface. A entrega atual completa documentos e inclui contrato/RPCs e migration aditiva para tentativas duráveis, sem alterar cobrança, split ou aprovação. Detalhes e ordem de publicação: [onboarding de documentos](asaas-document-onboarding.md).
 
 Não atribuir Asaas a pagamentos manuais/offline, relatórios genéricos ou assinaturas de outros gateways. Um estado de pagamento confirmado não identifica sozinho o provedor.
 
@@ -26,7 +26,7 @@ O playbook classifica a integração direta como **Modelo A — Direto Tomador**
 
 A consulta autorizada em produção, somente leitura, retornou aprovação geral pendente, cadastro comercial aprovado e documentos ainda não enviados, sem `onboardingUrl` nos grupos solicitados. Não houve upload, criação, cobrança ou alteração da conta nesta auditoria.
 
-Isso não prova que o Asaas habilitou ou desabilitou BaaS. Não encerrar, recriar ou resetar a conta para tentar resolver. Solicitar ao suporte o modelo efetivo da subconta existente e a forma de concluir seus documentos; verificar se o link dedicado depende de habilitação/migração.
+Os grupos retornados são `IDENTIFICATION_SELFIE`, `IDENTIFICATION` e `ENTREPRENEUR_REQUIREMENT`, em `NOT_SENT`. A documentação oficial permite envio pela API para esses tipos quando não há link dedicado; esse fluxo está implementado localmente. Não é necessário esperar um link para concluir essas solicitações após a publicação e validação da melhoria. Isso não confirma o enquadramento ou a homologação BaaS: o modelo efetivo e as pendências contratuais devem ser confirmados com o Asaas. Não encerrar, recriar ou resetar a conta para tentar resolver.
 
 ## Rascunho das respostas do checklist
 
@@ -40,7 +40,7 @@ Não marcar respostas por conveniência. As respostas abaixo são preparatórias
 | 3. Clareza nos canais/interfaces | Responder apenas após conferir os fluxos publicados e anexar provas. Patch local não é evidência de produção. |
 | 4. Clientes repassam serviços financeiros a terceiros | Decisão empresarial a confirmar com Asaas. Arena oferecendo uma reserva não deve ser automaticamente classificada como revenda de BaaS. |
 | 5. Estrutura da operação | Rascunho: (a), Direta Tomador, pois usamos a chave da subconta em nome da arena. |
-| 6. Marca Asaas nos fluxos | Adequação técnica em preparação. Exige evidências da tela de criação de conta/subconta e outros fluxos sem acesso público. |
+| 6. Marca Asaas nos fluxos | Identificação implementada e publicada na entrega anterior. Exige evidências reais da tela de criação de conta/subconta e dos outros fluxos protegidos, incluindo app. |
 | Evidências: URLs e prints | Links reais publicados; prints limpos de onboarding e telas protegidas, sem PII, valores reais, credenciais ou documentos. |
 | 7. Exclusividade do provedor BaaS | Confirmar empresarialmente o serviço abrangido. Outros gateways de assinaturas não devem ser confundidos automaticamente com outro provedor BaaS. |
 | 8. Tarifas financeiras próprias | O formulário exclui remuneração via split/overprice desta pergunta. Revisar contratos e cobrança real antes de responder. |
@@ -53,11 +53,11 @@ Não marcar respostas por conveniência. As respostas abaixo são preparatórias
 | 15. Estrutura operacional | Número de funcionários informado pelo responsável. |
 | 16. Faturamento anterior | Valor validado com responsável/contabilidade; não equivale ao volume processado. |
 | 17. Avaliação do atendimento | Descrever processo real existente; não afirmar programa inexistente. |
-| 18. Modelo de subconta | Pretendido: Subcontas BaaS com envio pela URL dedicada. Confirmar habilitação e reaproveitamento da subconta existente com Asaas. |
+| 18. Modelo de subconta | Confirmar o modelo cadastrado com o Asaas. A capacidade técnica suporta link dedicado quando retornado e API nos grupos compatíveis sem link; não marcar “Subcontas BaaS” apenas porque a criação funcionou. |
 
 ### Rascunho técnico — pergunta 10
 
-A Arena Digital é uma plataforma de gestão de arenas e reservas esportivas, com backoffice web para gestores e aplicativo para atletas. Integra o Asaas para criar contas de pagamento de titularidade das arenas, acompanhar seu cadastro e aprovação e emitir cobranças Pix de reservas no contexto de cada subconta, usando sua credencial protegida. A comissão contratual da plataforma é direcionada à conta principal por split; os valores restantes ficam na conta emissora, conforme tarifas e regras do Asaas. A plataforma apresenta a experiência e integra os serviços; o Asaas presta os serviços financeiros e de pagamentos. O onboarding BaaS pretendido utiliza o link de documentação fornecido pelo Asaas.
+A Arena Digital é uma plataforma de gestão de arenas e reservas esportivas, com backoffice web para gestores e aplicativo para atletas. Integra o Asaas para criar contas de pagamento de titularidade das arenas, acompanhar seu cadastro e aprovação e emitir cobranças Pix de reservas no contexto de cada subconta, usando sua credencial protegida. A comissão contratual da plataforma é direcionada à conta principal por split; os valores restantes ficam na conta emissora, conforme tarifas e regras do Asaas. A plataforma apresenta a experiência e integra os serviços; o Asaas presta os serviços financeiros e de pagamentos. A documentação cadastral é concluída pela jornada permitida pelo Asaas: link dedicado quando fornecido ou envio pela API para grupos compatíveis sem link. A capacidade de upload está implementada localmente e depende da sua publicação e validação integrada.
 
 Não informar operações em uso ou volumes que ainda não existem. Distinguir capacidade implementada e uso efetivo em produção.
 
@@ -79,17 +79,17 @@ O texto informativo de interface não substitui essa cláusula, contrato BaaS ou
 
 ## Ordem de entrega e rollback
 
-Nenhum contrato backend novo é necessário para a identificação na interface. Web e app podem ser promovidos independentemente, respeitando seu fluxo Git e autorização. Não houve commit/push/deploy nesta preparação.
+A identificação na interface foi publicada anteriormente. A nova capacidade de envio precisa da migration de documentos no DB antes do consumidor web; não exige novo binário do app. O estado dessa promoção deve ser conferido nos PRs e no deployment correspondente ao SHA da branch de ambiente. A [ordem de publicação](asaas-document-onboarding.md) respeita os PRs e gates de cada ambiente.
 
-Após validação local: revisão dos textos; publicação autorizada em homologação; teste integrado; publicação autorizada de web e app; reunião de evidências reais; preenchimento e revisão humana do formulário; envio autorizado; informar ao Asaas o e-mail utilizado e acompanhar análise/contrato/checklist de segurança.
+Próximas etapas: publicar e validar os documentos em homologação; promover DB/web para produção com autorização; obter a redação legal aprovada; concluir KYC da arena; reunir as evidências reais e dados empresariais; revisar o formulário com os responsáveis e enviá-lo com autorização; informar ao Asaas o e-mail utilizado e acompanhar análise/contrato/checklist de segurança. Confirmar com o Asaas em paralelo o modelo e a etapa de avaliação/homologação da conta principal.
 
-Rollback: remover/reverter apenas os componentes informativos e suas inserções. Nenhuma transição financeira, credencial ou dado precisa ser desfeito.
+Rollback da identificação: reverter apenas os componentes informativos. Rollback do upload: reverter o consumidor web e preservar o histórico durável no DB, evitando reapresentar documentos que já possam ter sido recebidos.
 
 ## Perguntas ao suporte antes da submissão
 
 1. Qual a etapa da homologação da conta principal e quais pendências permanecem?
 2. A subconta já criada em avaliação pode ser aproveitada no modelo BaaS?
-3. Como concluir os documentos exigidos enquanto a consulta da subconta não retorna link de onboarding?
+3. Existe alguma restrição específica para concluir os grupos compatíveis sem link pela API nesta conta? A documentação geral confirma esse método; não esperar um link como condição padrão.
 4. Quais textos contratuais e evidências mobile são exigidos para este fluxo?
 
 ## Resultado da preparação técnica
@@ -99,8 +99,8 @@ Rollback: remover/reverter apenas os componentes informativos e suas inserções
 - Notificações de convite/cancelamento e e-mails de autenticação não identificam provedor financeiro. Mantidos sem atribuição genérica ao Asaas.
 - Rascunhos e auditorias: este documento, `docs/asaas-baas-transparency-audit.md` no web e `docs/asaas-baas-transparency.md` no app.
 
-Validações executadas: web 491 testes passaram e 43 ficaram ignorados; quatro testes de segurança passaram. App: 188 testes passaram e exportação Android/Hermes passou. Typecheck web e app passaram. Lint focado passou nos arquivos novos e demais arquivos alterados; o modal de reservas web mantém sete erros preexistentes de `any`. Não declarar lint global aprovado.
+Validações da entrega anterior: web 491 testes passaram e 43 ficaram ignorados; quatro testes de segurança passaram. App: 188 testes passaram e exportação Android/Hermes passou. Typecheck web e app passaram. Lint focado passou nos arquivos novos e demais arquivos alterados; o modal de reservas web mantém sete erros preexistentes de `any`. Não declarar lint global aprovado.
 
 QA validou a renderização dos componentes reais de onboarding em seis estados, com fronteiras de ações isoladas e dados fictícios. A página pública e o onboarding foram conferidos no navegador; o onboarding também foi inspecionado em quadro de 390 pixels. Essas capturas são locais e não comprovam publicação/homologação.
 
-Pendências bloqueantes para declarar preparação integral do checklist: revisão e aprovação dos textos legais; orientação do Asaas sobre documentos solicitados sem link; confirmação do modelo efetivo/reaproveitamento da subconta; dados empresariais do formulário; publicação autorizada; evidências reais do app com binário atualizado e confirmação do selo remoto nativo com o Asaas. O simulador instalado tinha versão anterior; nenhuma captura desse binário foi tratada como prova do patch.
+Pendências para declarar preparação integral do checklist: revisão e aprovação dos textos legais; publicação e teste integrado do novo envio de documentos; confirmação do modelo efetivo/reaproveitamento da subconta; dados empresariais do formulário; evidências reais do app com binário atualizado e confirmação do selo remoto nativo com o Asaas. O simulador instalado tinha versão anterior; nenhuma captura desse binário foi tratada como prova do patch.
