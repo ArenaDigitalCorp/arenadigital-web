@@ -55,6 +55,16 @@ Não é necessário novo build do app para esta melhoria do backoffice. Consumid
 
 Fontes: [documentos via API](https://docs.asaas.com/reference/enviar-documentos), [consulta dos documentos](https://docs.asaas.com/reference/verificar-documentos-pendentes), [envio hospedado](https://docs.asaas.com/docs/onboarding-e-envio-de-documentos-via-link).
 
+## Recusa do método de envio
+
+Uma recusa HTTP do Asaas não comprova erro de extensão ou conteúdo. O transporte preserva somente status HTTP e códigos de uma lista fixa para diagnóstico, sem reter descrições, arquivos ou payloads do provedor. Corpos inválidos, interrompidos ou excessivos não transformam uma recusa HTTP definitiva em resultado desconhecido.
+
+Quando uma resposta 400/422 contém `invalid_object` e informa precisamente que o tipo de documento não pode ser enviado via API, o painel recebe `provider_document_api_unavailable` (409) com orientação fixa para contatar o suporte do Asaas e confirmar o método de envio. A tentativa continua `failed`/`provider_rejected`, compatível com a persistência existente. Outras recusas não são interpretadas como restrição do método.
+
+Na reprodução autorizada em produção, um JPEG válido foi recusado dessa forma para selfie, enquanto o grupo continuava `NOT_SENT` e sem `onboardingUrl`. O requerimento empresarial já estava `PENDING`. Isso confirma a restrição do método para a selfie daquela conta; não confirma erro no arquivo de identificação nem o enquadramento BaaS. Sem um método disponível, o Asaas precisa orientar o responsável ou disponibilizar o fluxo apropriado. Não inventar link, alterar o tipo solicitado ou reenviar em outro grupo.
+
+Testes de regressão cobrem a classificação específica, resposta neutra para outras recusas, limites de leitura, diagnóstico sem dados privados e preservação da confirmação de retry. A correção melhora a orientação e a investigação; não habilita o recebimento de documentos no Asaas.
+
 ## Evidências executadas nesta entrega
 
 Gates finais executados com Node 22.19.0:

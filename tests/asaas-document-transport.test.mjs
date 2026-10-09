@@ -132,3 +132,88 @@ test('listing errors do not imply an upload was attempted', async () => {
   assert.equal(h.requests.length, 1)
   assert.equal(h.requests[0].options.method, undefined)
 })
+
+test('a generic provider rejection does not blame file format and retains only safe diagnostics', async () => {
+  const h = harness(() => Response.json({ errors: [
+    { code: 'invalid_action', description: 'synthetic-private-provider-detail' },
+    { code: 'synthetic-private-unknown-code', description: 'synthetic-private-file-name.pdf' },
+  ] }, { status: 400 }))
+  await assert.rejects((await h.create('arena-test')).upload(upload), error => {
+    assert.equal(error.outcome, 'failed')
+    assert.equal(error.reasonCode, 'provider_rejected')
+    assert.equal(error.providerHttpStatus, 400)
+    assert.deepEqual(Array.from(error.providerErrorCodes), ['invalid_action', 'unclassified'])
+    assert.ok(!/formato|extens[aã]o/iu.test(error.message))
+    assert.ok(!JSON.stringify(error).includes('synthetic-private'))
+    assert.ok(!error.message.includes('synthetic-private'))
+    return true
+  })
+})
+
+test('malformed, HTML, absent and oversized error bodies preserve a definite HTTP rejection', async () => {
+  for (const body of [null, 'synthetic-not-json', '<html>synthetic-private-error</html>', JSON.stringify({ errors: [{ code: 'invalid_action', description: 'x'.repeat(300 * 1024) }] })]) {
+    const h = harness(() => new Response(body, { status: 422 }))
+    await assert.rejects((await h.create('arena-test')).upload(upload), error => {
+      assert.equal(error.outcome, 'failed')
+      assert.equal(error.providerHttpStatus, 422)
+      assert.deepEqual(Array.from(error.providerErrorCodes), ['unclassified'])
+      assert.ok(!/formato/iu.test(error.message))
+      assert.ok(!JSON.stringify(error).includes('synthetic-private'))
+      return true
+    })
+  }
+})
+
+test('a body-read failure does not turn a received 400 rejection into unknown', async () => {
+  const h = harness(() => new Response(new ReadableStream({ start(controller) { controller.error(new Error('synthetic-private-stream-detail')) } }), { status: 400 }))
+  await assert.rejects((await h.create('arena-test')).upload(upload), error => {
+    assert.equal(error.outcome, 'failed')
+    assert.equal(error.reasonCode, 'provider_rejected')
+    assert.deepEqual(Array.from(error.providerErrorCodes), ['unclassified'])
+    assert.ok(!error.message.includes('synthetic-private'))
+    return true
+  })
+})
+
+test('provider error-code diagnostics are bounded and deduplicated', async () => {
+  const h = harness(() => Response.json({ errors: Array.from({ length: 100 }, () => ({ code: 'invalid_action', description: 'synthetic-private-detail' })) }, { status: 400 }))
+  await assert.rejects((await h.create('arena-test')).upload(upload), error => {
+    assert.deepEqual(Array.from(error.providerErrorCodes), ['invalid_action'])
+    assert.equal(error.providerHttpStatus, 400)
+    return true
+  })
+})
+
+test('an explicit API-method refusal has a fixed support instruction without leaking the provider description', async () => {
+  const h = harness(() => Response.json({ errors: [{ code: 'invalid_object',
+    description: 'Esse tipo de documento não pode ser enviado via API. synthetic-private-provider-detail',
+  }] }, { status: 400 }))
+  await assert.rejects((await h.create('arena-test')).upload(upload), error => {
+    assert.equal(error.status, 409)
+    assert.equal(error.code, 'provider_document_api_unavailable')
+    assert.equal(error.outcome, 'failed')
+    assert.equal(error.reasonCode, 'provider_rejected')
+    assert.equal(error.providerHttpStatus, 400)
+    assert.deepEqual(Array.from(error.providerErrorCodes), ['invalid_object'])
+    assert.match(error.message, /Asaas.*API/u)
+    assert.match(error.message, /suporte.*Asaas/u)
+    assert.ok(!/formato|extens[aã]o/iu.test(error.message))
+    assert.ok(!JSON.stringify(error).includes('synthetic-private'))
+    return true
+  })
+})
+
+test('invalid_object is not interpreted as an API-method refusal without the precise provider reason', async () => {
+  for (const [status, code, description, expectedCode] of [
+    [400, 'invalid_object', 'synthetic-private-unrelated-reason', 'provider_document_rejected'],
+    [400, 'invalid_action', 'Esse tipo de documento não pode ser enviado via API.', 'provider_document_rejected'],
+    [503, 'invalid_object', 'Esse tipo de documento não pode ser enviado via API.', 'upload_result_unknown'],
+  ]) {
+    const h = harness(() => Response.json({ errors: [{ code, description }] }, { status }))
+    await assert.rejects((await h.create('arena-test')).upload(upload), error => {
+      assert.equal(error.code, expectedCode)
+      assert.ok(!error.message.includes('synthetic-private'))
+      return true
+    })
+  }
+})

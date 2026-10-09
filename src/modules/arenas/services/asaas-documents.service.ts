@@ -34,6 +34,10 @@ export class AsaasDocumentUploadError extends AsaasDocumentError {
     code: string,
     readonly requestId: string,
     readonly attemptStatus: AsaasDocumentAttemptStatus,
+    readonly providerDiagnostics?: {
+      httpStatus: AsaasDocumentProviderError['providerHttpStatus']
+      errorCodes: AsaasDocumentProviderError['providerErrorCodes']
+    },
   ) {
     super(message, status, code)
     this.name = 'AsaasDocumentUploadError'
@@ -256,6 +260,7 @@ export async function uploadArenaAsaasDocument(input: {
       error instanceof AsaasDocumentError ? error.status : 502,
       error instanceof AsaasDocumentError ? error.code : 'upload_result_unknown',
       input.requestId, outcome,
+      error instanceof AsaasDocumentProviderError ? { httpStatus: error.providerHttpStatus, errorCodes: error.providerErrorCodes } : undefined,
     )
   }
   await finishUpload({ ...input, outcome: 'submitted', reasonCode: null })
