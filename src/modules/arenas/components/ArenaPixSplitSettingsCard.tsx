@@ -39,6 +39,7 @@ import type {
 } from "@/modules/arenas/types/pix-split.types"
 import { cn } from "@/lib/utils"
 import { AsaasProviderNotice } from "@/components/payments/asaas-provider-notice"
+import { ArenaAsaasDocumentsPanel } from "@/modules/arenas/components/ArenaAsaasDocumentsPanel"
 
 interface Props {
     arenaId: string
@@ -378,9 +379,7 @@ export function ArenaPixSplitSettingsCard({
                         "h-7",
                         "border-sky-200 bg-sky-50 text-sky-800",
                     )}>
-                        {isPlatform
-                            ? settings.onboardingStarted ? "Subconta BaaS" : "Não configurado"
-                            : settings.onboardingStarted ? "Cadastro iniciado" : "Não iniciado"}
+                        {settings.onboardingStarted ? "Cadastro iniciado" : isPlatform ? "Não configurado" : "Não iniciado"}
                     </Badge>
                 </div>
             </div>
@@ -411,7 +410,7 @@ export function ArenaPixSplitSettingsCard({
                                 {automaticUpdateError} Você pode usar “Atualizar agora” sem reiniciar o cadastro.
                             </p>
                         )}
-                        {settings.onboardingUrl && (
+                        {settings.onboardingUrl && (settings.documentationStatus === "PENDING" || settings.documentationStatus === "REJECTED") && (
                             <Button asChild variant="outline" className="mt-4 w-full sm:w-auto">
                                 <a href={settings.onboardingUrl} target="_blank" rel="noreferrer">
                                     <ExternalLink className="h-4 w-4" />
@@ -419,10 +418,18 @@ export function ArenaPixSplitSettingsCard({
                                 </a>
                             </Button>
                         )}
-                        {!settings.onboardingUrl && settings.documentationStatus === "PENDING" && settings.asaasAccountId && (
+                        {!settings.onboardingUrl && settings.documentationStatus === "PENDING" && settings.hasPaymentAccount && (
                             <p className="mt-4 text-xs leading-5 text-slate-600" role="status">
-                                O Asaas ainda não disponibilizou um link de envio neste painel. Use “Atualizar agora” para consultar novamente. Confirme com o suporte financeiro Asaas como concluir a documentação desta conta, sem reiniciar o cadastro.
+                                Não há um link de envio nesta consulta. Confira os documentos abaixo: cada solicitação indica como concluir o envio ao Asaas.
                             </p>
+                        )}
+                        {settings.hasPaymentAccount && !settings.credentialRecoveryRequired && (
+                            <ArenaAsaasDocumentsPanel
+                                arenaId={arenaId}
+                                refreshKey={settings.lastStatusCheckedAt ?? settings.updatedAt}
+                                onUploaded={() => { void handleSync() }}
+                                disabled={busy !== null}
+                            />
                         )}
                     </section>
 
