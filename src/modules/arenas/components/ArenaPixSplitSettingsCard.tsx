@@ -1,5 +1,7 @@
 "use client"
 
+import { ArenaCommissionFields } from "./ArenaCommissionFields"
+
 import type { FormEvent } from "react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
@@ -325,6 +327,8 @@ export function ArenaPixSplitSettingsCard({
                 holderDocument: operationalForm.holderDocument,
                 pixKey: operationalForm.pixKey,
                 platformFeeBasisPoints: operationalForm.platformFeeBasisPoints,
+                commissionMode: operationalForm.commissionMode,
+                commissionFixedCents: operationalForm.commissionFixedCents,
             })
             if (!result.success) throw new Error(result.error)
             updateSettings(result.data)
@@ -582,7 +586,7 @@ export function ArenaPixSplitSettingsCard({
                     <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
                         <div>
                             <h4 id="split-operation-title" className="text-sm font-bold text-slate-950">Operação do split</h4>
-                            <p className="mt-1 text-xs leading-5 text-slate-500">A comissão é calculada sobre o valor bruto e enviada como valor fixo em cada nova cobrança. A arena recebe o saldo líquido após a tarifa do Asaas.</p>
+                            <p className="mt-1 text-xs leading-5 text-slate-500">Defina a comissão da Arena Digital após as tarifas do Asaas. A arena recebe o restante do valor líquido.</p>
                         </div>
                         <div className="flex items-start gap-4">
                             <div className="text-right">
@@ -593,19 +597,7 @@ export function ArenaPixSplitSettingsCard({
                         </div>
                     </div>
 
-                    <div className="mt-5 grid gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
-                            <Label htmlFor="platform-split-fee">Taxa Arena Digital (%)</Label>
-                            <Input id="platform-split-fee" type="number" min="0" max="100" step="0.01" value={(operationalForm.platformFeeBasisPoints / 100).toFixed(2)} onChange={(event) => setOperationalForm((form) => ({ ...form, platformFeeBasisPoints: Math.round(Number(event.target.value) * 100) }))} inputMode="decimal" />
-                        </div>
-                        <div className="flex items-end">
-                            <div className="w-full border-y border-slate-200 py-3 text-sm text-slate-600">
-                                Arena: <strong className="text-slate-950">{((10_000 - operationalForm.platformFeeBasisPoints) / 100).toFixed(2)}%</strong>
-                                <span className="mx-2 text-slate-300">|</span>
-                                Plataforma: <strong className="text-slate-950">{(operationalForm.platformFeeBasisPoints / 100).toFixed(2)}%</strong>
-                            </div>
-                        </div>
-                    </div>
+                    <ArenaCommissionFields value={operationalForm} onChange={(next) => setOperationalForm((form) => ({ ...form, ...next }))} />
                     <div className="mt-5 flex justify-end">
                         <Button type="submit" disabled={busy !== null} className="bg-slate-950 text-white hover:bg-slate-800">
                             {busy === "save" ? <Loader2 className="animate-spin" /> : <Check />}

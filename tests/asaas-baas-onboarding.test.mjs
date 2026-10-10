@@ -115,7 +115,7 @@ test('status sync uses subaccount runtime credentials and approval guards activa
   assert.match(syncBody, /p_snapshot_observed_at: snapshotObservedAt/u)
   assert.match(syncBody, /existing\.activated_at === null[\s\S]*updated\.activated_at !== null[\s\S]*updated\.status === 'active'/u)
   assert.doesNotMatch(syncBody, /updateArenaPaymentAccount\(/u)
-  assert.match(actions, /activated_at:\s*parsed\.enabled/u)
+  assert.match(actions, /rpc\('update_arena_booking_commission'/u)
   assert.match(actions, /Date\.parse\(existing\.updated_at\) \+ 15_000/u)
   assert.match(actions, /assertArenaAsaasRuntimeCredentials\(arenaId\)/u)
   assert.match(actions, /O split só pode ser ativado depois da aprovação geral/u)
