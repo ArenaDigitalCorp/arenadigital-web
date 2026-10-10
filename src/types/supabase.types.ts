@@ -562,6 +562,8 @@ export type Database = {
       }
       arena_payment_accounts: {
         Row: {
+          commission_mode: string
+          commission_fixed_cents: number
           activated_at: string | null
           arena_id: string
           asaas_account_id: string | null
@@ -588,6 +590,8 @@ export type Database = {
           webhook_token_hash: string | null
         }
         Insert: {
+          commission_mode?: string
+          commission_fixed_cents?: number
           activated_at?: string | null
           arena_id: string
           asaas_account_id?: string | null
@@ -614,6 +618,8 @@ export type Database = {
           webhook_token_hash?: string | null
         }
         Update: {
+          commission_mode?: string
+          commission_fixed_cents?: number
           activated_at?: string | null
           arena_id?: string
           asaas_account_id?: string | null
@@ -1993,6 +1999,10 @@ export type Database = {
       }
       booking_payments: {
         Row: {
+          commission_mode: string
+          commission_fixed_cents: number
+          provider_net_amount_cents: number | null
+          commission_settled: boolean
           amount_cents: number
           arena_id: string
           arena_split_basis_points: number
@@ -2029,6 +2039,10 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          commission_mode?: string
+          commission_fixed_cents?: number
+          provider_net_amount_cents?: number | null
+          commission_settled?: boolean
           amount_cents: number
           arena_id: string
           arena_split_basis_points?: number
@@ -2065,6 +2079,10 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          commission_mode?: string
+          commission_fixed_cents?: number
+          provider_net_amount_cents?: number | null
+          commission_settled?: boolean
           amount_cents?: number
           arena_id?: string
           arena_split_basis_points?: number

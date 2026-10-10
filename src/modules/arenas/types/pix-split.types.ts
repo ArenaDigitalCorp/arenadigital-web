@@ -29,6 +29,8 @@ export interface ArenaPixSplitSettings {
   onboardingUrl: string | null
   lastStatusCheckedAt: string | null
   activatedAt: string | null
+  commissionMode: 'percentage_net' | 'fixed'
+  commissionFixedCents: number
   platformFeeBasisPoints: number
   updatedAt: string | null
 }
@@ -54,5 +56,7 @@ export interface UpdateArenaPixSplitSettingsInput {
   holderName?: string | null
   holderDocument?: string | null
   pixKey?: string | null
+  commissionMode: 'percentage_net' | 'fixed'
+  commissionFixedCents: number
   platformFeeBasisPoints: number
 }
