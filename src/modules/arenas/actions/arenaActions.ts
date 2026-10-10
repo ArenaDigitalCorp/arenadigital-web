@@ -250,6 +250,8 @@ function defaultPixSplitSettings(): ArenaPixSplitSettings {
         onboardingUrl: null,
         lastStatusCheckedAt: null,
         activatedAt: null,
+        commissionMode: 'percentage_net',
+        commissionFixedCents: 0,
         platformFeeBasisPoints: 200,
         updatedAt: null,
     }
@@ -264,6 +266,8 @@ type ArenaPaymentAccountRow = {
     holder_name: string | null
     holder_document: string | null
     pix_key: string | null
+    commission_mode: 'percentage_net' | 'fixed'
+    commission_fixed_cents: number
     platform_fee_basis_points: number | null
     status: string | null
     payment_flow: string | null
@@ -371,6 +375,8 @@ const PAYMENT_ACCOUNT_COLUMNS = [
     'holder_document',
     'pix_key',
     'platform_fee_basis_points',
+    'commission_mode',
+    'commission_fixed_cents',
     'status',
     'payment_flow',
     'onboarding_status',
@@ -745,6 +751,8 @@ function mapPixSplitSettings(row: ArenaPaymentAccountRow | null): ArenaPixSplitS
         onboardingUrl: safeOnboardingUrl(row.onboarding_url),
         lastStatusCheckedAt: row.last_status_checked_at ?? null,
         activatedAt: row.activated_at ?? null,
+        commissionMode: row.commission_mode ?? 'percentage_net',
+        commissionFixedCents: Number(row.commission_fixed_cents ?? 0),
         platformFeeBasisPoints: Number(row.platform_fee_basis_points ?? 200),
         updatedAt: row.updated_at ?? null,
     }
@@ -761,6 +769,8 @@ function settingsForFinancialOnboardingAccess(
         asaasWalletId: '',
         asaasAccountId: '',
         pixKey: '',
+        commissionMode: 'percentage_net',
+        commissionFixedCents: 0,
         platformFeeBasisPoints: 0,
     }
 }
@@ -806,29 +816,23 @@ export async function updateArenaPixSplitSettingsAction(
 
         const pixKey = parsed.enabled ? await ensureArenaAsaasPixKey(arenaId) : existing.pix_key
 
-        const now = new Date().toISOString()
-        const payload: ArenaPaymentAccountPayload = {
-            arena_id: arenaId,
-            provider: 'asaas',
-            payment_flow: 'arena_subaccount_split',
-            pix_key: pixKey,
-            platform_fee_basis_points: platformFeeBasisPoints,
-            status: parsed.enabled ? 'active' : 'disabled',
-            activated_at: parsed.enabled && !existing.activated_at ? now : existing.activated_at,
-            updated_at: now,
+        const client = getSupabaseAdmin() as unknown as {
+            rpc(name: 'update_arena_booking_commission', args: {
+                p_arena_id: string; p_actor_id: string; p_enabled: boolean
+                p_mode: 'percentage_net' | 'fixed'; p_basis_points: number
+                p_fixed_cents: number; p_pix_key: string | null
+            }): Promise<{ data: ArenaPaymentAccountRow | null; error: SupabaseErrorLike | null }>
         }
-
-        const data = await saveArenaPaymentAccount(payload)
-        await recordPaymentAudit({
-            arenaId,
-            actorId: profile.dbUserId,
-            action: 'platform_split_updated',
-            newValue: {
-                enabled: parsed.enabled,
-                platform_fee_basis_points: platformFeeBasisPoints,
-            },
-            metadata: { payment_flow: 'arena_subaccount_split' },
+        const { data, error } = await client.rpc('update_arena_booking_commission', {
+            p_arena_id: arenaId,
+            p_actor_id: profile.dbUserId,
+            p_enabled: parsed.enabled,
+            p_mode: parsed.commissionMode,
+            p_basis_points: platformFeeBasisPoints,
+            p_fixed_cents: parsed.commissionFixedCents,
+            p_pix_key: pixKey,
         })
+        if (error || !data) throw new Error(error?.message ?? 'Erro ao salvar comissão da arena')
         revalidatePixSplitPaths(arenaId)
         return { success: true, data: mapPixSplitSettings(data) }
     } catch (err) {
