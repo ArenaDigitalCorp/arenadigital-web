@@ -168,6 +168,8 @@ type ArenaPaymentAccountRow = {
   holder_name: string | null
   holder_document: string | null
   pix_key: string | null
+  commission_mode: 'percentage_net' | 'fixed'
+  commission_fixed_cents: number
   platform_fee_basis_points: number | null
   status: string | null
   payment_flow: string | null
@@ -292,6 +294,8 @@ function defaultPixSplitSettings(): ArenaPixSplitSettings {
     onboardingUrl: null,
     lastStatusCheckedAt: null,
     activatedAt: null,
+    commissionMode: 'percentage_net',
+    commissionFixedCents: 0,
     platformFeeBasisPoints: 200,
     updatedAt: null,
   }
@@ -335,6 +339,8 @@ function mapPixSplitSettings(row: ArenaPaymentAccountRow | undefined): ArenaPixS
     onboardingUrl: safeHttpsUrl(row.onboarding_url),
     lastStatusCheckedAt: row.last_status_checked_at ?? null,
     activatedAt: row.activated_at ?? null,
+    commissionMode: row.commission_mode ?? 'percentage_net',
+    commissionFixedCents: Number(row.commission_fixed_cents ?? 0),
     platformFeeBasisPoints: Number(row.platform_fee_basis_points ?? 200),
     updatedAt: row.updated_at ?? null,
   }
@@ -534,7 +540,7 @@ export async function getPlatformAdminOverview(
       ? supabase
           .from('arena_payment_accounts')
           .select(
-            'arena_id, asaas_wallet_id, asaas_account_id, holder_name, holder_document, pix_key, platform_fee_basis_points, status, payment_flow, onboarding_status, commercial_info_status, bank_account_info_status, documentation_status, onboarding_url, last_status_checked_at, activated_at, webhook_token_hash, credential_recovery_pending, metadata, updated_at',
+            'arena_id, asaas_wallet_id, asaas_account_id, holder_name, holder_document, pix_key, platform_fee_basis_points, commission_mode, commission_fixed_cents, status, payment_flow, onboarding_status, commercial_info_status, bank_account_info_status, documentation_status, onboarding_url, last_status_checked_at, activated_at, webhook_token_hash, credential_recovery_pending, metadata, updated_at',
           )
           .eq('provider', 'asaas')
           .limit(1000)

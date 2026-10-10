@@ -67,8 +67,15 @@ export const updateArenaPixSplitSettingsSchema = z.object({
   holderName: z.string().trim().max(120).nullable().optional(),
   holderDocument: z.string().trim().max(20).nullable().optional(),
   pixKey: z.string().trim().max(255).nullable().optional(),
+  commissionMode: z.enum(['percentage_net', 'fixed']),
+  commissionFixedCents: z.number().int().min(0).max(100_000_000),
   platformFeeBasisPoints: z.coerce.number().int().min(0).max(10_000),
-}).strict()
+}).strict().superRefine((value, ctx) => {
+  if ((value.commissionMode === 'fixed' && value.platformFeeBasisPoints !== 0)
+    || (value.commissionMode === 'percentage_net' && value.commissionFixedCents !== 0)) {
+    ctx.addIssue({ code: 'custom', path: ['commissionMode'], message: 'Escolha apenas um tipo de comissão.' })
+  }
+})
 
 export function normalizeAsaasSubaccountInput(input: z.infer<typeof createArenaAsaasSubaccountSchema>) {
   return {
