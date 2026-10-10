@@ -83,6 +83,14 @@ const sections = [
         ],
     },
     {
+        title: "6.2. Serviços financeiros e de pagamentos — Asaas",
+        body: [
+            "Os serviços financeiros e de pagamentos disponibilizados pela integração da plataforma com o Asaas, incluindo abertura e manutenção de conta de pagamento para as arenas, emissão de cobranças Pix, processamento de pagamentos e transferências de valores, são prestados pelo ASAAS GESTÃO FINANCEIRA INSTITUIÇÃO DE PAGAMENTOS S.A. (Asaas).",
+            "Nessa integração, a Arena Digital atua como integradora tecnológica e distribuidora da experiência do produto, não sendo instituição financeira ou de pagamento, nem realizando intermediação financeira em nome próprio.",
+            "O relacionamento financeiro e de pagamentos e a responsabilidade regulatória pelos serviços acima descritos são do Asaas, nos termos da regulamentação vigente.",
+        ],
+    },
+    {
         title: "7. Responsabilidades",
         body: ["A Arena Digital não é responsável por:"],
         list: [
@@ -170,7 +178,7 @@ export default function TermsOfUsePage() {
                             </section>
                         ))}
 
-                        <p className="mt-9 text-[10px] leading-[1.5]">Última atualização: 13/09/2026</p>
+                        <p className="mt-9 text-[10px] leading-[1.5]">Última atualização: 09/10/2026</p>
                     </div>
                 </section>
             </main>
