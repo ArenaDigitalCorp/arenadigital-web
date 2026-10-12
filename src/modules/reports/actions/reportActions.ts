@@ -1323,7 +1323,26 @@ export async function getPaymentStatusReportAction(
       status: 'Pago' as const,
     }))
 
+    // Estorno de recebimento de caixa já fechado preserva a entrada original e
+    // lança uma saída 'estorno' (source_id = id da entrada): ela não conta como paga.
+    const estornados = new Set<string>()
+    if ((transactionsResult.data ?? []).length > 0) {
+      const estornosResult = await fetchAllSupabaseRows(
+        supabase
+          .from('transactions')
+          .select('source_id')
+          .eq('arena_id', arenaId)
+          .eq('source_type', 'estorno')
+          .order('id', { ascending: true })
+      )
+      logSourceError('estornos', estornosResult.error)
+      for (const estorno of (estornosResult.data ?? []) as { source_id: string | null }[]) {
+        if (estorno.source_id) estornados.add(estorno.source_id)
+      }
+    }
+
     const transacoesFiltradas = (transactionsResult.data ?? [])
+      .filter((t: { id: string }) => !estornados.has(t.id))
       .filter((t: any) =>
         shouldIncludeTransactionRow(t.category ?? '', t.description, sourceFlags.mode, stationTypeNames, {
           detalharPorHora,

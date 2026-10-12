@@ -3,6 +3,7 @@
 import { getSupabaseAdmin } from '@/lib/supabase-server';
 import {
   assertArenaAdminAccess,
+  assertArenaCaixaAccess,
   assertArenaScopedResourceAccess,
 } from '@/lib/server-auth';
 import { SupabaseFinanceRepository } from '@/modules/finance/repositories/SupabaseFinanceRepository';
@@ -84,7 +85,7 @@ export async function createTransactionAction(
   input: unknown
 ) {
   try {
-    const { dbUserId } = await assertArenaAdminAccess(arenaId);
+    const { dbUserId } = await assertArenaCaixaAccess(arenaId);
     const parsed = transactionActionSchema.safeParse(input);
     if (!parsed.success) {
       throw new Error(parsed.error.issues[0]?.message ?? 'Dados do lançamento inválidos');
@@ -93,14 +94,23 @@ export async function createTransactionAction(
       ...parsed.data,
       total_value: Number(Math.max(0, parsed.data.quantity * parsed.data.unit_value - parsed.data.discount).toFixed(2)),
       atleta_id: parsed.data.atleta_id ?? null,
-      modo_pagamento_id: parsed.data.modo_pagamento_id ?? null,
     };
-    const repo = new SupabaseFinanceRepository(getSupabaseAdmin());
-    const data = await repo.create({
-      ...safeInput,
-      arena_id: arenaId,
-      registered_by: dbUserId,
+    const { data, error } = await getSupabaseAdmin().rpc('create_caixa_transaction', {
+      p_arena_id: arenaId,
+      p_type: safeInput.type,
+      p_category: safeInput.category,
+      p_description: safeInput.description,
+      p_quantity: safeInput.quantity,
+      p_unit_value: safeInput.unit_value,
+      p_discount: safeInput.discount,
+      p_total_value: safeInput.total_value,
+      p_launch_date: safeInput.launch_date,
+      p_registration_date: safeInput.registration_date,
+      p_atleta_id: safeInput.atleta_id ?? undefined,
+      p_modo_pagamento_id: safeInput.modo_pagamento_id,
+      p_registered_by: dbUserId,
     });
+    if (error) throw new Error(error.message);
     revalidatePath(`/dashboard/finance/${arenaId}`);
     return { success: true, data };
   } catch (err) {
@@ -116,7 +126,7 @@ export async function updateTransactionAction(
   input: unknown
 ) {
   try {
-    await assertArenaAdminAccess(arenaId);
+    await assertArenaCaixaAccess(arenaId);
     await assertArenaScopedResourceAccess('transactions', transactionId, { expectedArenaId: arenaId });
     const parsed = transactionActionSchema.safeParse(input);
     if (!parsed.success) {
@@ -126,10 +136,22 @@ export async function updateTransactionAction(
       ...parsed.data,
       total_value: Number(Math.max(0, parsed.data.quantity * parsed.data.unit_value - parsed.data.discount).toFixed(2)),
       atleta_id: parsed.data.atleta_id ?? null,
-      modo_pagamento_id: parsed.data.modo_pagamento_id ?? null,
     };
-    const repo = new SupabaseFinanceRepository(getSupabaseAdmin());
-    const data = await repo.update(transactionId, safeInput);
+    const { data, error } = await getSupabaseAdmin().rpc('update_caixa_transaction', {
+      p_arena_id: arenaId,
+      p_transaction_id: transactionId,
+      p_category: safeInput.category,
+      p_description: safeInput.description,
+      p_quantity: safeInput.quantity,
+      p_unit_value: safeInput.unit_value,
+      p_discount: safeInput.discount,
+      p_total_value: safeInput.total_value,
+      p_launch_date: safeInput.launch_date,
+      p_registration_date: safeInput.registration_date,
+      p_atleta_id: safeInput.atleta_id ?? undefined,
+      p_modo_pagamento_id: safeInput.modo_pagamento_id,
+    });
+    if (error) throw new Error(error.message);
     revalidatePath(`/dashboard/finance/${arenaId}`);
     return { success: true, data };
   } catch (err) {
@@ -144,10 +166,13 @@ export async function deleteTransactionAction(
   transactionId: string
 ) {
   try {
-    await assertArenaAdminAccess(arenaId);
+    await assertArenaCaixaAccess(arenaId);
     await assertArenaScopedResourceAccess('transactions', transactionId, { expectedArenaId: arenaId });
-    const repo = new SupabaseFinanceRepository(getSupabaseAdmin());
-    await repo.delete(transactionId);
+    const { error } = await getSupabaseAdmin().rpc('delete_caixa_transaction', {
+      p_arena_id: arenaId,
+      p_transaction_id: transactionId,
+    });
+    if (error) throw new Error(error.message);
     revalidatePath(`/dashboard/finance/${arenaId}`);
     return { success: true };
   } catch (err) {

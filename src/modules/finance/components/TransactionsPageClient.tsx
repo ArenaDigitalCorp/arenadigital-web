@@ -2,9 +2,9 @@
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, ArrowLeft, ChevronLeft, ChevronRight, Edit, Trash2, Calendar } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
-import { getTransactionsAction, deleteTransactionAction } from "@/modules/finance/actions/financeActions";
+import { getTransactionsAction } from "@/modules/finance/actions/financeActions";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
 import { startOfMonth, endOfMonth, format, addMonths, subMonths } from "date-fns";
@@ -19,15 +19,6 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { arenaDataTable } from "@/lib/arena-data-table";
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogFooter,
-    DialogDescription,
-} from "@/components/ui/dialog";
-import { TransactionForm, TransactionData } from "@/modules/finance/components/TransactionForm";
 import { toast } from "sonner";
 import { formatLaunchDate } from "@/lib/format";
 
@@ -37,8 +28,8 @@ interface Props {
 }
 
 const LABELS = {
-    entrada: { title: 'Entradas', button: 'Nova entrada', createModal: 'Nova entrada', editModal: 'Editar entrada' },
-    saída:   { title: 'Saídas',   button: 'Nova saída',   createModal: 'Nova saída',   editModal: 'Editar saída'   },
+    entrada: { title: 'Entradas' },
+    saída: { title: 'Saídas' },
 } as const;
 
 const formatCurrency = (val: number) =>
@@ -48,9 +39,6 @@ export function TransactionsPageClient({ arenaId, type }: Props) {
     const [transactions, setTransactions] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [currentDate, setCurrentDate] = useState(new Date());
-    const [isFormOpen, setIsFormOpen] = useState(false);
-    const [editingTransaction, setEditingTransaction] = useState<TransactionData | null>(null);
-    const [deletingId, setDeletingId] = useState<string | null>(null);
 
     const labels = LABELS[type];
 
@@ -71,46 +59,6 @@ export function TransactionsPageClient({ arenaId, type }: Props) {
 
     useEffect(() => { loadData(); }, [loadData]);
 
-    const handleOpenEdit = (t: any) => {
-        setEditingTransaction({
-            id: t.id,
-            type: t.type,
-            category: t.category,
-            description: t.description,
-            quantity: t.quantity,
-            unit_value: t.unit_value,
-            discount: t.discount,
-            total_value: t.total_value,
-            launch_date: t.launch_date,
-            registration_date: t.registration_date,
-            atleta_id: t.atleta_id,
-            atleta: t.atleta,
-            modo_pagamento_id: t.modo_pagamento_id,
-            modo_pagamento: t.modo_pagamento,
-        });
-        setIsFormOpen(true);
-    };
-
-    const handleFormSuccess = () => {
-        setIsFormOpen(false);
-        setEditingTransaction(null);
-        loadData();
-    };
-
-    const handleDelete = async () => {
-        if (!deletingId) return;
-        try {
-            const result = await deleteTransactionAction(arenaId, deletingId);
-            if (!result.success) throw new Error(result.error);
-            setTransactions(transactions.filter(t => t.id !== deletingId));
-            toast.success("Lançamento excluído!");
-        } catch (error) {
-            toast.error(error instanceof Error ? error.message : "Erro ao excluir lançamento.");
-        } finally {
-            setDeletingId(null);
-        }
-    };
-
     if (isLoading) return <Skeleton className="h-[400px] w-full" />;
 
     return (
@@ -121,9 +69,12 @@ export function TransactionsPageClient({ arenaId, type }: Props) {
 
             <div className="flex items-center justify-between">
                 <h1 className="text-3xl font-black text-arena-navy-800 tracking-tight">{labels.title}</h1>
-                <Button onClick={() => { setEditingTransaction(null); setIsFormOpen(true); }} className="bg-arena-button hover:bg-arena-button-hover text-white font-semibold shadow-sm">
-                    {labels.button} <Plus className="ml-2 h-4 w-4" />
-                </Button>
+                <p className="text-sm text-arena-navy-800/60">
+                    Histórico somente leitura. Novos lançamentos são feitos na aba{' '}
+                    <Link href={`/dashboard/finance/${arenaId}/caixa`} className="font-bold text-arena-button hover:underline">
+                        Caixa
+                    </Link>.
+                </p>
             </div>
 
             <Card className="border-none shadow-xl rounded-2xl overflow-hidden bg-white">
@@ -160,7 +111,6 @@ export function TransactionsPageClient({ arenaId, type }: Props) {
                             <TableHead className={arenaDataTable.th}>Modo pagamento</TableHead>
                             {type === 'entrada' && <TableHead className={arenaDataTable.th}>Atleta</TableHead>}
                             <TableHead className={arenaDataTable.th}>Registrado por</TableHead>
-                            <TableHead className={cn(arenaDataTable.thRight, "w-24")} />
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -188,56 +138,11 @@ export function TransactionsPageClient({ arenaId, type }: Props) {
                                     </TableCell>
                                 )}
                                 <TableCell className={cn(arenaDataTable.td, "text-arena-navy-800/60")}>{t.registered_by?.name}</TableCell>
-                                <TableCell className={arenaDataTable.tdRight}>
-                                    <div className="flex justify-end gap-2">
-                                        <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(t)} className="h-8 w-8 bg-[#FFC145]/10 text-arena-navy-800/60 hover:bg-[#FFC145]/30 hover:text-arena-navy-800">
-                                            <Edit className="h-4 w-4" />
-                                        </Button>
-                                        <Button variant="ghost" size="icon" onClick={() => setDeletingId(t.id)} className="h-8 w-8 bg-red-50 text-red-500 hover:bg-red-100">
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                    </div>
-                                </TableCell>
                             </TableRow>
                         ))}
                     </TableBody>
                 </Table>
             </Card>
-
-            {/* Create / Edit modal */}
-            <Dialog open={isFormOpen} onOpenChange={(open) => { if (!open) { setIsFormOpen(false); setEditingTransaction(null); } }}>
-                <DialogContent className="w-[calc(100vw-2rem)] max-w-[440px]">
-                    <DialogHeader>
-                        <DialogTitle className="text-2xl font-black text-arena-navy-800">
-                            {editingTransaction ? labels.editModal : labels.createModal}
-                        </DialogTitle>
-                    </DialogHeader>
-                    <TransactionForm
-                        arenaId={arenaId}
-                        registeredBy=""
-                        type={type}
-                        transaction={editingTransaction ?? undefined}
-                        onSuccess={handleFormSuccess}
-                        onCancel={() => { setIsFormOpen(false); setEditingTransaction(null); }}
-                    />
-                </DialogContent>
-            </Dialog>
-
-            {/* Delete confirmation modal */}
-            <Dialog open={!!deletingId} onOpenChange={(open) => { if (!open) setDeletingId(null); }}>
-                <DialogContent className="max-w-sm">
-                    <DialogHeader>
-                        <DialogTitle className="text-lg font-black text-arena-navy-800">Excluir lançamento?</DialogTitle>
-                        <DialogDescription className="text-arena-navy-800/60">
-                            Esta ação não pode ser desfeita. O lançamento será removido permanentemente.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter className="flex gap-3 sm:justify-end">
-                        <Button variant="outline" onClick={() => setDeletingId(null)} className="border-arena-navy-800/20">Cancelar</Button>
-                        <Button onClick={handleDelete} className="bg-red-600 hover:bg-red-700 text-white font-bold">Excluir</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
         </div>
     );
 }

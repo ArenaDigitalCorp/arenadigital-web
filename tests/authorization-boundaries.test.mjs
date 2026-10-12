@@ -150,14 +150,21 @@ test('arena classification and notes are committed by one audited super-admin RP
   assert.doesNotMatch(actions, /app_discoverable, platform_notes, owner_id/u)
 })
 
-test('user and finance mutations remain restricted to Owner or Gestor', async () => {
+test('user mutations remain restricted to Owner or Gestor', async () => {
   const userActions = await source('src/modules/users/actions/userActions.ts')
   for (const name of ['createArenaUserAction', 'updateArenaUserAction', 'deleteArenaUserAction']) {
     assert.match(exportedFunctionBody(userActions, name), /assertArenaAdminAccess\(arenaId\)/)
   }
+})
 
+test('caixa lançamento mutations are open to any active arena member, not admin-only', async () => {
   const financeActions = await source('src/modules/finance/actions/financeActions.ts')
   for (const name of ['createTransactionAction', 'updateTransactionAction', 'deleteTransactionAction']) {
+    assert.match(exportedFunctionBody(financeActions, name), /assertArenaCaixaAccess\(arenaId\)/)
+  }
+
+  const financeReadActions = ['getFinanceDashboardAction', 'getTransactionsAction', 'getAvulsosTodosAction']
+  for (const name of financeReadActions) {
     assert.match(exportedFunctionBody(financeActions, name), /assertArenaAdminAccess\(arenaId\)/)
   }
 })
