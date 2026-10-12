@@ -32,13 +32,14 @@ import {
   GRADIENT_MEDIA_CARD_STATION_PRESET,
 } from '@/components/dashboard/GradientMediaCard';
 import { StationForm } from '@/modules/stations/components/StationForm';
+import { stationStatusLabel } from '@/modules/stations/station-status';
 import { normalizeString } from '@/lib/utils';
 
 const stationFilterSelectClass =
   'h-10 w-full min-w-[160px] border-slate-300 text-sm text-arena-navy-800 shadow-none focus-visible:ring-1 focus-visible:ring-[#20B2AA] data-[placeholder]:text-arena-navy-800/60 sm:w-fit';
 
 type StationTypeFilter = 'all' | 'bar' | 'loja' | 'outro';
-type StationStatusFilter = 'all' | 'ativo' | 'inativo' | 'manutencao' | 'desativado';
+type StationStatusFilter = 'all' | 'ativo' | 'manutencao' | 'desativado';
 type StationSortOrder = 'recent' | 'oldest';
 
 interface StationListItem {
@@ -78,22 +79,15 @@ function stationStatusBadge(status: string | null | undefined) {
   if (s === 'ativo') return undefined;
   if (s === 'inativo') {
     return (
-      <Badge variant="warning" className="pointer-events-none">
-        Inativo
+      <Badge variant="destructive" className="pointer-events-none">
+        {stationStatusLabel(s)}
       </Badge>
     );
   }
   if (s === 'Em manutenção') {
     return (
       <Badge variant="outline" className="pointer-events-none border-white/80 bg-white/90 text-arena-navy-800">
-        Em manutenção
-      </Badge>
-    );
-  }
-  if (s === 'Desativado') {
-    return (
-      <Badge variant="destructive" className="pointer-events-none">
-        Desativado
+        {stationStatusLabel(s)}
       </Badge>
     );
   }
@@ -111,7 +105,7 @@ export function StationsPageClient({ arenaId, initialStations, canManage }: Prop
   const [editOpen, setEditOpen] = useState(false);
   const [editingStation, setEditingStation] = useState<StationListItem | null>(null);
   const [typeFilter, setTypeFilter] = useState<StationTypeFilter>('all');
-  const [statusFilter, setStatusFilter] = useState<StationStatusFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<StationStatusFilter>('ativo');
   const [sortOrder, setSortOrder] = useState<StationSortOrder>('recent');
 
   useEffect(() => {
@@ -134,9 +128,8 @@ export function StationsPageClient({ arenaId, initialStations, canManage }: Prop
       list = list.filter((s) => {
         const st = s.status ?? 'ativo';
         if (statusFilter === 'ativo') return isStationActive(s.status);
-        if (statusFilter === 'inativo') return st === 'inativo';
         if (statusFilter === 'manutencao') return st === 'Em manutenção';
-        if (statusFilter === 'desativado') return st === 'Desativado';
+        if (statusFilter === 'desativado') return st === 'inativo';
         return true;
       });
     }
@@ -264,7 +257,6 @@ export function StationsPageClient({ arenaId, initialStations, canManage }: Prop
                 <SelectContent>
                   <SelectItem value="all">Todos os status</SelectItem>
                   <SelectItem value="ativo">Ativo</SelectItem>
-                  <SelectItem value="inativo">Inativo</SelectItem>
                   <SelectItem value="manutencao">Em manutenção</SelectItem>
                   <SelectItem value="desativado">Desativado</SelectItem>
                 </SelectContent>

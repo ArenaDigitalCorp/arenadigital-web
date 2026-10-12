@@ -13,7 +13,7 @@ export const transactionActionSchema = z.object({
   launch_date: z.string().date(),
   registration_date: z.string().date(),
   atleta_id: nullableUuid,
-  modo_pagamento_id: nullableUuid,
+  modo_pagamento_id: z.string({ error: 'Informe o modo de pagamento' }).uuid('Informe o modo de pagamento'),
 }).strict().superRefine((value, context) => {
   const calculatedTotal = Math.max(0, value.quantity * value.unit_value - value.discount)
   if (Math.abs(value.total_value - calculatedTotal) > 0.009) {

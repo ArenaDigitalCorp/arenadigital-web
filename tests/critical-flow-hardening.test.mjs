@@ -28,7 +28,7 @@ function validTransaction(overrides = {}) {
     launch_date: '2026-08-01',
     registration_date: '2026-08-01',
     atleta_id: null,
-    modo_pagamento_id: null,
+    modo_pagamento_id: '86d2b40c-9001-4402-adff-6bf16931aeec',
     ...overrides,
   }
 }
@@ -42,6 +42,7 @@ test('finance action DTO is a strict business-field allowlist', () => {
   }
 
   assert.equal(transactionActionSchema.safeParse(validTransaction({ total_value: 1 })).success, false)
+  assert.equal(transactionActionSchema.safeParse(validTransaction({ modo_pagamento_id: null })).success, false)
 })
 
 test('finance action parses before persistence and owns tenant and actor ids', async () => {
@@ -134,14 +135,14 @@ test('loyalty mutations are admin-only, idempotent RPC calls', async () => {
 })
 
 test('cited mutation consumers check structured failures before local success state', async () => {
-  const [transactions, products, booking, court] = await Promise.all([
-    source('src/modules/finance/components/TransactionsPageClient.tsx'),
+  const [caixa, products, booking, court] = await Promise.all([
+    source('src/modules/finance/components/CaixaPageClient.tsx'),
     source('src/modules/products/components/ProductsPageClient.tsx'),
     source('src/modules/bookings/components/BookingDetailsModal.tsx'),
     source('src/modules/courts/components/CourtForm.tsx'),
   ])
 
-  assert.match(transactions, /deleteTransactionAction[\s\S]{0,120}if \(!result\.success\) throw/)
+  assert.match(caixa, /deleteTransactionAction[\s\S]{0,120}if \(!result\.success\) throw/)
   assert.match(products, /deleteProductAction[\s\S]{0,120}if \(!result\.success\) throw/)
   assert.match(booking, /updateBookingStatusAction[\s\S]{0,120}if \(!result\.success\) throw/)
   assert.match(court, /updateCourtAction\(arenaId, newCourt\.id[\s\S]{0,160}if \(!updateRes\.success\) throw/)
