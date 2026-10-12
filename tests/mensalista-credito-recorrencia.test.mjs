@@ -18,7 +18,7 @@ register(
     `)
 )
 
-const { CREDITO_TIPO_LABEL, formatRecorrenciaLabel } = await import(
+const { CREDITO_TIPO_LABEL, formatRecorrenciaLabel, clampCreditoAbatimento } = await import(
   '../src/modules/mensalistas/credito-recorrencia.ts'
 )
 const { buildMensalistaCreditRows } = await import('../src/modules/reports/mensalista-credit-rows.ts')
@@ -238,4 +238,38 @@ test('a action de retirada repassa a subconta ao RPC', async () => {
   assert.match(retiradaBlock, /p_plano_id: parsed\.planoId \?\? undefined/)
   // Saldo por recorrência vem do banco, não de estimativa na tela.
   assert.match(actions, /from\('mensalista_credito_saldo_recorrencia'\)/)
+})
+
+// ── clampCreditoAbatimento (reajuste com abatimento de crédito) ────────────
+
+test('clampCreditoAbatimento não passa do que falta na cobrança nem do saldo', () => {
+  assert.equal(clampCreditoAbatimento(100, 50, 200), 50)
+  assert.equal(clampCreditoAbatimento(100, 200, 30), 30)
+  assert.equal(clampCreditoAbatimento(20, 200, 200), 20)
+})
+
+test('clampCreditoAbatimento nunca fica negativo', () => {
+  assert.equal(clampCreditoAbatimento(-10, 50, 200), 0)
+  assert.equal(clampCreditoAbatimento(50, -10, 200), 0)
+  assert.equal(clampCreditoAbatimento(50, 50, -10), 0)
+})
+
+test('clampCreditoAbatimento arredonda a centavos', () => {
+  assert.equal(clampCreditoAbatimento(10.005, 100, 100), 10.01)
+})
+
+test('a action de reajuste só abate crédito via register_mensalista_payment_atomic', async () => {
+  const actions = await readFile(
+    new URL('../src/modules/mensalistas/actions/mensalistaActions.ts', import.meta.url),
+    'utf8'
+  )
+  const reajusteBlock = actions.slice(actions.indexOf('async function abaterCreditoDoReajuste'))
+  assert.match(reajusteBlock, /\.rpc\('register_mensalista_payment_atomic'/)
+  assert.doesNotMatch(reajusteBlock, /from\('mensalista_creditos'\)\s*\n\s*\.(insert|update|delete)/)
+})
+
+test('clampCreditoAbatimento: mês zerado no reajuste não tem o que abater', () => {
+  // Reajustar o valor do mês para R$ 0 zera o "devido" — crédito não vira
+  // saque: sem restante na cobrança, nada é aplicável, mesmo com saldo sobrando.
+  assert.equal(clampCreditoAbatimento(400, 0, 430), 0)
 })

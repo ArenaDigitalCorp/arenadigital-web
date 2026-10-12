@@ -265,6 +265,8 @@ export function MensalistaDetailClient({
     label: string
     valorAtual: number
     valorMesAtual: number | null
+    /** Cobrança do mês visualizado sem rateio e ainda sem pagamento/crédito lançado. */
+    creditoElegivel: boolean
   } | null>(null)
   const [pausaTarget, setPausaTarget] = useState<{
     planoId: string
@@ -587,9 +589,20 @@ export function MensalistaDetailClient({
             return total + Math.max(0, hf - hi)
           }, 0)
           const m = rec.mensalidade
+          const cobrancasAtivas = rec.cobrancas.filter((c) => c.ativo)
           const restanteMensalidadeAtual = m
-            ? restanteMensalidade(Number(m.valor_total), rec.cobrancas.filter((c) => c.ativo))
+            ? restanteMensalidade(Number(m.valor_total), cobrancasAtivas)
             : 0
+          // Só vale abater crédito no reajuste quando a cobrança do mês é de UM
+          // atleta só (sem rateio) e ainda não recebeu pagamento/crédito — as
+          // mesmas condições que reajustar_plano_mensalista_atomic já exige para
+          // não pular o mês.
+          const creditoElegivelReajuste =
+            !!m &&
+            !m.rateio &&
+            cobrancasAtivas.length === 1 &&
+            Number(cobrancasAtivas[0].valor_pago) === 0 &&
+            Number(cobrancasAtivas[0].credito_aplicado) === 0
           const isOpen = expandedPlanoIds.has(p.id)
           const valorMesAtual = m ? Number(m.valor_total) : Number(p.valor_mensal)
           const valorDiferenteDoPlano =
@@ -656,6 +669,16 @@ export function MensalistaDetailClient({
                     {formatCurrency(valorMesAtual)}
                     {valorDiferenteDoPlano ? ' este mês' : '/mês'}
                   </span>
+                  {m &&
+                    restanteMensalidadeAtual > 0.005 &&
+                    restanteMensalidadeAtual < valorMesAtual - 0.005 && (
+                      <span
+                        className="text-xs font-bold text-amber-700"
+                        title="Parte deste mês já foi coberta por pagamento ou crédito — isto é o que ainda falta cobrar em dinheiro."
+                      >
+                        resta {formatCurrency(restanteMensalidadeAtual)}
+                      </span>
+                    )}
                   {ajusteDoMes && (
                     <>
                       <Badge className="bg-sky-100 text-sky-700 border-none font-bold text-[10px] uppercase">
@@ -770,6 +793,7 @@ export function MensalistaDetailClient({
                             label: `${(p.court as { name?: string } | null)?.name ?? ''} · ${DIAS[p.dia_semana]} ${horario}`,
                             valorAtual: Number(p.valor_mensal) || 0,
                             valorMesAtual: m ? Number(m.valor_total) : null,
+                            creditoElegivel: creditoElegivelReajuste,
                           })
                         }
                       >
@@ -1471,6 +1495,8 @@ export function MensalistaDetailClient({
         valorAtual={reajusteTarget?.valorAtual ?? 0}
         valorMesAtual={reajusteTarget?.valorMesAtual ?? null}
         competencia={`${competencia}-01`}
+        creditoSubcontas={detalhe.creditoSubcontas}
+        creditoElegivel={reajusteTarget?.creditoElegivel ?? false}
       />
       <PausarPlanoModal
         open={!!pausaTarget}
