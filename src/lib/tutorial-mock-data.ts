@@ -301,6 +301,7 @@ export function buildTutorialFinance(arenaId: string): {
     id,
     arena_id: arenaId,
     atleta_id: null,
+    caixa_session_id: null,
     category,
     description,
     discount: 0,

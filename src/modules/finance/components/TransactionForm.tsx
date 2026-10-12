@@ -36,6 +36,7 @@ import {
 import { Check, ChevronsUpDown, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createTransactionAction, updateTransactionAction, getModoPagamentoAction } from "@/modules/finance/actions/financeActions";
+import { getTransactionCategoriesAction } from "@/modules/finance/actions/transactionCategoryActions";
 import { getAthletesByArenaAction } from "@/modules/athletes/actions/athleteActions";
 import { toast } from "sonner";
 import { trackAction } from "@/lib/telemetry/client";
@@ -98,6 +99,7 @@ export function TransactionForm({
             : null
     );
     const [modosPagamento, setModosPagamento] = useState<ModoPagamento[]>([]);
+    const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
 
     const form = useForm<TransactionFormValues>({
         resolver: zodResolver(transactionSchema) as any,
@@ -138,6 +140,22 @@ export function TransactionForm({
         }
         loadModosPagamento();
     }, []);
+
+    // Carregar categorias de lançamento cadastradas pela arena (Cadastros Auxiliares)
+    useEffect(() => {
+        async function loadCategories() {
+            try {
+                const res = await getTransactionCategoriesAction(arenaId);
+                const names = (res.data ?? [])
+                    .filter((c) => c.type === effectiveType && c.active)
+                    .map((c) => c.name);
+                setCategoryOptions(names);
+            } catch (err) {
+                console.error("Erro ao carregar categorias de lançamento:", err);
+            }
+        }
+        loadCategories();
+    }, [arenaId, effectiveType]);
 
     // Carregar atletas da carteira da arena (somente para entradas)
     useEffect(() => {
@@ -195,9 +213,11 @@ export function TransactionForm({
         }
     };
 
-    const categories = effectiveType === "entrada"
-        ? ["Mensalidade", "Bar", "Loja", "Aluguel", "Serviços da Arena"]
-        : ["Salário", "Manutenção", "Fornecedores", "Contas Fixas"];
+    // Inclui a categoria atual do lançamento mesmo que tenha sido inativada/renomeada
+    // depois, para não deixar o Select em branco ao editar um lançamento antigo.
+    const categories = transaction?.category && !categoryOptions.includes(transaction.category)
+        ? [transaction.category, ...categoryOptions]
+        : categoryOptions;
 
     return (
         <Form {...form}>

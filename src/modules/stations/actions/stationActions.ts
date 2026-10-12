@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { assertArenaAccess, assertArenaAdminAccess, assertArenaBackofficeAccess, assertStationAccess } from '@/lib/server-auth'
 import { fetchAllSupabaseRows } from '@/lib/supabase-pagination'
 import type { StationOrdersFilters } from '@/modules/stations/types/station.types'
+import { isStationStatus } from '@/modules/stations/station-status'
 
 export async function getStationsWithMetricsAction(arenaId: string) {
     try {
@@ -219,6 +220,7 @@ export async function getArenaStationsForCatalogAction(arenaId: string) {
 export async function createStationAction(arenaId: string, input: { name: string; status: string; station_type_id: string }) {
     try {
         await assertArenaAdminAccess(arenaId)
+        if (!isStationStatus(input.status)) throw new Error('Status de estação inválido')
         const { data, error } = await getSupabaseAdmin()
             .from('stations')
             .insert([{ ...input, arena_id: arenaId }])
@@ -237,6 +239,7 @@ export async function updateStationAction(arenaId: string, stationId: string, in
     try {
         await assertArenaAdminAccess(arenaId)
         await assertStationAccess(stationId, arenaId)
+        if (input.status !== undefined && !isStationStatus(input.status)) throw new Error('Status de estação inválido')
         const { data, error } = await getSupabaseAdmin()
             .from('stations')
             .update(input)
