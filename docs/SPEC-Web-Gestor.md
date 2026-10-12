@@ -3421,3 +3421,201 @@ parâmetros é removida). Testes: pgTAP `supabase/tests/20261007230000_turmas_te
   - turmas, níveis, horários e alunos por `select` com service role (FKs permitem embed do PostgREST);
   - professores por `list_atleta_perfis`.
 
+## 47. Caixa — Abertura e Fechamento Diário (12/10/2026)
+
+Em desenvolvimento, branches `feat/caixa-sessions` (db) / `feat/caixa` (web). Ainda não aplicado em
+homologação nem produção. Não confundir com a tabela `station_orders`/comandas (§5.8.1 do PRD) — este é
+o caixa diário da **arena** dentro do Financeiro, não o caixa de uma Estação.
+
+### 47.1 Banco (`arenadigital-db`)
+
+Migração `20261012150000_caixa_sessions_schema_rls_rpcs.sql`. pgTAP:
+`supabase/tests/20261012150000_caixa_sessions_schema_rls_rpcs_test.sql` (24 verificações).
+
+- **Tabela `caixa_sessions`**: `arena_id`, `status` (`'aberta'|'fechada'`), `opened_at`, `opened_by`,
+  `opening_balance`, `opening_notes`, `closed_at`, `closed_by`, `total_entradas`, `total_saidas`,
+  `closing_balance` (pode ser negativo), `closing_notes`. Índice único parcial
+  `caixa_sessions_one_open_per_arena` (`WHERE status = 'aberta'`) garante só 1 sessão aberta por arena,
+  mas permite abrir/fechar várias vezes no mesmo dia. Constraint `caixa_sessions_closed_fields_check`
+  mantém os campos de fechamento coerentes com o status.
+- **`transactions.caixa_session_id`** (nullable, `ON DELETE SET NULL`): vincula um lançamento manual à
+  sessão aberta no momento da criação. Constraint `transactions_caixa_session_or_source_check`
+  (`caixa_session_id IS NULL OR source_type IS NULL`) impede misturar lançamento manual de caixa com
+  lançamento automático (comanda/Asaas/mensalista).
+- **RLS**: só `SELECT` via `can_access_arena_caixa(arena_id)` (novo helper — igual a
+  `can_access_arena_backoffice`, mas inclui a role `'Caixa'`, já que aqui é justamente quem deve operar
+  o caixa). Nenhuma policy de escrita; toda escrita é via RPC `SECURITY DEFINER`.
+- **RPCs** (service_role; parâmetros explícitos de usuário, nunca `auth.uid()`, mesmo padrão de
+  `close_station_order`):
+
+  | RPC | Uso no web |
+  |---|---|
+  | `open_caixa_session(p_arena_id, p_opened_by, p_opening_balance, p_opening_notes?)` | `openCaixaSessionAction` — erro `23505` se já houver caixa aberto |
+  | `close_caixa_session(p_arena_id, p_session_id, p_closed_by, p_closing_notes?)` | `closeCaixaSessionAction` — calcula `total_entradas`/`total_saidas`/`closing_balance`; idempotente se já fechada |
+  | `create_caixa_transaction(...)` | `createTransactionAction` — erro `P0002` se não houver caixa aberto na arena |
+  | `update_caixa_transaction(...)` | `updateTransactionAction` — erro `23514` se a sessão do lançamento já está fechada |
+  | `delete_caixa_transaction(p_arena_id, p_transaction_id)` | `deleteTransactionAction` — mesma regra de sessão fechada |
+- **Trigger** `trg_prevent_closed_caixa_transaction_mutation` (`BEFORE UPDATE OR DELETE` em
+  `transactions`): defesa em profundidade — bloqueia alterar/excluir um lançamento de sessão fechada
+  mesmo fora das RPCs acima.
+- Leitura de sessão atual/histórico/detalhe é `SELECT` direto (sem RPC) — não precisa de atomicidade.
+
+### 47.2 Web — permissão
+
+`src/lib/server-auth.ts`: `assertArenaCaixaAccess(arenaId)` = `assertArenaAccess(arenaId)` (Owner |
+Gestor | Atendente | Caixa — qualquer membro ativo), nomeado para documentar a intenção. Substitui
+`assertArenaAdminAccess` em `createTransactionAction`/`updateTransactionAction`/`deleteTransactionAction`
+(`src/modules/finance/actions/financeActions.ts`), que agora chamam as RPCs `create_caixa_transaction`/
+`update_caixa_transaction`/`delete_caixa_transaction` em vez de `insert`/`update`/`delete` direto na
+tabela `transactions`. As leituras do Financeiro (`getFinanceDashboardAction`, `getTransactionsAction`,
+`getAvulsosTodosAction`) continuam com `assertArenaAdminAccess`.
+
+### 47.3 Web — tipos, actions e telas
+
+- `finance.types.ts`: `CaixaSession` (a partir de `Database['public']['Tables']['caixa_sessions']['Row']`,
+  com `opened_by_user`/`closed_by_user` opcionais via embed), `CaixaSessionStatus`.
+- `schemas/caixa-session-action.schema.ts`: `openCaixaSessionActionSchema`
+  (`opening_balance ≥ 0`, `opening_notes?`), `closeCaixaSessionActionSchema` (`session_id`,
+  `closing_notes?`), ambos `.strict()`.
+- `actions/caixaSessionActions.ts`: `getCurrentCaixaSessionAction`, `getCaixaSessionsHistoryAction`,
+  `getCaixaSessionDetailAction` (sessão + lançamentos vinculados), `openCaixaSessionAction`,
+  `closeCaixaSessionAction` — todas com `assertArenaCaixaAccess`. O embed de `opened_by`/`closed_by`
+  usa `users!caixa_sessions_opened_by_fkey`/`users!caixa_sessions_closed_by_fkey` (duas FKs para
+  `users`, precisa desambiguar no PostgREST).
+- `app/dashboard/finance/[arenaId]/layout.tsx` (novo): renderiza `FinanceTabsNav` (Visão geral /
+  Entradas / Saídas / Caixa) acima de `{children}`; cada aba é uma rota própria, não state de tab.
+- `components/CaixaPageClient.tsx` (novo): sem sessão aberta → form de abertura; com sessão aberta →
+  cabeçalho da sessão + lista de lançamentos (reaproveita `TransactionForm`) + botão "Fechar caixa"
+  (confirmação com resumo prévio → resumo final) + histórico de sessões fechadas com detalhe.
+- `components/TransactionsPageClient.tsx` (`/entradas`, `/saidas`): perdeu toda a UI de
+  criar/editar/excluir — agora é só histórico de leitura, com um link para a aba Caixa.
+- `components/FinanceDashboardClient.tsx`: removidos os dialogs "Nova entrada"/"Nova saída" da Visão
+  Geral (substituídos por link para `/caixa`); `chartData` deixou de ser `useState`+`useEffect` e passou
+  a `useMemo` (puramente derivado de `chartSeries`/`period`/`viewType`, sem motivo para efeito).
+
+### 47.4 Testes
+
+`tests/caixa-session-actions.test.mjs` (as actions usam `assertArenaCaixaAccess` e as RPCs certas, nunca
+`insert`/`update`/`delete` direto; `assertArenaCaixaAccess` delega para `assertArenaAccess` sem filtro de
+role; `CaixaPageClient` só atualiza a UI após checar `result.success`/`result.data`).
+`tests/authorization-boundaries.test.mjs`: separado o teste de mutações de usuário (continuam
+admin-only) do de lançamento de caixa (agora aberto a qualquer membro ativo).
+`tests/critical-flow-hardening.test.mjs`: a citação do padrão de delete migrou de
+`TransactionsPageClient.tsx` para `CaixaPageClient.tsx`, onde a exclusão de lançamento agora mora.
+
+### 47.5 Recebimentos automáticos, saldo em dinheiro e estorno
+
+Migração `20261012170000_caixa_recebimentos_automaticos.sql` (reexecutável; não altera a `20261012150000`).
+pgTAP: `supabase/tests/20261012170000_caixa_recebimentos_automaticos_test.sql` (24 verificações); a
+`20261012150000_..._test.sql` perdeu a asserção da constraint removida e passou a informar modo de
+pagamento (e a ordem atual dos parâmetros de `create_caixa_transaction`).
+
+- **Sem reescrever as RPCs de pagamento**: `create_backoffice_booking`, `confirm_backoffice_booking_payment`,
+  `register_booking_cobranca_payment_atomic`, `register_mensalista_payment_atomic`, `close_station_order` e
+  `purchase_/enroll_backoffice_rotativo_*` já gravam `source_type`. O trigger
+  `trg_link_transaction_to_open_caixa` (`BEFORE INSERT`) preenche `caixa_session_id` com a sessão `aberta`
+  da arena quando `source_type IS NOT NULL` — com `FOR SHARE`, que serializa com o `FOR UPDATE` do
+  `close_caixa_session` (recebimento concorrente ao fechamento não fica fora dos totais gravados).
+  Removida a constraint `transactions_caixa_session_or_source_check`.
+- **Fechamento**: `close_caixa_session` grava `total_entradas`/`total_saidas` (todas as formas),
+  `total_entradas_dinheiro`/`total_saidas_dinheiro`, `totais_por_modo` (jsonb
+  `[{modo_pagamento_id, nome, entradas, saidas}]`) e `closing_balance = opening_balance + entradas em
+  dinheiro − saídas em dinheiro`. Dinheiro = `public.is_modo_pagamento_dinheiro` (`nome ILIKE 'dinheiro%'`,
+  mesmo critério por nome de `close_station_order`). Sessões fechadas antes ficam com `totais_por_modo`
+  nulo e o saldo antigo.
+- **Congelamento** (`prevent_closed_caixa_transaction_mutation`, redefinida): em caixa fechado, `UPDATE`
+  só é bloqueado se mudar conteúdo financeiro — anonimização por exclusão de conta
+  (`atleta_id`/`registered_by` → NULL, inclusive o `ON DELETE SET NULL` das FKs) e o retry idempotente das
+  RPCs (`ON CONFLICT ... SET source_id = EXCLUDED.source_id`) passam. `DELETE` em cascata da exclusão da
+  arena passa.
+- **Estorno**: `DELETE` de recebimento automático (`source_type` ≠ `estorno`) de caixa fechado vira
+  `INSERT` de saída `category 'Estorno'`, `source_type 'estorno'`, `source_id = id original` (idempotente
+  pelo índice `transactions_source_idempotency_key`) + `RETURN NULL` (original preservado). O trigger de
+  INSERT vincula a saída ao caixa aberto, se houver. Os estornos existentes
+  (`remove_mensalista_rateio_participante_atomic`, remoção de participante do rateio avulso) apagam por
+  `transaction_id` sem checar linhas afetadas e removem os pagamentos pela cascata da cobrança, então não
+  precisaram mudar. Limitação: a saída de estorno herda `registered_by` do lançamento original (o trigger
+  não sabe quem estornou).
+- **RPCs do caixa**: `create_/update_caixa_transaction` exigem `p_modo_pagamento_id`;
+  `update_/delete_caixa_transaction` recusam lançamento com `source_type` ("altere/estorne pela tela de
+  origem").
+- **Web**: `src/modules/finance/lib/caixa.ts` (puro): `caixaTotaisPorModo`, `saldoEmDinheiro`,
+  `isModoDinheiro`, `origemDoLancamento` (mapa `source_type` → Mensalidade, Reserva avulsa, Rateio,
+  Comanda, Rotativo, Estorno), `isLancamentoAutomatico`. `CaixaPageClient`: selo de origem, coluna de modo
+  de pagamento, "Automático" no lugar de editar/excluir, "Saldo em dinheiro" no cabeçalho, quebra por forma
+  na confirmação de fechamento, no resumo e na impressão. `modo_pagamento_id` obrigatório em
+  `transaction-action.schema.ts` e `transaction.schema.ts`. `getPaymentStatusReportAction` exclui entradas
+  cujo `id` é `source_id` de uma linha `estorno`.
+- **Testes**: `tests/caixa-session-actions.test.mjs` (quebra por forma e saldo em dinheiro, origem,
+  sem editar/excluir automático, relatório sem estornados); `tests/critical-flow-hardening.test.mjs`
+  (modo de pagamento obrigatório no DTO).
+
+## 48. Cadastros Auxiliares — Categorias de Lançamento (12/10/2026)
+
+Em desenvolvimento, mesmas branches do §47. Espelha `product_categories` (§5.9 do PRD /
+`20260801140000_consolidate_web_product_catalog.sql`), adaptado de `kind: 'product'|'service'` para
+`type: 'entrada'|'saída'`. Diferença chave: `transactions.category` continua texto livre (sem FK) —
+a nova tabela só alimenta as opções do `Select`, não referencia os lançamentos.
+
+### 48.1 Banco (`arenadigital-db`)
+
+Migração `20261012160000_transaction_categories_schema_rls.sql`. pgTAP:
+`supabase/tests/20261012160000_transaction_categories_schema_rls_test.sql` (7 verificações).
+
+- **Tabela `transaction_categories`**: `arena_id`, `name`, `type` (`'entrada'|'saída'`), `sort_order`,
+  `active`, `created_by`. `UNIQUE (arena_id, type, name)` — mesmo nome é permitido em tipos diferentes
+  (namespaces distintos).
+- **RLS**: só `SELECT` via `can_access_arena(arena_id)` (já existe — qualquer membro ativo, igual
+  `product_categories`). Sem policy de escrita e sem RPC — CRUD é direto por `service_role` nas server
+  actions, já que não há necessidade de lock/atomicidade (diferente do Caixa, §47).
+- **Seed idempotente**: a própria migration insere, para cada arena já existente, as 9 categorias que
+  eram fixas no código (`ON CONFLICT (arena_id, type, name) DO NOTHING`), para a transição não deixar
+  nenhuma arena com a lista vazia.
+
+### 48.2 Web
+
+- `finance.types.ts`: `TransactionCategory`, `UpdateTransactionCategoryDTO` (a partir de
+  `Database['public']['Tables']['transaction_categories']`).
+- `actions/transactionCategoryActions.ts` — espelha `src/modules/products/actions/categoryActions.ts`:
+  - `getTransactionCategoriesAction(arenaId)`: `assertArenaAccess` (leitura ampla).
+  - `createTransactionCategoryAction`/`updateTransactionCategoryAction`/`deleteTransactionCategoryAction`:
+    `assertArenaAdminAccess` (só Owner/Gestor — é configuração, mesmo nível de Catálogo/Espaços/Usuários).
+  - `deleteTransactionCategoryAction` bloqueia a exclusão contando `transactions` por `arena_id` +
+    `type` + `category = nome atual` (equivalente ao `count` por `category_id` do produto, mas por nome
+    já que `transactions.category` não é FK); orienta inativar em vez de excluir quando há uso.
+  - Erro `23505` (nome duplicado na mesma arena+tipo) vira mensagem amigável, igual ao produto.
+- `app/dashboard/finance/[arenaId]/cadastros-auxiliares/page.tsx` (novo), `assertArenaAdminAccess` +
+  `getTransactionCategoriesAction` no server, renderiza `CadastrosAuxiliaresPageClient`.
+- `components/CadastrosAuxiliaresPageClient.tsx` (novo): página própria (não modal, diferente de
+  `CategoriesManagerModal.tsx`), duas seções lado a lado "Categorias de Entrada"/"Categorias de Saída",
+  cada uma com o mesmo padrão de interação do produto (criar, renomear inline, `Switch` ativar/inativar,
+  excluir com `ConfirmActionDialog`) — sem contador de itens vinculados no front (não há FK para contar
+  localmente); o bloqueio de exclusão em uso aparece como erro vindo do backend.
+- `components/FinanceTabsNav.tsx`: nova aba **Cadastros Auxiliares** depois de Caixa.
+- `components/TransactionForm.tsx`: o array fixo de categorias virou um fetch de
+  `getTransactionCategoriesAction(arenaId)`, filtrado por `type === effectiveType && active`. Ao editar
+  um lançamento cuja categoria não está mais na lista (inativada/renomeada/excluída depois), o nome
+  original é incluído no topo das opções para o Select não ficar em branco.
+
+### 48.3 Testes
+
+`tests/transaction-category-actions.test.mjs`: leitura usa `assertArenaAccess`; escrita usa
+`assertArenaAdminAccess`; exclusão checa uso por `type`+`category` (nunca por id sozinho);
+`TransactionForm.tsx` busca categorias da arena em vez do array fixo antigo.
+
+
+## 49. Correção — status de estação (12/10/2026)
+
+O formulário de estação oferecia "Desativado" com o valor `Desativado`, que a constraint
+`stations_status_check` (`ativo`, `inativo`, `Em manutenção`) nunca aceitou — salvar dava
+`violates check constraint "stations_status_check"`. Sem mudança de banco: o PRD (§5.8) define três
+status (Ativo / Em manutenção / Desativado), e "Desativado" é o `inativo` do banco.
+
+- `src/modules/stations/station-status.ts`: `STATION_STATUSES` (valores da constraint),
+  `STATION_STATUS_OPTIONS` (`inativo` → rótulo "Desativado"), `isStationStatus`, `stationStatusLabel`.
+- `StationForm`: `z.enum(STATION_STATUSES)` e opções a partir da lista (sai a opção duplicada "Inativo").
+- `StationsPageClient`: badge "Desativado" para `inativo`; filtro "Desativado" filtra `inativo` (sai o
+  filtro "Inativo", que era o mesmo valor). O filtro de status abre em "Ativo" por padrão.
+- `createStationAction`/`updateStationAction`: recusam status fora da lista com "Status de estação
+  inválido" em vez do erro cru do banco.
+- Teste: `tests/station-status.test.mjs`.

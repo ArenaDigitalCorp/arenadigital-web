@@ -11,7 +11,7 @@ export const transactionSchema = z.object({
     launch_date: z.string(),
     registration_date: z.string(),
     atleta_id: z.string().optional(),
-    modo_pagamento_id: z.string().optional(),
+    modo_pagamento_id: z.string({ error: "Selecione o modo de pagamento" }).min(1, "Selecione o modo de pagamento"),
 })
 
 export type TransactionFormValues = z.infer<typeof transactionSchema>

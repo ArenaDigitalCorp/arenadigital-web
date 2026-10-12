@@ -327,6 +327,16 @@ export async function assertArenaBackofficeAccess(arenaId: string): Promise<Aren
 }
 
 /**
+ * Protege o fluxo de Caixa (abrir/fechar sessão, lançar entrada/saída manual).
+ * Equivalente a assertArenaAccess (qualquer membro ativo: Owner | Gestor | Atendente | Caixa) —
+ * nomeado explicitamente para documentar que, aqui, a role de membership "Caixa"
+ * é quem deve poder operar o caixa físico, diferente de assertArenaBackofficeAccess.
+ */
+export async function assertArenaCaixaAccess(arenaId: string): Promise<ArenaAccessProfile> {
+  return assertArenaAccess(arenaId)
+}
+
+/**
  * Protege rotas exclusivas de Administrador (Owner | Gestor).
  * Bloqueia Caixa e Atendente.
  * Uso: Espaços, Relatórios, Configurações de Arena/Usuários.
