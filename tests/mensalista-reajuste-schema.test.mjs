@@ -52,3 +52,32 @@ test('reajustarValorSchema allows zero (free plan) and large values', () => {
   assert.equal(reajustarValorSchema.safeParse({ ...base, novoValor: 100_000_000 }).success, true)
   assert.equal(reajustarValorSchema.safeParse({ ...base, novoValor: 100_000_001 }).success, false)
 })
+
+test('creditoAplicado é opcional e zero por padrão', () => {
+  const parsed = reajustarValorSchema.safeParse(base)
+  assert.equal(parsed.success, true)
+  assert.equal(parsed.data.creditoAplicado, 0)
+  assert.equal(parsed.data.creditoOperationId, null)
+})
+
+test('creditoAplicado > 0 exige creditoOperationId', () => {
+  assert.equal(
+    reajustarValorSchema.safeParse({ ...base, creditoAplicado: 50 }).success,
+    false
+  )
+  assert.equal(
+    reajustarValorSchema.safeParse({
+      ...base,
+      creditoAplicado: 50,
+      creditoOperationId: '44444444-4444-4444-8444-444444444444',
+    }).success,
+    true
+  )
+})
+
+test('creditoAplicado rejeita valor negativo', () => {
+  assert.equal(
+    reajustarValorSchema.safeParse({ ...base, creditoAplicado: -1 }).success,
+    false
+  )
+})

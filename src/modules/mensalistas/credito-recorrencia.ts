@@ -64,6 +64,24 @@ export function formatRecorrenciaLabel(p: RecorrenciaParaRotulo): string {
   return [p.court?.name, DIAS[p.dia_semana], faixa(p)].filter(Boolean).join(' · ')
 }
 
+/**
+ * Quanto do crédito do atleta cabe abater numa cobrança, dado o que o gestor pediu.
+ *
+ * Usada nos dois lados: a UI do reajuste sugere este valor ao digitar o novo valor
+ * ou trocar a vigência, e a action faz o mesmo cálculo (com os dados já persistidos,
+ * após o reajuste) antes de chamar `register_mensalista_payment_atomic` — único
+ * lugar que decide "quanto cabe", para as duas pontas nunca divergirem.
+ */
+export function clampCreditoAbatimento(
+  desejado: number,
+  restanteCobranca: number,
+  saldoAtleta: number
+): number {
+  const teto = Math.min(Math.max(restanteCobranca, 0), Math.max(saldoAtleta, 0))
+  const valor = Math.min(Math.max(desejado, 0), teto)
+  return Math.round(valor * 100) / 100
+}
+
 /** Uma subconta do crédito do atleta: a geral (`planoId` null) ou a de uma recorrência. */
 export interface SubcontaCredito {
   planoId: string | null
