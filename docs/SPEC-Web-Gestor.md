@@ -1504,6 +1504,74 @@ Testes: `tests/mensalista-reajuste.test.mjs` (11) e
 `tests/mensalista-reajuste-schema.test.mjs` (competência obrigatória no dia 1º,
 novo escopo).
 
+### 23.5 Abater crédito existente durante o reajuste
+
+Implementado em 11/10/2026. O gestor abria "Reajustar valor", confirmava, e só
+depois lembrava (ou esquecia) de usar o crédito acumulado do atleta em
+"Registrar pagamento" separadamente. Agora o próprio modal de reajuste já mostra
+o crédito disponível e oferece abatê-lo na cobrança do mês, pré-preenchido.
+
+- Disponível só nos escopos `somente_mes` e `mes_atual` — são os dois que
+  alteram o valor da cobrança do mês visualizado. `mes_seguinte` não a toca,
+  então não há o que abater ali.
+- **Sem RPC nova.** `reajustarValorPlanoAction` chama
+  `reajustar_plano_mensalista_atomic` como antes e, depois, se
+  `creditoAplicado > 0`, chama `register_mensalista_payment_atomic` (a mesma RPC
+  de "Registrar pagamento") com `p_valor = 0` e `p_credito_aplicado` — a cobrança
+  não precisa ficar quitada, só abatida. **A ordem importa**: abater antes
+  deixaria `credito_aplicado > 0` na cobrança, e o próprio reajuste pula
+  mensalidades nessa condição (§23, RPC) — por isso o crédito só é aplicado
+  depois do reajuste já ter atualizado `valor_devido`.
+- Não é uma transação única: são duas chamadas RPC (cada uma idempotente pelo
+  seu próprio `operationId`/`creditoOperationId`). Se o reajuste for bem-sucedido
+  mas o abatimento falhar (ex.: corrida que já gastou o crédito), o reajuste
+  **não é desfeito** — a action devolve `creditoAplicado: 0` e
+  `creditoNaoAplicadoMotivo`, e o gestor recorre a "Registrar pagamento" para
+  aplicar o crédito manualmente.
+- Quem decide de qual subconta o crédito sai continua sendo o trigger
+  `private.mensalista_credito_rotear` (§42) — a feature não escolhe subconta, só
+  o valor a abater.
+- `clampCreditoAbatimento(desejado, restanteCobrança, saldoAtleta)` em
+  `credito-recorrencia.ts` é a única função que decide "quanto cabe": a UI a usa
+  para sugerir o valor pré-preenchido (editável/zerável) e a action a usa de
+  novo, já com os dados persistidos após o reajuste, antes de chamar a RPC de
+  pagamento — as duas pontas nunca divergem.
+- **Teto duplo no valor sugerido/validado:** nunca passa do saldo de crédito
+  **nem** do valor que a cobrança vai assumir com o próprio reajuste. Um mês
+  zerado (`novoValor = 0` em `somente_mes`) não tem o que abater — a cobrança já
+  nasce sem saldo devedor — mesmo que o atleta tenha crédito sobrando; o modal
+  bloqueia o envio com mensagem explícita, e a action nunca mais fica muda
+  nesse caso (`creditoNaoAplicadoMotivo` sempre vem preenchido quando
+  `creditoAplicado` pedido é `> 0` e nada foi aplicado).
+- **Qual crédito é "seguro" por padrão:** a sugestão só soma a subconta desta
+  recorrência + a subconta geral (`creditoSeguro`). Crédito de **outra**
+  recorrência do mesmo atleta só entra se o gestor digitar um valor maior
+  manualmente — e nesse caso o modal mostra um aviso âmbar nomeando de qual(is)
+  recorrência(s) o excedente sairia, para nunca ser um desconto "escondido".
+- **Vigência padrão do modal é `somente_mes`** (era `mes_seguinte`): é onde o
+  abatimento de crédito se aplica e o ajuste pontual é o caso mais comum.
+- **O valor sugerido no campo depende da vigência** (corrigido em 12/10/2026):
+  `somente_mes` edita a cobrança JÁ GERADA daquele mês — que pode ser pró-rata
+  num plano por blocos (ex. R$ 300 num plano de R$ 500/mês) — então a sugestão
+  vem de `valorMesAtual`, não de `valorAtual` (o preço cheio do plano). Sugerir
+  o preço cheio ali fazia o gestor achar que precisava reduzir o valor para
+  "500 → 170" para usar o crédito, quando o certo é deixar o valor da cobrança
+  como está e só preencher o crédito — ver nota de UX abaixo. As vigências que
+  mudam o plano (`mes_atual`/`mes_seguinte`) continuam sugerindo `valorAtual`.
+  Uma vez que o gestor edita o campo à mão, a troca de vigência não sobrescreve
+  mais o que ele digitou.
+- **UX do modal revisada em 12/10/2026** (menos poluída, sem perder botões em
+  telas menores): descrição da vigência só aparece na opção selecionada;
+  "Observação" virou `<details>` recolhido por padrão; o bloco de crédito ficou
+  com uma única legenda de disponibilidade e só mostra o aviso de outra
+  recorrência quando ele realmente se aplica. O scroll interno (ver item
+  anterior) já garantia que o rodapé nunca suma — a redução de conteúdo é só
+  para caber mais sem precisar rolar.
+
+Testes: `tests/mensalista-credito-recorrencia.test.mjs` (`clampCreditoAbatimento`,
+incluindo o caso de mês zerado) e `tests/mensalista-reajuste-schema.test.mjs`
+(`creditoAplicado`/`creditoOperationId`).
+
 ---
 
 ## 24. Exclusão e desativação de espaço

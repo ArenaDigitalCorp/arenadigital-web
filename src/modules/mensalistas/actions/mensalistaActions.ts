@@ -22,6 +22,7 @@ import {
   uuidSchema,
 } from '@/modules/mensalistas/schemas/mensalista.schema'
 import {
+  clampCreditoAbatimento,
   formatRecorrenciaLabel,
   montarSubcontas,
   type RecorrenciaParaRotulo,
@@ -52,6 +53,11 @@ import type {
 /** First day of the current real calendar month, as `YYYY-MM-DD`. */
 function currentMonthStartISO(): string {
   return format(startOfMonth(new Date()), 'yyyy-MM-dd')
+}
+
+/** Today's real calendar date, as `YYYY-MM-DD`. */
+function todayISO(): string {
+  return format(new Date(), 'yyyy-MM-dd')
 }
 
 const PLANO_SELECT =
@@ -989,6 +995,106 @@ export interface ReajustarValorResult {
   ignoradasRateio: number
   ignoradasPagamento: number
   idempotent: boolean
+  /** Quanto de crédito o gestor pediu para abater (0 se não pediu). */
+  creditoSolicitado: number
+  /** Quanto efetivamente foi abatido da cobrança do mês âncora. */
+  creditoAplicado: number
+  /** Por que `creditoAplicado` ficou abaixo do solicitado (ou zero), quando houver. */
+  creditoNaoAplicadoMotivo: string | null
+}
+
+/**
+ * Abate crédito do atleta na cobrança do mês âncora do reajuste, reaproveitando
+ * `register_mensalista_payment_atomic` (mesma RPC do "Registrar pagamento") com
+ * `p_valor = 0`. Roda DEPOIS do reajuste já ter atualizado `valor_devido` — nunca
+ * antes, porque uma cobrança com `credito_aplicado > 0` é pulada pelo próprio
+ * reajuste. Nunca lança exceção: o reajuste já foi persistido, então uma falha
+ * aqui só é reportada como aviso, não como erro da operação toda.
+ */
+async function abaterCreditoDoReajuste(args: {
+  arenaId: string
+  planoId: string
+  competencia: string
+  creditoSolicitado: number
+  creditoOperationId: string
+  observacao: string | null
+  registeredBy: string
+}): Promise<{ aplicado: number; motivo: string | null }> {
+  const admin = getSupabaseAdmin()
+  try {
+    const { data: mensalidade, error: mensError } = await admin
+      .from('mensalista_mensalidades')
+      .select('id, rateio, status')
+      .eq('arena_id', args.arenaId)
+      .eq('plano_id', args.planoId)
+      .eq('competencia', args.competencia)
+      .maybeSingle()
+    if (mensError) throw new Error(mensError.message)
+    if (!mensalidade) {
+      return { aplicado: 0, motivo: 'Mensalidade do mês não encontrada' }
+    }
+    if (mensalidade.rateio) {
+      return { aplicado: 0, motivo: 'Mês com rateio ativo — aplique o crédito pela fatia do participante' }
+    }
+    if (mensalidade.status === 'quitado' || mensalidade.status === 'cancelado') {
+      return { aplicado: 0, motivo: 'Mês já quitado ou cancelado — não há valor a abater' }
+    }
+
+    const { data: cobrancasAtivas, error: cobrError } = await admin
+      .from('mensalista_cobrancas')
+      .select('id, valor_devido, valor_pago, credito_aplicado, atleta_id')
+      .eq('mensalidade_id', mensalidade.id)
+      .eq('ativo', true)
+    if (cobrError) throw new Error(cobrError.message)
+    if (!cobrancasAtivas || cobrancasAtivas.length !== 1) {
+      return { aplicado: 0, motivo: 'Cobrança do mês dividida ou não encontrada' }
+    }
+    const cobranca = cobrancasAtivas[0]
+    if (!cobranca.atleta_id) {
+      return { aplicado: 0, motivo: 'Cobrança sem atleta vinculado' }
+    }
+
+    const restante = round2(
+      Number(cobranca.valor_devido) - Number(cobranca.valor_pago) - Number(cobranca.credito_aplicado)
+    )
+    if (restante <= 0) {
+      return {
+        aplicado: 0,
+        motivo: 'Cobrança do mês já está em R$ 0,00 com este reajuste — não há valor a abater',
+      }
+    }
+
+    const { data: saldoRow } = await admin
+      .from('mensalista_credito_saldo')
+      .select('saldo')
+      .eq('arena_id', args.arenaId)
+      .eq('atleta_id', cobranca.atleta_id)
+      .maybeSingle()
+    const saldoAtleta = Number(saldoRow?.saldo ?? 0)
+
+    const aplicavel = clampCreditoAbatimento(args.creditoSolicitado, restante, saldoAtleta)
+    if (aplicavel <= 0) {
+      return { aplicado: 0, motivo: 'Saldo de crédito insuficiente' }
+    }
+
+    const { error: pagError } = await admin.rpc('register_mensalista_payment_atomic', {
+      p_operation_id: args.creditoOperationId,
+      p_arena_id: args.arenaId,
+      p_cobranca_id: cobranca.id,
+      p_valor: 0,
+      p_credito_aplicado: aplicavel,
+      p_data: todayISO(),
+      p_modo_pagamento_id: null,
+      p_observacao: args.observacao ?? 'Crédito aplicado durante reajuste de valor',
+      p_registered_by: args.registeredBy,
+    })
+    if (pagError) throw new Error(pagError.message)
+
+    return { aplicado: aplicavel, motivo: aplicavel < args.creditoSolicitado ? 'Só parte do crédito pedido coube na cobrança' : null }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Erro ao aplicar o crédito'
+    return { aplicado: 0, motivo: message }
+  }
 }
 
 export async function reajustarValorPlanoAction(
@@ -1015,6 +1121,23 @@ export async function reajustarValorPlanoAction(
     if (error) throw new Error(error.message)
 
     const row = (data ?? {}) as Record<string, unknown>
+
+    let creditoAplicado = 0
+    let creditoNaoAplicadoMotivo: string | null = null
+    if (parsed.creditoAplicado > 0 && parsed.creditoOperationId) {
+      const resultado = await abaterCreditoDoReajuste({
+        arenaId: parsed.arenaId,
+        planoId: parsed.planoId,
+        competencia: parsed.competencia,
+        creditoSolicitado: parsed.creditoAplicado,
+        creditoOperationId: parsed.creditoOperationId,
+        observacao: parsed.observacao,
+        registeredBy: dbUserId,
+      })
+      creditoAplicado = resultado.aplicado
+      creditoNaoAplicadoMotivo = resultado.motivo
+    }
+
     revalidateMensalistaPaths(parsed.arenaId)
     return {
       success: true,
@@ -1027,6 +1150,9 @@ export async function reajustarValorPlanoAction(
         ignoradasRateio: Number(row.mensalidades_com_rateio_ignoradas ?? 0),
         ignoradasPagamento: Number(row.mensalidades_com_pagamento_ignoradas ?? 0),
         idempotent: Boolean(row.idempotent ?? false),
+        creditoSolicitado: parsed.creditoAplicado,
+        creditoAplicado,
+        creditoNaoAplicadoMotivo,
       },
     }
   } catch (err) {
