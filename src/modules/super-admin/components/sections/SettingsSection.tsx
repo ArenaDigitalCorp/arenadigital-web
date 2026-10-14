@@ -107,6 +107,7 @@ export function SettingsSection({ overview, initialArenaId }: { overview: Platfo
                 arenaName={selectedPaymentArena.name}
                 initialSettings={selectedPaymentArena.pixSplitSettings}
                 registration={{
+                  legalName: selectedPaymentArena.registrationLegalName,
                   email: selectedPaymentArena.registrationEmail,
                   phone: selectedPaymentArena.registrationPhone,
                   document: selectedPaymentArena.registrationDocument,

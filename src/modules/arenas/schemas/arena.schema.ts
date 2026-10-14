@@ -1,9 +1,11 @@
 import { isValidCpfOrCnpj } from '@/lib/brasil-document'
 import { APP_BOOKING_MODES } from '@/modules/arenas/domain/app-booking-mode'
+import { getArenaLegalNameError } from '@/modules/arenas/domain/arena-legal-name'
 import * as z from 'zod'
 
-export const arenaSchema = z.object({
+const arenaBaseSchema = z.object({
     name: z.string().min(2, "O nome da arena deve ter pelo menos 2 caracteres."),
+    legal_name: z.string().trim().nullable().optional(),
     status: z.enum(["ativo", "inativo", "Em manutenção"]),
     sports: z.array(z.string()).optional(),
     comodidades: z.array(z.string()).optional(),
@@ -19,6 +21,7 @@ export const arenaSchema = z.object({
     zip_code: z.string().optional(),
     cpf_cnpj: z
         .string()
+        .nullable()
         .optional()
         .refine((v) => isValidCpfOrCnpj(v ?? ''), {
             message: 'Informe um CPF ou CNPJ válido, ou deixe em branco.',
@@ -36,6 +39,13 @@ export const arenaSchema = z.object({
     ).optional(),
     app_booking_mode: z.enum(APP_BOOKING_MODES).optional(),
     accepts_app_booking_requests: z.boolean().optional(),
+})
+
+export const arenaUpdateSchema = arenaBaseSchema.partial()
+
+export const arenaSchema = arenaBaseSchema.superRefine((value, ctx) => {
+    const message = getArenaLegalNameError(value.cpf_cnpj, value.legal_name)
+    if (message) ctx.addIssue({ code: 'custom', path: ['legal_name'], message })
 })
 
 export type ArenaFormValues = z.infer<typeof arenaSchema>

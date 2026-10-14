@@ -15,7 +15,8 @@ import {
     checkArenaSignupEmailAction,
     startSignUpAction,
 } from "@/modules/auth/actions/authActions"
-import { isValidCpf, isValidCpfOrCnpj } from "@/lib/brasil-document"
+import { isValidCpf, isValidCpfOrCnpj, onlyDigits } from "@/lib/brasil-document"
+import { getArenaLegalNameError } from "@/modules/arenas/domain/arena-legal-name"
 import { track, trackAction } from "@/lib/telemetry/client"
 
 const maskCpf = (value: string) => {
@@ -63,6 +64,7 @@ export function CustomSignUp() {
     const [responsibleCpf, setResponsibleCpf] = React.useState("")
     const [phone, setPhone] = React.useState("")
     const [arenaName, setArenaName] = React.useState("")
+    const [arenaLegalName, setArenaLegalName] = React.useState("")
     const [arenaDocument, setArenaDocument] = React.useState("")
 
     const [cep, setCep] = React.useState("")
@@ -232,6 +234,12 @@ export function CustomSignUp() {
             return
         }
 
+        const legalNameError = getArenaLegalNameError(arenaDocument, arenaLegalName)
+        if (legalNameError) {
+            toast.error(legalNameError)
+            return
+        }
+
         if (!municipioId) {
             toast.error("Por favor, selecione uma cidade.")
             return
@@ -258,6 +266,7 @@ export function CustomSignUp() {
             cpf: responsibleCpf,
             phone,
             arenaName,
+            arenaLegalName,
             arenaDocument,
             addressData,
         })
@@ -377,8 +386,13 @@ export function CustomSignUp() {
                     </div>
                 </div>
                 <div className="space-y-2">
-                    <Label htmlFor="arenaName" className="text-white/70">Nome da Arena</Label>
+                    <Label htmlFor="arenaName" className="text-white/70">Nome da arena / nome fantasia</Label>
                     <Input id="arenaName" value={arenaName} placeholder="Ex: Arena Beach Tennis" onChange={(e) => setArenaName(e.target.value)} className="bg-white border-none h-12 rounded-lg text-black" required />
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="arenaLegalName" className="text-white/70">Razão social{onlyDigits(arenaDocument).length === 14 ? " *" : ""}</Label>
+                    <Input id="arenaLegalName" value={arenaLegalName} placeholder="Nome registrado da empresa" onChange={(e) => setArenaLegalName(e.target.value)} autoComplete="organization" maxLength={120} required={onlyDigits(arenaDocument).length === 14} className="bg-white border-none h-12 rounded-lg text-black" />
+                    <p className="text-xs text-white/60">Obrigatória para empresas com CNPJ.</p>
                 </div>
                 <div className="space-y-2">
                     <Label htmlFor="arenaDocument" className="text-white/70">CPF/CNPJ da Arena</Label>

@@ -17,6 +17,7 @@ type Props = {
     paymentSettings: ArenaPixSplitSettings
     cancellationPolicySettings: ArenaCancellationPolicySettings
     registration: {
+        legalName?: string | null
         email: string
         phone: string
         document: string

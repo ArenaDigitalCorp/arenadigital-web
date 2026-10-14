@@ -4,6 +4,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server"
 import { getSupabaseAdmin } from "@/lib/supabase-server"
 import { findUserByCpf, findUserByEmail, normalizeEmail, resolveAuthenticatedDbUser } from "@/lib/account-identity"
 import { isValidCpf, isValidCpfOrCnpj, onlyDigits } from "@/lib/brasil-document"
+import { getArenaLegalNameError } from "@/modules/arenas/domain/arena-legal-name"
 import {
     getPlatformAccessLevel,
     hasExplicitArenaAccess,
@@ -44,6 +45,7 @@ type SignUpInput = {
     cpf: string
     phone: string
     arenaName: string
+    arenaLegalName?: string
     arenaDocument: string
     addressData: AddressData
 }
@@ -98,6 +100,8 @@ function validateArenaSignupData(input: SignUpInput) {
     if (onlyDigits(input.phone).length < 10) return "Informe um telefone válido para a arena."
     if (!onlyDigits(input.arenaDocument)) return "Informe o CPF ou CNPJ da arena."
     if (!isValidCpfOrCnpj(input.arenaDocument)) return "Informe um CPF ou CNPJ válido."
+    const legalNameError = getArenaLegalNameError(input.arenaDocument, input.arenaLegalName)
+    if (legalNameError) return legalNameError
     if (!input.addressData.id_municipio) return "Selecione a cidade da arena."
     return null
 }
@@ -179,6 +183,7 @@ export async function startSignUpAction(input: SignUpInput): Promise<ActionResul
 
         const intent = createArenaSignupIntent({
             arenaName: input.arenaName.trim(),
+            arenaLegalName: input.arenaLegalName?.trim(),
             arenaDocument: cleanArenaDocument,
             phone: input.phone.trim(),
             cpf: cleanCpf,
@@ -244,6 +249,7 @@ export async function provisionAfterSignUpAction(): Promise<ActionResult<SelfSer
             requesterUserId: dbUser.id,
             operationId: user.id,
             arenaName: intent.arenaName,
+            arenaLegalName: intent.arenaLegalName,
             phone: intent.phone,
             document: intent.arenaDocument,
             addressData: intent.addressData,

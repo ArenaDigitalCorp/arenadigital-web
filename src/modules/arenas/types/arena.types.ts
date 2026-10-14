@@ -14,6 +14,7 @@ export interface Arena {
   id: string;
   name: string;
   owner_id: string;
+  legal_name?: string | null;
   status: 'active' | 'inactive' | 'maintenance';
   address?: Record<string, unknown>;
   phone?: string;

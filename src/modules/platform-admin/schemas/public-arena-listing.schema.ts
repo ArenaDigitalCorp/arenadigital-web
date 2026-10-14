@@ -1,10 +1,12 @@
 import { isValidCnpj, onlyDigits } from '@/lib/brasil-document'
 import { z } from 'zod'
+import { getArenaLegalNameError } from '@/modules/arenas/domain/arena-legal-name'
 
 const optionalText = (max: number) => z.string().trim().max(max).optional()
 
 export const publicArenaListingInputSchema = z.object({
   name: z.string().trim().min(2, 'Informe o nome do local.').max(160),
+  legalName: z.string().trim().optional(),
   cnpj: z
     .string()
     .trim()
@@ -44,7 +46,10 @@ export const publicArenaListingInputSchema = z.object({
   sportIds: z.array(z.string().uuid()).min(1, 'Selecione ao menos um esporte.').max(30),
   platformNotes: optionalText(1000),
   reason: z.string().trim().min(8, 'Explique o motivo do cadastro em ao menos 8 caracteres.').max(500),
-}).strict()
+}).strict().superRefine((value, ctx) => {
+  const message = getArenaLegalNameError(value.cnpj, value.legalName)
+  if (message) ctx.addIssue({ code: 'custom', path: ['legalName'], message })
+})
 
 export type PublicArenaListingInput = z.input<typeof publicArenaListingInputSchema>
 export type ParsedPublicArenaListingInput = z.output<typeof publicArenaListingInputSchema>
