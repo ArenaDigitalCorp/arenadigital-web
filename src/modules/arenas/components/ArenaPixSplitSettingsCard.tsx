@@ -48,6 +48,7 @@ interface Props {
     arenaName: string
     initialSettings: ArenaPixSplitSettings
     registration: {
+        legalName?: string | null
         email: string
         phone: string
         document: string
@@ -135,7 +136,6 @@ function StatusLine({
 
 export function ArenaPixSplitSettingsCard({
     arenaId,
-    arenaName,
     initialSettings,
     registration,
     accessMode = "platform",
@@ -150,7 +150,7 @@ export function ArenaPixSplitSettingsCard({
     const [reconcileAccountId, setReconcileAccountId] = useState("")
     const [reconcileWalletId, setReconcileWalletId] = useState("")
     const [onboardingForm, setOnboardingForm] = useState({
-        name: initialSettings.holderName || arenaName,
+        name: registration.legalName || initialSettings.holderName || "",
         email: registration.email,
         cpfCnpj: initialSettings.holderDocument || registration.document,
         companyType: "" as AsaasCompanyType | "",
