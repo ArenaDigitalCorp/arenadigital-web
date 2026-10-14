@@ -30,6 +30,7 @@ import type {
 
 type FormState = {
   name: string
+  legalName: string
   cnpj: string
   address: string
   number: string
@@ -61,6 +62,7 @@ type CnpjLookupData = {
 
 const EMPTY_FORM: FormState = {
   name: "",
+  legalName: "",
   cnpj: "",
   address: "",
   number: "",
@@ -148,6 +150,7 @@ export function PublicArenaListingDialog() {
       setForm((current) => ({
         ...current,
         name: data.nomeFantasia?.trim() || data.razaoSocial || current.name,
+        legalName: data.razaoSocial?.trim() || "",
         cnpj: data.cnpj,
         address: data.logradouro || current.address,
         number: ["S/N", "SN"].includes(data.numero.trim().toUpperCase()) ? "" : data.numero,
@@ -232,6 +235,7 @@ export function PublicArenaListingDialog() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div><FieldLabel htmlFor="public-arena-name">Nome do local</FieldLabel><Input id="public-arena-name" required value={form.name} onChange={(event) => updateField("name", event.target.value)} placeholder="Ex.: Arena Beira-Mar" className="bg-white" /></div>
                   <div><FieldLabel htmlFor="public-arena-cnpj" optional>CNPJ</FieldLabel><div className="flex gap-2"><Input id="public-arena-cnpj" value={form.cnpj} onChange={(event) => updateField("cnpj", event.target.value)} placeholder="00.000.000/0000-00" className="bg-white" /><Button type="button" variant="outline" onClick={() => void lookupCnpj()} disabled={cnpjLoading || !options} className="shrink-0 bg-white">{cnpjLoading ? <LoaderCircle className="animate-spin" /> : <FileSearch />}<span className="hidden sm:inline">Consultar</span></Button></div></div>
+                  <div className="sm:col-span-2"><FieldLabel htmlFor="public-arena-legal-name" optional={onlyDigits(form.cnpj).length !== 14}>Razão social</FieldLabel><Input id="public-arena-legal-name" value={form.legalName} onChange={(event) => updateField("legalName", event.target.value)} required={onlyDigits(form.cnpj).length === 14} autoComplete="organization" maxLength={120} placeholder="Nome registrado da empresa" className="bg-white" /><p className="mt-2 text-xs text-slate-500">Obrigatória quando houver CNPJ.</p></div>
                 </div>
               </section>
 

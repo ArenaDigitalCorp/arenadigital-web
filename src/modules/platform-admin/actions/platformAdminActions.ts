@@ -110,6 +110,7 @@ type ArenaRow = {
   email: string | null
   phone: string | null
   cpf_cnpj: string | null
+  legal_name: string | null
   address: unknown
   number: string | null
   complement: string | null
@@ -527,7 +528,7 @@ export async function getPlatformAdminOverview(
       .limit(1000),
     supabase
       .from('arenas')
-      .select('id, name, status, platform_kind, app_discoverable, owner_id, created_at, location, id_municipio, email, phone, cpf_cnpj, address, number, complement, neighborhood, zip_code, owner:users!arenas_owner_id_fkey(id, name, email)')
+      .select('id, name, legal_name, status, platform_kind, app_discoverable, owner_id, created_at, location, id_municipio, email, phone, cpf_cnpj, address, number, complement, neighborhood, zip_code, owner:users!arenas_owner_id_fkey(id, name, email)')
       .order('created_at', { ascending: false })
       .limit(1000),
     supabase.from('municipios').select('codigo_ibge, nome, codigo_uf').limit(6000),
@@ -714,6 +715,7 @@ export async function getPlatformAdminOverview(
       ownerName: owner?.name ?? null,
       ownerEmail: owner?.email ?? '—',
       registrationEmail: arena.email ?? owner?.email ?? '',
+      registrationLegalName: arena.legal_name,
       registrationPhone: arena.phone ?? '',
       registrationDocument: arena.cpf_cnpj ?? '',
       registrationAddress: addressText(arena.address),
@@ -930,6 +932,7 @@ export async function createPublicArenaListingAction(
     const { data, error } = await asRpcClient().rpc('create_public_arena_listing', {
       p_actor_user_id: profile.dbUserId,
       p_name: parsed.name,
+      p_legal_name: parsed.legalName?.trim() || null,
       p_id_municipio: parsed.municipalityId,
       p_address: parsed.address,
       p_number: parsed.number?.trim() || null,

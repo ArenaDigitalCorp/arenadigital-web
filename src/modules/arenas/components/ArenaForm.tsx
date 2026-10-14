@@ -145,6 +145,7 @@ export function ArenaForm({
         resolver: zodResolver(arenaFormSchema) as any,
         defaultValues: {
             name: initialData?.name || "",
+            legal_name: initialData?.legal_name || "",
             status: mapStatusFromDB(initialData?.status),
             sports: initialData?.sports?.map((s: any) => s.id || s) || [], // Handle object or ID
             comodidades: initialData?.comodidades?.map((c: any) => c.id || c) || [],
@@ -236,6 +237,7 @@ export function ArenaForm({
             if (nome) {
                 form.setValue("name", nome, { shouldValidate: true, shouldDirty: true })
             }
+            form.setValue("legal_name", d.razaoSocial || "", { shouldValidate: true, shouldDirty: true })
             if (d.logradouro) {
                 form.setValue("address", d.logradouro, { shouldValidate: true, shouldDirty: true })
             }
@@ -323,6 +325,7 @@ export function ArenaForm({
             const payload: any = { ...data };
             const docDigits = onlyDigits(data.cpf_cnpj ?? "");
             payload.cpf_cnpj = docDigits.length > 0 ? docDigits : null;
+            payload.legal_name = data.legal_name?.trim() || null;
             if (initialData) {
                 if (bannerFile) {
                     try {
@@ -392,7 +395,7 @@ export function ArenaForm({
                             name="name"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Nome</FormLabel>
+                                    <FormLabel>Nome da arena / nome fantasia</FormLabel>
                                     <FormControl>
                                         <Input placeholder="Informe o nome da arena" {...field} />
                                     </FormControl>
@@ -401,6 +404,20 @@ export function ArenaForm({
                             )}
                         />
 
+                        <FormField
+                            control={form.control}
+                            name="legal_name"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Razão social{onlyDigits(form.watch("cpf_cnpj")).length === 14 ? " *" : ""}</FormLabel>
+                                    <FormControl>
+                                        <Input {...field} value={field.value ?? ""} placeholder="Ex: Arena Beach Esportes de Areia Ltda" autoComplete="organization" maxLength={120} required={onlyDigits(form.watch("cpf_cnpj")).length === 14} />
+                                    </FormControl>
+                                    <FormDescription>Nome registrado da empresa. Obrigatório quando houver CNPJ.</FormDescription>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
                         <FormField
                             control={form.control}
                             name="cpf_cnpj"
@@ -415,6 +432,7 @@ export function ArenaForm({
                                                 autoComplete="off"
                                                 className="sm:flex-1"
                                                 {...field}
+                                                value={field.value ?? ""}
                                             />
                                             <Button
                                                 type="button"

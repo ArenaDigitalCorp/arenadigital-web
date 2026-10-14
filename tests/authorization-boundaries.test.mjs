@@ -18,7 +18,7 @@ test('destructive arena operations remain owner-only and Pix operational setting
   assert.match(exportedFunctionBody(contents, 'deleteArenaAction'), /assertArenaOwnerAccess\(arenaId\)/)
   assert.match(exportedFunctionBody(contents, 'createArenaAction'), /arenaSchema\.parse\(input\)/)
   assert.match(exportedFunctionBody(contents, 'createArenaAction'), /owner_id: dbUserId/)
-  assert.match(exportedFunctionBody(contents, 'updateArenaAction'), /arenaSchema\.partial\(\)\.parse\(input\)/)
+  assert.match(exportedFunctionBody(contents, 'updateArenaAction'), /arenaUpdateSchema\.parse\(input\)/)
 
   for (const name of ['updateArenaPixSplitSettingsAction', 'recoverArenaAsaasSubaccountCredentialAction']) {
     const body = exportedFunctionBody(contents, name)
