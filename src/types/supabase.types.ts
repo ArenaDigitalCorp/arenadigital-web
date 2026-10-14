@@ -2464,6 +2464,91 @@ export type Database = {
           },
         ]
       }
+      caixa_sessions: {
+        Row: {
+          arena_id: string
+          closed_at: string | null
+          closed_by: string | null
+          closing_balance: number | null
+          closing_notes: string | null
+          created_at: string
+          id: string
+          opened_at: string
+          opened_by: string
+          opening_balance: number
+          opening_notes: string | null
+          status: string
+          total_entradas: number | null
+          total_saidas: number | null
+          total_saidas_dinheiro: number | null
+          total_entradas_dinheiro: number | null
+          totais_por_modo: Json | null
+          updated_at: string
+        }
+        Insert: {
+          arena_id: string
+          closed_at?: string | null
+          closed_by?: string | null
+          closing_balance?: number | null
+          closing_notes?: string | null
+          created_at?: string
+          id?: string
+          opened_at?: string
+          opened_by: string
+          opening_balance: number
+          opening_notes?: string | null
+          status?: string
+          total_entradas?: number | null
+          total_saidas?: number | null
+          total_saidas_dinheiro?: number | null
+          total_entradas_dinheiro?: number | null
+          totais_por_modo?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          arena_id?: string
+          closed_at?: string | null
+          closed_by?: string | null
+          closing_balance?: number | null
+          closing_notes?: string | null
+          created_at?: string
+          id?: string
+          opened_at?: string
+          opened_by?: string
+          opening_balance?: number
+          opening_notes?: string | null
+          status?: string
+          total_entradas?: number | null
+          total_saidas?: number | null
+          total_saidas_dinheiro?: number | null
+          total_entradas_dinheiro?: number | null
+          totais_por_modo?: Json | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "caixa_sessions_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "caixa_sessions_closed_by_fkey"
+            columns: ["closed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "caixa_sessions_opened_by_fkey"
+            columns: ["opened_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       comentario_escopo: {
         Row: {
           escopo: string
@@ -5604,10 +5689,62 @@ export type Database = {
           },
         ]
       }
+      transaction_categories: {
+        Row: {
+          active: boolean
+          arena_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          sort_order: number
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          arena_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          sort_order?: number
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          arena_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          sort_order?: number
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transaction_categories_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transaction_categories_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       transactions: {
         Row: {
           arena_id: string
           atleta_id: string | null
+          caixa_session_id: string | null
           category: string
           created_at: string
           description: string | null
@@ -5627,6 +5764,7 @@ export type Database = {
         Insert: {
           arena_id: string
           atleta_id?: string | null
+          caixa_session_id?: string | null
           category: string
           created_at?: string
           description?: string | null
@@ -5646,6 +5784,7 @@ export type Database = {
         Update: {
           arena_id?: string
           atleta_id?: string | null
+          caixa_session_id?: string | null
           category?: string
           created_at?: string
           description?: string | null
@@ -5675,6 +5814,13 @@ export type Database = {
             columns: ["atleta_id"]
             isOneToOne: false
             referencedRelation: "atleta"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_caixa_session_id_fkey"
+            columns: ["caixa_session_id"]
+            isOneToOne: false
+            referencedRelation: "caixa_sessions"
             referencedColumns: ["id"]
           },
           {
@@ -6537,6 +6683,166 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "station_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      close_caixa_session: {
+        Args: {
+          p_arena_id: string
+          p_closed_by: string
+          p_closing_notes?: string
+          p_session_id: string
+        }
+        Returns: {
+          arena_id: string
+          closed_at: string | null
+          closed_by: string | null
+          closing_balance: number | null
+          closing_notes: string | null
+          created_at: string
+          id: string
+          opened_at: string
+          opened_by: string
+          opening_balance: number
+          opening_notes: string | null
+          status: string
+          total_entradas: number | null
+          total_saidas: number | null
+          total_saidas_dinheiro: number | null
+          total_entradas_dinheiro: number | null
+          totais_por_modo: Json | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "caixa_sessions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_caixa_transaction: {
+        Args: {
+          p_arena_id: string
+          p_atleta_id?: string
+          p_category: string
+          p_description: string
+          p_discount: number
+          p_launch_date: string
+          p_modo_pagamento_id?: string
+          p_quantity: number
+          p_registered_by: string
+          p_registration_date: string
+          p_total_value: number
+          p_type: string
+          p_unit_value: number
+        }
+        Returns: {
+          arena_id: string
+          atleta_id: string | null
+          caixa_session_id: string | null
+          category: string
+          created_at: string
+          description: string | null
+          discount: number
+          id: string
+          launch_date: string
+          modo_pagamento_id: string | null
+          quantity: number
+          registered_by: string | null
+          registration_date: string
+          source_id: string | null
+          source_type: string | null
+          total_value: number
+          type: string
+          unit_value: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "transactions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      delete_caixa_transaction: {
+        Args: {
+          p_arena_id: string
+          p_transaction_id: string
+        }
+        Returns: undefined
+      }
+      open_caixa_session: {
+        Args: {
+          p_arena_id: string
+          p_opened_by: string
+          p_opening_balance: number
+          p_opening_notes?: string
+        }
+        Returns: {
+          arena_id: string
+          closed_at: string | null
+          closed_by: string | null
+          closing_balance: number | null
+          closing_notes: string | null
+          created_at: string
+          id: string
+          opened_at: string
+          opened_by: string
+          opening_balance: number
+          opening_notes: string | null
+          status: string
+          total_entradas: number | null
+          total_saidas: number | null
+          total_saidas_dinheiro: number | null
+          total_entradas_dinheiro: number | null
+          totais_por_modo: Json | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "caixa_sessions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_caixa_transaction: {
+        Args: {
+          p_arena_id: string
+          p_atleta_id?: string
+          p_category: string
+          p_description: string
+          p_discount: number
+          p_launch_date: string
+          p_modo_pagamento_id?: string
+          p_quantity: number
+          p_registration_date: string
+          p_total_value: number
+          p_transaction_id: string
+          p_unit_value: number
+        }
+        Returns: {
+          arena_id: string
+          atleta_id: string | null
+          caixa_session_id: string | null
+          category: string
+          created_at: string
+          description: string | null
+          discount: number
+          id: string
+          launch_date: string
+          modo_pagamento_id: string | null
+          quantity: number
+          registered_by: string | null
+          registration_date: string
+          source_id: string | null
+          source_type: string | null
+          total_value: number
+          type: string
+          unit_value: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "transactions"
           isOneToOne: true
           isSetofReturn: false
         }

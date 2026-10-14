@@ -368,6 +368,7 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
     A vigência é ancorada no **mês que o gestor está vendo na tela**. Antes, "mês atual" significava o mês corrente do calendário: olhando outubro em setembro, o reajuste caía sobre setembro. Os rótulos passaram a nomear o mês justamente para não haver dúvida.
 
     Nos dois escopos que mudam o plano, as cobranças abertas já geradas são reescritas da vigência em diante — respeitando a regra de cobrança do plano, de modo que uma recorrência por blocos continua custando menos em meses com menos jogos. Meses com rateio ou pagamento registrado são preservados e o gestor é avisado. Tudo fica no **Histórico de reajustes** (valor anterior → novo, escopo, vigência, observação, data) visível na própria recorrência.
+    - **Abater crédito existente no reajuste** (11/10/2026): quando o atleta tem crédito acumulado e o mês visualizado ainda não tem pagamento/crédito lançado, o modal já mostra o saldo disponível e sugere, pré-preenchido, abater parte dele na cobrança do mês — editável ou zerável antes de confirmar. Só aparece em **Somente [mês]** e **De [mês] em diante** (os dois escopos que tocam a cobrança do mês visualizado); evita o gestor ter que lembrar de aplicar o crédito depois, num "Registrar pagamento" à parte.
   - **Mensalidade do mês:** sem rateio → 1 linha (devido / pago / restante) com **Registrar pagamento**; com rateio → uma linha por participante (pago, crédito aplicado, data) com **Registrar pagamento** por pessoa, mais um resumo fixo **Pago / Falta** acima da lista (calculado sobre o valor total da mensalidade, não sobre uma fatia individual).
   - **Registrar pagamento acima do devido:** o valor em dinheiro pode passar do valor da cobrança. Quando isso acontece, o modal pergunta se o gestor quer que o excedente vire **crédito**: **sim** → a cobrança fica quitada no valor exato e o excedente entra como saldo de crédito; **não** → o pagamento é registrado como está (acima do devido). Se a parcela for de um **participante avulso** (sem cadastro), o crédito é lançado para o **responsável pela recorrência**. O dinheiro total recebido entra no **Financeiro** da arena nos dois casos; o crédito lançado não gera lançamento de caixa (só é receita quando aplicado).
   - **Histórico de pagamentos:** todos os pagamentos de todas as competências — data, competência, participante, valor em dinheiro, valor em crédito, observação (paginado).
@@ -684,6 +685,36 @@ A seção "Cobranças Avulsas" que antes aparecia na parte de baixo da página d
   - o código da turma abre os alunos dela, e o nome do aluno na turma abre a ficha do atleta.
 - **Fora do escopo:** cobrança dos alunos da turma.
 - **Próximo passo:** aplicar em homologação a migração `20261008120000_encerrar_turma_recorrencia_agora.sql` (opção "a partir de hoje"), revisar e abrir os PRs (db antes do web) e fechar as perguntas que restam no plano (§6).
+
+---
+
+### 5.25 Caixa — Abertura e Fechamento Diário (Financeiro) (12/10/2026)
+- **Status:** **Em desenvolvimento**, branches `feat/caixa-sessions` (db) / `feat/caixa` (web). Ainda não aplicado em homologação nem produção.
+- **Não confundir com §5.8.1 (Gestão de Caixas):** aquela seção é sobre o caixa de uma **Estação** (bar/loja) e suas comandas. Esta seção é sobre o **caixa diário da arena** dentro do Financeiro — um turno de abertura/fechamento que controla quando lançamentos manuais de entrada/saída podem ser feitos.
+- **Problema:** hoje qualquer lançamento manual de entrada/saída no Financeiro pode ser feito em qualquer momento, sem vínculo a uma janela de caixa, dificultando conferência de quanto entrou/saiu durante um turno e qual o saldo em dinheiro esperado.
+- **Entrada:** nova aba **Caixa** dentro da tela de Financeiro (ao lado de Visão geral, Entradas e Saídas).
+- **Abertura de Caixa:** registra data/hora, usuário que abriu e o saldo inicial em dinheiro. Só depois da abertura é possível lançar entradas e saídas manuais. É permitido abrir e fechar o caixa mais de uma vez no mesmo dia — cada abertura é uma sessão própria, com seu próprio histórico.
+- **Lançamentos durante o caixa aberto:** as mesmas entradas/saídas que existiam no Financeiro, agora só disponíveis dentro da aba Caixa e sempre vinculadas à sessão aberta no momento da criação. Editar ou excluir um lançamento só é possível enquanto a sessão que o originou ainda estiver aberta.
+- **Fechamento de Caixa:** disponível a qualquer momento enquanto houver caixa aberto. Mostra um resumo sintético (total de entradas, total de saídas e saldo final, podendo ser negativo) e o detalhe de tudo que foi lançado durante a abertura. Depois de fechado, os lançamentos daquela sessão ficam congelados.
+- **Histórico:** sessões já fechadas continuam consultáveis (data/hora de abertura e fechamento, quem abriu e fechou, totais e saldo final, lançamentos detalhados) — é o relatório de "tudo que aconteceu naquela abertura de caixa".
+- **Quem pode operar:** qualquer membro ativo da arena (Owner, Gestor, Atendente ou a role de membership "Caixa") pode abrir, lançar e fechar o caixa — decisão deliberada de abrir esse fluxo além de Owner/Gestor, já que é uma role pensada para quem opera o caixa no dia a dia.
+- **Páginas Entradas e Saídas:** passam a ser histórico **somente leitura** (sem criar/editar/excluir); toda criação de lançamento manual passa a existir exclusivamente dentro da aba Caixa, e só com caixa aberto.
+- **Recebimentos automáticos no caixa:** pagamentos de reserva avulsa, rateio, mensalidade, comanda e rotativo registrados **enquanto há um caixa aberto** entram automaticamente nesse caixa, com um selo da origem (Mensalidade, Reserva avulsa, Rateio, Comanda, Rotativo). Sem caixa aberto, o pagamento entra normalmente só no Financeiro (não é puxado depois para o próximo caixa). No caixa eles não podem ser editados nem excluídos — isso continua sendo feito na tela de origem.
+- **Saldo em dinheiro:** o caixa lista todas as formas de pagamento, com totais por forma, mas o **saldo final é o saldo físico em dinheiro** (abertura + entradas em dinheiro − saídas em dinheiro), que é o que deve bater com a gaveta. Por isso todo lançamento manual no caixa exige o modo de pagamento. Caixas fechados antes dessa mudança continuam com o saldo antigo (todas as formas).
+- **Estorno depois do fechamento:** se um recebimento que entrou num caixa já fechado for estornado (ex.: remover um participante que já pagou do rateio), o lançamento original **não é apagado** (o fechamento fica íntegro) e uma **saída "Estorno"** é lançada no caixa aberto agora (ou só no Financeiro, se não houver caixa aberto). Estorno de recebimento do caixa ainda aberto continua apagando o lançamento. O relatório de Pagamentos não conta uma entrada estornada como paga.
+- **Fora do escopo desta etapa:** ajustes maiores na tela de Financeiro em si (ficam para depois).
+- **Próximo passo:** aplicar a migration em homologação (db antes do web), validar o fluxo completo em homolog e então promover para produção — tudo sob autorização explícita a cada etapa.
+
+---
+
+### 5.26 Cadastros Auxiliares — Categorias de Lançamento (12/10/2026)
+- **Status:** **Em desenvolvimento**, mesmas branches do Caixa (`feat/caixa-sessions` / `feat/caixa`). Ainda não aplicado em homologação nem produção.
+- **Problema:** o campo "Tipo de lançamento" dos formulários de Entrada e Saída era uma lista fixa no código (ex.: Mensalidade, Bar, Loja... / Salário, Manutenção...), sem o gestor poder adaptá-la à realidade da própria arena.
+- **Entrada:** nova aba **Cadastros Auxiliares**, ao lado de Caixa, dentro do Financeiro.
+- **O que faz:** o gestor cadastra, renomeia, ativa/inativa e exclui as categorias que aparecem no "Tipo de lançamento" das telas de Entrada e Saída — uma lista para cada um dos dois tipos. Categoria com lançamentos já registrados não pode ser excluída (só inativada); ao editar um lançamento antigo, a categoria original continua aparecendo mesmo se tiver sido inativada depois.
+- **Transição:** cada arena já existente recebe, automaticamente, as mesmas categorias que eram fixas antes (5 de entrada, 4 de saída) — ninguém perde as opções que já usava; dali em diante são só um ponto de partida editável.
+- **Quem pode gerenciar:** só Owner/Gestor (mesmo nível de Catálogo, Espaços e Configurações de Usuários) — lançar continua aberto a Atendente/Caixa (§5.25), só a gestão da lista de categorias é restrita.
+- **Fora do escopo:** reclassificar em massa lançamentos antigos quando uma categoria é renomeada (o nome gravado no lançamento não muda retroativamente, igual já era antes).
 
 ## 7. Restrições Técnicas
 

@@ -1,21 +1,12 @@
 "use client"
 
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { BarChart3, Plus } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
-import { getFinanceDashboardAction } from "@/modules/finance/actions/financeActions";
+import { BarChart3, ArrowRight } from "lucide-react";
+import { useMemo, useState } from "react";
 import type { ArenaFinanceSummary, ArenaFinanceDailyRow, Transaction } from "@/modules/finance/types/finance.types";
 import { format } from "date-fns";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
-import { TransactionForm } from "@/modules/finance/components/TransactionForm";
 import { formatLaunchDate } from "@/lib/format";
 
 interface Props {
@@ -45,93 +36,57 @@ function computeComparison(summary: ArenaFinanceSummary) {
     };
 }
 
-export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentEntradas, initialRecentSaidas, initialChartSeries }: Props) {
-    const [totals, setTotals] = useState(() => computeTotals(initialSummary));
-    const [recentEntradas, setRecentEntradas] = useState<Transaction[]>(initialRecentEntradas);
-    const [recentSaidas, setRecentSaidas] = useState<Transaction[]>(initialRecentSaidas);
-    const [monthlyComparison, setMonthlyComparison] = useState(() => computeComparison(initialSummary));
-    const [isLoading, setIsLoading] = useState(false);
-    const [isAddingEntry, setIsAddingEntry] = useState(false);
-    const [isAddingExpense, setIsAddingExpense] = useState(false);
-    const [viewType, setViewType] = useState<'saldo' | 'entrada' | 'saída'>('entrada');
-    const [period, setPeriod] = useState<'7d' | '30d'>('7d');
-    const [chartData, setChartData] = useState<{ label: string; value: number; percentage: number; isCurrentDay?: boolean }[]>([]);
-    const [chartSeries, setChartSeries] = useState<ArenaFinanceDailyRow[]>(initialChartSeries);
-
-    const processChartData = useCallback(
-        (series: ArenaFinanceDailyRow[], periodType: '7d' | '30d', type: 'saldo' | 'entrada' | 'saída') => {
-            const now = new Date();
-            const daysCount = periodType === '7d' ? 7 : 30;
-            const byDay = new Map(
-                series.map((r) => [r.bucket_date.length >= 10 ? r.bucket_date.slice(0, 10) : r.bucket_date, r])
-            );
-
-            const lastXDays = Array.from({ length: daysCount }, (_, i) => {
-                const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                d.setDate(d.getDate() - (daysCount - 1 - i));
-                return d;
-            });
-
-            const result = lastXDays.map((dateObj) => {
-                const key = format(dateObj, 'yyyy-MM-dd');
-                const row = byDay.get(key);
-                let value = 0;
-                if (row) {
-                    if (type === 'saldo') value = row.entradas - row.saidas;
-                    else if (type === 'entrada') value = row.entradas;
-                    else value = row.saidas;
-                }
-
-                const dateStr = dateObj.toLocaleDateString();
-                const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-                return {
-                    label:
-                        daysCount === 7
-                            ? weekdays[dateObj.getDay()]
-                            : `${dateObj.getDate().toString().padStart(2, '0')}/${(dateObj.getMonth() + 1).toString().padStart(2, '0')}`,
-                    value,
-                    isCurrentDay: dateStr === now.toLocaleDateString(),
-                };
-            });
-
-            const maxValue = Math.max(...result.map((d) => Math.abs(d.value)), 1);
-            setChartData(
-                result.map((d) => ({
-                    ...d,
-                    percentage: (Math.abs(d.value) / maxValue) * 100,
-                }))
-            );
-        },
-        []
+function computeChartData(series: ArenaFinanceDailyRow[], periodType: '7d' | '30d', type: 'saldo' | 'entrada' | 'saída') {
+    const now = new Date();
+    const daysCount = periodType === '7d' ? 7 : 30;
+    const byDay = new Map(
+        series.map((r) => [r.bucket_date.length >= 10 ? r.bucket_date.slice(0, 10) : r.bucket_date, r])
     );
 
-    const loadData = useCallback(async () => {
-        setIsLoading(true);
-        try {
-            const now = new Date();
-            const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            const start = new Date(end);
-            start.setDate(start.getDate() - 29);
+    const lastXDays = Array.from({ length: daysCount }, (_, i) => {
+        const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        d.setDate(d.getDate() - (daysCount - 1 - i));
+        return d;
+    });
 
-            const res = await getFinanceDashboardAction(arenaId);
-            if (!res.success || !res.data) throw new Error(res.error)
-
-            setTotals(computeTotals(res.data.summary));
-            setMonthlyComparison(computeComparison(res.data.summary));
-            setRecentEntradas(res.data.recentIn);
-            setRecentSaidas(res.data.recentOut);
-            setChartSeries(res.data.series);
-        } catch (error) {
-            console.error(error);
-        } finally {
-            setIsLoading(false);
+    const result = lastXDays.map((dateObj) => {
+        const key = format(dateObj, 'yyyy-MM-dd');
+        const row = byDay.get(key);
+        let value = 0;
+        if (row) {
+            if (type === 'saldo') value = row.entradas - row.saidas;
+            else if (type === 'entrada') value = row.entradas;
+            else value = row.saidas;
         }
-    }, [arenaId]);
 
-    useEffect(() => {
-        if (isLoading) return;
-        processChartData(chartSeries, period, viewType);
-    }, [period, viewType, chartSeries, processChartData, isLoading]);
+        const dateStr = dateObj.toLocaleDateString();
+        const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+        return {
+            label:
+                daysCount === 7
+                    ? weekdays[dateObj.getDay()]
+                    : `${dateObj.getDate().toString().padStart(2, '0')}/${(dateObj.getMonth() + 1).toString().padStart(2, '0')}`,
+            value,
+            isCurrentDay: dateStr === now.toLocaleDateString(),
+        };
+    });
+
+    const maxValue = Math.max(...result.map((d) => Math.abs(d.value)), 1);
+    return result.map((d) => ({
+        ...d,
+        percentage: (Math.abs(d.value) / maxValue) * 100,
+    }));
+}
+
+export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentEntradas, initialRecentSaidas, initialChartSeries }: Props) {
+    const totals = computeTotals(initialSummary);
+    const recentEntradas = initialRecentEntradas;
+    const recentSaidas = initialRecentSaidas;
+    const monthlyComparison = computeComparison(initialSummary);
+    const chartSeries = initialChartSeries;
+    const [viewType, setViewType] = useState<'saldo' | 'entrada' | 'saída'>('entrada');
+    const [period, setPeriod] = useState<'7d' | '30d'>('7d');
+    const chartData = useMemo(() => computeChartData(chartSeries, period, viewType), [chartSeries, period, viewType]);
 
     const formatCurrency = (val: number) => {
         return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -293,9 +248,9 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                 <Card className="p-8 border-none shadow-lg rounded-2xl bg-white">
                     <div className="flex items-center justify-between mb-8">
                         <h3 className="text-xl font-bold text-arena-navy-800">Últimas Entradas</h3>
-                        <Button onClick={() => setIsAddingEntry(true)} variant="ghost" className="text-arena-navy-800/60 hover:text-arena-navy-800 gap-2 font-bold text-sm">
-                            Nova entrada <Plus className="h-4 w-4" />
-                        </Button>
+                        <Link href={`/dashboard/finance/${arenaId}/caixa`} className="flex items-center gap-2 text-arena-navy-800/60 hover:text-arena-navy-800 font-bold text-sm">
+                            Lançar no Caixa <ArrowRight className="h-4 w-4" />
+                        </Link>
                     </div>
                     <div className="space-y-4">
                         {recentEntradas.map(t => (
@@ -325,9 +280,9 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                 <Card className="p-8 border-none shadow-lg rounded-2xl bg-white">
                     <div className="flex items-center justify-between mb-8">
                         <h3 className="text-xl font-bold text-arena-navy-800">Últimas Saídas</h3>
-                        <Button onClick={() => setIsAddingExpense(true)} variant="ghost" className="text-arena-navy-800/60 hover:text-arena-navy-800 gap-2 font-bold text-sm">
-                            Nova saída <Plus className="h-4 w-4" />
-                        </Button>
+                        <Link href={`/dashboard/finance/${arenaId}/caixa`} className="flex items-center gap-2 text-arena-navy-800/60 hover:text-arena-navy-800 font-bold text-sm">
+                            Lançar no Caixa <ArrowRight className="h-4 w-4" />
+                        </Link>
                     </div>
                     <div className="space-y-4">
                         {recentSaidas.map(t => (
@@ -348,37 +303,6 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                     </Link>
                 </Card>
             </div>
-
-            {/* Modals */}
-            <Dialog open={isAddingEntry} onOpenChange={setIsAddingEntry}>
-                <DialogContent className="w-[calc(100vw-2rem)] max-w-[440px]">
-                    <DialogHeader>
-                        <DialogTitle className="text-2xl font-black text-arena-navy-800">Nova entrada</DialogTitle>
-                    </DialogHeader>
-                    <TransactionForm
-                        arenaId={arenaId}
-                        registeredBy=""
-                        type="entrada"
-                        onSuccess={() => { setIsAddingEntry(false); loadData(); }}
-                        onCancel={() => setIsAddingEntry(false)}
-                    />
-                </DialogContent>
-            </Dialog>
-
-            <Dialog open={isAddingExpense} onOpenChange={setIsAddingExpense}>
-                <DialogContent className="w-[calc(100vw-2rem)] max-w-[440px]">
-                    <DialogHeader>
-                        <DialogTitle className="text-2xl font-black text-arena-navy-800">Nova saída</DialogTitle>
-                    </DialogHeader>
-                    <TransactionForm
-                        arenaId={arenaId}
-                        registeredBy=""
-                        type="saída"
-                        onSuccess={() => { setIsAddingExpense(false); loadData(); }}
-                        onCancel={() => setIsAddingExpense(false)}
-                    />
-                </DialogContent>
-            </Dialog>
         </div>
     );
 }

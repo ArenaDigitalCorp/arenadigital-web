@@ -89,19 +89,28 @@ export const removerPausaSchema = z.object({
   pausaId: uuidSchema,
 })
 
-export const reajustarValorSchema = z.object({
-  arenaId: uuidSchema,
-  planoId: uuidSchema,
-  operationId: uuidSchema,
-  novoValor: z.number().finite().min(0).max(100_000_000),
-  escopo: z.enum(['mes_atual', 'mes_seguinte', 'somente_mes']),
-  /**
-   * Competência que o gestor está vendo na tela (YYYY-MM-01). É a âncora da
-   * vigência: "mês atual" significa ESTE mês, não o mês do relógio do servidor.
-   */
-  competencia: z.string().regex(/^\d{4}-\d{2}-01$/),
-  observacao: z.string().trim().max(400).nullable(),
-})
+export const reajustarValorSchema = z
+  .object({
+    arenaId: uuidSchema,
+    planoId: uuidSchema,
+    operationId: uuidSchema,
+    novoValor: z.number().finite().min(0).max(100_000_000),
+    escopo: z.enum(['mes_atual', 'mes_seguinte', 'somente_mes']),
+    /**
+     * Competência que o gestor está vendo na tela (YYYY-MM-01). É a âncora da
+     * vigência: "mês atual" significa ESTE mês, não o mês do relógio do servidor.
+     */
+    competencia: z.string().regex(/^\d{4}-\d{2}-01$/),
+    observacao: z.string().trim().max(400).nullable(),
+    /** Crédito do atleta a abater da cobrança do mês âncora, junto com o reajuste. */
+    creditoAplicado: z.number().finite().min(0).max(100_000_000).default(0),
+    /** Chave de idempotência do abatimento — obrigatória quando `creditoAplicado > 0`. */
+    creditoOperationId: uuidSchema.nullable().default(null),
+  })
+  .refine((v) => v.creditoAplicado === 0 || v.creditoOperationId !== null, {
+    message: 'Falta a chave de idempotência do crédito',
+    path: ['creditoOperationId'],
+  })
 
 /** "Ajustar mensalidades do mês": o que o gestor confirmou, para UMA competência. */
 export const reajusteMesLoteSchema = z.object({

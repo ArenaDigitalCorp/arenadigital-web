@@ -24,6 +24,7 @@ import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { getStationTypesAction, createStationAction, updateStationAction } from "@/modules/stations/actions/stationActions"
 import type { StationType } from "@/modules/stations/types/station.types"
+import { STATION_STATUSES, STATION_STATUS_OPTIONS, isStationStatus } from "@/modules/stations/station-status"
 import { useEffect, useState } from "react"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -31,7 +32,7 @@ const stationFormSchema = z.object({
     name: z.string().min(2, {
         message: "O nome da estação deve ter pelo menos 2 caracteres.",
     }),
-    status: z.enum(["ativo", "inativo", "Em manutenção", "Desativado"]),
+    status: z.enum(STATION_STATUSES),
     station_type_id: z.string().min(1, {
         message: "Selecione um tipo de estação.",
     }),
@@ -54,7 +55,7 @@ export function StationForm({ initialData, arenaId, onSuccess }: StationFormProp
         resolver: zodResolver(stationFormSchema),
         defaultValues: {
             name: initialData?.name || "",
-            status: (initialData?.status as StationFormValues["status"]) || "ativo",
+            status: isStationStatus(initialData?.status) ? initialData.status : "ativo",
             station_type_id: initialData?.station_type_id || "",
         },
     })
@@ -62,7 +63,7 @@ export function StationForm({ initialData, arenaId, onSuccess }: StationFormProp
     useEffect(() => {
         form.reset({
             name: initialData?.name || "",
-            status: (initialData?.status as StationFormValues["status"]) || "ativo",
+            status: isStationStatus(initialData?.status) ? initialData.status : "ativo",
             station_type_id: initialData?.station_type_id || "",
         })
     }, [initialData?.id, initialData?.name, initialData?.status, initialData?.station_type_id, form])
@@ -171,10 +172,9 @@ export function StationForm({ initialData, arenaId, onSuccess }: StationFormProp
                                     </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                    <SelectItem value="ativo">Ativo</SelectItem>
-                                    <SelectItem value="inativo">Inativo</SelectItem>
-                                    <SelectItem value="Em manutenção">Em manutenção</SelectItem>
-                                    <SelectItem value="Desativado">Desativado</SelectItem>
+                                    {STATION_STATUS_OPTIONS.map((option) => (
+                                        <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                                    ))}
                                 </SelectContent>
                             </Select>
                             <FormMessage />
