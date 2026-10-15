@@ -7,6 +7,7 @@ import {
 } from '@/lib/server-auth'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
+import { listAllAthleteProfiles } from '@/modules/athletes/lib/list-all-athlete-profiles'
 import {
   PERFIS_ATLETA,
   type PerfilAtleta,
@@ -95,8 +96,8 @@ export async function setPerfilAtletaAction(
 }
 
 /**
- * Perfil de todos os atletas da arena, numa chamada. A listagem carrega a arena
- * inteira e filtra no cliente; buscar perfil por linha seria N+1.
+ * Perfil de todos os atletas da arena, em páginas da RPC de lote. A listagem
+ * filtra no cliente; buscar perfil por linha seria N+1.
  */
 export async function listPerfisAtletaAction(
   arenaId: string
@@ -105,10 +106,7 @@ export async function listPerfisAtletaAction(
     await assertArenaBackofficeAccess(arenaId)
     const parsed = z.object({ arenaId: uuid }).parse({ arenaId })
 
-    const { data, error } = await (getSupabaseAdmin() as unknown as LooseClient).rpc(
-      'list_atleta_perfis',
-      { p_arena_id: parsed.arenaId }
-    )
+    const { data, error } = await listAllAthleteProfiles(getSupabaseAdmin(), parsed.arenaId)
     if (error) throw new Error(error.message)
 
     const mapa: Record<string, PerfilAtleta> = {}
