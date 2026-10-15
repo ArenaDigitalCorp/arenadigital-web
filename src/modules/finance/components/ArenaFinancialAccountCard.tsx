@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { format } from 'date-fns'
 import Link from 'next/link'
 import {
   ArrowDownToLine,
@@ -51,8 +52,8 @@ function closedPeriod() {
   const start = new Date(finish)
   start.setDate(start.getDate() - 29)
   return {
-    startDate: start.toISOString().slice(0, 10),
-    finishDate: finish.toISOString().slice(0, 10),
+    startDate: format(start, 'yyyy-MM-dd'),
+    finishDate: format(finish, 'yyyy-MM-dd'),
   }
 }
 

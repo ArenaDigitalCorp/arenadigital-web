@@ -350,7 +350,14 @@ export class SupabaseRotativoRepository implements IRotativoRepository {
       p_registered_by: input.registeredBy,
     });
 
-    if (error) throw new Error(`SupabaseRotativoRepository.purchaseCreditsAtomic: ${error.message}`);
+    if (error) {
+      const failure = new Error(`SupabaseRotativoRepository.purchaseCreditsAtomic: ${error.message}`);
+      const sqlState = 'code' in error ? error.code : undefined;
+      if (typeof sqlState === 'string' && ['22023', '23503', '23514', '42501'].includes(sqlState)) {
+        Object.assign(failure, { purchaseRejected: true });
+      }
+      throw failure;
+    }
     return data as AtomicRotativoCreditPurchaseResult;
   }
 

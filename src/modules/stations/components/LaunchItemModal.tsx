@@ -30,6 +30,7 @@ import { isCatalogService, matchesProductOrServiceSearch, normalizeCatalogStatus
 import { Search, Check, X, Loader2, Plus, Minus, Trash2 } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
+import { formatCurrency } from "@/lib/format"
 
 const launchItemSchema = z.object({
     quantity: z.string().min(1, "Informe a quantidade"),
@@ -245,7 +246,7 @@ export function LaunchItemModal({
                                                         <div key={product.id} className="flex items-center justify-between p-3 bg-white border border-arena-navy-800/5 rounded-xl hover:border-arena-button/20 transition-all group">
                                                             <div className="flex flex-col">
                                                                 <span className="font-semibold text-arena-navy-800 text-sm group-hover:text-arena-button transition-colors">{product.name}</span>
-                                                                <span className="text-xs text-arena-navy-800/40 font-medium">R$ {product.price.toFixed(2)}</span>
+                                                                <span className="text-xs text-arena-navy-800/40 font-medium">{formatCurrency(product.price)}</span>
                                                                 <span className={cn(
                                                                     "text-[10px] font-bold mt-0.5",
                                                                     isCatalogService(product)
@@ -312,7 +313,7 @@ export function LaunchItemModal({
                                         {selectedItems.slice(0, 3).map((item, index) => (
                                             <div key={index} className="flex items-center justify-between text-sm">
                                                 <span className="text-arena-navy-800/60"><span className="font-bold text-arena-button">{item.quantity}x</span> {item.product.name}</span>
-                                                <span className="font-bold text-arena-navy-800">R$ {(item.product.price * item.quantity).toFixed(2)}</span>
+                                                <span className="font-bold text-arena-navy-800">{formatCurrency(item.product.price * item.quantity)}</span>
                                             </div>
                                         ))}
                                         {selectedItems.length > 3 && (
@@ -324,7 +325,7 @@ export function LaunchItemModal({
                                     <div className="flex items-center justify-between pt-2 border-t border-dashed border-arena-navy-800/10">
                                         <span className="text-sm font-black text-arena-navy-800 uppercase tracking-wider">Total a Lançar</span>
                                         <span className="text-lg font-black text-arena-button">
-                                            R$ {selectedItems.reduce((acc, item) => acc + (item.product.price * item.quantity), 0).toFixed(2)}
+                                            {formatCurrency(selectedItems.reduce((acc, item) => acc + (item.product.price * item.quantity), 0))}
                                         </span>
                                     </div>
                                 </div>

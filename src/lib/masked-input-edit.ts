@@ -5,7 +5,8 @@ const meaningful = (value: string) => (value.match(/[A-Za-z0-9]/g) ?? []).length
 export function maskEdit(rawValue: string, rawCaret: number, mask: (value: string) => string, previous: PreviousEdit | null = null) {
   let raw = rawValue
   let caret = rawCaret
-  if (previous && previous.start === previous.end && previous.value.length === raw.length + 1) {
+  if (previous && previous.start === previous.end && previous.value.length === raw.length + 1
+      && mask(raw) === previous.value) {
     const removedIndex = previous.key === 'Backspace' ? previous.start - 1 : previous.key === 'Delete' ? previous.start : -1
     if (removedIndex >= 0 && /[().\s/\-]/.test(previous.value[removedIndex])) {
       if (previous.key === 'Backspace') {

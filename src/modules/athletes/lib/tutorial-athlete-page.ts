@@ -5,7 +5,7 @@ type TutorialAthlete = { id: string; name: string; sport: string; cpf: string | 
 /** Tutorial data stays local; the real listing always uses the server query. */
 export function tutorialAthletePage(athletes: TutorialAthlete[], query: AthletePageQuery): AthletePage {
   const normalize = (value: string) => value.toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-  const matching: AthletePageItem[] = athletes
+  const matching: (AthletePageItem & { perfil: 'padrao' })[] = athletes
     .filter(athlete => normalize(athlete.name).includes(normalize(query.search.trim())))
     .map(athlete => ({ ...athlete, cpf: athlete.cpf ?? '---', telefone: athlete.telefone ?? '---', email: athlete.email ?? '---', perfil: 'padrao' }))
   const filtered = query.profile === 'todos' || query.profile === 'padrao' ? matching : []

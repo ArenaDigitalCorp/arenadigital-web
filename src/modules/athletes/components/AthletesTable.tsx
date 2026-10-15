@@ -34,6 +34,7 @@ interface Props {
     arenaId: string | null
     /** Perfil por atleta. Vazio enquanto carrega — a coluna mostra "—". */
     perfis: Record<string, PerfilAtleta>
+    profilesAvailable?: boolean
     error?: string
     onRetry: () => void
     page: number
@@ -57,17 +58,20 @@ function Ordenavel({
     ordem,
     onOrdenar,
     children,
+    disabled = false,
 }: {
     coluna: Coluna
     ordem: AthleteSort
     onOrdenar: (coluna: Coluna) => void
     children: React.ReactNode
+    disabled?: boolean
 }) {
     const ativo = ordem.column === coluna
     const Icone = !ativo ? ChevronsUpDown : ordem.direction === "asc" ? ArrowUp : ArrowDown
     return (
         <button
             type="button"
+            disabled={disabled}
             onClick={() => onOrdenar(coluna)}
             className={cn(
                 "inline-flex items-center gap-1 transition-colors hover:text-arena-navy-800",
@@ -83,7 +87,7 @@ function Ordenavel({
 /** Mesma marcação da aba Cadastros em Arena (tabela nativa + `arenaDataTable`). */
 export function AthletesTable({
     athletes, isLoading, arenaId, perfis, error, onRetry,
-    page, pageSize, total, onPageChange, onPageSizeChange, sort, onSortChange,
+    page, pageSize, total, onPageChange, onPageSizeChange, sort, onSortChange, profilesAvailable = true,
 }: Props) {
     const router = useRouter()
     const totalPages = Math.max(1, Math.ceil(total / pageSize))
@@ -112,7 +116,7 @@ export function AthletesTable({
                                 </Ordenavel>
                             </th>
                             <th className={arenaDataTable.th}>
-                                <Ordenavel coluna="perfil" ordem={sort} onOrdenar={alternar}>
+                                <Ordenavel coluna="perfil" ordem={sort} onOrdenar={alternar} disabled={!profilesAvailable}>
                                     Perfil
                                 </Ordenavel>
                             </th>

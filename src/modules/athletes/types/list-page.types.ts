@@ -13,11 +13,13 @@ export type AthletePageQuery = {
   profile: AthleteProfileFilter
   sort: AthleteSort
 }
-export type AthletePageItem = AtletaListItem & { perfil: PerfilAtleta }
+export type AthletePageItem = AtletaListItem & { perfil: PerfilAtleta | null }
 export type AthletePage = {
   items: AthletePageItem[]
   page: number
   pageSize: number
   total: number
-  counts: Record<AthleteProfileFilter, number>
+  counts: { todos: number } & Partial<Record<PerfilAtleta, number | null>>
+  /** Omitted by the previous RPC version, which always included profiles. */
+  profilesAvailable?: boolean
 }

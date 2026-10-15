@@ -6,6 +6,7 @@ import { Loader2, Plus, Copy, Trash2, Star, Eraser, Lock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { invalidHourlyDraft, type HourlyPriceDraft } from '@/modules/courts/lib/price-input'
 import { cn } from '@/lib/utils'
 import { DayCard } from '@/modules/courts/components/DayCard'
 import { DaySchedulePanel } from '@/modules/courts/components/DaySchedulePanel'
@@ -33,7 +34,7 @@ import {
   priceTableFromLegacyDayConfig,
   toEditorDays,
 } from '@/modules/courts/lib/price-table-editor'
-import type { DayConfig } from '@/modules/courts/lib/day-schedule'
+import { tiersFromConfig, type DayConfig } from '@/modules/courts/lib/day-schedule'
 
 /**
  * O formulário do espaço tem **um** botão de salvar. No modo persistido é ele
@@ -41,6 +42,7 @@ import type { DayConfig } from '@/modules/courts/lib/day-schedule'
  */
 export type PriceTablesHandle = {
   /** Grava as tabelas alteradas. `false` ⇒ já avisou o gestor por toast. */
+  validate: () => boolean
   saveAll: () => Promise<boolean>
   hasPendingChanges: () => boolean
 }
@@ -75,6 +77,7 @@ export function PriceTablesConfig({
 }: PriceTablesConfigProps) {
   const isDraft = !!draftTables && !!onDraftChange
 
+  const [priceDraftsByDay, setPriceDraftsByDay] = useState<Record<string, Record<string, HourlyPriceDraft>>>({})
   const [loaded, setLoaded] = useState<EditorTable[] | null>(null)
   const [activeKey, setActiveKey] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -94,6 +97,7 @@ export function PriceTablesConfig({
       setLoaded([])
       return
     }
+    setPriceDraftsByDay({})
     if (res.data.length === 0) {
       const fallback = priceTableFromLegacyDayConfig(courtId, arenaId, fallbackDayConfig)
       setLoaded([toEditor(fallback)])
@@ -116,6 +120,29 @@ export function PriceTablesConfig({
     [draftTables]
   )
   const tables: EditorTable[] | null = isDraft ? draftEditors : loaded
+
+  // Draft validity belongs to each live day. Structural operations can
+  // replace selected destinations without discarding another table's edits.
+  const invalidDraftDayKeys = useMemo(() => new Set((tables ?? []).flatMap(table =>
+    table.editorDays.filter(day => day.enabled &&
+      tiersFromConfig(courtPriceDayToDayConfig(day)).some(tier => invalidHourlyDraft(
+        priceDraftsByDay[`${keyOf(table)}:${day.diaSemana}`]?.[tier.id], tier.price,
+      ))
+    ).map(day => `${keyOf(table)}:${day.diaSemana}`)
+  )), [tables, priceDraftsByDay])
+  const hasInvalidDraftPrices = invalidDraftDayKeys.size > 0
+  const validate = useCallback((skipId?: string) => {
+    const invalid = [...invalidDraftDayKeys].some(key => !skipId || !key.startsWith(`${skipId}:`))
+    if (!invalid) return true
+    toast.error('Corrija os valores por hora inválidos antes de salvar.')
+    return false
+  }, [invalidDraftDayKeys])
+
+  const discardPriceDrafts = (tableKey: string, days?: number[]) => {
+    setPriceDraftsByDay(previous => Object.fromEntries(Object.entries(previous).filter(([key]) =>
+      days ? !days.some(day => key === `${tableKey}:${day}`) : !key.startsWith(`${tableKey}:`)
+    )))
+  }
 
   const active = useMemo(
     () => tables?.find((t) => keyOf(t) === activeKey) ?? tables?.[0] ?? null,
@@ -153,6 +180,7 @@ export function PriceTablesConfig({
    */
   const handleDayChange = (nextConfig: DayConfig) => {
     if (!active) return
+    discardPriceDrafts(keyOf(active), selectedDows.slice(1))
     patchActive({
       editorDays: active.editorDays.map((d) =>
         selectedDows.includes(d.diaSemana)
@@ -195,6 +223,11 @@ export function PriceTablesConfig({
     const sourceDow = selectedDows[0]
     const src = active.editorDays.find((d) => d.diaSemana === sourceDow)
     if (!src) return
+    if (invalidDraftDayKeys.has(`${keyOf(active)}:${sourceDow}`)) {
+      toast.error('Corrija os valores do dia de origem antes de replicar.')
+      return
+    }
+    discardPriceDrafts(keyOf(active), active.editorDays.filter(day => day.diaSemana !== sourceDow).map(day => day.diaSemana))
     patchActive({
       editorDays: active.editorDays.map((d) =>
         d.diaSemana === sourceDow
@@ -215,12 +248,18 @@ export function PriceTablesConfig({
 
   const handleCopyFromPadrao = () => {
     if (!active || !padrao) return
-    patchActive({ editorDays: copyDaysFrom(padrao) })
+    if ([...invalidDraftDayKeys].some(key => key.startsWith(`${keyOf(padrao)}:`))) {
+      toast.error('Corrija os valores da tabela Padrão antes de copiar.')
+      return
+    }
+    discardPriceDrafts(keyOf(active))
+    patchActive({ editorDays: copyDaysFrom({ ...padrao, days: padrao.editorDays }) })
     toast.success('Faixas da tabela Padrão copiadas. Ajuste o que for diferente.')
   }
 
   const handleClear = () => {
     if (!active) return
+    discardPriceDrafts(keyOf(active))
     patchActive({
       editorDays: active.editorDays.map((d) => ({ ...d, enabled: false, bands: [] })),
     })
@@ -234,6 +273,7 @@ export function PriceTablesConfig({
    */
   const saveDirtyTables = useCallback(
     async (skipId?: string): Promise<boolean> => {
+      if (!validate(skipId)) return false
       if (isDraft || !courtId) return true
       const pending = (loaded ?? []).filter((t) => t.dirty && t.id && t.id !== skipId)
       if (pending.length === 0) return true
@@ -272,16 +312,17 @@ export function PriceTablesConfig({
       await load()
       return true
     },
-    [arenaId, courtId, isDraft, load, loaded]
+    [arenaId, courtId, isDraft, load, loaded, validate]
   )
 
   useImperativeHandle(
     ref,
     () => ({
+      validate,
       saveAll: () => saveDirtyTables(),
       hasPendingChanges: () => (loaded ?? []).some((t) => t.dirty),
     }),
-    [loaded, saveDirtyTables]
+    [loaded, saveDirtyTables, validate]
   )
 
   const handleCreate = async () => {
@@ -663,6 +704,15 @@ export function PriceTablesConfig({
             </Button>
           </div>
 
+          {hasInvalidDraftPrices && (
+            <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              Corrija os valores por hora inválidos antes de salvar. Os valores anteriores não serão salvos enquanto houver erros.
+              <Button type="button" variant="link" className="h-auto px-0 text-red-700" onClick={() => setPriceDraftsByDay({})}>
+                Descartar os textos inválidos e revisar os valores anteriores
+              </Button>
+            </div>
+          )}
+
           {/* ── Painel do dia ────────────────────────────────────────── */}
           <div className="rounded-xl border border-border">
             <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2.5">
@@ -686,6 +736,8 @@ export function PriceTablesConfig({
               <DaySchedulePanel
                 key={`${keyOf(active)}-${leadDow}`}
                 config={leadConfig}
+                priceDrafts={priceDraftsByDay[`${keyOf(active)}:${leadDow}`] ?? {}}
+                onPriceDraftChange={drafts => setPriceDraftsByDay(previous => ({ ...previous, [`${keyOf(active)}:${leadDow}`]: drafts }))}
                 onChange={handleDayChange}
                 batchDays={batchNames}
               />

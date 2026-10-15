@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { decimalInput, integerInput } from '@/shared/schemas/numeric.schema'
 
 const nullableUuid = z.string().uuid().nullable().optional()
 
@@ -6,10 +7,10 @@ export const transactionActionSchema = z.object({
   type: z.enum(['entrada', 'saída']),
   category: z.string().trim().min(1).max(100),
   description: z.string().trim().min(3).max(500),
-  quantity: z.coerce.number().int().min(1).max(100000),
-  unit_value: z.coerce.number().finite().min(0.01).max(99999999.99),
-  discount: z.coerce.number().finite().min(0).max(99999999.99),
-  total_value: z.coerce.number().finite().min(0).max(99999999.99),
+  quantity: integerInput(z.number().int().min(1).max(100000)),
+  unit_value: decimalInput(z.number().finite().min(0.01).max(99999999.99)),
+  discount: decimalInput(z.number().finite().min(0).max(99999999.99)),
+  total_value: decimalInput(z.number().finite().min(0).max(99999999.99)),
   launch_date: z.string().date(),
   registration_date: z.string().date(),
   atleta_id: nullableUuid,

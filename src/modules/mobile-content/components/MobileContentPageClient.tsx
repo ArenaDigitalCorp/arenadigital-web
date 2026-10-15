@@ -1,6 +1,7 @@
 "use client"
 
 import { FormEvent, ReactNode, useState, useTransition } from "react"
+import { format } from "date-fns"
 import { CalendarPlus, Megaphone, Plus, Sparkles, UsersRound } from "lucide-react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
@@ -44,7 +45,7 @@ interface Props {
 const NONE_VALUE = "__none__"
 
 function todayKey() {
-  return new Date().toISOString().slice(0, 10)
+  return format(new Date(), "yyyy-MM-dd")
 }
 
 function toOptionalValue(value: string) {

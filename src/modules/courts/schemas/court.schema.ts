@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { integerInput } from '@/shared/schemas/numeric.schema'
 
 export const courtSchema = z.object({
     name: z.string().min(2, "O nome do espaço deve ter pelo menos 2 caracteres."),
@@ -10,7 +11,7 @@ export const courtSchema = z.object({
     booking_type: z.enum(["unique", "hourly"]),
     image_url: z.string().optional(),
     day_config: z.array(z.any()).optional(),
-    capacity: z.coerce.number().min(1, "A capacidade deve ser pelo menos 1.").optional(),
+    capacity: integerInput(z.number().int("Informe uma capacidade inteira.").min(1, "A capacidade deve ser pelo menos 1.")).optional(),
 })
 
 export type CourtFormValues = z.infer<typeof courtSchema>

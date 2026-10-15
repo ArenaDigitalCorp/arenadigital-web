@@ -13,6 +13,8 @@ import {
     FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { DecimalInput } from "@/components/ui/decimal-input";
+import { formatDecimalInput, parseBrazilianDecimal } from "@/lib/format";
 import {
     Select,
     SelectContent,
@@ -41,7 +43,32 @@ import { getAthletesByArenaAction } from "@/modules/athletes/actions/athleteActi
 import { toast } from "sonner";
 import { trackAction } from "@/lib/telemetry/client";
 import { useEffect, useState } from "react";
+import { format } from "date-fns";
+import { integerInput } from "@/shared/schemas/numeric.schema";
 import { transactionSchema, type TransactionFormValues } from "@/modules/finance/schemas/transaction.schema";
+
+// Keep the user's text while editing; convert complete BRL values only at
+// validation/submission boundaries. An omitted optional discount means zero.
+const transactionInputSchema = transactionSchema.extend({
+    quantity: integerInput(zod.number().int("Informe uma quantidade inteira").min(1, "Mínimo 1").max(100000)),
+    unit_value: zod.preprocess(value =>
+        typeof value === "string" || typeof value === "number" ? parseBrazilianDecimal(value) : undefined,
+        zod.number({ error: "Informe um valor unitário válido" }).min(0.01, "Mínimo R$ 0,01").max(99999999.99)),
+    discount: zod.preprocess(value =>
+        typeof value === "string" && value.trim() === "" ? 0
+            : typeof value === "string" || typeof value === "number" ? parseBrazilianDecimal(value) : undefined,
+        zod.number({ error: "Informe um desconto válido" }).min(0, "Mínimo 0").max(99999999.99)),
+    total_value: zod.number().finite().min(0).max(99999999.99),
+});
+
+function calculatedTotal(quantity: number | string, unit: number | string, discount: number | string) {
+    const count = Number(quantity);
+    const unitAmount = parseBrazilianDecimal(unit);
+    const discountAmount = typeof discount === "string" && discount.trim() === "" ? 0 : parseBrazilianDecimal(discount);
+    if (!Number.isFinite(count) || unitAmount === null || discountAmount === null) return 0;
+    const total = count * unitAmount - discountAmount;
+    return Number.isFinite(total) ? Number(Math.max(0, total).toFixed(2)) : 0;
+}
 
 interface Atleta {
     id: string;
@@ -102,7 +129,7 @@ export function TransactionForm({
     const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
 
     const form = useForm<TransactionFormValues>({
-        resolver: zodResolver(transactionSchema) as any,
+        resolver: zodResolver(transactionInputSchema) as any,
         defaultValues: {
             type: effectiveType,
             category: transaction?.category ?? "",
@@ -111,8 +138,8 @@ export function TransactionForm({
             unit_value: transaction?.unit_value ?? 0,
             discount: transaction?.discount ?? 0,
             total_value: transaction?.total_value ?? 0,
-            launch_date: transaction?.launch_date?.split("T")[0] ?? new Date().toISOString().split("T")[0],
-            registration_date: transaction?.registration_date?.split("T")[0] ?? new Date().toISOString().split("T")[0],
+            launch_date: transaction?.launch_date?.split("T")[0] ?? format(new Date(), "yyyy-MM-dd"),
+            registration_date: transaction?.registration_date?.split("T")[0] ?? format(new Date(), "yyyy-MM-dd"),
             atleta_id: transaction?.atleta_id ?? undefined,
             modo_pagamento_id: transaction?.modo_pagamento_id ?? undefined,
         },
@@ -124,8 +151,7 @@ export function TransactionForm({
     const discount = watch("discount");
 
     useEffect(() => {
-        const total = (Number(quantity) * Number(unitValue)) - Number(discount);
-        setValue("total_value", Math.max(0, total));
+        setValue("total_value", calculatedTotal(quantity, unitValue, discount));
     }, [quantity, unitValue, discount, setValue]);
 
     // Carregar modos de pagamento
@@ -171,7 +197,19 @@ export function TransactionForm({
         loadAtletas();
     }, [arenaId, effectiveType]);
 
-    const onSubmit = async (values: any) => {
+    const onSubmit = async (input: TransactionFormValues) => {
+        const parsed = transactionInputSchema.safeParse({
+            ...input,
+            total_value: calculatedTotal(input.quantity, input.unit_value, input.discount),
+        });
+        if (!parsed.success) {
+            for (const issue of parsed.error.issues) {
+                const field = issue.path[0] as keyof TransactionFormValues;
+                if (field) form.setError(field, { type: "validate", message: issue.message });
+            }
+            return;
+        }
+        const values = parsed.data;
         try {
             if (isEditing && transaction) {
                 const res = await updateTransactionAction(arenaId, transaction.id, {
@@ -333,7 +371,7 @@ export function TransactionForm({
                         <FormItem>
                             <FormLabel>Valor unitário</FormLabel>
                             <FormControl>
-                                <Input type="number" step="0.01" {...field} />
+                                <DecimalInput {...field} value={typeof field.value === "number" ? formatDecimalInput(field.value) : field.value} />
                             </FormControl>
                             <FormMessage />
                         </FormItem>
@@ -347,7 +385,7 @@ export function TransactionForm({
                         <FormItem>
                             <FormLabel>Desconto (se houver)</FormLabel>
                             <FormControl>
-                                <Input type="number" step="0.01" {...field} />
+                                <DecimalInput {...field} value={typeof field.value === "number" ? formatDecimalInput(field.value) : field.value} />
                             </FormControl>
                             <FormMessage />
                         </FormItem>
@@ -361,7 +399,7 @@ export function TransactionForm({
                         <FormItem>
                             <FormLabel>Total</FormLabel>
                             <FormControl>
-                                <Input type="number" disabled {...field} />
+                                <DecimalInput {...field} disabled value={formatDecimalInput(field.value)} />
                             </FormControl>
                             <FormMessage />
                         </FormItem>

@@ -76,6 +76,7 @@ test('Asaas accepts stored +55 without changing the DDD or truncating internatio
   assert.equal(result.cpfCnpj, '26472629000128')
   assert.equal(result.postalCode, '88037395')
   assert.equal(schema.safeParse({ ...input, mobilePhone: '+14155552671' }).success, false)
+  assert.equal(schema.safeParse({ ...input, mobilePhone: '(48) 3333-4444' }).success, false)
 })
 
 test('Pix keys normalize according to their selected type and reject mismatches', () => {
@@ -85,18 +86,19 @@ test('Pix keys normalize according to their selected type and reject mismatches'
   assert.equal(normalizePixKey('PHONE', contact.phone), '+5548996426091')
   assert.equal(normalizePixKey('EMAIL', contact.email), 'contact@example.com')
   assert.equal(normalizePixKey('EVP', '11111111-1111-4111-8111-111111111111'), '11111111-1111-4111-8111-111111111111')
-  for (const [type, value] of [['CPF', '123'], ['CNPJ', contact.cpf], ['PHONE', '+14155552671'], ['EVP', contact.email], ['EMAIL', 'abc']]) {
+  for (const [type, value] of [['CPF', '123'], ['CNPJ', contact.cpf], ['PHONE', '+14155552671'], ['PHONE', '(48) 3333-4444'], ['PHONE', '+ 55 999999999'], ['EVP', contact.email], ['EMAIL', 'abc']]) {
     assert.equal(normalizePixKey(type, value), null)
   }
 })
 
 test('decimal field formats complete values on blur and leaves invalid pasted text visible', () => {
-  const { DecimalInput } = loadTypescriptModule('src/components/ui/decimal-input.tsx')
+  const { DecimalInput } = loadTypescriptModule('src/components/ui/decimal-input.tsx', { react: { useState: initial => [initial, () => {}] } })
   let changed
   const element = DecimalInput({ onChange: event => { changed = event.target.value } })
   const target = { value: '1234.56' }
   element.props.onBlur({ currentTarget: target, target })
-  assert.equal(changed, '1.234,56')
+  assert.equal(changed, undefined)
+  assert.equal(target.value, '1.234,56')
   changed = undefined
   target.value = '12oops'
   element.props.onBlur({ currentTarget: target, target })

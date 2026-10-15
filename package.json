@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "node --test --experimental-strip-types tests/**/*.test.mjs",
+    "test": "node --test --experimental-strip-types \"tests/**/*.test.mjs\"",
     "guard:migration-ownership": "node scripts/check-migration-ownership.mjs",
     "db:push": "node -e \"console.error('Bloqueado: migrations pertencem ao repositorio arenadigital-db e exigem o pipeline protegido.'); process.exit(1)\"",
     "db:types": "npx supabase gen types typescript --project-id zojnnynuxlmcdsfzdnie --schema public > src/types/supabase.types.ts",
