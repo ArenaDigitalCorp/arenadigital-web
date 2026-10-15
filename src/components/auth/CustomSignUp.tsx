@@ -3,6 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import { MaskedInput } from "@/components/ui/masked-input"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
@@ -15,44 +16,9 @@ import {
     checkArenaSignupEmailAction,
     startSignUpAction,
 } from "@/modules/auth/actions/authActions"
-import { isValidCpf, isValidCpfOrCnpj, onlyDigits } from "@/lib/brasil-document"
+import { isValidCpf, isValidCpfOrCnpj, isValidCep, normalizeCep, normalizeCpfCnpj } from "@/lib/brasil-document"
 import { getArenaLegalNameError } from "@/modules/arenas/domain/arena-legal-name"
 import { track, trackAction } from "@/lib/telemetry/client"
-
-const maskCpf = (value: string) => {
-    return value
-        .replace(/\D/g, "")
-        .replace(/(\d{3})(\d)/, "$1.$2")
-        .replace(/(\d{3})(\d)/, "$1.$2")
-        .replace(/(\d{3})(\d{1,2})/, "$1-$2")
-        .replace(/(-\d{2})\d+?$/, "$1");
-};
-
-const maskPhone = (value: string) => {
-    return value
-        .replace(/\D/g, "")
-        .replace(/(\d{2})(\d)/, "($1) $2")
-        .replace(/(\d{5})(\d)/, "$1-$2")
-        .replace(/(-\d{4})\d+?$/, "$1");
-};
-
-const maskCep = (value: string) => {
-    return value
-        .replace(/\D/g, "")
-        .replace(/(\d{5})(\d)/, "$1-$2")
-        .replace(/(-\d{3})\d+?$/, "$1");
-};
-
-const maskCpfCnpj = (value: string) => {
-    const digits = value.replace(/\D/g, "").slice(0, 14)
-    if (digits.length <= 11) return maskCpf(digits)
-    return digits
-        .replace(/(\d{2})(\d)/, "$1.$2")
-        .replace(/(\d{3})(\d)/, "$1.$2")
-        .replace(/(\d{3})(\d)/, "$1/$2")
-        .replace(/(\d{4})(\d{1,2})/, "$1-$2")
-        .replace(/(-\d{2})\d+?$/, "$1")
-}
 
 type EstadoRow = { codigo_uf: number; nome: string; uf: string }
 type MunicipioRow = { codigo_ibge: number; nome: string; codigo_uf: number }
@@ -165,8 +131,8 @@ export function CustomSignUp() {
     }
 
     const handleCepBlur = async () => {
-        const cleanCep = cep.replace(/\D/g, '')
-        if (cleanCep.length !== 8) return
+        const cleanCep = normalizeCep(cep)
+        if (!isValidCep(cleanCep)) return
 
         try {
             const res = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`)
@@ -378,11 +344,11 @@ export function CustomSignUp() {
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                         <Label htmlFor="responsibleCpf" className="text-white/70">CPF do responsável</Label>
-                        <Input id="responsibleCpf" value={responsibleCpf} onChange={(e) => setResponsibleCpf(maskCpf(e.target.value))} inputMode="numeric" placeholder="000.000.000-00" className="bg-white border-none h-12 rounded-lg text-black" required />
+                        <MaskedInput mask="cpf" id="responsibleCpf" value={responsibleCpf} onChange={(e) => setResponsibleCpf(e.target.value)} inputMode="numeric" placeholder="000.000.000-00" className="bg-white border-none h-12 rounded-lg text-black" required />
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="phone" className="text-white/70">Telefone da Arena</Label>
-                        <Input id="phone" value={phone} onChange={(e) => setPhone(maskPhone(e.target.value))} placeholder="(00) 00000-0000" className="bg-white border-none h-12 rounded-lg text-black" required />
+                        <MaskedInput mask="phone" id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(00) 00000-0000" className="bg-white border-none h-12 rounded-lg text-black" required />
                     </div>
                 </div>
                 <div className="space-y-2">
@@ -390,13 +356,13 @@ export function CustomSignUp() {
                     <Input id="arenaName" value={arenaName} placeholder="Ex: Arena Beach Tennis" onChange={(e) => setArenaName(e.target.value)} className="bg-white border-none h-12 rounded-lg text-black" required />
                 </div>
                 <div className="space-y-2">
-                    <Label htmlFor="arenaLegalName" className="text-white/70">Razão social{onlyDigits(arenaDocument).length === 14 ? " *" : ""}</Label>
-                    <Input id="arenaLegalName" value={arenaLegalName} placeholder="Nome registrado da empresa" onChange={(e) => setArenaLegalName(e.target.value)} autoComplete="organization" maxLength={120} required={onlyDigits(arenaDocument).length === 14} className="bg-white border-none h-12 rounded-lg text-black" />
+                    <Label htmlFor="arenaLegalName" className="text-white/70">Razão social{normalizeCpfCnpj(arenaDocument).length === 14 ? " *" : ""}</Label>
+                    <Input id="arenaLegalName" value={arenaLegalName} placeholder="Nome registrado da empresa" onChange={(e) => setArenaLegalName(e.target.value)} autoComplete="organization" maxLength={120} required={normalizeCpfCnpj(arenaDocument).length === 14} className="bg-white border-none h-12 rounded-lg text-black" />
                     <p className="text-xs text-white/60">Obrigatória para empresas com CNPJ.</p>
                 </div>
                 <div className="space-y-2">
                     <Label htmlFor="arenaDocument" className="text-white/70">CPF/CNPJ da Arena</Label>
-                    <Input id="arenaDocument" value={arenaDocument} onChange={(e) => setArenaDocument(maskCpfCnpj(e.target.value))} inputMode="numeric" placeholder="000.000.000-00 ou 00.000.000/0000-00" className="bg-white border-none h-12 rounded-lg text-black" required />
+                    <MaskedInput mask="cpfCnpj" id="arenaDocument" value={arenaDocument} onChange={(e) => setArenaDocument(e.target.value)} inputMode="text" placeholder="000.000.000-00 ou 00.000.000/0000-00" className="bg-white border-none h-12 rounded-lg text-black" required />
                     <p className="text-xs leading-5 text-white/60">Se a arena já estiver no catálogo público, este dado ajuda a localizar o cadastro, mas a propriedade será confirmada pela nossa equipe.</p>
                 </div>
             </div>
@@ -406,7 +372,7 @@ export function CustomSignUp() {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="space-y-2">
                         <Label htmlFor="cep" className="text-white/70">CEP</Label>
-                        <Input id="cep" value={cep} onChange={(e) => setCep(maskCep(e.target.value))} onBlur={handleCepBlur} placeholder="00000-000" className="bg-white border-none h-12 rounded-lg text-black" required />
+                        <MaskedInput mask="cep" id="cep" value={cep} onChange={(e) => setCep(e.target.value)} onBlur={handleCepBlur} placeholder="00000-000" className="bg-white border-none h-12 rounded-lg text-black" required />
                     </div>
 
                     <div className="space-y-2">

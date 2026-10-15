@@ -1,4 +1,4 @@
-import { isValidCnpj, onlyDigits } from '@/lib/brasil-document'
+import { isValidCnpj, normalizeCep, normalizeCpfCnpj } from '@/lib/brasil-document'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -25,9 +25,15 @@ export async function GET(request: NextRequest) {
   }
 
   const raw = request.nextUrl.searchParams.get('cnpj')
-  const cnpj = onlyDigits(raw ?? '')
+  const cnpj = normalizeCpfCnpj(raw ?? '')
   if (cnpj.length !== 14 || !isValidCnpj(cnpj)) {
     return NextResponse.json({ error: 'CNPJ inválido.' }, { status: 400 })
+  }
+
+  // O provedor atual aceita somente CNPJ numérico. O cadastro continua
+  // aceitando CNPJ alfanumérico, preenchido manualmente, sem perder letras.
+  if (/[A-Z]/.test(cnpj)) {
+    return NextResponse.json({ error: 'A consulta automática ainda não aceita CNPJ alfanumérico. Preencha os dados manualmente.' }, { status: 422 })
   }
 
   try {
@@ -71,10 +77,10 @@ export async function GET(request: NextRequest) {
           : null
 
     const payload: CnpjLookupPayload = {
-      cnpj: typeof b.cnpj === 'string' ? onlyDigits(b.cnpj) : cnpj,
+      cnpj: typeof b.cnpj === 'string' ? normalizeCpfCnpj(b.cnpj) : cnpj,
       razaoSocial: typeof b.razao_social === 'string' ? b.razao_social : '',
       nomeFantasia: typeof b.nome_fantasia === 'string' ? b.nome_fantasia : null,
-      cep: typeof b.cep === 'string' ? onlyDigits(b.cep) : '',
+      cep: typeof b.cep === 'string' ? normalizeCep(b.cep) : '',
       logradouro: typeof b.logradouro === 'string' ? b.logradouro : '',
       numero: typeof b.numero === 'string' ? b.numero : '',
       complemento: typeof b.complemento === 'string' ? b.complemento : null,

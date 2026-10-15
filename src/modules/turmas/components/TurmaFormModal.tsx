@@ -1,5 +1,7 @@
 'use client'
 
+import { DecimalInput } from '@/components/ui/decimal-input'
+import { parseBrazilianDecimal } from '@/lib/format'
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Info, Loader2, Lock, Plus, Search, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
@@ -228,7 +230,7 @@ export function TurmaFormModal({ arenaId, turma, turmas, catalogo, onCancelar, o
       ? resumirPlano(blocosMensalista, cotacaoAtual.valores, inicioVigencia, agora)
       : null
   const valorMensalTexto = valorMensalManual ?? (resumo ? resumo.valorMesCheio.toFixed(2) : '')
-  const valorMensal = Number(valorMensalTexto) || 0
+  const valorMensal = (parseBrazilianDecimal(valorMensalTexto) ?? Number.NaN)
   const primeiraMensalidade =
     resumo && inicioVigencia
       ? Math.round(valorMensal * fracaoPrimeiroMes(blocosMensalista, inicioVigencia, agora) * 100) / 100
@@ -280,7 +282,7 @@ export function TurmaFormModal({ arenaId, turma, turmas, catalogo, onCancelar, o
   else if (!dataInicio) erros.recorrencia = 'Informe a data de início da recorrência.'
   else if (dataInicio < hoje) erros.recorrencia = 'A recorrência não pode começar no passado.'
   else if (cotando) erros.recorrencia = 'Aguarde o cálculo do valor da recorrência.'
-  else if (valorMensal <= 0) erros.recorrencia = 'Informe o valor mensal da recorrência.'
+  else if (!Number.isFinite(valorMensal) || valorMensal <= 0) erros.recorrencia = 'Informe o valor mensal da recorrência.'
 
   const erro = (campo: Campo) => (tentouSalvar || campo === 'vagas' ? erros[campo] : undefined)
 
@@ -908,7 +910,7 @@ export function TurmaFormModal({ arenaId, turma, turmas, catalogo, onCancelar, o
                         ? `A partir de ${format(mesReferencia(inicioVigencia), 'MMMM', { locale: ptBR })} (R$)`
                         : 'Valor mensal cobrado (R$)'}
                     </Label>
-                    <Input
+                    <DecimalInput
                       type="number"
                       min={0}
                       step="0.01"

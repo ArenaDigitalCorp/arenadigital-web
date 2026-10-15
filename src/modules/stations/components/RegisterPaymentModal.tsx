@@ -17,7 +17,10 @@ import {
     FormField,
     FormItem,
     FormLabel,
+    FormMessage,
 } from "@/components/ui/form"
+import { DecimalInput } from "@/components/ui/decimal-input"
+import { formatDecimalInput, parseBrazilianDecimal } from "@/lib/format"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import {
@@ -34,7 +37,7 @@ import { addPaymentAction, closeOrderAndGenerateFinanceAction } from "@/modules/
 import { Loader2 } from "lucide-react"
 
 const paymentSchema = z.object({
-    amount: z.string().min(1, "Informe o valor"),
+    amount: z.string().refine(value => { const amount = parseBrazilianDecimal(value); return amount !== null && amount > 0 }, "Informe um valor válido maior que zero."),
     payment_method: z.string().min(1, "Selecione a forma de pagamento"),
     observation: z.string().optional(),
     paid_by_name: z.string().optional(),
@@ -72,7 +75,7 @@ export function RegisterPaymentModal({
         if (order) {
             const paid = order.station_payments?.reduce((acc, p) => acc + p.amount, 0) || 0
             const balance = order.total_value - paid
-            form.setValue("amount", balance.toFixed(2))
+            form.setValue("amount", formatDecimalInput(balance))
         }
     }, [order, form, isOpen])
 
@@ -81,7 +84,8 @@ export function RegisterPaymentModal({
 
         setIsSubmitting(true)
         try {
-            const amount = parseFloat(data.amount.replace(',', '.'))
+            const amount = parseBrazilianDecimal(data.amount)
+            if (amount === null || amount <= 0) throw new Error('Informe um valor válido maior que zero.')
 
             const payRes = await addPaymentAction(order.arena_id, {
                 order_id: order.id,
@@ -212,13 +216,14 @@ export function RegisterPaymentModal({
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormControl>
-                                            <Input
+                                            <DecimalInput
                                                 placeholder="R$ 0,00"
                                                 {...field}
                                                 className="h-12 border-arena-navy-800/10 focus:ring-arena-button focus:border-arena-button rounded-xl font-bold text-arena-navy-800"
                                             />
                                         </FormControl>
-                                    </FormItem>
+                                    <FormMessage />
+                            </FormItem>
                                 )}
                             />
                         </div>

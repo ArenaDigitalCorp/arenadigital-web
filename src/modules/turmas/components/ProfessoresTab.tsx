@@ -1,5 +1,6 @@
 'use client'
 
+import { formatPhone } from '@/lib/brasil-document'
 import { useState } from 'react'
 import { ArrowDownWideNarrow, ArrowUpNarrowWide, Eye, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -181,7 +182,7 @@ export function ProfessoresTab({ turmas, catalogo, onVer }: Props) {
                     </button>
                   </td>
                   <td className={cn(arenaDataTable.td, 'whitespace-nowrap text-arena-navy-800/60')}>
-                    {l.professor.telefone ?? '—'}
+                    {formatPhone(l.professor.telefone) || '—'}
                   </td>
                   <td className={cn(arenaDataTable.td, 'text-arena-navy-800/60')}>{l.professor.email ?? '—'}</td>
                   <td className={arenaDataTable.td}>

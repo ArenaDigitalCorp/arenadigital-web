@@ -1,5 +1,6 @@
 'use client';
 
+import { formatPhone } from '@/lib/brasil-document'
 import { useRef, useState } from 'react';
 import { Search, X, Loader2, UserPlus } from 'lucide-react';
 import { Label } from '@/components/ui/label';
@@ -137,7 +138,7 @@ export function BookingParticipantsField({
                 <div>
                   <p className="text-sm font-bold text-arena-navy-800">{athlete.nome_perfil}</p>
                   <p className="text-[10px] font-black uppercase tracking-tight text-arena-navy-800/40">
-                    {athlete.telefone}
+                    {formatPhone(athlete.telefone)}
                   </p>
                 </div>
               </button>

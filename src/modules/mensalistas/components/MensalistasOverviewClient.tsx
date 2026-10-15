@@ -1,5 +1,6 @@
 'use client'
 
+import { formatPhone } from '@/lib/brasil-document'
 import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { addMonths, format, parseISO, subMonths } from 'date-fns'
@@ -418,7 +419,7 @@ export function MensalistasOverviewClient({ arenaId, competencia, overview }: Pr
                           </p>
                           {r.telefone && (
                             <p className="text-[11px] text-arena-navy-800/40">
-                              {r.telefone}
+                              {formatPhone(r.telefone)}
                             </p>
                           )}
                         </div>

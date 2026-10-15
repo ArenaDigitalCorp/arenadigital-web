@@ -14,10 +14,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { MaskedInput } from "@/components/ui/masked-input"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { isValidCnpj, onlyDigits } from "@/lib/brasil-document"
+import { isValidCnpj, normalizeCpfCnpj } from "@/lib/brasil-document"
 import {
   createPublicArenaListingAction,
   getPublicArenaListingFormOptionsAction,
@@ -130,7 +131,7 @@ export function PublicArenaListingDialog() {
   }
 
   async function lookupCnpj() {
-    const cnpj = onlyDigits(form.cnpj)
+    const cnpj = normalizeCpfCnpj(form.cnpj)
     if (!isValidCnpj(cnpj)) {
       toast.error("Informe um CNPJ válido antes de consultar.")
       return
@@ -234,8 +235,8 @@ export function PublicArenaListingDialog() {
                 <div className="mb-4 flex items-center gap-2"><Building2 className="h-4 w-4 text-orange-600" /><h3 className="font-heading text-lg font-black text-slate-950">Identificação</h3></div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div><FieldLabel htmlFor="public-arena-name">Nome do local</FieldLabel><Input id="public-arena-name" required value={form.name} onChange={(event) => updateField("name", event.target.value)} placeholder="Ex.: Arena Beira-Mar" className="bg-white" /></div>
-                  <div><FieldLabel htmlFor="public-arena-cnpj" optional>CNPJ</FieldLabel><div className="flex gap-2"><Input id="public-arena-cnpj" value={form.cnpj} onChange={(event) => updateField("cnpj", event.target.value)} placeholder="00.000.000/0000-00" className="bg-white" /><Button type="button" variant="outline" onClick={() => void lookupCnpj()} disabled={cnpjLoading || !options} className="shrink-0 bg-white">{cnpjLoading ? <LoaderCircle className="animate-spin" /> : <FileSearch />}<span className="hidden sm:inline">Consultar</span></Button></div></div>
-                  <div className="sm:col-span-2"><FieldLabel htmlFor="public-arena-legal-name" optional={onlyDigits(form.cnpj).length !== 14}>Razão social</FieldLabel><Input id="public-arena-legal-name" value={form.legalName} onChange={(event) => updateField("legalName", event.target.value)} required={onlyDigits(form.cnpj).length === 14} autoComplete="organization" maxLength={120} placeholder="Nome registrado da empresa" className="bg-white" /><p className="mt-2 text-xs text-slate-500">Obrigatória quando houver CNPJ.</p></div>
+                  <div><FieldLabel htmlFor="public-arena-cnpj" optional>CNPJ</FieldLabel><div className="flex gap-2"><MaskedInput mask="cnpj" id="public-arena-cnpj" value={form.cnpj} onChange={(event) => updateField("cnpj", event.target.value)} placeholder="00.000.000/0000-00" className="bg-white" /><Button type="button" variant="outline" onClick={() => void lookupCnpj()} disabled={cnpjLoading || !options} className="shrink-0 bg-white">{cnpjLoading ? <LoaderCircle className="animate-spin" /> : <FileSearch />}<span className="hidden sm:inline">Consultar</span></Button></div></div>
+                  <div className="sm:col-span-2"><FieldLabel htmlFor="public-arena-legal-name" optional={normalizeCpfCnpj(form.cnpj).length !== 14}>Razão social</FieldLabel><Input id="public-arena-legal-name" value={form.legalName} onChange={(event) => updateField("legalName", event.target.value)} required={normalizeCpfCnpj(form.cnpj).length === 14} autoComplete="organization" maxLength={120} placeholder="Nome registrado da empresa" className="bg-white" /><p className="mt-2 text-xs text-slate-500">Obrigatória quando houver CNPJ.</p></div>
                 </div>
               </section>
 
@@ -246,7 +247,7 @@ export function PublicArenaListingDialog() {
                   <div className="sm:col-span-2"><FieldLabel htmlFor="public-arena-number" optional>Número</FieldLabel><Input id="public-arena-number" value={form.number} onChange={(event) => updateField("number", event.target.value)} className="bg-white" /></div>
                   <div className="sm:col-span-2"><FieldLabel htmlFor="public-arena-neighborhood" optional>Bairro</FieldLabel><Input id="public-arena-neighborhood" value={form.neighborhood} onChange={(event) => updateField("neighborhood", event.target.value)} className="bg-white" /></div>
                   <div className="sm:col-span-2"><FieldLabel htmlFor="public-arena-complement" optional>Complemento</FieldLabel><Input id="public-arena-complement" value={form.complement} onChange={(event) => updateField("complement", event.target.value)} className="bg-white" /></div>
-                  <div className="sm:col-span-2"><FieldLabel htmlFor="public-arena-zip" optional>CEP</FieldLabel><Input id="public-arena-zip" inputMode="numeric" value={form.zipCode} onChange={(event) => updateField("zipCode", event.target.value)} placeholder="00000-000" className="bg-white" /></div>
+                  <div className="sm:col-span-2"><FieldLabel htmlFor="public-arena-zip" optional>CEP</FieldLabel><MaskedInput mask="cep" id="public-arena-zip" inputMode="numeric" value={form.zipCode} onChange={(event) => updateField("zipCode", event.target.value)} placeholder="00000-000" className="bg-white" /></div>
                   <div className="sm:col-span-3"><FieldLabel htmlFor="public-arena-state">Estado</FieldLabel><select id="public-arena-state" required value={form.stateCode ?? ""} onChange={(event) => { const code = Number(event.target.value); setMunicipalities([]); setForm((current) => ({ ...current, stateCode: code || null, municipalityId: null })); if (code) void loadMunicipalities(code) }} disabled={!options || optionsLoading} className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"><option value="">Selecionar UF</option>{options?.states.map((state) => <option key={state.code} value={state.code}>{state.name} ({state.uf})</option>)}</select></div>
                   <div className="sm:col-span-3"><FieldLabel htmlFor="public-arena-city">Município</FieldLabel><select id="public-arena-city" required value={form.municipalityId ?? ""} onChange={(event) => updateField("municipalityId", Number(event.target.value) || null)} disabled={!form.stateCode || municipalitiesLoading} className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"><option value="">{municipalitiesLoading ? "Carregando…" : "Selecionar município"}</option>{municipalities.map((municipality) => <option key={municipality.code} value={municipality.code}>{municipality.name}</option>)}</select></div>
                 </div>
@@ -255,7 +256,7 @@ export function PublicArenaListingDialog() {
               <section className="border-t border-slate-200 pt-6">
                 <h3 className="mb-4 font-heading text-lg font-black text-slate-950">Contato e apresentação</h3>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div><FieldLabel htmlFor="public-arena-phone" optional>Telefone</FieldLabel><Input id="public-arena-phone" type="tel" value={form.phone} onChange={(event) => updateField("phone", event.target.value)} placeholder="(00) 00000-0000" className="bg-white" /></div>
+                  <div><FieldLabel htmlFor="public-arena-phone" optional>Telefone</FieldLabel><MaskedInput mask="phone" id="public-arena-phone" type="tel" value={form.phone} onChange={(event) => updateField("phone", event.target.value)} placeholder="(00) 00000-0000" className="bg-white" /></div>
                   <div><FieldLabel htmlFor="public-arena-email" optional>E-mail público</FieldLabel><Input id="public-arena-email" type="email" value={form.email} onChange={(event) => updateField("email", event.target.value)} placeholder="contato@local.com.br" className="bg-white" /></div>
                   <div className="sm:col-span-2"><FieldLabel htmlFor="public-arena-description" optional>Descrição para o catálogo</FieldLabel><Textarea id="public-arena-description" value={form.description} onChange={(event) => updateField("description", event.target.value)} placeholder="Estrutura, modalidades e informações úteis para o atleta." className="min-h-24 bg-white" /></div>
                 </div>

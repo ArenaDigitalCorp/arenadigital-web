@@ -1,5 +1,7 @@
 'use client'
 
+import { parseBrazilianDecimal } from '@/lib/format'
+import { DecimalInput } from '@/components/ui/decimal-input'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -53,7 +55,7 @@ interface Props {
   modosPagamento: { id: string; nome: string }[]
 }
 
-const parseValor = (v: string) => Number(v.replace(',', '.'))
+const parseValor = (v: string) => (parseBrazilianDecimal(v) ?? Number.NaN)
 
 function statusLabel(c: BookingCobranca) {
   if (c.status === 'quitado') return { text: 'Pago', cls: 'bg-emerald-100 text-emerald-700' }
@@ -384,7 +386,7 @@ export function GerenciarRateioAvulsoModal({
                             <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-arena-navy-800/40">
                               R$
                             </span>
-                            <Input
+                            <DecimalInput
                               inputMode="decimal"
                               aria-label={`Parte de ${c.nome}`}
                               value={valores[c.id] ?? ''}
@@ -493,7 +495,7 @@ export function GerenciarRateioAvulsoModal({
                           <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-arena-navy-800/40">
                             R$
                           </span>
-                          <Input
+                          <DecimalInput
                             inputMode="decimal"
                             aria-label="Valor da parte"
                             value={novoValor}

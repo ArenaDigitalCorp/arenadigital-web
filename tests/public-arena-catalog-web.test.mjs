@@ -68,7 +68,7 @@ test('public listing schema enforces location, sport, document and audit validat
   assert.match(schema, /name: z\.string\(\)\.trim\(\)\.min\(2/u)
   assert.match(schema, /address: z\.string\(\)\.trim\(\)\.min\(2/u)
   assert.match(schema, /isValidCnpj\(value\)/u)
-  assert.match(schema, /value\.length === 0 \|\| value\.length === 8/u)
+  assert.match(schema, /zipCode: optionalCepSchema/u)
   assert.match(schema, /sportIds: z\.array\(z\.string\(\)\.uuid\(\)\)\.min\(1/u)
   assert.match(schema, /reason: z\.string\(\)\.trim\(\)\.min\(8/u)
   assert.match(schema, /\.strict\(\)/u)

@@ -1,7 +1,8 @@
-import { isValidCpfOrCnpj } from '@/lib/brasil-document'
+import { isValidCpfOrCnpj, normalizeCpfCnpj } from '@/lib/brasil-document'
 import { APP_BOOKING_MODES } from '@/modules/arenas/domain/app-booking-mode'
 import { getArenaLegalNameError } from '@/modules/arenas/domain/arena-legal-name'
 import * as z from 'zod'
+import { optionalCepSchema, optionalEmailSchema, optionalPhoneSchema } from '@/shared/schemas/contact.schema'
 
 const arenaBaseSchema = z.object({
     name: z.string().min(2, "O nome da arena deve ter pelo menos 2 caracteres."),
@@ -9,8 +10,8 @@ const arenaBaseSchema = z.object({
     status: z.enum(["ativo", "inativo", "Em manutenção"]),
     sports: z.array(z.string()).optional(),
     comodidades: z.array(z.string()).optional(),
-    phone: z.string().optional(),
-    email: z.string().email().optional().or(z.literal('')),
+    phone: optionalPhoneSchema,
+    email: optionalEmailSchema,
     description: z.string().optional(),
     banner_url: z.string().optional(),
     address: z.string().min(2, "O logradouro é obrigatório."),
@@ -18,11 +19,12 @@ const arenaBaseSchema = z.object({
     number: z.string().optional(),
     complement: z.string().optional(),
     id_municipio: z.number({ message: "O município é obrigatório" }),
-    zip_code: z.string().optional(),
+    zip_code: optionalCepSchema,
     cpf_cnpj: z
         .string()
         .nullable()
         .optional()
+        .transform(v => v == null ? v : normalizeCpfCnpj(v))
         .refine((v) => isValidCpfOrCnpj(v ?? ''), {
             message: 'Informe um CPF ou CNPJ válido, ou deixe em branco.',
         }),

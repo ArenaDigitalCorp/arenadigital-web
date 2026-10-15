@@ -1,5 +1,6 @@
 'use client'
 
+import { formatCpf, formatPhone } from '@/lib/brasil-document'
 import { Users } from 'lucide-react'
 import { StandardModal } from '@/components/ui/standard-modal'
 import { arenaDataTable } from '@/lib/arena-data-table'
@@ -95,8 +96,8 @@ export function ProfessorDetalheModal({ professor, turmas, catalogo, onFechar, o
         </div>
 
         <div className="grid grid-cols-1 gap-3 rounded-lg border border-arena-navy-800/10 bg-arena-navy-800/[0.02] p-4 text-sm sm:grid-cols-3">
-          <Dado rotulo="CPF" valor={professor.cpf ?? '—'} />
-          <Dado rotulo="Telefone" valor={professor.telefone ?? '—'} />
+          <Dado rotulo="CPF" valor={formatCpf(professor.cpf) || '—'} />
+          <Dado rotulo="Telefone" valor={formatPhone(professor.telefone) || '—'} />
           <Dado rotulo="E-mail" valor={professor.email ?? '—'} />
           <div className="sm:col-span-3">
             <p className="font-semibold text-arena-navy-800">Esportes e níveis (perfil do atleta)</p>

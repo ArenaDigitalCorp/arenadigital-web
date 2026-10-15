@@ -12,6 +12,9 @@ import {
   WalletCards,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { MaskedInput } from '@/components/ui/masked-input'
+import { DecimalInput } from '@/components/ui/decimal-input'
+import { parseBrazilianDecimal } from '@/lib/format'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import {
@@ -62,10 +65,10 @@ function formatCents(value: number | null) {
 }
 
 function amountFromInput(value: string): number | null {
-  const normalized = value.replace(/\./g, '').replace(',', '.').trim()
-  const parsed = Number(normalized)
-  if (!Number.isFinite(parsed) || parsed <= 0) return null
-  return Math.round(parsed * 100)
+  const parsed = parseBrazilianDecimal(value)
+  if (parsed === null || parsed <= 0) return null
+  const cents = Math.round(parsed * 100)
+  return Number.isSafeInteger(cents) ? cents : null
 }
 
 export function ArenaFinancialAccountCard({ arenaId }: { arenaId: string }) {
@@ -299,20 +302,24 @@ export function ArenaFinancialAccountCard({ arenaId }: { arenaId: string }) {
               <select
                 className="h-10 rounded-md border border-input bg-transparent px-3 text-sm"
                 value={pixKeyType}
-                onChange={(event) => setPixKeyType(event.target.value as ArenaPixKeyType)}
+                onChange={(event) => { setPixKeyType(event.target.value as ArenaPixKeyType); setPixKey('') }}
               >
                 {PIX_KEY_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
               </select>
             </label>
             <label className="grid gap-2 text-sm font-bold text-arena-navy-800">
               Chave Pix
-              <input
-                className="h-10 rounded-md border border-input bg-transparent px-3 text-sm"
-                autoComplete="off"
-                value={pixKey}
-                onChange={(event) => setPixKey(event.target.value)}
-                placeholder="Informe a chave da Arena"
-              />
+              {pixKeyType === 'CPF' || pixKeyType === 'CNPJ' || pixKeyType === 'PHONE' ? (
+                <MaskedInput
+                  mask={pixKeyType === 'CPF' ? 'cpf' : pixKeyType === 'CNPJ' ? 'cnpj' : 'phone'}
+                  autoComplete="off" value={pixKey} onChange={event => setPixKey(event.target.value)}
+                  placeholder="Informe a chave da Arena"
+                />
+              ) : (
+                <input className="h-10 rounded-md border border-input bg-transparent px-3 text-sm"
+                  type={pixKeyType === 'EMAIL' ? 'email' : 'text'} autoComplete="off"
+                  value={pixKey} onChange={event => setPixKey(event.target.value)} placeholder="Informe a chave da Arena" />
+              )}
             </label>
           </div>
           <DialogFooter>
@@ -339,7 +346,7 @@ export function ArenaFinancialAccountCard({ arenaId }: { arenaId: string }) {
               Valor do saque
               <div className="flex h-12 items-center rounded-lg border border-slate-200 bg-white px-3">
                 <span className="mr-2 text-sm font-bold text-slate-400">R$</span>
-                <input
+                <DecimalInput
                   className="min-w-0 flex-1 bg-transparent text-lg font-black outline-none"
                   inputMode="decimal"
                   value={withdrawalAmount}

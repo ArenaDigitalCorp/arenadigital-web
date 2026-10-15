@@ -1,5 +1,6 @@
 "use client"
 
+import { formatPhone } from '@/lib/brasil-document'
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { format, parseISO } from "date-fns"
@@ -238,7 +239,7 @@ export function MensalistasPageClient({ arenaId, initialPlanos }: Props) {
                                                 <div>
                                                     <p className="font-bold text-arena-navy-800 text-sm">{nome}</p>
                                                     {plano.atleta?.telefone && (
-                                                        <p className="text-[11px] text-arena-navy-800/40">{plano.atleta.telefone}</p>
+                                                        <p className="text-[11px] text-arena-navy-800/40">{formatPhone(plano.atleta.telefone)}</p>
                                                     )}
                                                 </div>
                                             </div>

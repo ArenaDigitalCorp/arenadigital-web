@@ -1,5 +1,6 @@
 'use client';
 
+import { formatCpfCnpj } from '@/lib/brasil-document'
 import { useState } from 'react';
 import Link from 'next/link';
 import type { LucideIcon } from 'lucide-react';
@@ -802,7 +803,7 @@ export function SubscriptionPageClient({
                   <div>
                     <p className="text-xs text-muted-foreground">CPF / CNPJ</p>
                     <p className="mt-0.5 text-sm font-medium">
-                      {billingAddress.cpfCnpj ?? '—'}
+                      {formatCpfCnpj(billingAddress.cpfCnpj) || '—'}
                     </p>
                   </div>
                   <div>

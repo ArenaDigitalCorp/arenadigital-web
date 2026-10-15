@@ -1,5 +1,6 @@
 'use client'
 
+import { formatPhone } from '@/lib/brasil-document'
 import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { addMonths, format, parseISO, subMonths } from 'date-fns'
@@ -436,7 +437,7 @@ export function MensalistaDetailClient({
           <p className="text-arena-navy-800/60 font-medium">
             Competência de{' '}
             {format(competenciaDate, "MMMM 'de' yyyy", { locale: ptBR })}
-            {resumo.telefone ? ` · ${resumo.telefone}` : ''}
+            {resumo.telefone ? ` · ${formatPhone(resumo.telefone)}` : ''}
           </p>
         </div>
 

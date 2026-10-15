@@ -1,5 +1,7 @@
 'use client'
 
+import { parseBrazilianDecimal } from '@/lib/format'
+import { DecimalInput } from '@/components/ui/decimal-input'
 import { useEffect, useState } from 'react'
 import { addMonths, format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -13,7 +15,6 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -99,7 +100,7 @@ export function ReajustarValorModal({
   const mesAncora = nomeMes(ancoraDate)
   const mesSeguinte = nomeMes(addMonths(ancoraDate, 1))
 
-  const novo = Number(valor.replace(',', '.'))
+  const novo = (parseBrazilianDecimal(valor) ?? Number.NaN)
   const invalido = !Number.isFinite(novo) || novo < 0
   const semMudanca = !invalido && Math.abs(novo - valorReferencia) < 0.005
 
@@ -134,10 +135,10 @@ export function ReajustarValorModal({
     setCreditoValor(sugestaoCredito > 0 ? String(sugestaoCredito) : '')
   }, [open, mostraCredito, sugestaoCredito, creditoTocado])
 
-  const creditoNum = mostraCredito ? Number(creditoValor.replace(',', '.')) || 0 : 0
+  const creditoNum = mostraCredito ? (creditoValor.trim() === '' ? 0 : parseBrazilianDecimal(creditoValor) ?? Number.NaN) : 0
   const creditoExcedeCobranca = creditoNum > valorCobrancaPosReajuste + 0.005
   const creditoInvalido =
-    creditoNum < 0 || creditoNum > creditoTotal + 0.005 || creditoExcedeCobranca
+    !Number.isFinite(creditoNum) || creditoNum < 0 || creditoNum > creditoTotal + 0.005 || creditoExcedeCobranca
   const creditoUsaOutraRecorrencia = creditoNum > creditoSeguro + 0.005
   const creditoDeOutras = Math.round((creditoNum - creditoSeguro) * 100) / 100
 
@@ -225,7 +226,7 @@ export function ReajustarValorModal({
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-arena-navy-800/40">
                 R$
               </span>
-              <Input
+              <DecimalInput
                 inputMode="decimal"
                 value={valor}
                 onChange={(e) => {
@@ -317,7 +318,7 @@ export function ReajustarValorModal({
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-arena-navy-800/40">
                   R$
                 </span>
-                <Input
+                <DecimalInput
                   inputMode="decimal"
                   value={creditoValor}
                   onChange={(e) => {
