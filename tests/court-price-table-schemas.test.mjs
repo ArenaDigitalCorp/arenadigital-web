@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import {
+import { loadTypescriptModule } from './helpers/load-typescript-module.mjs'
+const {
   createPriceTableSchema,
   priceBandSchema,
   priceDaySchema,
   upsertPriceTableSchema,
-} from '../src/modules/courts/schemas/price-table.schema.ts'
+} = loadTypescriptModule('src/modules/courts/schemas/price-table.schema.ts')
 import {
   MAX_PRICE_TABLES_PER_COURT,
   RESERVED_PRICE_TABLE_KINDS,

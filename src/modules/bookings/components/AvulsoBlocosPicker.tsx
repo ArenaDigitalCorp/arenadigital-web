@@ -3,6 +3,8 @@
 import { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Loader2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { DecimalInput } from '@/components/ui/decimal-input';
+import { parseBrazilianDecimal } from '@/lib/format';
 import {
   DIAS_SEMANA_CURTO,
   DIAS_SEMANA_LONGO,
@@ -75,6 +77,7 @@ export function AvulsoBlocosPicker({
   disabled = false,
 }: AvulsoBlocosPickerProps) {
   const [foco, setFoco] = useState<{ dia: number; hora: number } | null>(null);
+  const [priceDrafts, setPriceDrafts] = useState<Record<string, { text: string; amount: number }>>({});
 
   const horas = useMemo(() => faixaDeHoras(courts), [courts]);
   const agora = useMemo(() => new Date(), []);
@@ -343,6 +346,9 @@ export function AvulsoBlocosPicker({
             {blocos.map((bloco) => {
               const court = courts.find((c) => c.id === bloco.courtId);
               const key = `${bloco.courtId}|${bloco.date}|${bloco.from}`;
+              const draft = priceDrafts[key];
+              const priceText = draft && Object.is(draft.amount, bloco.valor) ? draft.text : String(bloco.valor);
+              const invalidPrice = !Number.isFinite(bloco.valor) || bloco.valor < 0;
               const data = new Date(bloco.date + 'T00:00:00');
               return (
                 <div
@@ -361,15 +367,23 @@ export function AvulsoBlocosPicker({
                   </span>
                   <div className="ml-auto flex items-center gap-2">
                     <span className="text-[10px] font-medium text-arena-navy-800/40">R$</span>
-                    <input
-                      type="number"
+                    <DecimalInput
                       min={0}
                       step="0.01"
                       disabled={disabled}
-                      value={bloco.valor}
-                      onChange={(e) => onBlocoValorChange(key, Number(e.target.value) || 0)}
+                      value={priceText}
+                      aria-label="Valor do horário"
+                      aria-invalid={invalidPrice}
+                      onChange={(e) => {
+                        const text = e.target.value;
+                        const parsed = parseBrazilianDecimal(text);
+                        const amount = parsed !== null && parsed >= 0 ? parsed : Number.NaN;
+                        setPriceDrafts((previous) => ({ ...previous, [key]: { text, amount } }));
+                        onBlocoValorChange(key, amount);
+                      }}
                       className="w-24 rounded-lg border border-arena-navy-800/10 px-2 py-1 text-right font-mono text-[12.5px] font-semibold text-arena-navy-800 focus:border-arena-button focus:outline-none focus:ring-1 focus:ring-arena-button"
                     />
+                    {invalidPrice && <span role="alert" className="text-xs text-red-600">Informe um valor válido.</span>}
                   </div>
                   <button
                     type="button"

@@ -8,7 +8,7 @@ export function normalizeCpf(value: string | null | undefined): string {
 }
 
 export function normalizeCpfCnpj(value: string | null | undefined): string {
-  return (value ?? '').trim().replace(/[.\/\-\s]/g, '').toUpperCase()
+  return (value ?? '').trim().replace(/[.\/\-\s]/g, '').replace(/[a-z]/g, letter => letter.toUpperCase())
 }
 
 export function normalizeCep(value: string | null | undefined): string {
@@ -60,7 +60,7 @@ function validBrazilPhone(value: string): boolean {
 
 /** Brazil national numbers require a valid DDD. Explicit foreign country codes survive. */
 export function normalizePhone(value: string | null | undefined): string | null {
-  const raw = (value ?? '').trim().replace(/[\u2010-\u2015\u2212]/g, '-')
+  const raw = (value ?? '').replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '').trim().replace(/[\u2010-\u2015\u2212]/g, '-')
   if (!raw) return null
   if (!/^\+?[\d\s().\-]+$/.test(raw)) return null
   const digits = onlyDigits(raw)
@@ -117,11 +117,11 @@ function maskNationalPhone(digits: string): string {
   return `(${digits.slice(0, 2)}) ${subscriber.slice(0, split)}${subscriber.length > split ? `-${subscriber.slice(split)}` : ''}`
 }
 export function maskPhone(value: string): string {
-  const raw = value.trim().replace(/[\u2010-\u2015\u2212]/g, '-')
+  const raw = value.replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '').trim().replace(/[\u2010-\u2015\u2212]/g, '-')
   if (!raw || !/^\+?[\d\s().\-]+$/.test(raw)) return value
   const digits = onlyDigits(raw)
   if (raw.startsWith('+') && !digits.startsWith('55')) return `+${digits}`
-  const hasCountryCode = raw.startsWith('+55') || (digits.startsWith('55') && [12,13].includes(digits.length))
+  const hasCountryCode = raw.startsWith('+') || (digits.startsWith('55') && [12,13].includes(digits.length))
   const national = hasCountryCode ? digits.slice(2) : digits
   if (national.length > 11) return value
   return `${hasCountryCode ? '+55 ' : ''}${maskNationalPhone(national)}`

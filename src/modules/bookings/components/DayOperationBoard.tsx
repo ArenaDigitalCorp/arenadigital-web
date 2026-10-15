@@ -29,6 +29,7 @@ import {
     CommandList,
 } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
+import { formatCurrency } from "@/lib/format";
 import { getBookingsByArenaWithSportsAction } from "@/modules/bookings/actions/bookingActions";
 import type { Booking } from "@/modules/bookings/types/booking.types";
 import { BookingModal } from "@/modules/bookings/components/BookingModal";
@@ -859,7 +860,7 @@ export function DayOperationBoard({
                                                                         <div className="flex items-center gap-1.5">
                                                                             {booking.price != null && (
                                                                                 <span className={cn("text-[9px] font-bold", styles.textSecondary)}>
-                                                                                    R$ {Number(booking.price).toFixed(0)}
+                                                                                    {formatCurrency(booking.price)}
                                                                                 </span>
                                                                             )}
                                                                             <span className={cn("text-[9px] font-bold", styles.textSecondary)}>•</span>

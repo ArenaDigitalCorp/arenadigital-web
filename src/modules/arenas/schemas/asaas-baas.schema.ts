@@ -1,11 +1,12 @@
 import { z } from 'zod'
+import { decimalInput, integerInput } from '@/shared/schemas/numeric.schema'
 
 import { isValidCnpj, isValidCpf, normalizeCep, normalizeCpfCnpj, normalizeEmail, normalizePhone } from '@/lib/brasil-document'
 export { isValidCnpj, isValidCpf }
 
 function nationalBrazilPhone(value: string): string | null {
   const canonical = normalizePhone(value)
-  return canonical?.startsWith('+55') && /^\+55\d{10,11}$/.test(canonical) ? canonical.slice(3) : null
+  return canonical && /^\+55\d{2}9\d{8}$/.test(canonical) ? canonical.slice(3) : null
 }
 
 const requiredText = (label: string, min: number, max: number) =>
@@ -19,7 +20,7 @@ export const createArenaAsaasSubaccountSchema = z.object({
   }),
   companyType: z.enum(['MEI', 'LIMITED', 'INDIVIDUAL', 'ASSOCIATION']),
   mobilePhone: z.string().trim().refine(value => nationalBrazilPhone(value) !== null, 'Informe um celular brasileiro válido com DDD.'),
-  incomeValue: z.coerce.number().finite().positive('Informe um faturamento mensal maior que zero.').max(1_000_000_000),
+  incomeValue: decimalInput(z.number().finite().positive('Informe um faturamento mensal maior que zero.').max(1_000_000_000)),
   address: requiredText('Endereço', 2, 120),
   addressNumber: requiredText('Número', 1, 20),
   complement: z.string().trim().max(80).nullable().optional(),
@@ -36,7 +37,7 @@ export const updateArenaPixSplitSettingsSchema = z.object({
   pixKey: z.string().trim().max(255).nullable().optional(),
   commissionMode: z.enum(['percentage_net', 'fixed']),
   commissionFixedCents: z.number().int().min(0).max(100_000_000),
-  platformFeeBasisPoints: z.coerce.number().int().min(0).max(10_000),
+  platformFeeBasisPoints: integerInput(z.number().int().min(0).max(10_000)),
 }).strict().superRefine((value, ctx) => {
   if ((value.commissionMode === 'fixed' && value.platformFeeBasisPoints !== 0)
     || (value.commissionMode === 'percentage_net' && value.commissionFixedCents !== 0)) {

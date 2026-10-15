@@ -1,7 +1,8 @@
 import * as z from 'zod'
+import { decimalInput } from '@/shared/schemas/numeric.schema'
 
 export const openCaixaSessionActionSchema = z.object({
-  opening_balance: z.coerce.number().finite().min(0).max(99999999.99),
+  opening_balance: decimalInput(z.number().finite().min(0).max(99999999.99)),
   opening_notes: z.string().trim().max(500).nullable().optional(),
 }).strict()
 

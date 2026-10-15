@@ -81,9 +81,10 @@ export function ArenaAiAgentSettingsCard({ arenaId, initialSettings }: Props) {
         event.preventDefault()
         setSavingConfig(true)
         try {
-            const capValue = monthlyCap.trim() ? Number(monthlyCap.trim()) : null
-            if (capValue != null && (!Number.isFinite(capValue) || capValue <= 0)) {
-                throw new Error("O teto mensal de tokens deve ser um número positivo.")
+            const capText = monthlyCap.trim()
+            const capValue = capText ? Number(capText) : null
+            if (capValue != null && (!/^\d+$/.test(capText) || !Number.isSafeInteger(capValue) || capValue <= 0 || capValue > 2_147_483_647)) {
+                throw new Error("O teto mensal de tokens deve ser um número inteiro entre 1 e 2.147.483.647.")
             }
             const res = await updateAgentConfigAction(arenaId, {
                 personaPrompt: persona.trim() || null,
@@ -343,7 +344,7 @@ export function ArenaAiAgentSettingsCard({ arenaId, initialSettings }: Props) {
                             <Input
                                 id="agent-cap"
                                 value={monthlyCap}
-                                onChange={(e) => setMonthlyCap(e.target.value.replace(/\D/g, ""))}
+                                onChange={(e) => setMonthlyCap(e.target.value)}
                                 placeholder="Ex.: 500000"
                                 inputMode="numeric"
                             />

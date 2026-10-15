@@ -1,6 +1,7 @@
 "use client"
 
 import { FormEvent, useMemo, useState, useTransition } from "react"
+import { format } from "date-fns"
 import { ExternalLink, Megaphone, Pencil, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
@@ -48,22 +49,27 @@ const ctaKinds: Array<{ value: AppHomeContentCtaKind; label: string }> = [
   { value: "go_to_perfil", label: "Ir para perfil" },
 ]
 
-function nowForInput() {
-  const date = new Date()
-  date.setMinutes(date.getMinutes() - date.getTimezoneOffset())
-  return date.toISOString().slice(0, 16)
+function nowForInput(date = new Date()) {
+  return format(date, "yyyy-MM-dd'T'HH:mm")
 }
 
 function toDateTimeInput(value: string | null | undefined) {
   if (!value) return ""
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ""
-  date.setMinutes(date.getMinutes() - date.getTimezoneOffset())
-  return date.toISOString().slice(0, 16)
+  return format(date, "yyyy-MM-dd'T'HH:mm")
 }
 
-function fromDateTimeInput(value: string) {
-  return value ? new Date(value).toISOString() : null
+function fromDateTimeInput(value: string, original: string | null) {
+  if (!value) return null
+  // A minute-only input cannot distinguish a repeated DST hour or represent
+  // stored seconds. An unchanged field keeps the original instant/precision.
+  if (original && value === toDateTimeInput(original)) return original
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime()) || format(date, "yyyy-MM-dd'T'HH:mm") !== value) {
+    throw new Error("Informe uma data e horário válidos.")
+  }
+  return date.toISOString()
 }
 
 function formatDateTime(value: string | null | undefined) {
@@ -82,6 +88,7 @@ function labelFor<T extends string>(items: Array<{ value: T; label: string }>, v
 }
 
 function emptyDraft() {
+  const now = new Date(Math.floor(Date.now() / 60_000) * 60_000)
   return {
     id: "",
     kind: "announcement" as AppHomeContentKind,
@@ -94,8 +101,10 @@ function emptyDraft() {
     city_id: NONE_VALUE,
     sport_id: NONE_VALUE,
     priority: "0",
-    starts_at: nowForInput(),
+    starts_at: nowForInput(now),
     ends_at: "",
+    original_starts_at: now.toISOString() as string | null,
+    original_ends_at: null as string | null,
     active: true,
   }
 }
@@ -192,12 +201,23 @@ export function AppHomeContentAdminClient({ initialItems, sports, cities }: Prop
       priority: String(item.priority),
       starts_at: toDateTimeInput(item.starts_at) || nowForInput(),
       ends_at: toDateTimeInput(item.ends_at),
+      original_starts_at: item.starts_at,
+      original_ends_at: item.ends_at,
       active: item.active,
     })
   }
 
   const saveContent = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    let startsAt: string
+    let endsAt: string | null
+    try {
+      startsAt = fromDateTimeInput(draft.starts_at, draft.original_starts_at) ?? new Date().toISOString()
+      endsAt = fromDateTimeInput(draft.ends_at, draft.original_ends_at)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Informe uma data e horário válidos.")
+      return
+    }
     startTransition(async () => {
       const result = await upsertAppHomeContentAction({
         id: draft.id || undefined,
@@ -211,8 +231,8 @@ export function AppHomeContentAdminClient({ initialItems, sports, cities }: Prop
         city_id: draft.city_id === NONE_VALUE ? null : Number(draft.city_id),
         sport_id: draft.sport_id === NONE_VALUE ? null : draft.sport_id,
         priority: Number(draft.priority || 0),
-        starts_at: fromDateTimeInput(draft.starts_at) ?? new Date().toISOString(),
-        ends_at: fromDateTimeInput(draft.ends_at),
+        starts_at: startsAt,
+        ends_at: endsAt,
         active: draft.active,
       })
 

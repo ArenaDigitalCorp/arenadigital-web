@@ -5,6 +5,16 @@ import { requireAuthenticatedDbUser, assertArenaAccess, assertArenaAdminAccess, 
 import { SupabaseProductRepository } from '@/modules/products/repositories/SupabaseProductRepository'
 import type { CreateProductDTO, Product, UpdateProductDTO } from '@/modules/products/types/product.types'
 import { revalidatePath } from 'next/cache'
+import { z } from 'zod'
+import { decimalInput } from '@/shared/schemas/numeric.schema'
+
+const catalogPriceSchema = decimalInput(z.number().finite().min(0))
+
+function parseCatalogPrice(value: unknown): number {
+    const parsed = catalogPriceSchema.safeParse(value)
+    if (!parsed.success) throw new Error('Preço inválido')
+    return parsed.data
+}
 
 type StockRpcName =
     | 'register_product_stock_entry'
@@ -100,7 +110,8 @@ export async function createProductAction(arenaId: string, input: CreateProductD
         const { dbUserId } = await requireAuthenticatedDbUser()
         const catalogKind: CatalogKind = input.catalog_kind === 'service' ? 'service' : 'product'
         if (!input.category_id) throw new Error('Selecione uma categoria')
-        const name = validateCatalogBasics(input.name, Number(input.price), input.status ?? 'Ativo')
+        const price = parseCatalogPrice(input.price)
+        const name = validateCatalogBasics(input.name, price, input.status ?? 'Ativo')
         const refs = await resolveCatalogReferences(
             arenaId,
             input.category_id,
@@ -115,7 +126,7 @@ export async function createProductAction(arenaId: string, input: CreateProductD
             item_type: refs.category.name,
             station_id: refs.stationId,
             station_type_id: refs.stationTypeId,
-            price: Number(input.price),
+            price,
             catalog_kind: catalogKind,
             status: input.status ?? 'Ativo',
             stock_quantity: 0,
@@ -157,9 +168,10 @@ export async function updateProductAction(arenaId: string, productId: string, in
         if (catalogKind === 'service' && current.stock_quantity > 0) {
             throw new Error('Zere o estoque físico antes de salvar o item como serviço')
         }
+        const price = parseCatalogPrice(input.price === undefined ? current.price : input.price)
         const name = validateCatalogBasics(
             input.name ?? current.name,
-            Number(input.price ?? current.price),
+            price,
             input.status ?? current.status,
         )
         const refs = await resolveCatalogReferences(
@@ -175,7 +187,7 @@ export async function updateProductAction(arenaId: string, productId: string, in
             item_type: refs.category.name,
             station_id: refs.stationId,
             station_type_id: refs.stationTypeId,
-            price: Number(input.price ?? current.price),
+            price,
             catalog_kind: catalogKind,
             status: input.status ?? current.status,
             updated_by: dbUserId,

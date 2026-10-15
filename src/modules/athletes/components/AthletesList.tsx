@@ -43,6 +43,14 @@ function AthletesListForArena({ arenaId, tutorial = false }: AthletesListProps) 
           ? { success: true as const, data: tutorialAthletePage(tutorialAthletes, query) }
           : await getAthletesPageAction({ arenaId, ...query });
         if (!cancelled) {
+          if (response.success && response.data.profilesAvailable === false
+              && (query.profile !== 'todos' || query.sort.column === 'perfil')) {
+            setQuery(current => ({
+              ...current, page: 1, profile: 'todos',
+              sort: current.sort.column === 'perfil' ? { column: 'name', direction: current.sort.direction } : current.sort,
+            }));
+            return;
+          }
           setResult(response.success
             ? { key: requestKey, data: response.data }
             : { key: requestKey, error: response.error });
@@ -58,7 +66,9 @@ function AthletesListForArena({ arenaId, tutorial = false }: AthletesListProps) 
   const isLoading = !current;
   const data = current?.data;
   const athletes = data?.items ?? [];
-  const perfis = Object.fromEntries(athletes.map(athlete => [athlete.id, athlete.perfil]));
+  const profilesAvailable = data?.profilesAvailable !== false;
+  const perfis = Object.fromEntries(athletes.flatMap(athlete =>
+    profilesAvailable && athlete.perfil ? [[athlete.id, athlete.perfil]] : []));
 
   if (!arenaId) {
     return (
@@ -88,7 +98,7 @@ function AthletesListForArena({ arenaId, tutorial = false }: AthletesListProps) 
               <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             </div>
 
-            <div className="flex flex-wrap items-center gap-1.5">
+            {profilesAvailable && <div className="flex flex-wrap items-center gap-1.5">
               {(['todos', ...PERFIS_ATLETA] as const).map((opcao) => {
                 const ativo = query.profile === opcao;
                 return (
@@ -111,8 +121,16 @@ function AthletesListForArena({ arenaId, tutorial = false }: AthletesListProps) 
                   </button>
                 );
               })}
-            </div>
+            </div>}
           </div>
+          {!profilesAvailable && (
+            <p role="status" className="text-xs text-arena-navy-800/60">
+              Perfis temporariamente indisponíveis. Os atletas continuam listados.{' '}
+              <button type="button" className="underline" onClick={() => setRetry(value => value + 1)}>
+                Tentar carregar os perfis novamente
+              </button>
+            </p>
+          )}
         </div>
 
         <AthletesTable
@@ -120,6 +138,7 @@ function AthletesListForArena({ arenaId, tutorial = false }: AthletesListProps) 
           isLoading={isLoading}
           arenaId={arenaId}
           perfis={perfis}
+          profilesAvailable={profilesAvailable}
           error={current?.error}
           onRetry={() => setRetry(value => value + 1)}
           page={data?.page ?? query.page}
