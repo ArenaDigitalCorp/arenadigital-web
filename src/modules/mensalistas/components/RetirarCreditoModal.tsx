@@ -1,5 +1,7 @@
 'use client'
 
+import { parseBrazilianDecimal } from '@/lib/format'
+import { DecimalInput } from '@/components/ui/decimal-input'
 import { useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import {
@@ -10,7 +12,6 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
@@ -66,12 +67,12 @@ export function RetirarCreditoModal({
 
   const subconta = subcontas.find((s) => chaveDa(s) === subcontaChave) ?? null
   const disponivel = subconta?.saldo ?? 0
-  const valorNum = Number(valor.replace(',', '.')) || 0
+  const valorNum = (valor.trim() === '' ? 0 : parseBrazilianDecimal(valor) ?? Number.NaN)
   const excede = valorNum > disponivel + 0.01
   const restanteAposRetirada = Math.max(0, disponivel - valorNum)
 
   const handleSave = async () => {
-    if (valorNum <= 0) {
+    if (!Number.isFinite(valorNum) || valorNum <= 0) {
       toast.error('Informe um valor de retirada maior que zero.')
       return
     }
@@ -153,7 +154,7 @@ export function RetirarCreditoModal({
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-arena-navy-800/40 text-sm">
                 R$
               </span>
-              <Input
+              <DecimalInput
                 inputMode="decimal"
                 value={valor}
                 onChange={(e) => setValor(e.target.value)}

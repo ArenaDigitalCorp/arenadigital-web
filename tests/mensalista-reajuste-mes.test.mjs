@@ -2,7 +2,8 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
-import {
+import { loadTypescriptModule } from './helpers/load-typescript-module.mjs'
+const {
   arredondar,
   editavel,
   impacto,
@@ -14,7 +15,7 @@ import {
   validarNovoValor,
   valorInicial,
   variacaoJogos,
-} from '../src/modules/mensalistas/reajuste-mes.ts'
+} = loadTypescriptModule('src/modules/mensalistas/reajuste-mes.ts')
 import { reajusteMesLoteSchema } from '../src/modules/mensalistas/schemas/mensalista.schema.ts'
 
 // Quarta de R$ 400 por 4 jogos num mês de 5 quartas (ex.: dezembro/2026).
@@ -80,7 +81,7 @@ test('quitada, cancelada e plano por blocos não se editam', () => {
   const blocos = linha({ porBlocos: true, valorSugerido: null })
   assert.equal(editavel(blocos), false)
   assert.equal(precisaAnalise(blocos), false)
-  assert.deepEqual(selos(linha({ mensalidadeStatus: 'quitado', valorPago: 400 })), ['quitada'])
+  assert.deepEqual([...selos(linha({ mensalidadeStatus: 'quitado', valorPago: 400 }))], ['quitada'])
 })
 
 // ── Valor ──────────────────────────────────────────────────────────────────

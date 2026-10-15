@@ -1,3 +1,4 @@
+import { parseBrazilianDecimal } from '@/lib/format'
 /**
  * Regras da tela "Ajustar mensalidades do mês" — o que precisa de análise, o
  * que vem selecionado, os selos de cada linha, a validação do novo valor e o
@@ -117,10 +118,7 @@ export function variacaoJogos(linha: ReajusteMesLinha): 'sobe' | 'desce' | 'igua
 
 /** "1.234,50" / "1234.5" → número; vazio ou lixo → NaN. */
 export function parseValor(texto: string): number {
-  const limpo = texto.trim().replace(/\s|R\$/g, '')
-  if (!limpo) return Number.NaN
-  const normalizado = limpo.includes(',') ? limpo.replace(/\./g, '').replace(',', '.') : limpo
-  return Number(normalizado)
+  return parseBrazilianDecimal(texto) ?? Number.NaN
 }
 
 /** Quanto o mês muda no total (soma das diferenças). */

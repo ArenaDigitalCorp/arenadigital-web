@@ -65,3 +65,31 @@ export function formatLaunchDate(iso: string | null | undefined): string {
   }
   return new Date(iso).toLocaleDateString('pt-BR')
 }
+
+/**
+ * Decimal entry: comma or dot decimal, optional BR thousands before a comma.
+ * A lone dot with three fraction digits is ambiguous and must be corrected.
+ * Returns null rather than turning invalid text into zero or a partial amount.
+ */
+export function parseBrazilianDecimal(value: string | number | null | undefined): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  const raw = (value ?? '').trim().replace(/^R\$\s*/, '')
+  if (!raw) return null
+  let canonical: string
+  if (raw.includes(',')) {
+    if (!/^[+-]?(?:\d+|\d{1,3}(?:\.\d{3})+),\d{1,2}$/.test(raw)) return null
+    canonical = raw.replace(/\./g, '').replace(',', '.')
+  } else {
+    if (!/^[+-]?\d+(?:\.\d{1,2})?$/.test(raw)) return null
+    canonical = raw
+  }
+  const parsed = Number(canonical)
+  return Number.isFinite(parsed) && Math.abs(parsed) <= Number.MAX_SAFE_INTEGER / 100 ? parsed : null
+}
+
+/** Editing display for decimal BRL amounts; the stored value remains numeric. */
+export function formatDecimalInput(value: number): string {
+  return Number.isFinite(value)
+    ? value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : ''
+}

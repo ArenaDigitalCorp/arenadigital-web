@@ -1,3 +1,4 @@
+import { asaasDomesticPhone, normalizeCpfCnpj, normalizeEmail, normalizeCep } from '@/lib/brasil-document'
 import { createHash } from 'crypto';
 import type {
   DomainInvoice,
@@ -359,10 +360,10 @@ export class AsaasGateway implements PaymentGateway {
           {
             body: {
               name: input.name ?? existing.name,
-              email: input.email,
-              cpfCnpj: input.cpfCnpj,
-              phone: input.phone ?? undefined,
-              postalCode: input.postalCode ?? undefined,
+              email: normalizeEmail(input.email),
+              cpfCnpj: normalizeCpfCnpj(input.cpfCnpj),
+              phone: asaasDomesticPhone(input.phone),
+              postalCode: input.postalCode ? normalizeCep(input.postalCode) : undefined,
               addressNumber: input.addressNumber ?? undefined,
             },
           }
@@ -377,10 +378,10 @@ export class AsaasGateway implements PaymentGateway {
       {
         body: {
           name: input.name ?? input.email,
-          email: input.email,
-          cpfCnpj: input.cpfCnpj,
-          phone: input.phone ?? undefined,
-          postalCode: input.postalCode ?? undefined,
+          email: normalizeEmail(input.email),
+          cpfCnpj: normalizeCpfCnpj(input.cpfCnpj),
+          phone: asaasDomesticPhone(input.phone),
+          postalCode: input.postalCode ? normalizeCep(input.postalCode) : undefined,
           addressNumber: input.addressNumber ?? undefined,
           externalReference: externalRef,
         },

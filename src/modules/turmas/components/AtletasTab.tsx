@@ -1,5 +1,6 @@
 'use client'
 
+import { formatPhone } from '@/lib/brasil-document'
 import { useState } from 'react'
 import { AlertTriangle, Eye, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -227,7 +228,7 @@ export function AtletasTab({ turmas, catalogo, onVer, onAbrirTurma }: Props) {
                       {l.atleta.nome}
                     </button>
                     <span className="block whitespace-nowrap text-xs font-normal text-arena-navy-800/50">
-                      {l.atleta.telefone}
+                      {formatPhone(l.atleta.telefone)}
                     </span>
                   </td>
                   <td className={arenaDataTable.td}>

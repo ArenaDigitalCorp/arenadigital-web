@@ -1,5 +1,6 @@
 'use server'
 
+import { normalizePixKey } from '@/modules/finance/lib/pix-key'
 import { revalidatePath } from 'next/cache'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { assertArenaAdminAccess } from '@/lib/server-auth'
@@ -69,7 +70,7 @@ export async function configureArenaWithdrawalDestinationAction(
   input: { pixKeyType: ArenaPixKeyType; pixKey: string },
 ) {
   try {
-    const pixKey = input.pixKey.trim()
+    const pixKey = normalizePixKey(input.pixKeyType, input.pixKey)
     if (!['CPF', 'CNPJ', 'EMAIL', 'PHONE', 'EVP'].includes(input.pixKeyType) || !pixKey) {
       throw new Error('Informe uma chave Pix válida.')
     }

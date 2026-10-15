@@ -1,3 +1,4 @@
+import { normalizePhone, normalizeEmail } from '@/lib/brasil-document'
 import Stripe from 'stripe'
 import type {
   DomainInvoice,
@@ -149,9 +150,9 @@ export class StripeGateway implements PaymentGateway {
 
   async createCustomer(input: CreateCustomerInput): Promise<{ id: string }> {
     const customer = await this.client.customers.create({
-      email: input.email,
+      email: normalizeEmail(input.email),
       name: input.name ?? undefined,
-      phone: input.phone ?? undefined,
+      phone: normalizePhone(input.phone) ?? undefined,
       metadata: input.metadata
     })
     return { id: customer.id }

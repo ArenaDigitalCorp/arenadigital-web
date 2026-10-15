@@ -3,6 +3,7 @@
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { assertArenaAccess, assertStationAccess, assertStationOrderAccess, requireAuthenticatedDbUser } from '@/lib/server-auth'
 import { getArenaBillingAddress } from '@/modules/arenas/usecases/get-arena-billing-address.usecase'
+import { registerCustomerSchema } from '@/modules/stations/schemas/customer.schema'
 import type { Database } from '@/types/supabase.types'
 
 type StationOrderInsert = Database['public']['Tables']['station_orders']['Insert']
@@ -31,9 +32,10 @@ function stationOrderRpc() {
 export async function createCustomerAction(arenaId: string, input: { name: string; cpf?: string; phone?: string; email?: string }) {
     try {
         await assertArenaAccess(arenaId)
+        const parsed = registerCustomerSchema.parse(input)
         const { data, error } = await getSupabaseAdmin()
             .from('station_customers')
-            .insert([{ ...input, arena_id: arenaId }])
+            .insert([{ ...parsed, cpf: parsed.cpf || null, phone: parsed.phone || null, email: parsed.email || null, arena_id: arenaId }])
             .select()
             .single()
         if (error) throw new Error(error.message)

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { matchesAsaasSubaccountOwnership } from '../src/modules/arenas/services/asaas-subaccount-ownership.ts'
+import { loadTypescriptModule } from './helpers/load-typescript-module.mjs'
+const { matchesAsaasSubaccountOwnership } = loadTypescriptModule('src/modules/arenas/services/asaas-subaccount-ownership.ts')
 
 const expected = { accountId: 'acc_123', walletId: 'wal_123', cpfCnpj: '11.222.333/0001-81' }
 const remote = { id: 'acc_123', walletId: 'wal_123', cpfCnpj: '11222333000181' }
@@ -11,4 +12,12 @@ test('manual reconciliation requires matching account, wallet and full document'
   assert.equal(matchesAsaasSubaccountOwnership({ ...remote, walletId: 'wal_other' }, expected), false)
   assert.equal(matchesAsaasSubaccountOwnership({ ...remote, cpfCnpj: '11222333000182' }, expected), false)
   assert.equal(matchesAsaasSubaccountOwnership({ ...remote, cpfCnpj: null }, expected), false)
+})
+
+
+test('alphanumeric CNPJ ownership preserves every letter and rejects a different legal entity', () => {
+  const alpha = { ...expected, cpfCnpj: '12.ABC.345/01DE-35' }
+  assert.equal(matchesAsaasSubaccountOwnership({ ...remote, cpfCnpj: '12ABC34501DE35' }, alpha), true)
+  assert.equal(matchesAsaasSubaccountOwnership({ ...remote, cpfCnpj: '12XYZ34501DE35' }, alpha), false)
+  assert.equal(matchesAsaasSubaccountOwnership({ ...remote, cpfCnpj: '123450135' }, alpha), false)
 })

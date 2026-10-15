@@ -1,5 +1,6 @@
 "use client"
 
+import { formatPhone } from '@/lib/brasil-document'
 import { useState, useEffect, useCallback, use } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Search, Loader2, User, ChevronLeft, ChevronRight } from "lucide-react"
@@ -120,7 +121,7 @@ export default function TopAthletesPage({ params }: { params: Promise<{ arenaId:
                                                     {athlete.name}
                                                 </p>
                                                 <p className="text-xs text-gray-400 font-bold uppercase tracking-tight">
-                                                    {athlete.phone || "Sem telefone"}
+                                                    {formatPhone(athlete.phone) || "Sem telefone"}
                                                 </p>
                                             </div>
                                         </div>
