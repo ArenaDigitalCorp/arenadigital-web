@@ -23,6 +23,10 @@ test('numeric and official alphanumeric CNPJ vectors use verified checksums', ()
   assert.equal(doc.formatCnpj('12abc34501de35'), '12.ABC.345/01DE-35')
   assert.equal(doc.isValidCnpj('12ABC34501DE36'), false)
   assert.equal(doc.isValidCnpj('26@472629000128'), false)
+  for (const value of ['12ß34501DE006', '12ı34501DE003', '12ſ34501DE003', '12ﬀ34501DE006']) {
+    assert.equal(doc.isValidCnpj(value), false, value)
+    assert.equal(doc.normalizeCpfCnpj(value), value, 'Unicode letters must not turn into other document characters')
+  }
 })
 
 test('CEP is text and never discards leading zeros or overflow', () => {
@@ -39,6 +43,8 @@ test('phone canonicalization preserves Brazil area code 55 and explicit foreign 
     ['(48) 99642-6091', '+5548996426091'],
     ['+55 48 99642-6091', '+5548996426091'],
     ['+55\u00a048\u202f99642\u20116091', '+5548996426091'],
+    ['\u202a+55\u00a048\u00a099642\u20116091\u202c', '+5548996426091'],
+    ['+ (55) 48 99642-6091', '+5548996426091'],
     ['5548996426091', '+5548996426091'],
     ['(55) 99999-1234', '+5555999991234'],
     ['(48) 3333-4444', '+554833334444'],
@@ -53,7 +59,7 @@ test('phone canonicalization preserves Brazil area code 55 and explicit foreign 
 })
 
 test('ambiguous, malformed or overflowing phone numbers are not silently repaired', () => {
-  for (const value of ['996426091', '00996426091', '48996426091 ramal 2', '+554899642609199', '++5548996426091', '+12025550123456789']) assert.equal(doc.normalizePhone(value), null, value)
+  for (const value of ['996426091', '00996426091', '48996426091 ramal 2', '+554899642609199', '++5548996426091', '+12025550123456789', '+ 55 999999999', '+(55)999999999']) assert.equal(doc.normalizePhone(value), null, value)
   assert.equal(doc.formatPhone('legacy invalid'), 'legacy invalid')
   assert.equal(doc.maskPhone('+12025550123456789'), '+12025550123456789')
   assert.equal(doc.asaasDomesticPhone('+5548996426091'), '48996426091')

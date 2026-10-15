@@ -11,7 +11,7 @@ export const agentConfigSchema = z.object({
   model: z.string().min(1).default(DEFAULT_AGENT_MODEL),
   temperature: z.number().min(0).max(2).default(0.3),
   maxOutputTokens: z.number().int().min(50).max(2000).default(500),
-  monthlyTokenCap: z.number().int().positive().nullable().optional(),
+  monthlyTokenCap: z.number().int().positive().max(2_147_483_647, 'O teto mensal de tokens deve ser no máximo 2.147.483.647.').nullable().optional(),
   fallbackMessage: z
     .string()
     .max(1000, 'A mensagem de fallback deve ter no máximo 1000 caracteres.')

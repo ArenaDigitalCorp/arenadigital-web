@@ -1,6 +1,8 @@
 "use client"
 
-import { Input } from "@/components/ui/input"
+import { useState } from "react"
+import { DecimalInput } from "@/components/ui/decimal-input"
+import { parseBrazilianDecimal } from "@/lib/format"
 import { Label } from "@/components/ui/label"
 import type { ArenaPixSplitSettings } from "@/modules/arenas/types/pix-split.types"
 
@@ -11,9 +13,14 @@ export function ArenaCommissionFields({ value, onChange }: {
     onChange: (next: Commission) => void
 }) {
     const fixed = value.commissionMode === "fixed"
+    const [draft, setDraft] = useState<{ mode: Commission["commissionMode"]; text: string; cents: number } | null>(null)
+    const currentCents = fixed ? value.commissionFixedCents : value.platformFeeBasisPoints
+    const text = draft?.mode === value.commissionMode && Object.is(draft.cents, currentCents)
+        ? draft.text : String(currentCents / 100)
+    const invalid = !Number.isFinite(currentCents) || currentCents < 0 || currentCents > (fixed ? 100_000_000 : 10_000)
     const exampleNetCents = 9800
     const fee = fixed ? value.commissionFixedCents : Math.round(exampleNetCents * value.platformFeeBasisPoints / 10_000)
-    const money = (cents: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100)
+    const money = (cents: number) => Number.isFinite(cents) ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100) : 'Valor inválido'
     return (
         <div className="mt-5 space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
@@ -30,11 +37,15 @@ export function ArenaCommissionFields({ value, onChange }: {
                 </div>
                 <div className="space-y-2">
                     <Label htmlFor="platform-split-fee">{fixed ? "Comissão por cobrança (R$)" : "Comissão sobre o líquido (%)"}</Label>
-                    <Input id="platform-split-fee" type="number" min="0" max={fixed ? "1000000" : "100"} step="0.01" required
-                        value={(fixed ? value.commissionFixedCents : value.platformFeeBasisPoints) / 100}
-                        onChange={(event) => onChange({ ...value,
-                            [fixed ? "commissionFixedCents" : "platformFeeBasisPoints"]: Math.round(Number(event.target.value) * 100),
-                        })} inputMode="decimal" aria-describedby="commission-explanation" />
+                    <DecimalInput id="platform-split-fee" min="0" max={fixed ? "1000000" : "100"} step="0.01" required
+                        value={text}
+                        onChange={(event) => {
+                            const parsed = parseBrazilianDecimal(event.target.value)
+                            const cents = parsed !== null && parsed >= 0 && parsed <= (fixed ? 1_000_000 : 100) ? Math.round(parsed * 100) : Number.NaN
+                            setDraft({ mode: value.commissionMode, text: event.target.value, cents })
+                            onChange({ ...value, [fixed ? "commissionFixedCents" : "platformFeeBasisPoints"]: cents })
+                        }} inputMode="decimal" aria-invalid={invalid} aria-describedby="commission-explanation" />
+                    {invalid && <p role="alert" className="text-xs text-red-600">Informe uma comissão válida{fixed ? '.' : ' entre 0% e 100%.'}</p>}
                 </div>
             </div>
             <p id="commission-explanation" className="text-xs leading-5 text-slate-500">

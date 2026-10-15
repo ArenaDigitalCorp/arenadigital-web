@@ -20,6 +20,8 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
+import { DecimalInput } from "@/components/ui/decimal-input"
+import { parsePositiveInteger, parseRotativoAmount } from "@/modules/rotativos/utils/rotativo-input"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import {
@@ -46,11 +48,6 @@ interface Props {
   courts: CourtOption[]
   rotativo?: Rotativo | null
   onSuccess: () => void
-}
-
-function parseCurrency(value: string) {
-  const normalized = value.replace(/[^\d,.-]/g, "").replace(",", ".")
-  return Number.parseFloat(normalized) || 0
 }
 
 function formatTimeForInput(time: string) {
@@ -123,6 +120,16 @@ export function RotativoFormModal({
   }
 
   async function onSubmit(values: RotativoFormValues) {
+    const amount = parseRotativoAmount(values.valor)
+    if (amount === null) {
+      form.setError("valor", { message: "Informe um valor válido maior que zero." })
+      return
+    }
+    const participantLimit = values.limitado ? parsePositiveInteger(values.limite_participantes ?? "") : null
+    if (values.limitado && participantLimit === null) {
+      form.setError("limite_participantes", { message: "Informe uma quantidade inteira maior que zero." })
+      return
+    }
     setIsSubmitting(true)
     try {
       const payload = {
@@ -132,11 +139,9 @@ export function RotativoFormModal({
         court_ids: values.court_ids,
         hora_inicio: values.hora_inicio,
         hora_fim: values.hora_fim,
-        valor: parseCurrency(values.valor),
+        valor: amount,
         limitado: values.limitado,
-        limite_participantes: values.limitado
-          ? Number.parseInt(values.limite_participantes || "0", 10)
-          : null,
+        limite_participantes: participantLimit,
       }
 
       const result = isEditing && rotativo
@@ -273,7 +278,7 @@ export function RotativoFormModal({
                 <FormItem>
                   <FormLabel>Valor da inscrição</FormLabel>
                   <FormControl>
-                    <Input placeholder="R$ 00,00" {...field} />
+                    <DecimalInput placeholder="R$ 00,00" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

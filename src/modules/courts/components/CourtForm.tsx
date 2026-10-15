@@ -149,6 +149,7 @@ export function CourtForm({ initialData, arenaId, onSuccess, returnTab = "espaco
 
     async function onSubmit(data: any) {
         try {
+            if (priceTablesRef.current?.validate() === false) return
             // Na criação, a tabela Padrão do rascunho vira o day_config do espaço
             // (obrigatória); na edição os horários/preços são geridos pelo bloco
             // de Tabelas de preço, que salva sozinho.
@@ -505,6 +506,7 @@ export function CourtForm({ initialData, arenaId, onSuccess, returnTab = "espaco
                         />
                     ) : (
                         <PriceTablesConfig
+                            ref={priceTablesRef}
                             arenaId={arenaId}
                             draftTables={draftTables}
                             onDraftChange={setDraftTables}

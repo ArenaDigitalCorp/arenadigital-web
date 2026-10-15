@@ -270,9 +270,10 @@ export async function saveRotativoPacotesAction(formData: unknown) {
 export async function launchRotativoCreditAction(formData: unknown) {
   const parsed = launchCreditSchema.safeParse(formData)
   if (!parsed.success) {
-    return { success: false, error: parsed.error.issues[0]?.message ?? 'Dados inválidos' }
+    return { success: false, outcome: 'rejected' as const, error: parsed.error.issues[0]?.message ?? 'Dados inválidos' }
   }
 
+  let purchaseStarted = false
   try {
     const { dbUserId } = await requireAuthenticatedDbUser()
     const { operationId, arenaId, athleteId, quantidade, validityDays, modo_pagamento_id } = parsed.data
@@ -280,6 +281,7 @@ export async function launchRotativoCreditAction(formData: unknown) {
     await ensureAthleteBelongsToArena(arenaId, athleteId)
 
     const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
+    purchaseStarted = true
     const purchase = await repo.purchaseCreditsAtomic({
       operationId,
       arenaId,
@@ -294,7 +296,8 @@ export async function launchRotativoCreditAction(formData: unknown) {
     revalidateRotativo(arenaId)
     return { success: true, valorPago: purchase.valor_pago }
   } catch (error: unknown) {
-    return { success: false, error: getErrorMessage(error, 'Erro ao lançar crédito') }
+    const rejected = !purchaseStarted || (error instanceof Error && 'purchaseRejected' in error && error.purchaseRejected === true)
+    return { success: false, outcome: rejected ? 'rejected' as const : 'unknown' as const, error: getErrorMessage(error, 'Erro ao lançar crédito') }
   }
 }
 

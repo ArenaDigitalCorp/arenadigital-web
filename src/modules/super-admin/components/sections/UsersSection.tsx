@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
+import { format } from "date-fns"
 import { KeyRound, ShieldCheck, UserCheck, UserRound, UsersRound } from "lucide-react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
@@ -29,15 +30,23 @@ function accessLabel(level: PlatformAccessLevel) {
   return "Funcionário"
 }
 
+function expiryForInput(value: string | null | undefined) {
+  if (!value) return ""
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? "" : format(date, "yyyy-MM-dd'T'HH:mm")
+}
+
 export function UsersSection({ overview }: { overview: PlatformAdminOverview }) {
   const router = useRouter()
+  const initialUserId = overview.users[0]?.id ?? ""
+  const initialPrincipal = overview.principals.find(principal => principal.userId === initialUserId)
   const [pending, startTransition] = useTransition()
   const [query, setQuery] = useState("")
   const [identityFilter, setIdentityFilter] = useState<"all" | "linked" | "missing">("all")
-  const [selectedId, setSelectedId] = useState<string>(overview.users[0]?.id ?? "")
-  const [accessLevel, setAccessLevel] = useState<PlatformAccessLevel>("employee")
-  const [accessEnabled, setAccessEnabled] = useState(true)
-  const [expiresAt, setExpiresAt] = useState("")
+  const [selectedId, setSelectedId] = useState<string>(initialUserId)
+  const [accessLevel, setAccessLevel] = useState<PlatformAccessLevel>(initialPrincipal?.accessLevel ?? "employee")
+  const [accessEnabled, setAccessEnabled] = useState(initialPrincipal?.status !== "revoked")
+  const [expiresAt, setExpiresAt] = useState(() => expiryForInput(initialPrincipal?.expiresAt))
   const [reason, setReason] = useState("")
 
   const principalByUserId = useMemo(
@@ -64,7 +73,7 @@ export function UsersSection({ overview }: { overview: PlatformAdminOverview }) 
     setSelectedId(userId)
     setAccessLevel(principal?.accessLevel ?? "employee")
     setAccessEnabled(principal?.status !== "revoked")
-    setExpiresAt(principal?.expiresAt ? principal.expiresAt.slice(0, 16) : "")
+    setExpiresAt(expiryForInput(principal?.expiresAt))
     setReason("")
   }
 
@@ -73,13 +82,28 @@ export function UsersSection({ overview }: { overview: PlatformAdminOverview }) 
       toast.error("Selecione uma conta e informe um motivo com pelo menos 8 caracteres.")
       return
     }
+    let savedExpiry: string | null = null
+    if (accessEnabled && expiresAt) {
+      const originalExpiry = selectedPrincipal?.expiresAt
+      if (originalExpiry && expiresAt === expiryForInput(originalExpiry)) {
+        savedExpiry = originalExpiry
+      } else {
+        const date = new Date(expiresAt)
+        if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(expiresAt)
+          || Number.isNaN(date.getTime()) || expiryForInput(date.toISOString()) !== expiresAt) {
+          toast.error("Informe uma data e hora de expiração válidas.")
+          return
+        }
+        savedExpiry = date.toISOString()
+      }
+    }
     startTransition(async () => {
       const result = await managePlatformPrincipalAction({
         targetUserId: selectedUser.id,
         accessLevel,
         enabled: accessEnabled,
         reason,
-        expiresAt: accessEnabled && expiresAt ? new Date(expiresAt).toISOString() : null,
+        expiresAt: savedExpiry,
       })
       if (!result.success) {
         toast.error(result.error ?? "Não foi possível atualizar o acesso.")

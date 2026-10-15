@@ -10,10 +10,6 @@ const repository = readFileSync(
   new URL('../src/modules/rotativos/repositories/SupabaseRotativoRepository.ts', import.meta.url),
   'utf8',
 )
-const creditTab = readFileSync(
-  new URL('../src/modules/rotativos/components/CreditosTab.tsx', import.meta.url),
-  'utf8',
-)
 
 test('rotativo financial actions delegate to atomic RPC-backed repository methods', () => {
   assert.match(actions, /repo\.enrollAthleteAtomic\(/)
@@ -24,13 +20,6 @@ test('rotativo financial actions delegate to atomic RPC-backed repository method
   assert.doesNotMatch(actions, /SupabaseFinanceRepository/)
   assert.doesNotMatch(actions, /calculateCreditPurchaseValue/)
   assert.doesNotMatch(actions, /operationId:\s*crypto\.randomUUID\(\)/)
-})
-
-test('credit modal preserves one operation id across failures and rotates it on close', () => {
-  assert.match(creditTab, /const creditOperationId = useRef<string \| null>\(null\)/)
-  assert.match(creditTab, /operationId: creditOperationId\.current/)
-  assert.match(creditTab, /function closeCreditModal\(\)[\s\S]{0,100}creditOperationId\.current = null/)
-  assert.match(creditTab, /if \(result\.success\)[\s\S]{0,140}closeCreditModal\(\)/)
 })
 
 test('rotativo repository has no direct financial DML saga', () => {

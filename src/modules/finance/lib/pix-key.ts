@@ -7,7 +7,7 @@ export function normalizePixKey(type: ArenaPixKeyType, value: string): string | 
   if (type === 'CNPJ') return isValidCnpj(value) ? normalizeCpfCnpj(value) : null
   if (type === 'PHONE') {
     const phone = normalizePhone(value)
-    return phone?.startsWith('+55') ? phone : null
+    return phone && /^\+55\d{2}9\d{8}$/.test(phone) ? phone : null
   }
   if (type === 'EMAIL') {
     const email = normalizeEmail(value)

@@ -10,7 +10,8 @@ import {
   validateMultipartContentLength,
   validateUploadDescriptor,
 } from '../src/lib/upload-policy.ts'
-import { transactionActionSchema } from '../src/modules/finance/schemas/transaction-action.schema.ts'
+import { loadTypescriptModule } from './helpers/load-typescript-module.mjs'
+const { transactionActionSchema } = loadTypescriptModule('src/modules/finance/schemas/transaction-action.schema.ts')
 
 async function source(relativePath) {
   return readFile(new URL(`../${relativePath}`, import.meta.url), 'utf8')

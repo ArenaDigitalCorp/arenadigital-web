@@ -223,7 +223,7 @@ const principalInputSchema = z.object({
   accessLevel: z.enum(['employee', 'platform_admin', 'super_admin']),
   enabled: z.boolean(),
   reason: z.string().trim().min(8).max(500),
-  expiresAt: z.string().datetime().nullable().optional(),
+  expiresAt: z.string().datetime({ offset: true }).nullable().optional(),
 })
 
 const internalPlanInputSchema = z.object({

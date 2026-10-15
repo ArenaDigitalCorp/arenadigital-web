@@ -69,19 +69,24 @@ function rowsFromSettings(settings: ArenaCancellationPolicySettings): EditableTi
 }
 
 function parsedTiers(rows: EditableTier[]): ArenaCancellationPolicyTier[] | null {
-    const tiers = rows.map((row) => ({
-        minimumHoursBeforeStart: Number(row.minimumHoursBeforeStart),
-        refundPercentage: Number(row.refundPercentage),
-    }))
+    const tiers: ArenaCancellationPolicyTier[] = []
+    for (const row of rows) {
+        const hoursText = row.minimumHoursBeforeStart
+        const refundText = row.refundPercentage
+        if (typeof hoursText !== "string" || !/^\d+$/.test(hoursText.trim())
+            || typeof refundText !== "string" || !/^\d+$/.test(refundText.trim())) {
+            return null
+        }
 
-    if (tiers.some((tier) => (
-        !Number.isInteger(tier.minimumHoursBeforeStart)
-        || tier.minimumHoursBeforeStart < 0
-        || !Number.isInteger(tier.refundPercentage)
-        || tier.refundPercentage < 0
-        || tier.refundPercentage > 100
-    ))) {
-        return null
+        const minimumHoursBeforeStart = Number(hoursText)
+        const refundPercentage = Number(refundText)
+        if (!Number.isSafeInteger(minimumHoursBeforeStart)
+            || minimumHoursBeforeStart > 2_147_483_647
+            || !Number.isSafeInteger(refundPercentage)
+            || refundPercentage > 100) {
+            return null
+        }
+        tiers.push({ minimumHoursBeforeStart, refundPercentage })
     }
 
     return tiers.sort((left, right) => left.minimumHoursBeforeStart - right.minimumHoursBeforeStart)

@@ -2,7 +2,9 @@
 
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
-import * as z from "zod"
+import { productFormSchema, serviceFormSchema, type ProductFormValues, type ServiceFormValues } from "@/modules/products/schemas/product-form.schema"
+import { DecimalInput } from "@/components/ui/decimal-input"
+import { parseBrazilianDecimal } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
@@ -38,28 +40,6 @@ import {
 import { useEffect, useState } from "react"
 import { Loader2 } from "lucide-react"
 import { trackAction } from "@/lib/telemetry/client"
-
-const productFormSchema = z.object({
-    name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-    category_id: z.string().min(1, "Selecione a categoria"),
-    station_type_id: z.string().min(1, "Selecione o tipo de estação"),
-    price: z.string().refine((val) => !isNaN(Number(val)) && Number(val) >= 0, {
-        message: "Preço deve ser um número válido e positivo",
-    }),
-    status: z.enum(["Ativo", "Inativo"]),
-})
-
-const serviceFormSchema = z.object({
-    name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-    category_id: z.string().min(1, "Selecione a categoria"),
-    price: z.string().refine((val) => !isNaN(Number(val)) && Number(val) >= 0, {
-        message: "Preço deve ser um número válido e positivo",
-    }),
-    status: z.enum(["Ativo", "Inativo"]),
-})
-
-type ProductFormValues = z.infer<typeof productFormSchema>
-type ServiceFormValues = z.infer<typeof serviceFormSchema>
 
 function coerceProductCatalogStatus(product: Product | null | undefined): "Ativo" | "Inativo" {
     if (!product) return "Inativo"
@@ -242,6 +222,8 @@ function ProductFormInner({
         // eslint-disable-next-line react-hooks/exhaustive-deps -- alinhar ao produto/kind; defaultValues já cobrem o primeiro paint
     }, [kind, product, product?.id])
     async function submitProduct(data: ProductFormValues) {
+        const price = parseBrazilianDecimal(data.price)
+        if (price === null || price < 0) throw new Error("Informe um preço válido maior ou igual a zero.")
         const selectedType = stationTypes.find((t) => t.id === data.station_type_id)
         if (!selectedType) {
             toast.error("Selecione um tipo de estação válido.")
@@ -259,7 +241,7 @@ function ProductFormInner({
                 item_type: selectedCategory.name,
                 station_id: null,
                 station_type_id: data.station_type_id,
-                price: Number(data.price),
+                price,
                 status: data.status,
             })
             if (!res.success) throw new Error(res.error)
@@ -278,7 +260,7 @@ function ProductFormInner({
                 item_type: selectedCategory.name,
                 station_id: null,
                 station_type_id: data.station_type_id,
-                price: Number(data.price),
+                price,
                 catalog_kind: "product",
                 status: data.status,
             })
@@ -293,6 +275,8 @@ function ProductFormInner({
     }
 
     async function submitService(data: ServiceFormValues) {
+        const price = parseBrazilianDecimal(data.price)
+        if (price === null || price < 0) throw new Error("Informe um preço válido maior ou igual a zero.")
         const selectedCategory = kindCategories.find((c) => c.id === data.category_id)
         if (!selectedCategory) {
             toast.error("Selecione uma categoria válida.")
@@ -305,7 +289,7 @@ function ProductFormInner({
             item_type: selectedCategory.name,
             station_id: null,
             station_type_id: null,
-            price: Number(data.price),
+            price,
             catalog_kind: "service" as const,
             status: data.status,
             stock_quantity: 0,
@@ -438,10 +422,7 @@ function ProductFormInner({
                             <FormItem className="space-y-2">
                                 <FormLabel className={serviceLabelClass}>Valor</FormLabel>
                                 <FormControl>
-                                    <Input
-                                        type="number"
-                                        step="0.01"
-                                        min={0}
+                                    <DecimalInput
                                         placeholder="R$ 00,00"
                                         className={serviceInputClass}
                                         {...field}
@@ -587,9 +568,7 @@ function ProductFormInner({
                         <FormItem className="space-y-1.5">
                             <FormLabel className={formLabelClass}>Valor (R$)</FormLabel>
                             <FormControl>
-                                <Input
-                                    type="number"
-                                    step="0.01"
+                                <DecimalInput
                                     placeholder="0.00"
                                     className={inputFieldClass}
                                     {...field}

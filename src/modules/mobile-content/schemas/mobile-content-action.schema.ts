@@ -16,8 +16,8 @@ export const appHomeContentActionSchema = z.object({
   city_id: z.number().int().positive().nullable().optional(),
   sport_id: optionalUuid,
   priority: z.number().int().min(-100000).max(100000).optional(),
-  starts_at: z.string().datetime().optional(),
-  ends_at: optionalDateTime,
+  starts_at: z.string().datetime({ offset: true }).optional(),
+  ends_at: z.string().datetime({ offset: true }).nullable().optional(),
   active: z.boolean().optional(),
 }).strict()
 
