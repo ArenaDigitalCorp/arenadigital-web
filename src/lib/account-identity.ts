@@ -1,4 +1,4 @@
-import { onlyDigits } from '@/lib/brasil-document'
+import { normalizeCpf, formatCpf } from '@/lib/brasil-document'
 import type { getSupabaseAdmin } from '@/lib/supabase-server'
 
 type SupabaseAdmin = ReturnType<typeof getSupabaseAdmin>
@@ -24,12 +24,10 @@ export function normalizeEmail(email: string | null | undefined) {
 }
 
 export function normalizeDocument(value: string | null | undefined) {
-  return onlyDigits(value)
+  return normalizeCpf(value)
 }
 
-export function formatCpf(digits: string) {
-  return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
-}
+export { formatCpf }
 
 export function cpfMatches(left: string | null | undefined, right: string | null | undefined) {
   const a = normalizeDocument(left)

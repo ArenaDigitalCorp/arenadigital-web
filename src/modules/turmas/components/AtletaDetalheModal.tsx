@@ -1,5 +1,6 @@
 'use client'
 
+import { formatCpf, formatPhone } from '@/lib/brasil-document'
 import { useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { StandardModal } from '@/components/ui/standard-modal'
@@ -135,8 +136,8 @@ export function AtletaDetalheModal({ atleta, turmas, catalogo, onFechar, onAbrir
         </div>
 
         <div className="grid grid-cols-1 gap-3 rounded-lg border border-arena-navy-800/10 bg-arena-navy-800/[0.02] p-4 text-sm sm:grid-cols-3">
-          <Dado rotulo="CPF" valor={atleta.cpf ?? '—'} />
-          <Dado rotulo="Telefone" valor={atleta.telefone ?? '—'} />
+          <Dado rotulo="CPF" valor={formatCpf(atleta.cpf) || '—'} />
+          <Dado rotulo="Telefone" valor={formatPhone(atleta.telefone) || '—'} />
           <Dado rotulo="E-mail" valor={atleta.email ?? '—'} />
         </div>
 

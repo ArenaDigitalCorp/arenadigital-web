@@ -1,5 +1,6 @@
 "use client"
 
+import { formatCpf, formatPhone } from '@/lib/brasil-document'
 import { use, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
@@ -447,7 +448,7 @@ export default function AthleteDetailPage({
                     <div className="grid grid-cols-3 gap-y-6 gap-x-8 w-full">
                         <div>
                             <p className="text-xs text-gray-500 font-medium mb-1">CPF</p>
-                            <p className="font-medium text-gray-900">{data.cpf || "---"}</p>
+                            <p className="font-medium text-gray-900">{formatCpf(data.cpf) || "---"}</p>
                         </div>
                         <div>
                             <p className="text-xs text-gray-500 font-medium mb-1">Email</p>
@@ -455,7 +456,7 @@ export default function AthleteDetailPage({
                         </div>
                         <div>
                             <p className="text-xs text-gray-500 font-medium mb-1">Telefone</p>
-                            <p className="font-medium text-gray-900">{data.telefone || "---"}</p>
+                            <p className="font-medium text-gray-900">{formatPhone(data.telefone) || "---"}</p>
                         </div>
                         {data.instagram && (
                             <div>

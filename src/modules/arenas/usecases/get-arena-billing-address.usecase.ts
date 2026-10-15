@@ -1,3 +1,4 @@
+import { formatCpfCnpj } from '@/lib/brasil-document'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import type { Json } from '@/types/supabase.types'
 
@@ -23,18 +24,6 @@ function logradouroFromAddress(address: Json | null): string | null {
     if (typeof s === 'string' && s.trim()) return s.trim()
   }
   return null
-}
-
-function formatCpfCnpjDisplay(value: string | null | undefined): string | null {
-  if (!value?.trim()) return null
-  const d = value.replace(/\D/g, '')
-  if (d.length === 11) {
-    return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
-  }
-  if (d.length === 14) {
-    return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5')
-  }
-  return value.trim()
 }
 
 export async function getArenaBillingAddress(
@@ -92,7 +81,7 @@ export async function getArenaBillingAddress(
       : null
 
   return {
-    cpfCnpj: formatCpfCnpjDisplay(arena.cpf_cnpj),
+    cpfCnpj: formatCpfCnpj(arena.cpf_cnpj) || null,
     street: logradouroFromAddress(arena.address),
     neighborhood: arena.neighborhood?.trim() || null,
     city,

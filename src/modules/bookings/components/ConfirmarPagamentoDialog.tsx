@@ -1,5 +1,7 @@
 "use client"
 
+import { parseBrazilianDecimal } from '@/lib/format'
+import { DecimalInput } from '@/components/ui/decimal-input'
 import { useEffect, useState } from "react"
 import { Loader2, CheckCircle2, DollarSign } from "lucide-react"
 import {
@@ -11,7 +13,6 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
 interface ConfirmarPagamentoDialogProps {
@@ -42,9 +43,10 @@ export function ConfirmarPagamentoDialog({
     if (isOpen) setValor(valorPadrao.toString())
   }, [isOpen, valorPadrao])
 
-  const valorNum = parseFloat(valor.replace(",", ".")) || 0
+  const valorNum = (parseBrazilianDecimal(valor) ?? Number.NaN)
 
   const handleConfirm = async () => {
+    if (!Number.isFinite(valorNum) || valorNum <= 0) return
     await onConfirm(valorNum)
   }
 
@@ -84,7 +86,7 @@ export function ConfirmarPagamentoDialog({
             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-arena-navy-800/40 font-bold text-sm">
               R$
             </span>
-            <Input
+            <DecimalInput
               type="number"
               min={0}
               step="0.01"
@@ -111,7 +113,7 @@ export function ConfirmarPagamentoDialog({
           </Button>
           <Button
             onClick={handleConfirm}
-            disabled={isLoading || valorNum <= 0}
+            disabled={isLoading || !Number.isFinite(valorNum) || valorNum <= 0}
             className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold gap-2 rounded-xl h-11"
           >
             {isLoading ? (

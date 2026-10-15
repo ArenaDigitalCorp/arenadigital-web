@@ -1,5 +1,7 @@
 "use client"
 
+import { formatPhone } from '@/lib/brasil-document'
+import { openWhatsAppWeb } from '@/lib/whatsapp-web'
 import { useEffect, useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -137,14 +139,12 @@ export function DayOpportunitiesModal({ isOpen, onClose, arenaId, courtId, curre
     }
 
     const handleWhatsApp = (phone: string, name: string, freeSlots: number[]) => {
-        const cleanPhone = phone.replace(/\D/g, '')
-        const finalPhone = cleanPhone.length <= 11 ? `55${cleanPhone}` : cleanPhone
         const dayName = format(currentDate, "EEEE", { locale: ptBR })
         const slotsStr = [...freeSlots].sort((a, b) => a - b)
             .map(h => `${String(h).padStart(2, '0')}h`)
             .join(', ')
         const message = `Olá ${name}! Temos horário(s) disponível(is) na Arena nesta ${dayName}: ${slotsStr}. Gostaria de agendar?`
-        window.open(`https://wa.me/${finalPhone}?text=${encodeURIComponent(message)}`, '_blank')
+        openWhatsAppWeb(phone, message)
     }
 
     return (
@@ -190,7 +190,7 @@ export function DayOpportunitiesModal({ isOpen, onClose, arenaId, courtId, curre
                                         size="icon"
                                         className="h-10 w-10 rounded-xl bg-[#25D366] hover:bg-[#128C7E] text-white shadow-lg shadow-[#25D366]/20 shrink-0"
                                         onClick={() => handleWhatsApp(lead.phone, lead.athleteName, lead.freeSlots)}
-                                        title={`Contatar via WhatsApp: ${lead.phone}`}
+                                        title={`Contatar via WhatsApp: ${formatPhone(lead.phone)}`}
                                     >
                                         <MessageCircle className="w-5 h-5" />
                                     </Button>

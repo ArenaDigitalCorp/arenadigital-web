@@ -23,6 +23,9 @@ import {
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { MaskedInput } from "@/components/ui/masked-input"
+import { DecimalInput } from "@/components/ui/decimal-input"
+import { parseBrazilianDecimal } from "@/lib/format"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -249,7 +252,7 @@ export function ArenaPixSplitSettingsCard({
             const result = await createArenaAsaasSubaccountAction(arenaId, {
                 ...onboardingForm,
                 companyType,
-                incomeValue: Number(onboardingForm.incomeValue),
+                incomeValue: parseBrazilianDecimal(onboardingForm.incomeValue) ?? Number.NaN,
             })
             if (!result.success) {
                 updateSettings(result.data)
@@ -530,7 +533,7 @@ export function ArenaPixSplitSettingsCard({
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="baas-document">CNPJ</Label>
-                            <Input id="baas-document" value={onboardingForm.cpfCnpj} onChange={(event) => setOnboardingForm((form) => ({ ...form, cpfCnpj: event.target.value }))} inputMode="numeric" autoComplete="off" required />
+                            <MaskedInput mask="cnpj" id="baas-document" value={onboardingForm.cpfCnpj} onChange={(event) => setOnboardingForm((form) => ({ ...form, cpfCnpj: event.target.value }))} inputMode="text" autoComplete="off" required />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="baas-company-type">Natureza jurídica</Label>
@@ -545,11 +548,11 @@ export function ArenaPixSplitSettingsCard({
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="baas-phone">Celular</Label>
-                            <Input id="baas-phone" value={onboardingForm.mobilePhone} onChange={(event) => setOnboardingForm((form) => ({ ...form, mobilePhone: event.target.value }))} inputMode="tel" autoComplete="tel" required />
+                            <MaskedInput mask="phone" id="baas-phone" value={onboardingForm.mobilePhone} onChange={(event) => setOnboardingForm((form) => ({ ...form, mobilePhone: event.target.value }))} inputMode="tel" autoComplete="tel" required />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="baas-income">Faturamento mensal (R$)</Label>
-                            <Input id="baas-income" type="number" min="0.01" step="0.01" value={onboardingForm.incomeValue} onChange={(event) => setOnboardingForm((form) => ({ ...form, incomeValue: event.target.value }))} inputMode="decimal" required />
+                            <DecimalInput id="baas-income" value={onboardingForm.incomeValue} onChange={(event) => setOnboardingForm((form) => ({ ...form, incomeValue: event.target.value }))} inputMode="decimal" required />
                         </div>
                         <div className="space-y-2 xl:col-span-2">
                             <Label htmlFor="baas-address">Endereço</Label>
@@ -569,7 +572,7 @@ export function ArenaPixSplitSettingsCard({
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="baas-postal-code">CEP</Label>
-                            <Input id="baas-postal-code" value={onboardingForm.postalCode} onChange={(event) => setOnboardingForm((form) => ({ ...form, postalCode: event.target.value }))} inputMode="numeric" autoComplete="postal-code" required />
+                            <MaskedInput mask="cep" id="baas-postal-code" value={onboardingForm.postalCode} onChange={(event) => setOnboardingForm((form) => ({ ...form, postalCode: event.target.value }))} inputMode="numeric" autoComplete="postal-code" required />
                         </div>
                     </div>
                     <div className="mt-6 flex justify-end border-t border-slate-200 pt-5">

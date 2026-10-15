@@ -1,5 +1,6 @@
 "use client"
 
+import { formatCpf, formatPhone } from '@/lib/brasil-document'
 import { useEffect, useState } from "react"
 import {
     Dialog,
@@ -133,8 +134,8 @@ export function AthleteDetailsModal({ arenaId, athleteId, isOpen, onClose }: Ath
                                 <h3 className="text-sm font-bold text-arena-navy-800/50 uppercase tracking-widest">Contato</h3>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <InfoRow icon={<Mail className="h-4 w-4 text-arena-button" />} label="E-mail" value={data.email} />
-                                    <InfoRow icon={<Phone className="h-4 w-4 text-arena-button" />} label="Telefone" value={data.telefone} />
-                                    <InfoRow icon={<CreditCard className="h-4 w-4 text-arena-button" />} label="CPF" value={data.cpf} />
+                                    <InfoRow icon={<Phone className="h-4 w-4 text-arena-button" />} label="Telefone" value={formatPhone(data.telefone)} />
+                                    <InfoRow icon={<CreditCard className="h-4 w-4 text-arena-button" />} label="CPF" value={formatCpf(data.cpf)} />
                                 </div>
                             </div>
 

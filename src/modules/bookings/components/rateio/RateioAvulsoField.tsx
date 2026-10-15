@@ -1,5 +1,7 @@
 'use client'
 
+import { parseBrazilianDecimal } from '@/lib/format'
+import { DecimalInput } from '@/components/ui/decimal-input'
 import { useState } from 'react'
 import { Plus, Split, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -45,7 +47,7 @@ export function RateioAvulsoField({
   onRemoveSemCadastro,
 }: Props) {
   const [novoNome, setNovoNome] = useState('')
-  const partes = pessoas.map((p) => Number((valores[p.key] ?? '0').replace(',', '.')))
+  const partes = pessoas.map((p) => (parseBrazilianDecimal(valores[p.key] ?? '0') ?? Number.NaN))
   const soma = partes.reduce((s, v) => s + (Number.isFinite(v) ? v : 0), 0)
   const diferenca = diferencaRateio(partes, locacao)
 
@@ -88,7 +90,7 @@ export function RateioAvulsoField({
               <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-arena-navy-800/40">
                 R$
               </span>
-              <Input
+              <DecimalInput
                 inputMode="decimal"
                 aria-label={`Parte de ${p.nome}`}
                 value={valores[p.key] ?? ''}

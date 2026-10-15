@@ -1,5 +1,6 @@
 "use client"
 
+import { formatPhone } from '@/lib/brasil-document'
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -79,7 +80,7 @@ export function ArenasSettingsClient({ initialArenas }: Props) {
                                     </div>
                                     <div className="flex items-center text-sm text-muted-foreground">
                                         <Phone className="mr-2 h-4 w-4" />
-                                        <span>{arena.phone || 'Telefone não informado'}</span>
+                                        <span>{formatPhone(arena.phone) || 'Telefone não informado'}</span>
                                     </div>
                                     <div className="flex items-center text-sm text-muted-foreground">
                                         <Mail className="mr-2 h-4 w-4" />

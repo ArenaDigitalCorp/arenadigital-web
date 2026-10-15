@@ -1,5 +1,7 @@
 'use client'
 
+import { parseBrazilianDecimal } from '@/lib/format'
+import { DecimalInput } from '@/components/ui/decimal-input'
 import { useEffect, useMemo, useState } from 'react'
 import { format } from 'date-fns'
 import { Loader2 } from 'lucide-react'
@@ -88,8 +90,8 @@ export function RegistrarPagamentoModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, cobranca?.id])
 
-  const valorNum = Number(valor.replace(',', '.')) || 0
-  const creditoNum = Number(credito.replace(',', '.')) || 0
+  const valorNum = (valor.trim() === '' ? 0 : parseBrazilianDecimal(valor) ?? Number.NaN)
+  const creditoNum = (credito.trim() === '' ? 0 : parseBrazilianDecimal(credito) ?? Number.NaN)
   const total = useMemo(() => valorNum + creditoNum, [valorNum, creditoNum])
 
   // O excedente vem sempre do dinheiro (o crédito aplicado é limitado ao restante).
@@ -100,7 +102,7 @@ export function RegistrarPagamentoModal({
 
   const handleSave = async () => {
     if (!cobranca) return
-    if (total <= 0) {
+    if (!Number.isFinite(total) || total <= 0 || valorNum < 0 || creditoNum < 0) {
       toast.error('Informe um valor a pagar.')
       return
     }
@@ -174,7 +176,7 @@ export function RegistrarPagamentoModal({
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-arena-navy-800/40 text-sm">
                   R$
                 </span>
-                <Input
+                <DecimalInput
                   inputMode="decimal"
                   value={valor}
                   onChange={(e) => setValor(e.target.value)}
@@ -192,7 +194,7 @@ export function RegistrarPagamentoModal({
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-arena-navy-800/40 text-sm">
                     R$
                   </span>
-                  <Input
+                  <DecimalInput
                     inputMode="decimal"
                     value={credito}
                     onChange={(e) => setCredito(e.target.value)}

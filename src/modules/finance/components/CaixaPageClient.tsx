@@ -1,5 +1,6 @@
 "use client"
 
+import { formatCpfCnpj, formatPhone } from '@/lib/brasil-document'
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -325,8 +326,8 @@ export function CaixaPageClient({ arenaId }: Props) {
   <h1>${arena.name ?? ''}</h1>
   ${addressParts ? `<p class="center muted">${addressParts}</p>` : ''}
   ${cityLine ? `<p class="center muted">${cityLine}</p>` : ''}
-  ${arena.cpfCnpj ? `<p class="center muted">CNPJ: ${arena.cpfCnpj}</p>` : ''}
-  ${arena.phone ? `<p class="center muted">Tel: ${arena.phone}</p>` : ''}
+  ${arena.cpfCnpj ? `<p class="center muted">CPF/CNPJ: ${formatCpfCnpj(arena.cpfCnpj)}</p>` : ''}
+  ${arena.phone ? `<p class="center muted">Tel: ${formatPhone(arena.phone)}</p>` : ''}
   <div class="sep"></div>
   <p class="center"><strong>RESUMO DE CAIXA</strong></p>
   <p class="center muted">Documento de conferência interna</p>

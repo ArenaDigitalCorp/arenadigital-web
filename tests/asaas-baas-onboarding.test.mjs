@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
-import {
+import { loadTypescriptModule } from './helpers/load-typescript-module.mjs'
+const {
   createArenaAsaasSubaccountSchema,
   isValidCnpj,
   isValidCpf,
   normalizeAsaasSubaccountInput,
-} from '../src/modules/arenas/schemas/asaas-baas.schema.ts'
+} = loadTypescriptModule('src/modules/arenas/schemas/asaas-baas.schema.ts')
 
 async function source(relativePath) {
   return readFile(new URL(`../${relativePath}`, import.meta.url), 'utf8')
@@ -33,7 +34,7 @@ test('Asaas BaaS onboarding validates Brazilian documents and normalizes registr
   assert.equal(isValidCnpj('11.111.111/1111-11'), false)
 
   const parsed = createArenaAsaasSubaccountSchema.parse(validInput)
-  assert.deepEqual(normalizeAsaasSubaccountInput(parsed), {
+  assert.deepEqual(JSON.parse(JSON.stringify(normalizeAsaasSubaccountInput(parsed))), {
     ...validInput,
     cpfCnpj: '11222333000181',
     mobilePhone: '48999991234',

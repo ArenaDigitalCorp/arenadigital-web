@@ -1,5 +1,7 @@
 'use client'
 
+import { parseBrazilianDecimal } from '@/lib/format'
+import { DecimalInput } from '@/components/ui/decimal-input'
 import { useEffect, useMemo, useState } from 'react'
 import { format, parseISO } from 'date-fns'
 import { AlertTriangle, CalendarX2, Loader2 } from 'lucide-react'
@@ -11,7 +13,6 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
@@ -116,7 +117,7 @@ export function CancelarSessaoMensalistaModal({
     : descricaoCreditoJogoCancelado(startTime)
   const descricao = descricaoEditada ?? descricaoPadrao
 
-  const valorNum = Number(valor.replace(',', '.')) || 0
+  const valorNum = (valor.trim() === '' ? 0 : parseBrazilianDecimal(valor) ?? Number.NaN)
   const dia = diaExtenso(startTime)
   const horario = faixaHoraria(startTime, endTime)
   const horarioCancelado = faixaHoraria(cancelInicio, cancelFim)
@@ -129,7 +130,7 @@ export function CancelarSessaoMensalistaModal({
       toast.error(intervalo.erro)
       return
     }
-    if (lancarCredito && valorNum <= 0) {
+    if (lancarCredito && (!Number.isFinite(valorNum) || valorNum <= 0)) {
       toast.error('Informe um valor de crédito maior que zero.')
       return
     }
@@ -305,7 +306,7 @@ export function CancelarSessaoMensalistaModal({
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
                       R$
                     </span>
-                    <Input
+                    <DecimalInput
                       value={valor}
                       onChange={(e) => setValor(e.target.value)}
                       inputMode="decimal"
