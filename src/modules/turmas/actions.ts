@@ -7,6 +7,7 @@ import { ZodError } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { assertArenaBackofficeAccess, requireAuthenticatedDbUser } from '@/lib/server-auth'
 import { fetchAllSupabaseRows } from '@/lib/supabase-pagination'
+import { listAllAthleteProfiles } from '@/modules/athletes/lib/list-all-athlete-profiles'
 import { traduzirErroTurma, type ErroRpc } from './erros'
 import {
   criarTurmaSchema,
@@ -123,7 +124,7 @@ export async function getTurmasPageDataAction(arenaId: string): Promise<Resultad
             .order('nome_perfil')
             .order('id'),
         ),
-        db.rpc('list_atleta_perfis', { p_arena_id: arenaId }),
+        listAllAthleteProfiles(db, arenaId),
         db.rpc('list_turma_recorrencias', { p_arena_id: arenaId }),
         fetchAllSupabaseRows<any>(
           db

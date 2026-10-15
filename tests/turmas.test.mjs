@@ -214,10 +214,12 @@ test('every turma action checks backoffice access and writes only through the tu
     'vincular_turma_aluno_atomic',
     'desvincular_turma_aluno_atomic',
     'list_turma_recorrencias',
-    'list_atleta_perfis',
   ]) {
     assert.match(actions, new RegExp(`rpc\\('${rpc}'`))
   }
+  assert.match(actions, /listAllAthleteProfiles\(db, arenaId\)/)
+  const profileReader = await readFile(new URL('../src/modules/athletes/lib/list-all-athlete-profiles.ts', import.meta.url), 'utf8')
+  assert.match(profileReader, /\.rpc\('list_atleta_perfis'/)
   assert.doesNotMatch(actions, /\.(insert|update|upsert|delete)\(/)
 })
 
