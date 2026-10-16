@@ -104,7 +104,7 @@ export async function getTurmasPageDataAction(arenaId: string): Promise<Resultad
     await assertArenaBackofficeAccess(arenaId)
     const db = loose()
 
-    const [esportesRes, espacosRes, atletasRes, perfisRes, recorrenciasRes, turmasRes, matriculasRes] =
+    const [esportesRes, espacosRes, perfisRes, recorrenciasRes, turmasRes, matriculasRes] =
       await Promise.all([
         db
           .from('sports')
@@ -116,15 +116,7 @@ export async function getTurmasPageDataAction(arenaId: string): Promise<Resultad
           .select('id, name, status, court_price_tables(id, tipo, ativo, is_default, ordem)')
           .eq('arena_id', arenaId)
           .order('name'),
-        fetchAllSupabaseRows<AtletaRow>(
-          db
-            .from('atleta')
-            .select(`${ATLETA_SELECT}, arenas_atleta!inner(id_arena, perfil_definido_em)`)
-            .eq('arenas_atleta.id_arena', arenaId)
-            .order('nome_perfil')
-            .order('id'),
-        ),
-        listAllAthleteProfiles(db, arenaId),
+        listAllAthleteProfiles(db, arenaId, 'professor'),
         db.rpc('list_turma_recorrencias', { p_arena_id: arenaId }),
         fetchAllSupabaseRows<any>(
           db
@@ -150,7 +142,7 @@ export async function getTurmasPageDataAction(arenaId: string): Promise<Resultad
         ),
       ])
 
-    for (const res of [esportesRes, espacosRes, atletasRes, perfisRes, recorrenciasRes, turmasRes, matriculasRes]) {
+    for (const res of [esportesRes, espacosRes, perfisRes, recorrenciasRes, turmasRes, matriculasRes]) {
       if (res.error) throw new Error(res.error.message)
     }
 
@@ -190,7 +182,24 @@ export async function getTurmasPageDataAction(arenaId: string): Promise<Resultad
       ]),
     )
 
-    const atletaRows = atletasRes.data ?? []
+    // Only people shown in the three tabs belong in the initial document.
+    // The complete member catalogue is read separately when a selection modal opens.
+    const neededIds = [...new Set<string>([
+      ...perfis.keys(),
+      ...(turmasRes.data ?? []).map((t: any) => t.professor_atleta_id),
+      ...(matriculasRes.data ?? []).map((m: any) => m.atleta_id),
+    ])]
+    const atletaRows: AtletaRow[] = []
+    for (let i = 0; i < neededIds.length; i += 200) {
+      const res = await fetchAllSupabaseRows<AtletaRow>(db.from('atleta')
+        .select(`${ATLETA_SELECT}, arenas_atleta!inner(id_arena, perfil_definido_em)`)
+        .eq('arenas_atleta.id_arena', arenaId)
+        .in('id', neededIds.slice(i, i + 200))
+        .order('nome_perfil').order('id'))
+      if (res.error) throw new Error(res.error.message)
+      atletaRows.push(...(res.data ?? []))
+    }
+    atletaRows.sort((a, b) => a.nome_perfil.localeCompare(b.nome_perfil, 'pt-BR') || a.id.localeCompare(b.id))
     const atletas: Atleta[] = atletaRows.map((row) => paraAtleta(row, true))
     const professores: Professor[] = atletaRows
       .filter((row) => perfis.get(row.id) === 'professor')
@@ -294,6 +303,21 @@ export async function getTurmasPageDataAction(arenaId: string): Promise<Resultad
     return { success: true, data: { catalogo: { esportes, espacos, professores, atletas, recorrencias }, turmas } }
   } catch (err) {
     return falha(err, 'Erro ao carregar as turmas')
+  }
+}
+
+/** Fresh, complete selection catalogue; never a truncated list of candidates. */
+export async function getTurmasAthleteOptionsAction(arenaId: string): Promise<ResultadoTurma<Atleta[]>> {
+  try {
+    await assertArenaBackofficeAccess(arenaId)
+    const res = await fetchAllSupabaseRows<AtletaRow>(loose().from('atleta')
+      .select(`${ATLETA_SELECT}, arenas_atleta!inner(id_arena, perfil_definido_em)`)
+      .eq('arenas_atleta.id_arena', arenaId)
+      .order('nome_perfil').order('id'))
+    if (res.error) throw new Error(res.error.message)
+    return { success: true, data: (res.data ?? []).map((row) => paraAtleta(row, true)) }
+  } catch (err) {
+    return falha(err, 'Erro ao carregar os atletas')
   }
 }
 

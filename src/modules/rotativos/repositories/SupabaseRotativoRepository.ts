@@ -29,7 +29,8 @@ type RotativoRpcClient = {
 const ROTATIVO_SELECT = `
   *,
   esporte:id_esporte(name),
-  rotativo_courts(court:courts(id, name))
+  rotativo_courts(court:courts(id, name)),
+  rotativo_inscricoes(count)
 ` as const;
 
 function mapRotativo(row: Record<string, unknown>): Rotativo {
@@ -39,22 +40,16 @@ function mapRotativo(row: Record<string, unknown>): Rotativo {
 
   const rest = { ...row };
   delete rest.rotativo_courts;
-  return { ...rest, courts } as unknown as Rotativo;
-}
-
-async function attachInscricoesCount(client: SupabaseClient, rows: Rotativo[]): Promise<Rotativo[]> {
-  return Promise.all(
-    rows.map(async (r) => {
-      const { count } = await client
-        .from('rotativo_inscricoes')
-        .select('*', { count: 'exact', head: true })
-        .eq('id_rotativo', r.id);
-      return { ...r, inscricoes_count: count ?? 0 };
-    })
-  );
+  delete rest.rotativo_inscricoes;
+  const inscricoes = row.rotativo_inscricoes as { count: number }[] | null;
+  return { ...rest, courts, inscricoes_count: inscricoes?.[0]?.count ?? 0 } as unknown as Rotativo;
 }
 
 export class SupabaseRotativoRepository implements IRotativoRepository {
+  // Share only work that is still running in this request-owned repository.
+  // Never retain a completed result or share credit freshness across requests.
+  private readonly pendingCreditExpiry = new Map<string, Promise<number>>();
+
   constructor(private readonly client: SupabaseClient) {}
 
   private get rpc(): RotativoRpcClient {
@@ -153,8 +148,7 @@ export class SupabaseRotativoRepository implements IRotativoRepository {
     if (error) throw new Error(`SupabaseRotativoRepository.findById: ${error.message}`);
     if (!data) return null;
 
-    const [mapped] = await attachInscricoesCount(this.client, [mapRotativo(data)]);
-    return mapped;
+    return mapRotativo(data);
   }
 
   async findByDate(arenaId: string, date: string): Promise<Rotativo[]> {
@@ -166,8 +160,7 @@ export class SupabaseRotativoRepository implements IRotativoRepository {
       .order('hora_inicio', { ascending: true });
 
     if (error) throw new Error(`SupabaseRotativoRepository.findByDate: ${error.message}`);
-    const mapped = (data ?? []).map(mapRotativo);
-    return attachInscricoesCount(this.client, mapped);
+    return (data ?? []).map(mapRotativo);
   }
 
   async list(arenaId: string, filters: RotativoListFilters = {}): Promise<{ rows: Rotativo[]; total: number }> {
@@ -222,35 +215,24 @@ export class SupabaseRotativoRepository implements IRotativoRepository {
     const { data, error, count } = await query.range(from, to);
     if (error) throw new Error(`SupabaseRotativoRepository.list: ${error.message}`);
 
-    const mapped = (data ?? []).map(mapRotativo);
-    const rows = await attachInscricoesCount(this.client, mapped);
+    const rows = (data ?? []).map(mapRotativo);
     return { rows, total: count ?? 0 };
   }
 
   async findByMonth(arenaId: string, startDate: string, endDate: string): Promise<Record<string, MonthCalendarEntry>> {
     const { data, error } = await this.client
       .from('rotativos')
-      .select('id, data')
+      .select('id, data, rotativo_inscricoes(count)')
       .eq('id_arena', arenaId)
       .gte('data', startDate)
       .lte('data', endDate);
 
     if (error) throw new Error(`SupabaseRotativoRepository.findByMonth: ${error.message}`);
 
-    const results = await Promise.all(
-      (data ?? []).map(async (r) => {
-        const { count } = await this.client
-          .from('rotativo_inscricoes')
-          .select('*', { count: 'exact', head: true })
-          .eq('id_rotativo', r.id);
-        return { data: r.data, inscricoes_count: count ?? 0 };
-      })
-    );
-
     const byDate: Record<string, MonthCalendarEntry> = {};
-    for (const r of results) {
+    for (const r of data ?? []) {
       if (!byDate[r.data]) byDate[r.data] = { hasRotativo: true, hasInscriptions: false };
-      if (r.inscricoes_count > 0) byDate[r.data].hasInscriptions = true;
+      if ((r.rotativo_inscricoes?.[0]?.count ?? 0) > 0) byDate[r.data].hasInscriptions = true;
     }
     return byDate;
   }
@@ -480,11 +462,21 @@ export class SupabaseRotativoRepository implements IRotativoRepository {
     return data?.saldo ?? 0;
   }
 
-  async processExpiredCredits(arenaId: string): Promise<number> {
-    const { data, error } = await this.rpc.rpc('expire_backoffice_rotativo_credits', {
-      p_arena_id: arenaId,
-    });
-    if (error) throw new Error(`SupabaseRotativoRepository.processExpiredCredits: ${error.message}`);
-    return Number(data ?? 0);
+  processExpiredCredits(arenaId: string): Promise<number> {
+    const pending = this.pendingCreditExpiry.get(arenaId);
+    if (pending) return pending;
+
+    // Defer invocation until the promise is registered, including clients that
+    // throw synchronously. finally releases failures as well as successes.
+    const operation = Promise.resolve().then(async () => {
+      const { data, error } = await this.rpc.rpc('expire_backoffice_rotativo_credits', {
+        p_arena_id: arenaId,
+      });
+      if (error) throw new Error(`SupabaseRotativoRepository.processExpiredCredits: ${error.message}`);
+      return Number(data ?? 0);
+    }).finally(() => { this.pendingCreditExpiry.delete(arenaId); });
+
+    this.pendingCreditExpiry.set(arenaId, operation);
+    return operation;
   }
 }

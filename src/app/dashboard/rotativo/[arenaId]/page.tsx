@@ -1,3 +1,6 @@
+import { Suspense } from 'react'
+import { RotativoCreditsError } from '@/modules/rotativos/components/RotativoCreditsError'
+import { CreditosTab } from '@/modules/rotativos/components/CreditosTab'
 import { assertArenaBackofficeAccess } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { SupabaseArenaRepository } from '@/modules/arenas/repositories/SupabaseArenaRepository'
@@ -5,6 +8,24 @@ import { SupabaseRotativoRepository } from '@/modules/rotativos/repositories/Sup
 import { RotativoPageClient } from '@/modules/rotativos/components/RotativoPageClient'
 import { redirect } from 'next/navigation'
 import { buildTutorialRotativos } from '@/lib/tutorial-mock-data'
+
+async function CreditContent({ data }: {
+  data: Promise<{ ok: true; value: Awaited<ReturnType<typeof loadCredits>> } | { ok: false; error: unknown }>
+}) {
+  const result = await data
+  if (!result.ok) {
+    console.error('Rotativo credit read failed:', result.error)
+    return <RotativoCreditsError />
+  }
+  const [pacotes, movements, topAthletes, arenaId] = result.value
+  return <CreditosTab arenaId={arenaId} initialPacotes={pacotes} initialMovements={movements.rows}
+    initialMovementsTotal={movements.total} initialTopAthletes={topAthletes} />
+}
+
+async function loadCredits(repo: SupabaseRotativoRepository, arenaId: string) {
+  return Promise.all([repo.getPacotes(arenaId), repo.getCreditMovements(arenaId, { page: 1, pageSize: 10 }),
+    repo.getTopAthletesByCredit(arenaId, 5), Promise.resolve(arenaId)] as const)
+}
 
 export default async function RotativoPage({
   params,
@@ -37,10 +58,8 @@ export default async function RotativoPage({
         ]}
         initialRotativos={tutorialRotativos}
         initialRotativosTotal={tutorialRotativos.length}
-        initialPacotes={[]}
-        initialMovements={[]}
-        initialMovementsTotal={0}
-        initialTopAthletes={[]}
+        creditContent={<CreditosTab arenaId={arenaId} initialPacotes={[]} initialMovements={[]}
+          initialMovementsTotal={0} initialTopAthletes={[]} />}
       />
     )
   }
@@ -49,15 +68,16 @@ export default async function RotativoPage({
   const arenaRepo = new SupabaseArenaRepository(supabase)
   const repo = new SupabaseRotativoRepository(supabase)
 
-  await repo.processExpiredCredits(arenaId)
-
-  const [arena, rotativosList, courts, pacotes, movements, topAthletes] = await Promise.all([
+  // Credit reads start immediately, but their server-rendered content is streamed
+  // independently so that the sessions table does not wait for reconciliation.
+  const credits = loadCredits(repo, arenaId).then(
+    value => ({ ok: true as const, value }),
+    error => ({ ok: false as const, error }),
+  )
+  const [arena, rotativosList, courts] = await Promise.all([
     arenaRepo.findById(arenaId),
     repo.list(arenaId, { page: 1, pageSize: 10 }),
     repo.getCourts(arenaId),
-    repo.getPacotes(arenaId),
-    repo.getCreditMovements(arenaId, { page: 1, pageSize: 10 }),
-    repo.getTopAthletesByCredit(arenaId, 5),
   ])
 
   return (
@@ -67,10 +87,11 @@ export default async function RotativoPage({
       courts={courts}
       initialRotativos={rotativosList.rows}
       initialRotativosTotal={rotativosList.total}
-      initialPacotes={pacotes}
-      initialMovements={movements.rows}
-      initialMovementsTotal={movements.total}
-      initialTopAthletes={topAthletes}
+      creditContent={
+        <Suspense fallback={<p role="status" className="py-8 text-center text-muted-foreground">Carregando créditos…</p>}>
+          <CreditContent data={credits} />
+        </Suspense>
+      }
     />
   )
 }

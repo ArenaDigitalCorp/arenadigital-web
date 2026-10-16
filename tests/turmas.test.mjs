@@ -198,6 +198,7 @@ test('every turma action checks backoffice access and writes only through the tu
   const exportadas = [...actions.matchAll(/export async function (\w+)\(/g)].map((m) => m[1])
   assert.deepEqual(exportadas, [
     'getTurmasPageDataAction',
+    'getTurmasAthleteOptionsAction',
     'criarTurmaAction',
     'editarTurmaAction',
     'encerrarTurmaAction',
@@ -206,7 +207,7 @@ test('every turma action checks backoffice access and writes only through the tu
   ])
   const blocos = actions.split('export async function ').slice(1)
   for (const bloco of blocos) assert.match(bloco, /await assertArenaBackofficeAccess\(/)
-  for (const bloco of blocos.slice(1)) assert.match(bloco, /requireAuthenticatedDbUser\(\)/)
+  for (const bloco of blocos.slice(2)) assert.match(bloco, /requireAuthenticatedDbUser\(\)/)
   for (const rpc of [
     'create_turma_atomic',
     'update_turma_atomic',
@@ -217,7 +218,7 @@ test('every turma action checks backoffice access and writes only through the tu
   ]) {
     assert.match(actions, new RegExp(`rpc\\('${rpc}'`))
   }
-  assert.match(actions, /listAllAthleteProfiles\(db, arenaId\)/)
+  assert.match(actions, /listAllAthleteProfiles\(db, arenaId, 'professor'\)/)
   const profileReader = await readFile(new URL('../src/modules/athletes/lib/list-all-athlete-profiles.ts', import.meta.url), 'utf8')
   assert.match(profileReader, /\.rpc\('list_atleta_perfis'/)
   assert.doesNotMatch(actions, /\.(insert|update|upsert|delete)\(/)

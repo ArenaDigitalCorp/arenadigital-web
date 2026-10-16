@@ -26,5 +26,5 @@ export default async function TurmasPage({ params }: { params: Promise<{ arenaId
     )
   }
 
-  return <TurmasPageClient arenaId={arenaId} dados={res.data} />
+  return <TurmasPageClient key={arenaId} arenaId={arenaId} dados={res.data} />
 }
