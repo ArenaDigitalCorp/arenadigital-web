@@ -1,5 +1,7 @@
 'use client'
 
+import { notifyAthletesChanged } from '@/modules/athletes/lib/athlete-cache-events'
+
 import { useEffect, useState } from 'react'
 import { Check, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -60,6 +62,7 @@ export function PerfilAtletaCard({ arenaId, atletaId }: Props) {
     try {
       const res = await setPerfilAtletaAction({ arenaId, atletaId, perfil })
       if (!res.success || !res.data) throw new Error(res.error)
+      notifyAthletesChanged(arenaId)
       setEstado(res.data)
       toast.success(
         perfil === null

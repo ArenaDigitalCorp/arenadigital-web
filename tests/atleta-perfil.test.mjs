@@ -262,16 +262,16 @@ test('o perfil de todos os atletas vem numa chamada só', { skip: !hasDbRepo }, 
 
 test('a listagem pede uma página com os perfis e contagens do servidor', () => {
   const list = read('../src/modules/athletes/components/AthletesList.tsx')
-  assert.match(list, /getAthletesPageAction\(\{ arenaId, \.\.\.query \}\)/)
+  assert.match(list, /useAthletePage\(arenaId, tutorial, query\)/)
   assert.doesNotMatch(list, /getAthletesByArenaAction|listPerfisAtletaAction/)
   assert.match(list, /data\?\.counts\[opcao\]/)
 })
 
 test('falha da página não inventa perfis nem reaproveita dados de outra consulta', () => {
   const list = read('../src/modules/athletes/components/AthletesList.tsx')
-  assert.match(list, /result\?\.key === requestKey/)
-  assert.match(list, /if \(!cancelled\)/)
-  assert.match(list, /error=\{current\?\.error\}/)
+  const hook = read('../src/modules/athletes/hooks/useAthletePage.ts')
+  assert.match(hook, /enabled && !result\.isError && !waitingForConnection \? result\.data : undefined/)
+  assert.match(list, /error=\{result\.error\}/)
   assert.doesNotMatch(list, /\?\? 'padrao'/)
 })
 

@@ -38,7 +38,23 @@ function harness({ query = baseQuery, read = input => response(false, input) } =
   }
   const { AthletesList } = loadTypescriptModule('src/modules/athletes/components/AthletesList.tsx', {
     react, './AthletesTable': { AthletesTable: 'AthletesTable' },
-    '@/modules/athletes/actions/athleteActions': { getAthletesPageAction: async input => { calls.push(input); return read(input) } },
+    '@/modules/athletes/hooks/useAthletePage': { useAthletePage(id, tutorial, input) {
+      const [current, setCurrent] = react.useState(null)
+      const [token, setToken] = react.useState(0)
+      const key = JSON.stringify([id, tutorial, input, token])
+      react.useEffect(() => {
+        const timer = { async fn() {
+          calls.push({ arenaId: id, ...input })
+          const value = await read({ arenaId: id, ...input })
+          setCurrent(value.success ? { key, data: value.data } : { key, error: value.error })
+        } }
+        timers.push(timer)
+        return () => { timer.cancelled = true }
+      }, [key])
+      const value = current?.key === key ? current : null
+      return { data: value?.data, error: value?.error, isLoading: !value, isRefreshing: false,
+        retry: () => setToken(value => value + 1) }
+    } },
   }, { setTimeout(fn) { const timer = { fn }; timers.push(timer); return timer }, clearTimeout(timer) { timer.cancelled = true } })
   function render() {
     stateIndex = effectIndex = 0; dirty = false
