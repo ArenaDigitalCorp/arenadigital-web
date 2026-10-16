@@ -1,5 +1,7 @@
 "use client"
 
+import { notifyAthletesChanged } from '@/modules/athletes/lib/athlete-cache-events'
+
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { type FormEvent, useEffect, useState } from "react"
@@ -260,6 +262,7 @@ export function AthleteRegistrationModal({
             })
 
             if (result.success) {
+                notifyAthletesChanged(arenaId)
                 toast.success(lookupAthlete.alreadyLinked ? "Atleta já estava vinculado." : "Atleta vinculado com sucesso!")
                 onSuccess()
                 onOpenChange(false)
@@ -290,6 +293,7 @@ export function AthleteRegistrationModal({
                 idMunicipio: municipioId ?? undefined,
             })
             if (result.success) {
+                notifyAthletesChanged(arenaId)
                 toast.success("Atleta cadastrado e vinculado com sucesso.")
                 onSuccess()
                 onOpenChange(false)
