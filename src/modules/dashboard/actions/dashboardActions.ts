@@ -104,11 +104,11 @@ export async function getDashboardDataAction(
     occupancyPeriod: OccupancyPeriod = 'day'
 ): Promise<{ success: boolean; stats?: DashboardStats; occupancy?: OccupancyRow[]; error?: string }> {
     try {
-        const { dbUserId } = await requireAuthenticatedDbUser()
+        // The arena guard already authenticates the caller; do not resolve identity twice.
+        const { dbUserId } = selectedArenaId === 'all'
+            ? await requireAuthenticatedDbUser()
+            : await assertArenaBackofficeAccess(selectedArenaId)
         const supabase = getSupabaseAdmin()
-        if (selectedArenaId !== 'all') {
-            await assertArenaBackofficeAccess(selectedArenaId)
-        }
         const arenaIds = await resolveArenaIds(supabase, dbUserId, selectedArenaId)
 
         if (arenaIds.length === 0) {
@@ -132,27 +132,31 @@ export async function getDashboardDataAction(
         const occupancyRangeEndStr = addHours(endOfDay(occupancyRange.end), 6).toISOString()
         const occupancyPeriodDates = eachDayOfInterval({ start: occupancyRange.start, end: occupancyRange.end })
 
-        const { data: courts } = await supabase
-            .from('courts')
-            .select('id, name, day_config, arena_id')
-            .in('arena_id', arenaIds)
-            .eq('status', 'ativo')
+        // Only occupancy depends on courts. Revenue and reservation reads can
+        // start immediately instead of waiting for that unrelated round trip.
+        const occupancyPromise = (async () => {
+            const { data: courts } = await supabase
+                .from('courts')
+                .select('id, name, day_config, arena_id')
+                .in('arena_id', arenaIds)
+                .eq('status', 'ativo')
 
-        const courtList = courts ?? []
-        const courtIds = courtList.map(c => c.id)
+            const courtList = courts ?? []
+            const courtIds = courtList.map(c => c.id)
+            const occupancyBookings = courtIds.length === 0
+                ? { data: [] as { court_id: string; start_time: string; end_time: string }[], error: null }
+                : await fetchAllSupabaseRows(supabase
+                    .from('bookings')
+                    .select('court_id, start_time, end_time')
+                    .in('court_id', courtIds)
+                    .in('status', ['confirmed', 'pending'])
+                    .gte('start_time', occupancyRangeStartStr)
+                    .lte('start_time', occupancyRangeEndStr)
+                    .order('id', { ascending: true }))
+            return { courtList, occupancyBookings }
+        })()
 
-        const occupancyBookingsPromise = courtIds.length === 0
-            ? Promise.resolve({ data: [] as any[], error: null })
-            : fetchAllSupabaseRows(supabase
-                .from('bookings')
-                .select('court_id, start_time, end_time')
-                .in('court_id', courtIds)
-                .in('status', ['confirmed', 'pending'])
-                .gte('start_time', occupancyRangeStartStr)
-                .lte('start_time', occupancyRangeEndStr)
-                .order('id', { ascending: true }))
-
-        const [bookingCountResult, currentMonthTx, previousMonthTx, activeAthletesResult, occupancyBookingsResult] =
+        const [bookingCountResult, currentMonthTx, previousMonthTx, activeAthletesResult, { courtList, occupancyBookings }] =
             await Promise.all([
                 supabase.from('bookings').select('*', { count: 'exact', head: true })
                     .in('arena_id', arenaIds).eq('status', 'confirmed')
@@ -170,7 +174,7 @@ export async function getDashboardDataAction(
                     .gte('start_time', currentMonthStart).lte('start_time', currentMonthEnd)
                     .not('athlete_id', 'is', null)
                     .order('id', { ascending: true })),
-                occupancyBookingsPromise,
+                occupancyPromise,
             ])
 
         const receita = currentMonthTx.data?.reduce((acc, curr) => acc + Number(curr.total_value), 0) ?? 0
@@ -189,7 +193,7 @@ export async function getDashboardDataAction(
                 quadras: courtList.length,
                 ativos: new Set(activeAthletesResult.data?.map(b => b.athlete_id)).size,
             },
-            occupancy: buildOccupancyRows(courtList, occupancyBookingsResult.data ?? [], occupancyPeriodDates),
+            occupancy: buildOccupancyRows(courtList, occupancyBookings.data ?? [], occupancyPeriodDates),
         }
     } catch (err) {
         const message = err instanceof Error ? err.message : 'Erro ao carregar dashboard'

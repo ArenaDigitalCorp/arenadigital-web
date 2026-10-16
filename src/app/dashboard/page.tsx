@@ -68,6 +68,10 @@ function DashboardPageContent() {
 
     useEffect(() => {
         if (isLoadingUser || isLoadingArenas) return
+        if (isTutorial || !dbUser || !selectedArena) {
+            setIsLoading(false)
+            return
+        }
         if (dbUser?.platform_access_level === 'platform_admin') {
             setIsLoading(false)
             return

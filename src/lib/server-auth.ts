@@ -1,7 +1,9 @@
+import { cache } from 'react'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { fetchArenaMembershipByArenaAndUser } from '@/lib/arena-users'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { resolveAuthenticatedDbUser } from '@/lib/account-identity'
+import { loadOwnedArenas } from '@/lib/owned-arenas'
 import type { Database } from '@/types/supabase.types'
 import {
   canAccessArenaBackoffice,
@@ -77,7 +79,9 @@ type PlatformAccessRpcClient = {
   ) => Promise<{ data: string | null; error: { message: string } | null }>
 }
 
-export async function getPlatformAccessLevel(dbUserId: string): Promise<PlatformAccessLevel | null> {
+// React cache is scoped to a server render, never shared between users or requests.
+// Route handlers/actions still authenticate independently; the proxy refreshes cookies.
+const getPlatformAccessLevelForRender = cache(async function getPlatformAccessLevel(dbUserId: string): Promise<PlatformAccessLevel | null> {
   const supabase = getSupabaseAdmin()
   const { data, error } = await (supabase as unknown as PlatformAccessRpcClient).rpc(
     'get_platform_access_level',
@@ -93,25 +97,23 @@ export async function getPlatformAccessLevel(dbUserId: string): Promise<Platform
   }
 
   return null
+})
+
+export async function getPlatformAccessLevel(dbUserId: string): Promise<PlatformAccessLevel | null> {
+  return getPlatformAccessLevelForRender(dbUserId)
 }
 
 export async function hasDirectArenaOwnership(dbUserId: string): Promise<boolean> {
-  const supabase = getSupabaseAdmin()
-  const { data, error } = await supabase
-    .from('arenas')
-    .select('id')
-    .eq('owner_id', dbUserId)
-    .limit(1)
-    .maybeSingle()
+  const { data, error } = await loadOwnedArenas(dbUserId)
 
   if (error) {
     throw new Error(`Failed to verify arena ownership: ${error.message}`)
   }
 
-  return Boolean(data)
+  return Boolean(data?.length)
 }
 
-export async function requireAuthenticatedDbUser(): Promise<AuthenticatedDbUser> {
+const requireAuthenticatedDbUserForRender = cache(async function requireAuthenticatedDbUser(): Promise<AuthenticatedDbUser> {
   const supabaseSession = await createSupabaseServerClient()
   const { data: authData, error: authError } = await supabaseSession.auth.getUser()
 
@@ -131,6 +133,10 @@ export async function requireAuthenticatedDbUser(): Promise<AuthenticatedDbUser>
     authUserId,
     dbUserId: data.id,
   }
+})
+
+export async function requireAuthenticatedDbUser(): Promise<AuthenticatedDbUser> {
+  return requireAuthenticatedDbUserForRender()
 }
 
 export async function hasWebBackofficeAccess(dbUserId: string): Promise<boolean> {
@@ -161,7 +167,7 @@ export async function hasExplicitArenaAccess(dbUserId: string): Promise<boolean>
   return Boolean(linkedArena)
 }
 
-export async function requireWebBackofficeAccess(): Promise<AuthenticatedDbUser> {
+const requireWebBackofficeAccessForRender = cache(async function requireWebBackofficeAccess(): Promise<AuthenticatedDbUser> {
   const currentUser = await requireAuthenticatedDbUser()
   const canAccessWeb = await hasWebBackofficeAccess(currentUser.dbUserId)
 
@@ -170,6 +176,10 @@ export async function requireWebBackofficeAccess(): Promise<AuthenticatedDbUser>
   }
 
   return currentUser
+})
+
+export async function requireWebBackofficeAccess(): Promise<AuthenticatedDbUser> {
+  return requireWebBackofficeAccessForRender()
 }
 
 /**

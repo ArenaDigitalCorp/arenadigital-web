@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Menu } from 'lucide-react';
 import { Suspense, useState } from 'react';
+import type { DashboardBootstrap } from '@/lib/dashboard-bootstrap.types';
 
 function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   const { isCollapsed } = useSidebar();
@@ -72,13 +73,15 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
 
 export function DashboardLayoutWrapper({
   children,
+  initialData,
 }: {
   children: React.ReactNode;
+  initialData?: DashboardBootstrap;
 }) {
   return (
-    <UserProvider>
+    <UserProvider initialUser={initialData?.user}>
       <SidebarProvider>
-        <ArenaProvider>
+        <ArenaProvider initialArenas={initialData?.arenas}>
           <NotificationsProvider>
             <DashboardLayoutContent>{children}</DashboardLayoutContent>
           </NotificationsProvider>

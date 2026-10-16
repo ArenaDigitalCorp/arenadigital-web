@@ -48,7 +48,7 @@ test('platform identities require explicit ownership or membership to access are
   assert.doesNotMatch(arenaAccess, /Super administrators can only access/)
   assert.match(arenaAccess, /fetchArenaMembershipByArenaAndUser/)
 
-  const arenasApi = await source('src/app/api/arenas/route.ts')
+  const arenasApi = await source('src/lib/accessible-arenas.ts')
   assert.match(arenasApi, /fetchArenaMembershipsByUser\(supabase, dbUserId, true\)/)
   assert.doesNotMatch(arenasApi, /platformArenasResult|role: 'PlatformAdmin'/)
 
