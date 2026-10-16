@@ -1,3 +1,4 @@
+import { loadDashboardBootstrap } from "@/lib/dashboard-bootstrap";
 import { DashboardLayoutWrapper } from "@/components/dashboard/DashboardLayoutWrapper";
 import {
     AuthorizationError,
@@ -35,8 +36,10 @@ export default async function DashboardLayout({
         redirect("/admin/overview");
     }
 
+    const initialData = await loadDashboardBootstrap();
+
     return (
-        <DashboardLayoutWrapper>
+        <DashboardLayoutWrapper initialData={initialData}>
             {children}
         </DashboardLayoutWrapper>
     );

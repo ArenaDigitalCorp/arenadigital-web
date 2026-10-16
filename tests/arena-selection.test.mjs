@@ -26,6 +26,10 @@ test('selection remains on the new arena while navigation leaves an arena-scoped
       if (!(index in slots)) slots[index] = initial
       return [slots[index], (value) => { slots[index] = typeof value === 'function' ? value(slots[index]) : value }]
     },
+    useRef(initial) {
+      const [ref] = react.useState({ current: initial })
+      return ref
+    },
     useReducer(reducer, initial) {
       const [state, set] = react.useState(initial)
       return [state, (action) => set((current) => reducer(current, action))]
