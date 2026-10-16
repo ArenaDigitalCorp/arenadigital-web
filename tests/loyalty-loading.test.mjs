@@ -92,3 +92,12 @@ for(const [route,method,size] of [['statement','getStatement',15],['top-athletes
   else {const tree=await Page({params:Promise.resolve({arenaId})});assert.equal(tree.props.initialData.data[0].name,'initial');assert.equal(tree.props.userId,userId);assert.deepEqual(calls,['auth','db',[arenaId,1,size]])}
  }
 })
+
+test('an empty page beyond the last page resets to page one and reads it afresh before displaying data',async()=>{
+ const h=fixture();h.render().setQuery(q=>({...q,page:2}));h.render();let p=h.runTimers();h.requests[0].resolve(response({data:[],total:0,totalPages:0}));await p
+ let s=h.render();assert.equal(s.query.page,1);assert.equal(s.data,undefined);assert.equal(s.isLoading,true);p=h.runTimers();assert.equal(JSON.parse(h.requests[1].options.body).page,1);h.requests[1].resolve(response({data:[],total:0,totalPages:0}));await p;s=h.render();assert.equal(s.isLoading,false);assert.equal(s.data.total,0)
+})
+test('when rows disappear between requests, the UI reads the last valid page instead of showing data under an invalid page number',async()=>{
+ const h=fixture();h.render().setQuery(q=>({...q,page:5}));h.render();let p=h.runTimers();h.requests[0].resolve(response({data:[],total:17,totalPages:2}));await p
+ let s=h.render();assert.equal(s.query.page,2);assert.equal(s.data,undefined);p=h.runTimers();h.requests[1].resolve(response({data:[{name:'last page',balance:1.125}],total:17,totalPages:2}));await p;s=h.render();assert.equal(s.query.page,2);assert.equal(s.data.data[0].balance,1.125)
+})

@@ -34,7 +34,17 @@ export function useLoyaltyPage<T>(initialQuery: LoyaltyPageRead, initialData: Pa
           }
           return
         }
-        if (active) setState({ version, data: result.data })
+        if (active) {
+          const lastPage = Math.max(1, result.data.totalPages)
+          if (query.page > lastPage) {
+            // Rows may disappear between reads. Move to a valid page and read
+            // it afresh before showing any financial result under that number.
+            setRequest(current => current.version === version
+              ? { query: { ...query, page: lastPage }, version: version + 1 } : current)
+            return
+          }
+          setState({ version, data: result.data })
+        }
       } catch {
         if (active) setState({ version, error: 'Não foi possível carregar os dados. Tente novamente.' })
       }
