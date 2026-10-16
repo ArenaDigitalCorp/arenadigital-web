@@ -2,6 +2,7 @@
 
 import { SidebarProvider, useSidebar } from '@/contexts/SidebarContext';
 import { ArenaProvider } from '@/contexts/ArenaContext';
+import { DashboardQueryProvider } from './DashboardQueryProvider';
 import { UserProvider } from '@/contexts/UserContext';
 import { NotificationsProvider } from '@/modules/notifications/context/NotificationsContext';
 import { Sidebar } from '@/components/dashboard/Sidebar';
@@ -82,9 +83,11 @@ export function DashboardLayoutWrapper({
     <UserProvider initialUser={initialData?.user}>
       <SidebarProvider>
         <ArenaProvider initialArenas={initialData?.arenas}>
-          <NotificationsProvider>
-            <DashboardLayoutContent>{children}</DashboardLayoutContent>
-          </NotificationsProvider>
+          <DashboardQueryProvider>
+            <NotificationsProvider>
+              <DashboardLayoutContent>{children}</DashboardLayoutContent>
+            </NotificationsProvider>
+          </DashboardQueryProvider>
         </ArenaProvider>
       </SidebarProvider>
     </UserProvider>
