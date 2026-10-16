@@ -2,16 +2,7 @@
 
 import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react'
 
-type DbUser = {
-  id: string
-  email: string
-  name: string
-  role: string | null
-  created_at: string
-  onboarding_completed_at: string | null
-  onboarding_version: number
-  platform_access_level: 'employee' | 'platform_admin' | 'super_admin' | null
-}
+import type { DashboardUser as DbUser } from '@/lib/dashboard-bootstrap.types'
 
 type State =
   | { status: 'idle' }
@@ -43,8 +34,10 @@ type UserContextType = {
 
 const UserContext = createContext<UserContextType | undefined>(undefined)
 
-export function UserProvider({ children }: { children: React.ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, { status: 'idle' })
+export function UserProvider({ children, initialUser }: { children: React.ReactNode; initialUser?: DbUser | null }) {
+  const [state, dispatch] = useReducer(reducer, initialUser
+    ? { status: 'success', data: initialUser }
+    : { status: 'idle' })
 
   const fetchUser = useCallback(async () => {
     dispatch({ type: 'FETCH_START' })
@@ -59,7 +52,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  useEffect(() => { fetchUser() }, [fetchUser])
+  useEffect(() => { if (!initialUser) fetchUser() }, [fetchUser, initialUser])
 
   const dbUser = state.status === 'success' ? state.data : null
   const isLoading = state.status === 'idle' || state.status === 'loading'

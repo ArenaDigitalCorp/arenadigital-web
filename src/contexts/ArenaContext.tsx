@@ -1,17 +1,9 @@
 "use client"
 
-import React, { createContext, useContext, useReducer, useState, useEffect, useCallback } from "react";
+import React, { createContext, useContext, useReducer, useState, useEffect, useCallback, useRef } from "react";
 import { useDbUser } from "@/contexts/UserContext";
 import { usePathname } from "next/navigation";
-import type { ArenaAccessRole } from "@/lib/arena-permissions";
-
-interface Arena {
-    id: string;
-    name: string;
-    isOwner: boolean;
-    role: ArenaAccessRole;
-    assignedStationId: string | null;
-}
+import type { ArenaSummary as Arena } from "@/lib/dashboard-bootstrap.types";
 
 type State =
   | { status: 'idle' }
@@ -44,11 +36,15 @@ interface ArenaContextType {
 
 const ArenaContext = createContext<ArenaContextType | undefined>(undefined);
 
-export function ArenaProvider({ children }: { children: React.ReactNode }) {
-    const [selectedArena, setSelectedArena] = useState<string>("");
-    const [state, dispatch] = useReducer(reducer, { status: 'idle' });
+export function ArenaProvider({ children, initialArenas }: { children: React.ReactNode; initialArenas?: Arena[] | null }) {
     const { dbUser } = useDbUser();
     const pathname = usePathname();
+    const initialRouteArena = initialArenas?.find((arena) => pathname.split('/').includes(arena.id));
+    const [selectedArena, setSelectedArena] = useState<string>(initialRouteArena?.id ?? initialArenas?.[0]?.id ?? "");
+    const [state, dispatch] = useReducer(reducer, initialArenas
+        ? { status: 'success', data: initialArenas }
+        : { status: 'idle' });
+    const bootstrapUserId = useRef(initialArenas ? dbUser?.id : undefined);
 
     const fetchArenas = useCallback(async () => {
         if (!dbUser) {
@@ -75,7 +71,11 @@ export function ArenaProvider({ children }: { children: React.ReactNode }) {
         }
     }, [dbUser]);
 
-    useEffect(() => { fetchArenas() }, [fetchArenas]);
+    useEffect(() => {
+        if (bootstrapUserId.current && bootstrapUserId.current === dbUser?.id) return;
+        bootstrapUserId.current = undefined;
+        fetchArenas();
+    }, [dbUser?.id, fetchArenas]);
 
     useEffect(() => {
         if (state.status !== 'success') return;
