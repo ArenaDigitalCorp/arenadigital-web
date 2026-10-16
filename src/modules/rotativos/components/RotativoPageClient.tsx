@@ -1,15 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { DashboardTabs } from "@/components/dashboard/DashboardTabs"
 import { CadastradosTab } from "@/modules/rotativos/components/CadastradosTab"
-import { CreditosTab } from "@/modules/rotativos/components/CreditosTab"
 import type {
   CourtOption,
   Rotativo,
-  RotativoCreditoMovimento,
-  RotativoCreditoSaldo,
-  RotativoPacote,
 } from "@/modules/rotativos/types/rotativo.types"
 import type { Sport } from "@/modules/arenas/types/arena.types"
 
@@ -21,10 +17,7 @@ interface Props {
   courts: CourtOption[]
   initialRotativos: Rotativo[]
   initialRotativosTotal: number
-  initialPacotes: RotativoPacote[]
-  initialMovements: RotativoCreditoMovimento[]
-  initialMovementsTotal: number
-  initialTopAthletes: RotativoCreditoSaldo[]
+  creditContent: ReactNode
 }
 
 export function RotativoPageClient({
@@ -33,10 +26,7 @@ export function RotativoPageClient({
   courts,
   initialRotativos,
   initialRotativosTotal,
-  initialPacotes,
-  initialMovements,
-  initialMovementsTotal,
-  initialTopAthletes,
+  creditContent,
 }: Props) {
   const [activeTab, setActiveTab] = useState<TabValue>("cadastrados")
 
@@ -67,13 +57,7 @@ export function RotativoPageClient({
           initialTotal={initialRotativosTotal}
         />
       ) : (
-        <CreditosTab
-          arenaId={arenaId}
-          initialPacotes={initialPacotes}
-          initialMovements={initialMovements}
-          initialMovementsTotal={initialMovementsTotal}
-          initialTopAthletes={initialTopAthletes}
-        />
+        creditContent
       )}
     </div>
   )

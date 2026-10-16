@@ -12,7 +12,8 @@ export type AthleteProfileListRow = {
 }
 
 type ProfileQuery = SupabaseRangeQuery<AthleteProfileListRow> & {
-  order(column: string): SupabaseRangeQuery<AthleteProfileListRow>
+  order(column: string): ProfileQuery
+  eq(column: string, value: string): ProfileQuery
 }
 
 type ProfileRpcClient = {
@@ -20,10 +21,11 @@ type ProfileRpcClient = {
 }
 
 /** The untyped RPC returns a table, so PostgREST caps each response at 1,000. */
-export function listAllAthleteProfiles(client: unknown, arenaId: string) {
-  const query = (client as ProfileRpcClient)
+export function listAllAthleteProfiles(client: unknown, arenaId: string, profile?: 'professor') {
+  let query = (client as ProfileRpcClient)
     .rpc('list_atleta_perfis', { p_arena_id: arenaId })
     .order('atleta_id')
 
+  if (profile) query = query.eq('perfil_efetivo', profile)
   return fetchAllSupabaseRows(query)
 }
