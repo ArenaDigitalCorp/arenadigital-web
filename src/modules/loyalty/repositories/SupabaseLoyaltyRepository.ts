@@ -2,6 +2,18 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ILoyaltyRepository } from './ILoyaltyRepository';
 import type { LoyaltyTransaction, AthleteBalance, PaginatedResult } from '../types/loyalty.types';
 
+// PostgREST reports an offset beyond the result set as PGRST103/416 and
+// omits count. Recount with the identical filters; never infer a zero balance.
+async function emptyRangePage<T>(
+  readCount: () => PromiseLike<{ count: number | null; error: { message: string } | null }>,
+  pageSize: number,
+): Promise<PaginatedResult<T>> {
+  const { count, error } = await readCount();
+  if (error) throw new Error(`SupabaseLoyaltyRepository.pagination: ${error.message}`);
+  if (count === null) throw new Error('SupabaseLoyaltyRepository.pagination: count unavailable');
+  return { data: [], total: count, totalPages: Math.ceil(count / pageSize) };
+}
+
 export class SupabaseLoyaltyRepository implements ILoyaltyRepository {
   constructor(private readonly client: SupabaseClient) {}
 
@@ -34,19 +46,23 @@ export class SupabaseLoyaltyRepository implements ILoyaltyRepository {
   async getStatement(arenaId: string, page = 1, pageSize = 10, filters?: { athleteName?: string; startDate?: string; endDate?: string }): Promise<PaginatedResult<LoyaltyTransaction>> {
     const offset = (page - 1) * pageSize;
 
-    let query = this.client
-      .from('programa_fidelidade_extrato')
-      .select('*, atleta:id_atleta!inner(nome_perfil), criador:created_by(name)', { count: 'exact' })
-      .eq('id_arena', arenaId);
+    const buildQuery = (head = false) => {
+      let query = this.client
+        .from('programa_fidelidade_extrato')
+        .select('*, atleta:id_atleta!inner(nome_perfil), criador:created_by(name)', { count: 'exact', head })
+        .eq('id_arena', arenaId);
 
-    if (filters?.athleteName) query = query.ilike('atleta.nome_perfil', `%${filters.athleteName}%`);
-    if (filters?.startDate) query = query.gte('data_registro', filters.startDate);
-    if (filters?.endDate) query = query.lte('data_registro', filters.endDate);
+      if (filters?.athleteName) query = query.ilike('atleta.nome_perfil', `%${filters.athleteName}%`);
+      if (filters?.startDate) query = query.gte('data_registro', filters.startDate);
+      if (filters?.endDate) query = query.lte('data_registro', filters.endDate);
+      return query;
+    };
 
-    const { data, error, count } = await query
+    const { data, error, count } = await buildQuery()
       .order('data_registro', { ascending: false })
       .range(offset, offset + pageSize - 1);
 
+    if (error?.code === 'PGRST103' && page > 1) return emptyRangePage<LoyaltyTransaction>(() => buildQuery(true), pageSize);
     if (error) throw new Error(`SupabaseLoyaltyRepository.getStatement: ${error.message}`);
     return { data: (data ?? []) as unknown as LoyaltyTransaction[], total: count ?? 0, totalPages: Math.ceil((count ?? 0) / pageSize) };
   }
@@ -66,17 +82,21 @@ export class SupabaseLoyaltyRepository implements ILoyaltyRepository {
   async getAthletesWithBalance(arenaId: string, page = 1, pageSize = 10, query?: string): Promise<PaginatedResult<AthleteBalance>> {
     const offset = (page - 1) * pageSize;
 
-    let q = this.client
-      .from('athlete_loyalty_balance')
-      .select('id_atleta, balance, atleta:id_atleta!inner(id, nome_perfil, telefone)', { count: 'exact' })
-      .eq('id_arena', arenaId);
+    const buildQuery = (head = false) => {
+      let q = this.client
+        .from('athlete_loyalty_balance')
+        .select('id_atleta, balance, atleta:id_atleta!inner(id, nome_perfil, telefone)', { count: 'exact', head })
+        .eq('id_arena', arenaId);
 
-    if (query) q = q.ilike('atleta.nome_perfil', `%${query}%`);
+      if (query) q = q.ilike('atleta.nome_perfil', `%${query}%`);
+      return q;
+    };
 
-    const { data, error, count } = await q
+    const { data, error, count } = await buildQuery()
       .order('balance', { ascending: false })
       .range(offset, offset + pageSize - 1);
 
+    if (error?.code === 'PGRST103' && page > 1) return emptyRangePage<AthleteBalance>(() => buildQuery(true), pageSize);
     if (error) throw new Error(`SupabaseLoyaltyRepository.getAthletesWithBalance: ${error.message}`);
 
     const result: AthleteBalance[] = (data ?? []).map((item: any) => ({
