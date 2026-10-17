@@ -1,5 +1,6 @@
 "use client"
 
+import { formatPhone } from '@/lib/brasil-document'
 import { useState, useEffect, useRef } from "react"
 import { Search, Save, X, Loader2, Check } from "lucide-react"
 import { StandardModal } from "@/components/ui/standard-modal"
@@ -184,7 +185,7 @@ export function NewSendModal({ arenaId, isOpen, onClose, onSuccess }: NewSendMod
                                             >
                                                 <div>
                                                     <p className="font-semibold text-arena-navy-800 text-sm">{athlete.nome_perfil}</p>
-                                                    <p className="text-xs text-muted-foreground">{athlete.telefone}</p>
+                                                    <p className="text-xs text-muted-foreground">{formatPhone(athlete.telefone)}</p>
                                                 </div>
                                             </button>
                                         ))}
@@ -199,7 +200,7 @@ export function NewSendModal({ arenaId, isOpen, onClose, onSuccess }: NewSendMod
                                     </div>
                                     <div>
                                         <p className="font-semibold text-arena-navy-800 text-sm">{selectedAthlete.nome_perfil}</p>
-                                        <p className="text-xs text-muted-foreground">{selectedAthlete.telefone}</p>
+                                        <p className="text-xs text-muted-foreground">{formatPhone(selectedAthlete.telefone)}</p>
                                     </div>
                                 </div>
                                 <Button

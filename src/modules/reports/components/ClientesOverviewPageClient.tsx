@@ -1,5 +1,6 @@
 "use client"
 
+import { formatCpf as formatCpfValue } from '@/lib/brasil-document'
 import { useState, useMemo, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { format, parseISO } from "date-fns"
@@ -25,13 +26,6 @@ const PAGE_SIZE = 10
 function formatDate(iso: string | null): string {
     if (!iso) return '—'
     try { return format(parseISO(iso), 'dd/MM/yyyy', { locale: ptBR }) } catch { return '—' }
-}
-
-function formatCpf(cpf: string | null): string {
-    if (!cpf) return '—'
-    const d = cpf.replace(/\D/g, '')
-    if (d.length === 11) return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}`
-    return cpf
 }
 
 // Animated bar component
@@ -406,7 +400,7 @@ function AthleteRow({
             </td>
             <td className={cn(arenaDataTable.td, "font-mono")}>
                 <span className={cn("text-sm font-mono", isToday ? "text-arena-navy-800 font-bold" : "text-arena-navy-800/60")}>
-                    {formatCpf(athlete.cpf)}
+                    {formatCpfValue(athlete.cpf) || '—'}
                 </span>
             </td>
             <td className={arenaDataTable.td}>

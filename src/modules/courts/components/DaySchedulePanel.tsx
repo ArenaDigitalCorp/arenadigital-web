@@ -3,6 +3,9 @@
 import { useCallback, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { DecimalInput } from "@/components/ui/decimal-input"
+import { currentHourlyDraft, invalidHourlyDraft, type HourlyPriceDraft } from "@/modules/courts/lib/price-input"
+import { parseBrazilianDecimal } from "@/lib/format"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Plus, Trash2 } from "lucide-react"
@@ -24,6 +27,8 @@ import {
 interface DaySchedulePanelProps {
     /** Dia em edição (o primeiro selecionado, quando são vários). */
     config: DayConfig
+    priceDrafts?: Record<string, HourlyPriceDraft>
+    onPriceDraftChange?: (drafts: Record<string, HourlyPriceDraft>) => void
     onChange: (config: DayConfig) => void
     /**
      * Nomes dos demais dias selecionados. Quando há algum, o pai replica esta
@@ -32,7 +37,10 @@ interface DaySchedulePanelProps {
     batchDays?: string[]
 }
 
-export function DaySchedulePanel({ config, onChange, batchDays = [] }: DaySchedulePanelProps) {
+export function DaySchedulePanel({ config, onChange, batchDays = [], priceDrafts: controlledPriceDrafts, onPriceDraftChange }: DaySchedulePanelProps) {
+    const [localPriceDrafts, setLocalPriceDrafts] = useState<Record<string, HourlyPriceDraft>>({})
+    const priceDrafts = controlledPriceDrafts ?? localPriceDrafts
+    const changePriceDrafts = onPriceDraftChange ?? setLocalPriceDrafts
     const isOvernight = isOvernightDay(config)
     const slotCount = countSlots(config)
     const tiers = tiersFromConfig(config)
@@ -326,17 +334,21 @@ export function DaySchedulePanel({ config, onChange, batchDays = [] }: DaySchedu
                                     </span>
                                     <div className="relative">
                                         <span className="absolute left-2.5 top-2.5 text-xs text-muted-foreground">R$</span>
-                                        <Input
-                                            type="number"
-                                            value={tier.price || 0}
+                                        <DecimalInput
+                                            value={currentHourlyDraft(priceDrafts[tier.id], tier.price) ?? String(tier.price ?? 0)}
+                                            aria-label={`Valor por hora da faixa ${index + 1}`}
+                                            aria-invalid={invalidHourlyDraft(priceDrafts[tier.id], tier.price)}
                                             onChange={(e) => {
-                                                const val = parseFloat(e.target.value)
-                                                updateTierPrice(tier.id, isNaN(val) ? 0 : val)
+                                                const raw = e.target.value
+                                                const amount = parseBrazilianDecimal(raw)
+                                                changePriceDrafts({ ...priceDrafts, [tier.id]: { value: raw, sourcePrice: amount !== null && amount >= 0 ? amount : tier.price } })
+                                                if (amount !== null && amount >= 0) updateTierPrice(tier.id, amount)
                                             }}
                                             className="h-9 bg-white pl-7 text-sm"
-                                            step="0.01"
-                                            min="0"
                                         />
+                                        {invalidHourlyDraft(priceDrafts[tier.id], tier.price) && (
+                                            <p role="alert" className="mt-1 text-xs text-red-600">Informe um valor válido maior ou igual a zero.</p>
+                                        )}
                                     </div>
                                 </div>
 

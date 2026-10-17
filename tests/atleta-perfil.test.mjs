@@ -260,25 +260,19 @@ test('o perfil de todos os atletas vem numa chamada só', { skip: !hasDbRepo }, 
   )
 })
 
-test('a listagem carrega atletas e perfis em paralelo', () => {
+test('a listagem pede uma página com os perfis e contagens do servidor', () => {
   const list = read('../src/modules/athletes/components/AthletesList.tsx')
-  assert.match(list, /await Promise\.all\(\[\s*\n\s*getAthletesByArenaAction\(arenaId\),\s*\n\s*listPerfisAtletaAction\(arenaId\),/)
-  // perfil indisponível não pode derrubar a lista
-  assert.match(list, /perfisRes\.success && perfisRes\.data \? perfisRes\.data : \{\}/)
+  assert.match(list, /useAthletePage\(arenaId, tutorial, query\)/)
+  assert.doesNotMatch(list, /getAthletesByArenaAction|listPerfisAtletaAction/)
+  assert.match(list, /data\?\.counts\[opcao\]/)
 })
 
-test('sem perfis disponíveis, a tela não inventa "Cliente padrão"', () => {
+test('falha da página não inventa perfis nem reaproveita dados de outra consulta', () => {
   const list = read('../src/modules/athletes/components/AthletesList.tsx')
-  assert.match(list, /const perfisDisponiveis = Object\.keys\(perfis\)\.length > 0/)
-  assert.match(list, /!perfisDisponiveis && 'hidden'/, 'o filtro some em vez de mentir')
-  assert.match(list, /perfilFiltro === 'todos' \|\| !perfisDisponiveis/)
-})
-
-test('o filtro por perfil mostra a contagem de cada um', () => {
-  const list = read('../src/modules/athletes/components/AthletesList.tsx')
-  assert.match(list, /\(\['todos', \.\.\.PERFIS_ATLETA\] as const\)\.map/)
-  assert.match(list, /const contagem = useMemo/)
-  assert.match(list, /\(perfis\[a\.id\] \?\? 'padrao'\) === perfilFiltro/)
+  const hook = read('../src/modules/athletes/hooks/useAthletePage.ts')
+  assert.match(hook, /enabled && !result\.isError && !waitingForConnection \? result\.data : undefined/)
+  assert.match(list, /error=\{result\.error\}/)
+  assert.doesNotMatch(list, /\?\? 'padrao'/)
 })
 
 test('a tabela tem coluna de perfil e cabeçalhos ordenáveis', () => {
@@ -303,9 +297,10 @@ test('o cabeçalho ordenável não é recriado a cada render', () => {
   )
 })
 
-test('a ordenação respeita acentuação do português', () => {
+test('a ordenação da tabela é delegada ao servidor antes de paginar', () => {
   const tabela = read('../src/modules/athletes/components/AthletesTable.tsx')
-  assert.match(tabela, /localeCompare\(valor\(b\), "pt-BR", \{ sensitivity: "base" \}\)/)
+  assert.match(tabela, /onSortChange\(/)
+  assert.doesNotMatch(tabela, /athletes\]\.sort|athletes\.sort/)
 })
 
 // ── Índice de apoio para list_atleta_perfis não virar N sequential scans ──

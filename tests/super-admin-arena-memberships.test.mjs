@@ -43,7 +43,13 @@ function harness({ level = 'super_admin', owns = true, status = 'Ativo', role = 
     },
   }
   const memberships = load('src/lib/arena-users.ts', {})
+  const ownedArenas = load('src/lib/owned-arenas.ts', {
+    react: { cache: fn => fn },
+    '@/lib/supabase-server': { getSupabaseAdmin: () => supabase },
+  })
   const auth = load('src/lib/server-auth.ts', {
+    '@/lib/owned-arenas': ownedArenas,
+    react: { cache: fn => fn },
     '@/lib/supabase/server': { createSupabaseServerClient: async () => ({ auth: {
       getUser: async () => ({ data: { user: { id: 'auth-test' } }, error: null }),
     } }) },
@@ -52,7 +58,14 @@ function harness({ level = 'super_admin', owns = true, status = 'Ativo', role = 
     '@/lib/account-identity': { resolveAuthenticatedDbUser: async () => ({ id: userId }) },
     '@/lib/arena-permissions': permissions,
   })
+  const accessibleArenas = load('src/lib/accessible-arenas.ts', {
+    '@/lib/owned-arenas': ownedArenas,
+    '@/lib/arena-users': memberships,
+    '@/lib/server-auth': auth,
+    '@/lib/supabase-server': { getSupabaseAdmin: () => supabase },
+  })
   const route = load('src/app/api/arenas/route.ts', {
+    '@/lib/accessible-arenas': accessibleArenas,
     'next/server': { NextResponse: { json: (body, options) => ({ body, status: options?.status ?? 200 }) } },
     '@/lib/arena-users': memberships,
     '@/lib/server-auth': auth,
@@ -94,6 +107,7 @@ for (const linked of [true, false]) {
     const { auth } = harness({ owns: false, linked })
     const imports = {
       '@/lib/server-auth': auth,
+      '@/lib/dashboard-bootstrap': { loadDashboardBootstrap: async () => ({ user: null, arenas: null }) },
       'next/navigation': { redirect(path) { throw new Error(`Redirect:${path}`) } },
       '@/components/dashboard/DashboardLayoutWrapper': { DashboardLayoutWrapper: 'Dashboard' },
       '@/modules/super-admin/components/SuperAdminShell': { SuperAdminShell: 'Admin' },

@@ -12,6 +12,7 @@ import {
     FormLabel,
     FormMessage,
 } from "@/components/ui/form"
+import { MaskedInput } from "@/components/ui/masked-input"
 import { Input } from "@/components/ui/input"
 import {
     Select,
@@ -30,7 +31,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Check, ChevronsUpDown, Copy, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { isValidCnpj, onlyDigits } from "@/lib/brasil-document"
+import { isValidCnpj, isValidCep, normalizeCep, normalizeCpfCnpj } from "@/lib/brasil-document"
 import { getSportsAction } from "@/modules/athletes/actions/athleteActions"
 import { useEffect, useState } from "react"
 import { Textarea } from "@/components/ui/textarea"
@@ -145,6 +146,7 @@ export function ArenaForm({
         resolver: zodResolver(arenaFormSchema) as any,
         defaultValues: {
             name: initialData?.name || "",
+            legal_name: initialData?.legal_name || "",
             status: mapStatusFromDB(initialData?.status),
             sports: initialData?.sports?.map((s: any) => s.id || s) || [], // Handle object or ID
             comodidades: initialData?.comodidades?.map((c: any) => c.id || c) || [],
@@ -169,8 +171,8 @@ export function ArenaForm({
     })
 
     async function fetchAddressByCep(cep: string) {
-        const cleanCep = cep.replace(/\D/g, '');
-        if (cleanCep.length !== 8) return;
+        const cleanCep = normalizeCep(cep);
+        if (!isValidCep(cleanCep)) return;
 
         try {
             const res = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
@@ -207,7 +209,7 @@ export function ArenaForm({
     }
 
     async function applyCnpjFromReceitaFederal() {
-        const digits = onlyDigits(form.getValues("cpf_cnpj"))
+        const digits = normalizeCpfCnpj(form.getValues("cpf_cnpj") ?? "")
         if (digits.length !== 14 || !isValidCnpj(digits)) {
             toast.error("Informe um CNPJ válido (14 dígitos) para consultar os dados na Receita.")
             return
@@ -236,6 +238,7 @@ export function ArenaForm({
             if (nome) {
                 form.setValue("name", nome, { shouldValidate: true, shouldDirty: true })
             }
+            form.setValue("legal_name", d.razaoSocial || "", { shouldValidate: true, shouldDirty: true })
             if (d.logradouro) {
                 form.setValue("address", d.logradouro, { shouldValidate: true, shouldDirty: true })
             }
@@ -321,8 +324,9 @@ export function ArenaForm({
             // A geolocalização é resolvida no servidor (createArenaAction/updateArenaAction)
             // a partir do endereço + município — o Nominatim bloqueia chamadas do navegador.
             const payload: any = { ...data };
-            const docDigits = onlyDigits(data.cpf_cnpj ?? "");
+            const docDigits = normalizeCpfCnpj(data.cpf_cnpj ?? "");
             payload.cpf_cnpj = docDigits.length > 0 ? docDigits : null;
+            payload.legal_name = data.legal_name?.trim() || null;
             if (initialData) {
                 if (bannerFile) {
                     try {
@@ -392,7 +396,7 @@ export function ArenaForm({
                             name="name"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Nome</FormLabel>
+                                    <FormLabel>Nome da arena / nome fantasia</FormLabel>
                                     <FormControl>
                                         <Input placeholder="Informe o nome da arena" {...field} />
                                     </FormControl>
@@ -403,26 +407,41 @@ export function ArenaForm({
 
                         <FormField
                             control={form.control}
+                            name="legal_name"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Razão social{normalizeCpfCnpj(form.watch("cpf_cnpj") ?? "").length === 14 ? " *" : ""}</FormLabel>
+                                    <FormControl>
+                                        <Input {...field} value={field.value ?? ""} placeholder="Ex: Arena Beach Esportes de Areia Ltda" autoComplete="organization" maxLength={120} required={normalizeCpfCnpj(form.watch("cpf_cnpj") ?? "").length === 14} />
+                                    </FormControl>
+                                    <FormDescription>Nome registrado da empresa. Obrigatório quando houver CNPJ.</FormDescription>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
                             name="cpf_cnpj"
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>CPF ou CNPJ</FormLabel>
                                     <FormControl>
                                         <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
-                                            <Input
-                                                placeholder="Somente números ou com formatação"
-                                                inputMode="numeric"
+                                            <MaskedInput mask="cpfCnpj"
+                                                placeholder="CPF ou CNPJ"
+                                                inputMode="text"
                                                 autoComplete="off"
                                                 className="sm:flex-1"
                                                 {...field}
+                                                value={field.value ?? ""}
                                             />
                                             <Button
                                                 type="button"
                                                 variant="outline"
                                                 disabled={
                                                     cnpjLookupLoading ||
-                                                    onlyDigits(field.value).length !== 14 ||
-                                                    !isValidCnpj(onlyDigits(field.value))
+                                                    normalizeCpfCnpj(field.value ?? "").length !== 14 ||
+                                                    !isValidCnpj(normalizeCpfCnpj(field.value ?? ""))
                                                 }
                                                 onClick={() => void applyCnpjFromReceitaFederal()}
                                                 className="shrink-0 border-[#0D3B45] text-[#0D3B45] hover:bg-[#0D3B45]/5"
@@ -554,7 +573,7 @@ export function ArenaForm({
                                                 <FormItem>
                                                     <FormLabel>CEP</FormLabel>
                                                     <FormControl>
-                                                        <Input
+                                                        <MaskedInput mask="cep"
                                                             placeholder="00000-000"
                                                             {...field}
                                                             onBlur={(e) => {
@@ -885,7 +904,7 @@ export function ArenaForm({
                                 <FormItem>
                                     <FormLabel>Telefone</FormLabel>
                                     <FormControl>
-                                        <Input placeholder="(00) 00000-0000" {...field} />
+                                        <MaskedInput mask="phone" placeholder="(00) 00000-0000" {...field} />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>

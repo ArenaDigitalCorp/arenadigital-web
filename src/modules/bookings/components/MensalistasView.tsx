@@ -1,5 +1,6 @@
 'use client';
 
+import { formatPhone } from '@/lib/brasil-document'
 import { useState, useEffect, useCallback } from 'react';
 import {
   Users,
@@ -193,7 +194,7 @@ export function MensalistasView({
                         </div>
                         {plano.atleta?.telefone && (
                           <p className="text-xs text-arena-navy-800/50">
-                            {plano.atleta.telefone}
+                            {formatPhone(plano.atleta.telefone)}
                           </p>
                         )}
                       </div>

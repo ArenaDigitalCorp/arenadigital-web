@@ -9,6 +9,8 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { DecimalInput } from "@/components/ui/decimal-input"
+import { parsePriceAdjustmentInput } from "@/modules/products/lib/price-adjustment-input"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -86,7 +88,8 @@ export function BulkPriceAdjustModal({
         [categories, kind]
     )
 
-    const amount = Number(amountInput.replace(",", "."))
+    const amount = parsePriceAdjustmentInput(amountInput, adjustmentType) ?? Number.NaN
+    const AmountInput = adjustmentType === "percent" ? Input : DecimalInput
 
     const targetProducts = useMemo(() => {
         if (!categoryId) return []
@@ -240,9 +243,10 @@ export function BulkPriceAdjustModal({
                                 <Label className={labelClass}>
                                     {adjustmentType === "percent" ? "Percentual (ex.: 10 ou -5)" : "Valor (ex.: 1,00 ou -0,50)"}
                                 </Label>
-                                <Input
+                                <AmountInput
                                     type="text"
                                     inputMode="decimal"
+                                    aria-label={adjustmentType === "percent" ? "Percentual de reajuste" : "Valor fixo de reajuste"}
                                     placeholder={adjustmentType === "percent" ? "10" : "1,00"}
                                     className={inputClass}
                                     value={amountInput}

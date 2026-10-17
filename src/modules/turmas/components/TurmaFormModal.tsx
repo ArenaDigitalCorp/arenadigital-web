@@ -1,5 +1,7 @@
 'use client'
 
+import { DecimalInput } from '@/components/ui/decimal-input'
+import { parseBrazilianDecimal } from '@/lib/format'
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Info, Loader2, Lock, Plus, Search, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
@@ -50,12 +52,14 @@ import {
   turmasAtivas,
 } from '../lib'
 import type { BlocoHorario, DiaSemana, RecorrenciaExistente, Turma, TurmasCatalogo } from '../types'
+import type { TurmasAthleteCatalogState } from './TurmasAthleteCatalog'
 
 interface Props {
   arenaId: string
   turma: Turma | null
   turmas: Turma[]
   catalogo: TurmasCatalogo
+  catalogState?: TurmasAthleteCatalogState
   onCancelar: () => void
   /** Chamado depois que o banco gravou; recebe a mensagem de sucesso. */
   onSalvo: (mensagem: string) => void
@@ -76,7 +80,7 @@ function blocoVazio(): BlocoHorario {
   return { id: crypto.randomUUID(), espacoId: '', diaSemana: 1, inicio: '19:00', fim: '20:00' }
 }
 
-export function TurmaFormModal({ arenaId, turma, turmas, catalogo, onCancelar, onSalvo }: Props) {
+export function TurmaFormModal({ arenaId, turma, turmas, catalogo, catalogState, onCancelar, onSalvo }: Props) {
   const editando = turma !== null
 
   const [professorId, setProfessorId] = useState(turma?.professorId ?? '')
@@ -228,7 +232,7 @@ export function TurmaFormModal({ arenaId, turma, turmas, catalogo, onCancelar, o
       ? resumirPlano(blocosMensalista, cotacaoAtual.valores, inicioVigencia, agora)
       : null
   const valorMensalTexto = valorMensalManual ?? (resumo ? resumo.valorMesCheio.toFixed(2) : '')
-  const valorMensal = Number(valorMensalTexto) || 0
+  const valorMensal = (parseBrazilianDecimal(valorMensalTexto) ?? Number.NaN)
   const primeiraMensalidade =
     resumo && inicioVigencia
       ? Math.round(valorMensal * fracaoPrimeiroMes(blocosMensalista, inicioVigencia, agora) * 100) / 100
@@ -280,14 +284,19 @@ export function TurmaFormModal({ arenaId, turma, turmas, catalogo, onCancelar, o
   else if (!dataInicio) erros.recorrencia = 'Informe a data de início da recorrência.'
   else if (dataInicio < hoje) erros.recorrencia = 'A recorrência não pode começar no passado.'
   else if (cotando) erros.recorrencia = 'Aguarde o cálculo do valor da recorrência.'
-  else if (valorMensal <= 0) erros.recorrencia = 'Informe o valor mensal da recorrência.'
+  else if (!Number.isFinite(valorMensal) || valorMensal <= 0) erros.recorrencia = 'Informe o valor mensal da recorrência.'
 
   const erro = (campo: Campo) => (tentouSalvar || campo === 'vagas' ? erros[campo] : undefined)
 
   const salvar = async (mesmoComSobreposicao = false) => {
+    if (catalogState?.ready === false) return
     setTentouSalvar(true)
     setErroServidor(null)
     if (Object.keys(erros).length > 0 || !esporte || salvando) return
+    if (alunosIniciais.some(id => !catalogo.atletas.some(a => a.id === id && a.membro))) {
+      setErroServidor('Um atleta selecionado não está mais vinculado à arena. Remova-o da seleção antes de salvar.')
+      return
+    }
     if (turmasSobrepostas.length > 0 && !mesmoComSobreposicao) {
       setConfirmandoSobreposicao(true)
       return
@@ -394,7 +403,7 @@ export function TurmaFormModal({ arenaId, turma, turmas, catalogo, onCancelar, o
               <Button
                 type="button"
                 variant="outline"
-                disabled={salvando}
+                disabled={salvando || catalogState?.ready === false}
                 onClick={() => void salvar(true)}
                 className="h-11 border-red-300 bg-white px-5 font-semibold text-red-700 hover:bg-red-100 hover:text-red-800"
               >
@@ -434,7 +443,7 @@ export function TurmaFormModal({ arenaId, turma, turmas, catalogo, onCancelar, o
               </Button>
               <Button
                 type="button"
-                disabled={salvando}
+                disabled={salvando || catalogState?.ready === false}
                 onClick={() => void salvar()}
                 className="h-11 bg-arena-button px-6 font-semibold text-white hover:bg-arena-button-hover"
               >
@@ -447,6 +456,7 @@ export function TurmaFormModal({ arenaId, turma, turmas, catalogo, onCancelar, o
       }
     >
       <div className="space-y-8 pr-1">
+        {catalogState?.feedback}
         <Secao titulo="Identificação">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Campo
@@ -908,7 +918,7 @@ export function TurmaFormModal({ arenaId, turma, turmas, catalogo, onCancelar, o
                         ? `A partir de ${format(mesReferencia(inicioVigencia), 'MMMM', { locale: ptBR })} (R$)`
                         : 'Valor mensal cobrado (R$)'}
                     </Label>
-                    <Input
+                    <DecimalInput
                       type="number"
                       min={0}
                       step="0.01"

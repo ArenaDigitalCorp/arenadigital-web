@@ -1,3 +1,4 @@
+import { asaasDomesticPhone, normalizeCpfCnpj, normalizeEmail, normalizeCep, isValidCep } from '@/lib/brasil-document'
 import { createHash } from 'crypto';
 import type {
   DomainInvoice,
@@ -349,6 +350,9 @@ export class AsaasGateway implements PaymentGateway {
     }
 
     const externalRef = input.metadata?.arena_id;
+    // Customer CEP is optional. Keep malformed historical contacts locally,
+    // but never forward them as an invalid provider billing address.
+    const postalCode = isValidCep(input.postalCode) ? normalizeCep(input.postalCode) : undefined;
 
     if (externalRef) {
       const existing = await this.findCustomerByExternalReference(externalRef);
@@ -359,10 +363,10 @@ export class AsaasGateway implements PaymentGateway {
           {
             body: {
               name: input.name ?? existing.name,
-              email: input.email,
-              cpfCnpj: input.cpfCnpj,
-              phone: input.phone ?? undefined,
-              postalCode: input.postalCode ?? undefined,
+              email: normalizeEmail(input.email),
+              cpfCnpj: normalizeCpfCnpj(input.cpfCnpj),
+              phone: asaasDomesticPhone(input.phone),
+              postalCode,
               addressNumber: input.addressNumber ?? undefined,
             },
           }
@@ -377,10 +381,10 @@ export class AsaasGateway implements PaymentGateway {
       {
         body: {
           name: input.name ?? input.email,
-          email: input.email,
-          cpfCnpj: input.cpfCnpj,
-          phone: input.phone ?? undefined,
-          postalCode: input.postalCode ?? undefined,
+          email: normalizeEmail(input.email),
+          cpfCnpj: normalizeCpfCnpj(input.cpfCnpj),
+          phone: asaasDomesticPhone(input.phone),
+          postalCode,
           addressNumber: input.addressNumber ?? undefined,
           externalReference: externalRef,
         },

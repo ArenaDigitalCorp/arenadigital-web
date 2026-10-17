@@ -1,5 +1,7 @@
 "use client"
 
+import { notifyAthletesChanged } from '@/modules/athletes/lib/athlete-cache-events'
+
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { type FormEvent, useEffect, useState } from "react"
@@ -19,6 +21,8 @@ import {
     FormLabel,
     FormMessage,
 } from "@/components/ui/form"
+import { MaskedInput } from "@/components/ui/masked-input"
+import { formatCpf, isValidCpf, isValidCep, normalizeCep, normalizeCpf } from "@/lib/brasil-document"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -59,15 +63,6 @@ interface AthleteRegistrationModalProps {
     onOpenChange: (open: boolean) => void
     onSuccess: () => void
 }
-
-const maskCep = (value: string) =>
-    value.replace(/\D/g, "").replace(/(\d{5})(\d)/, "$1-$2").replace(/(-\d{3})\d+?$/, "$1")
-
-const maskCpf = (value: string) =>
-    value.replace(/\D/g, "").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d{1,2})/, "$1-$2").replace(/(-\d{2})\d+?$/, "$1")
-
-const maskPhone = (value: string) =>
-    value.replace(/\D/g, "").replace(/(\d{2})(\d)/, "($1) $2").replace(/(\d{5})(\d)/, "$1-$2").replace(/(-\d{4})\d+?$/, "$1")
 
 type ModalStep = "lookup" | "existing" | "create"
 
@@ -180,8 +175,8 @@ export function AthleteRegistrationModal({
 
     // CEP lookup — same as sign-up
     async function handleCepBlur() {
-        const cleanCep = form.getValues("cep")?.replace(/\D/g, "") ?? ""
-        if (cleanCep.length !== 8) return
+        const cleanCep = normalizeCep(form.getValues("cep") ?? "")
+        if (!isValidCep(cleanCep)) return
         setIsFetchingCep(true)
         try {
             const res = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`)
@@ -230,8 +225,8 @@ export function AthleteRegistrationModal({
 
     async function handleLookupSubmit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()
-        const cleanCpf = lookupCpf.replace(/\D/g, "")
-        if (cleanCpf.length !== 11) {
+        const cleanCpf = normalizeCpf(lookupCpf)
+        if (!isValidCpf(cleanCpf)) {
             toast.error("Informe um CPF válido para buscar o atleta.")
             return
         }
@@ -250,7 +245,7 @@ export function AthleteRegistrationModal({
                 return
             }
 
-            form.setValue("cpf", maskCpf(cleanCpf))
+            form.setValue("cpf", formatCpf(cleanCpf))
             setStep("create")
         } finally {
             setIsSubmitting(false)
@@ -267,6 +262,7 @@ export function AthleteRegistrationModal({
             })
 
             if (result.success) {
+                notifyAthletesChanged(arenaId)
                 toast.success(lookupAthlete.alreadyLinked ? "Atleta já estava vinculado." : "Atleta vinculado com sucesso!")
                 onSuccess()
                 onOpenChange(false)
@@ -297,6 +293,7 @@ export function AthleteRegistrationModal({
                 idMunicipio: municipioId ?? undefined,
             })
             if (result.success) {
+                notifyAthletesChanged(arenaId)
                 toast.success("Atleta cadastrado e vinculado com sucesso.")
                 onSuccess()
                 onOpenChange(false)
@@ -340,10 +337,10 @@ export function AthleteRegistrationModal({
                             <form id="athlete-lookup-form" onSubmit={handleLookupSubmit} className="px-8 py-6 space-y-5">
                                 <div className="space-y-2">
                                     <Label className={labelCls}>CPF do atleta</Label>
-                                    <Input
+                                    <MaskedInput mask="cpf"
                                         placeholder="000.000.000-00"
                                         value={lookupCpf}
-                                        onChange={(event) => setLookupCpf(maskCpf(event.target.value))}
+                                        onChange={(event) => setLookupCpf(event.target.value)}
                                         className={inputCls}
                                     />
                                     <p className="text-sm text-arena-navy-800/55">
@@ -357,7 +354,7 @@ export function AthleteRegistrationModal({
                                     <div className="flex items-start justify-between gap-4">
                                         <div>
                                             <h3 className="text-lg font-bold text-arena-navy-800">{lookupAthlete.name}</h3>
-                                            <p className="text-sm text-arena-navy-800/60">{maskCpf(lookupAthlete.cpf)}</p>
+                                            <p className="text-sm text-arena-navy-800/60">{formatCpf(lookupAthlete.cpf)}</p>
                                         </div>
                                         <span className={cn(
                                             "rounded-full px-3 py-1 text-xs font-semibold",
@@ -404,9 +401,9 @@ export function AthleteRegistrationModal({
                                             <FormItem className="min-w-0">
                                                 <FormLabel className={labelCls}>CPF</FormLabel>
                                                 <FormControl>
-                                                    <Input placeholder="000.000.000-00"
+                                                    <MaskedInput mask="cpf" placeholder="000.000.000-00"
                                                         {...field}
-                                                        onChange={e => field.onChange(maskCpf(e.target.value))}
+                                                        onChange={field.onChange}
                                                         className={inputCls} />
                                                 </FormControl>
                                                 <FormMessage />
@@ -420,9 +417,9 @@ export function AthleteRegistrationModal({
                                             <FormItem className="min-w-0">
                                                 <FormLabel className={labelCls}>Telefone</FormLabel>
                                                 <FormControl>
-                                                    <Input placeholder="(00) 00000-0000"
+                                                    <MaskedInput mask="phone" placeholder="(00) 00000-0000"
                                                         {...field}
-                                                        onChange={e => field.onChange(maskPhone(e.target.value))}
+                                                        onChange={field.onChange}
                                                         className={inputCls} />
                                                 </FormControl>
                                                 <FormMessage />
@@ -516,9 +513,9 @@ export function AthleteRegistrationModal({
                                                 <FormLabel className={labelCls}>CEP</FormLabel>
                                                 <FormControl>
                                                     <div className="relative">
-                                                        <Input placeholder="00000-000"
+                                                        <MaskedInput mask="cep" placeholder="00000-000"
                                                             {...field}
-                                                            onChange={e => field.onChange(maskCep(e.target.value))}
+                                                            onChange={field.onChange}
                                                             onBlur={handleCepBlur}
                                                             className={inputCls} />
                                                         {isFetchingCep && (

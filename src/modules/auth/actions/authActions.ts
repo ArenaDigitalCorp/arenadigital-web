@@ -3,7 +3,8 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server"
 import { getSupabaseAdmin } from "@/lib/supabase-server"
 import { findUserByCpf, findUserByEmail, normalizeEmail, resolveAuthenticatedDbUser } from "@/lib/account-identity"
-import { isValidCpf, isValidCpfOrCnpj, onlyDigits } from "@/lib/brasil-document"
+import { isValidCpf, isValidCpfOrCnpj, isValidPhone, isValidCep, normalizeCep, normalizeCpfCnpj, normalizePhone, onlyDigits } from "@/lib/brasil-document"
+import { getArenaLegalNameError } from "@/modules/arenas/domain/arena-legal-name"
 import {
     getPlatformAccessLevel,
     hasExplicitArenaAccess,
@@ -44,6 +45,7 @@ type SignUpInput = {
     cpf: string
     phone: string
     arenaName: string
+    arenaLegalName?: string
     arenaDocument: string
     addressData: AddressData
 }
@@ -95,9 +97,12 @@ function validateArenaSignupData(input: SignUpInput) {
     if (!isValidCpf(input.cpf)) return "Informe um CPF válido para o responsável."
     if (!isStrongPassword(input.password)) return "A senha não atende aos requisitos de segurança."
     if (!input.arenaName.trim()) return "Informe o nome da arena."
-    if (onlyDigits(input.phone).length < 10) return "Informe um telefone válido para a arena."
-    if (!onlyDigits(input.arenaDocument)) return "Informe o CPF ou CNPJ da arena."
+    if (!isValidPhone(input.phone)) return "Informe um telefone válido para a arena."
+    if (!normalizeCpfCnpj(input.arenaDocument)) return "Informe o CPF ou CNPJ da arena."
     if (!isValidCpfOrCnpj(input.arenaDocument)) return "Informe um CPF ou CNPJ válido."
+    const legalNameError = getArenaLegalNameError(input.arenaDocument, input.arenaLegalName)
+    if (legalNameError) return legalNameError
+    if (input.addressData.cep && !isValidCep(input.addressData.cep)) return "Informe um CEP válido."
     if (!input.addressData.id_municipio) return "Selecione a cidade da arena."
     return null
 }
@@ -133,7 +138,9 @@ export async function startSignUpAction(input: SignUpInput): Promise<ActionResul
         const admin = getSupabaseAdmin()
         const email = normalizeEmail(input.email)
         const cleanCpf = onlyDigits(input.cpf)
-        const cleanArenaDocument = onlyDigits(input.arenaDocument)
+        const cleanArenaDocument = normalizeCpfCnpj(input.arenaDocument)
+        const phone = normalizePhone(input.phone)!
+        const addressData = { ...input.addressData, ...(input.addressData.cep ? { cep: normalizeCep(input.addressData.cep) } : {}) }
         const emailRedirectTo = await getArenaSignupRedirectTo()
 
         const [existingUserByEmail, existingUserByCpf] = await Promise.all([
@@ -164,7 +171,7 @@ export async function startSignUpAction(input: SignUpInput): Promise<ActionResul
                     firstName: input.firstName.trim(),
                     lastName: input.lastName.trim(),
                     cpf: cleanCpf,
-                    phone: input.phone.trim(),
+                    phone,
                 },
             },
         })
@@ -179,10 +186,11 @@ export async function startSignUpAction(input: SignUpInput): Promise<ActionResul
 
         const intent = createArenaSignupIntent({
             arenaName: input.arenaName.trim(),
+            arenaLegalName: input.arenaLegalName?.trim(),
             arenaDocument: cleanArenaDocument,
-            phone: input.phone.trim(),
+            phone,
             cpf: cleanCpf,
-            addressData: input.addressData,
+            addressData,
         })
         const { error: intentError } = await admin.auth.admin.updateUserById(signUpData.user.id, {
             app_metadata: {
@@ -244,6 +252,7 @@ export async function provisionAfterSignUpAction(): Promise<ActionResult<SelfSer
             requesterUserId: dbUser.id,
             operationId: user.id,
             arenaName: intent.arenaName,
+            arenaLegalName: intent.arenaLegalName,
             phone: intent.phone,
             document: intent.arenaDocument,
             addressData: intent.addressData,

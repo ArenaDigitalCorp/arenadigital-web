@@ -1,20 +1,15 @@
 import * as z from 'zod'
-import { isValidCpf, onlyDigits } from '@/lib/brasil-document'
-
-const cpfSchema = z
-    .string()
-    .transform((value) => onlyDigits(value))
-    .refine((value) => isValidCpf(value), "CPF inválido.")
+import { cpfSchema, emailSchema, optionalCepSchema, phoneSchema } from '@/shared/schemas/contact.schema'
 
 export const athleteFormSchema = z.object({
     name: z.string().min(2, "O nome deve ter pelo menos 2 caracteres."),
     cpf: cpfSchema,
-    phone: z.string().min(10, "Telefone inválido."),
-    email: z.string().email("E-mail inválido."),
+    phone: phoneSchema,
+    email: emailSchema,
     birthDate: z.string().optional(),
     sport: z.string().min(1, "Selecione um esporte."),
     nivelHabilidade: z.string().optional(),
-    cep: z.string().optional(),
+    cep: optionalCepSchema,
     endereco: z.string().optional(),
     enderecoNumero: z.string().optional(),
     bairro: z.string().optional(),
@@ -40,13 +35,13 @@ export type LinkExistingAthleteInput = z.infer<typeof linkExistingAthleteSchema>
 export const linkAthleteSchema = z.object({
     name: z.string().min(2, "O nome deve ter pelo menos 2 caracteres."),
     cpf: cpfSchema,
-    phone: z.string().min(10, "Telefone inválido."),
-    email: z.string().email("E-mail inválido."),
+    phone: phoneSchema,
+    email: emailSchema,
     sportId: z.string().min(1, "Selecione um esporte."),
     arenaId: z.string().min(1, "Arena é obrigatória."),
     nivelHabilidadeId: z.string().optional(),
     birthDate: z.string().optional(),
-    cep: z.string().optional(),
+    cep: optionalCepSchema,
     endereco: z.string().optional(),
     enderecoNumero: z.string().optional(),
     bairro: z.string().optional(),

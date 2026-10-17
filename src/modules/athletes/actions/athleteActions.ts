@@ -9,6 +9,8 @@ import {
     lookupAthleteByCpfSchema,
 } from '@/modules/athletes/schemas/athlete.schema'
 import { onlyDigits } from '@/lib/brasil-document'
+import { athletePageSchema, fetchAthletePage } from '@/modules/athletes/lib/athlete-page'
+import type { AthletePage } from '@/modules/athletes/types/list-page.types'
 import {
     cpfMatches,
     findUserByAuthUserId,
@@ -159,13 +161,13 @@ export async function linkAthlete(formData: {
 
     try {
         await requireAuthenticatedDbUser()
-        await assertArenaBackofficeAccess(formData.arenaId)
+        await assertArenaBackofficeAccess(parsed.data.arenaId)
 
         const supabase = getSupabaseAdmin()
         const cleanCpf = onlyDigits(parsed.data.cpf)
-        const email = normalizeEmail(formData.email)
+        const email = normalizeEmail(parsed.data.email)
 
-        const existingAthlete = await findAthleteByCpf(supabase, cleanCpf, formData.arenaId)
+        const existingAthlete = await findAthleteByCpf(supabase, cleanCpf, parsed.data.arenaId)
         if (existingAthlete) {
             return { success: false, error: "Este CPF já pertence a um atleta cadastrado. Use a opção de vincular atleta existente." }
         }
@@ -201,16 +203,16 @@ export async function linkAthlete(formData: {
 
         // 2. Garanta uma identidade Auth inclusive para registros locais legados.
         // O convite permanece desativado; o atleta pode definir senha pela recuperação.
-        const firstName = formData.name.split(' ')[0]
-        const lastName = formData.name.split(' ').slice(1).join(' ') || undefined
+        const firstName = parsed.data.name.split(' ')[0]
+        const lastName = parsed.data.name.split(' ').slice(1).join(' ') || undefined
 
         // Envio de convite por email desativado a pedido.
-        // const { data: created, error: createErr } = await supabase.auth.admin.inviteUserByEmail(formData.email, {
+        // const { data: created, error: createErr } = await supabase.auth.admin.inviteUserByEmail(parsed.data.email, {
         //     redirectTo: getAthleteInviteRedirectTo(),
         //     data: {
         //         firstName,
         //         lastName,
-        //         name: formData.name,
+        //         name: parsed.data.name,
         //         role: 'atleta',
         //         origem_cadastro: 'arena',
         //         cpf: cleanCpf,
@@ -224,7 +226,7 @@ export async function linkAthlete(formData: {
                 user_metadata: {
                     firstName,
                     lastName,
-                    name: formData.name,
+                    name: parsed.data.name,
                     role: 'atleta',
                     origem_cadastro: 'arena',
                     cpf: cleanCpf,
@@ -249,18 +251,18 @@ export async function linkAthlete(formData: {
         // 3. Perfil, vínculo com arena e esporte são um único commit idempotente.
         const { error: provisionError } = await supabase.rpc('provision_arena_athlete_profile', {
             p_user_id: athleteDbUser.id,
-            p_arena_id: formData.arenaId,
-            p_name: formData.name,
+            p_arena_id: parsed.data.arenaId,
+            p_name: parsed.data.name,
             p_cpf: cleanCpf,
-            p_phone: formData.phone,
-            p_birth_date: formData.birthDate || null,
-            p_cep: formData.cep || null,
-            p_address: formData.endereco || null,
-            p_address_number: formData.enderecoNumero || null,
-            p_neighborhood: formData.bairro || null,
-            p_city_id: formData.idMunicipio || null,
-            p_sport_id: formData.sportId,
-            p_level_id: formData.nivelHabilidadeId || null,
+            p_phone: parsed.data.phone,
+            p_birth_date: parsed.data.birthDate || null,
+            p_cep: parsed.data.cep || null,
+            p_address: parsed.data.endereco || null,
+            p_address_number: parsed.data.enderecoNumero || null,
+            p_neighborhood: parsed.data.bairro || null,
+            p_city_id: parsed.data.idMunicipio || null,
+            p_sport_id: parsed.data.sportId,
+            p_level_id: parsed.data.nivelHabilidadeId || null,
         })
         if (provisionError) throw new Error(provisionError.message)
 
@@ -282,6 +284,20 @@ export async function linkAthlete(formData: {
         console.error("DEBUG - Full Error in linkAthlete:", error);
         const message = error instanceof Error ? error.message : "Ocorreu um erro inesperado ao vincular o atleta."
         return { success: false, error: message };
+    }
+}
+
+export async function getAthletesPageAction(input: unknown): Promise<
+    { success: true; data: AthletePage } | { success: false; error: string }
+> {
+    try {
+        const parsed = athletePageSchema.parse(input)
+        await assertArenaBackofficeAccess(parsed.arenaId)
+        const data = await fetchAthletePage(getSupabaseAdmin(), parsed.arenaId, parsed)
+        return { success: true, data }
+    } catch (err) {
+        const error = err instanceof Error ? err.message : 'Erro ao buscar a página de atletas'
+        return { success: false, error }
     }
 }
 

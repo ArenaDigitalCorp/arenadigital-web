@@ -917,6 +917,7 @@ export type Database = {
           id: string
           id_municipio: number | null
           instagram: string | null
+          legal_name: string | null
           location: unknown
           name: string
           neighborhood: string | null
@@ -947,6 +948,7 @@ export type Database = {
           id?: string
           id_municipio?: number | null
           instagram?: string | null
+          legal_name?: string | null
           location?: unknown
           name: string
           neighborhood?: string | null
@@ -977,6 +979,7 @@ export type Database = {
           id?: string
           id_municipio?: number | null
           instagram?: string | null
+          legal_name?: string | null
           location?: unknown
           name?: string
           neighborhood?: string | null
@@ -7187,6 +7190,7 @@ export type Database = {
       }
       create_public_arena_listing: {
         Args: {
+          p_legal_name?: string | null
           p_actor_user_id: string
           p_address: string
           p_cnpj?: string
@@ -8024,6 +8028,7 @@ export type Database = {
       }
       resolve_self_service_arena_signup: {
         Args: {
+          p_legal_name?: string | null
           p_address_data: Json
           p_arena_name: string
           p_document: string

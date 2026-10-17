@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { fetchAllSupabaseRows } from '@/lib/supabase-pagination';
 import type { IAthleteRepository } from './IAthleteRepository';
 import type { Atleta, AtletaListItem, CreateAtletaDTO, CreateArenaAtletaDTO, CreateAtletaEsporteDTO } from '../types/athlete.types';
 
@@ -27,11 +28,12 @@ export class SupabaseAthleteRepository implements IAthleteRepository {
         atleta_esportes(sport:id_esporte(name))
       `)
       .eq('arenas_atleta.id_arena', arenaId)
-      .order('nome_perfil', { ascending: true });
+      .order('nome_perfil', { ascending: true })
+      .order('id', { ascending: true });
 
     if (searchTerm) query = query.ilike('nome_perfil', `%${searchTerm}%`);
 
-    const { data, error } = await query;
+    const { data, error } = await fetchAllSupabaseRows(query);
     if (error) throw new Error(`SupabaseAthleteRepository.findByArena: ${error.message}`);
 
     return ((data ?? []) as unknown as AthleteByArenaRow[]).map((a) => {

@@ -1,5 +1,7 @@
 'use client'
 
+import { parseBrazilianDecimal } from '@/lib/format'
+import { DecimalInput } from '@/components/ui/decimal-input'
 import { useEffect, useRef, useState } from 'react'
 import { format } from 'date-fns'
 import { Loader2 } from 'lucide-react'
@@ -65,12 +67,12 @@ export function RegistrarPagamentoRateioModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, cobranca?.id])
 
-  const valorNum = Number(valor.replace(',', '.')) || 0
+  const valorNum = (valor.trim() === '' ? 0 : parseBrazilianDecimal(valor) ?? Number.NaN)
   const excede = valorNum > restante + 0.005
 
   const handleSave = async () => {
     if (!cobranca || !operationId.current) return
-    if (valorNum <= 0) {
+    if (!Number.isFinite(valorNum) || valorNum <= 0) {
       toast.error('Informe um valor a pagar.')
       return
     }
@@ -133,7 +135,7 @@ export function RegistrarPagamentoRateioModal({
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-arena-navy-800/40">
                   R$
                 </span>
-                <Input
+                <DecimalInput
                   inputMode="decimal"
                   value={valor}
                   onChange={(e) => setValor(e.target.value)}

@@ -13,25 +13,21 @@ import {
     FormLabel,
     FormMessage,
 } from "@/components/ui/form"
+import { MaskedInput } from "@/components/ui/masked-input"
+import { registerCustomerSchema } from "@/modules/stations/schemas/customer.schema"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
+import type { Database } from "@/types/supabase.types"
 import { createCustomerAction } from "@/modules/stations/actions/orderActions"
 
-const registerCustomerSchema = z.object({
-    name: z.string().min(2, "O nome deve ter pelo menos 2 caracteres"),
-    cpf: z.string().optional(),
-    phone: z.string().optional(),
-    email: z.string().email("E-mail inválido").optional().or(z.literal("")),
-})
-
-type RegisterCustomerValues = z.infer<typeof registerCustomerSchema>
+type RegisterCustomerValues = z.input<typeof registerCustomerSchema>
 
 interface RegisterCustomerModalProps {
     isOpen: boolean
     onClose: () => void
     arenaId: string
-    onSuccess: (customer: any) => void
+    onSuccess: (customer: Database["public"]["Tables"]["station_customers"]["Row"]) => void
 }
 
 export function RegisterCustomerModal({ isOpen, onClose, arenaId, onSuccess }: RegisterCustomerModalProps) {
@@ -51,7 +47,7 @@ export function RegisterCustomerModal({ isOpen, onClose, arenaId, onSuccess }: R
         setIsSubmitting(true)
         try {
             const res = await createCustomerAction(arenaId, data)
-            if (!res.success) throw new Error(res.error ?? 'Erro ao cadastrar cliente')
+            if (!res.success || !res.data) throw new Error(res.error ?? 'Erro ao cadastrar cliente')
             const newCustomer = res.data
             toast.success("Cliente cadastrado com sucesso!")
             onSuccess(newCustomer)
@@ -59,7 +55,7 @@ export function RegisterCustomerModal({ isOpen, onClose, arenaId, onSuccess }: R
             onClose()
         } catch (error) {
             console.error("Error registering customer:", error)
-            toast.error("Erro ao cadastrar cliente.")
+            toast.error(error instanceof Error ? error.message : "Erro ao cadastrar cliente.")
         } finally {
             setIsSubmitting(false)
         }
@@ -114,9 +110,9 @@ export function RegisterCustomerModal({ isOpen, onClose, arenaId, onSuccess }: R
                         name="cpf"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel className="text-arena-navy-800 font-bold">CPF</FormLabel>
+                                <FormLabel className="text-arena-navy-800 font-bold">CPF (Opcional)</FormLabel>
                                 <FormControl>
-                                    <Input placeholder="Informe o CPF do cliente" {...field} className="h-11 rounded-xl" />
+                                    <MaskedInput mask="cpf" placeholder="000.000.000-00" {...field} className="h-11 rounded-xl" />
                                 </FormControl>
                                 <FormMessage />
                             </FormItem>
@@ -130,7 +126,7 @@ export function RegisterCustomerModal({ isOpen, onClose, arenaId, onSuccess }: R
                             <FormItem>
                                 <FormLabel className="text-arena-navy-800 font-bold">Telefone (Opcional)</FormLabel>
                                 <FormControl>
-                                    <Input placeholder="Informe o telefone de contato" {...field} className="h-11 rounded-xl" />
+                                    <MaskedInput mask="phone" placeholder="(00) 00000-0000" {...field} className="h-11 rounded-xl" />
                                 </FormControl>
                                 <FormMessage />
                             </FormItem>

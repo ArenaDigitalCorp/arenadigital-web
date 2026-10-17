@@ -2,6 +2,7 @@
 
 import { SidebarProvider, useSidebar } from '@/contexts/SidebarContext';
 import { ArenaProvider } from '@/contexts/ArenaContext';
+import { DashboardQueryProvider } from './DashboardQueryProvider';
 import { UserProvider } from '@/contexts/UserContext';
 import { NotificationsProvider } from '@/modules/notifications/context/NotificationsContext';
 import { Sidebar } from '@/components/dashboard/Sidebar';
@@ -12,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Menu } from 'lucide-react';
 import { Suspense, useState } from 'react';
+import type { DashboardBootstrap } from '@/lib/dashboard-bootstrap.types';
 
 function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   const { isCollapsed } = useSidebar();
@@ -72,16 +74,20 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
 
 export function DashboardLayoutWrapper({
   children,
+  initialData,
 }: {
   children: React.ReactNode;
+  initialData?: DashboardBootstrap;
 }) {
   return (
-    <UserProvider>
+    <UserProvider initialUser={initialData?.user}>
       <SidebarProvider>
-        <ArenaProvider>
-          <NotificationsProvider>
-            <DashboardLayoutContent>{children}</DashboardLayoutContent>
-          </NotificationsProvider>
+        <ArenaProvider initialArenas={initialData?.arenas}>
+          <DashboardQueryProvider>
+            <NotificationsProvider>
+              <DashboardLayoutContent>{children}</DashboardLayoutContent>
+            </NotificationsProvider>
+          </DashboardQueryProvider>
         </ArenaProvider>
       </SidebarProvider>
     </UserProvider>

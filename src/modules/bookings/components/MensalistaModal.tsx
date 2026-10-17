@@ -1,5 +1,8 @@
 'use client';
 
+import { DecimalInput } from '@/components/ui/decimal-input'
+import { parseBrazilianDecimal } from '@/lib/format'
+import { formatPhone } from '@/lib/brasil-document'
 import { useState, useEffect, useRef } from 'react';
 import { Search, Save, X, Loader2, Check, Users } from 'lucide-react';
 import {
@@ -136,7 +139,7 @@ export function MensalistaModal({
       toast.error('Selecione um atleta vinculado à arena');
       return;
     }
-    if (!valorMensal || isNaN(Number(valorMensal))) {
+    if (!valorMensal || !Number.isFinite(parseBrazilianDecimal(valorMensal) ?? Number.NaN)) {
       toast.error('Informe o valor mensal');
       return;
     }
@@ -156,7 +159,7 @@ export function MensalistaModal({
         horario_inicio: horarioInicio,
         horario_fim: horarioFim,
         sessoes_por_mes: Number(sessoesPorMes),
-        valor_mensal: Number(valorMensal),
+        valor_mensal: (parseBrazilianDecimal(valorMensal) ?? Number.NaN),
         additional_athlete_ids: additionalParticipants.map((p) => p.id),
       });
 
@@ -190,7 +193,7 @@ export function MensalistaModal({
 
   const valorPorSessao =
     valorMensal && sessoesPorMes
-      ? (Number(valorMensal) / Number(sessoesPorMes)).toFixed(2)
+      ? ((parseBrazilianDecimal(valorMensal) ?? Number.NaN) / Number(sessoesPorMes)).toFixed(2)
       : null;
 
   return (
@@ -243,7 +246,7 @@ export function MensalistaModal({
                               {athlete.nome_perfil}
                             </p>
                             <p className="text-[10px] uppercase font-black text-arena-navy-800/40 tracking-tight">
-                              {athlete.telefone}
+                              {formatPhone(athlete.telefone)}
                             </p>
                           </div>
                         </button>
@@ -262,7 +265,7 @@ export function MensalistaModal({
                         {selectedAthlete.nome_perfil}
                       </p>
                       <p className="text-[10px] uppercase font-black text-arena-navy-800/40 tracking-tight">
-                        {selectedAthlete.telefone}
+                        {formatPhone(selectedAthlete.telefone)}
                       </p>
                     </div>
                   </div>
@@ -394,7 +397,7 @@ export function MensalistaModal({
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-arena-navy-800/40 font-bold text-sm">
                     R$
                   </span>
-                  <Input
+                  <DecimalInput
                     type="number"
                     min={0}
                     value={valorMensal}
@@ -413,7 +416,7 @@ export function MensalistaModal({
                 </p>
                 <p className="text-sm font-bold text-arena-navy-800">
                   {sessoesPorMes}x por mês &middot; R$ {valorPorSessao}/sessão
-                  &middot; R$ {Number(valorMensal).toFixed(2)}/mês
+                  &middot; R$ {(parseBrazilianDecimal(valorMensal) ?? Number.NaN).toFixed(2)}/mês
                 </p>
                 <p className="text-[11px] text-arena-navy-800/50">
                   Serão criadas reservas para o mês atual (confirmado) e os

@@ -1,9 +1,10 @@
 "use client"
 
+import { formatCpfCnpj, formatPhone } from '@/lib/brasil-document'
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DecimalInput } from "@/components/ui/decimal-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -35,7 +36,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { arenaDataTable } from "@/lib/arena-data-table";
-import { formatLaunchDate } from "@/lib/format";
+import { formatLaunchDate, parseBrazilianDecimal } from "@/lib/format";
 import { ARENA_BRAND_HEX } from "@/constants/arena-brand-hex";
 import {
     getCurrentCaixaSessionAction,
@@ -163,10 +164,15 @@ export function CaixaPageClient({ arenaId }: Props) {
     const historyTotalPages = Math.max(1, Math.ceil(historyTotal / historyPageSize));
 
     const handleOpenCaixa = async () => {
+        const balance = parseBrazilianDecimal(openingBalance);
+        if (balance === null || balance < 0 || balance > 99999999.99) {
+            toast.error("Informe um saldo inicial válido entre R$ 0,00 e R$ 99.999.999,99.");
+            return;
+        }
         setIsOpening(true);
         try {
             const result = await openCaixaSessionAction(arenaId, {
-                opening_balance: openingBalance,
+                opening_balance: balance,
                 opening_notes: openingNotes || null,
             });
             if (!result.success) throw new Error(result.error);
@@ -325,8 +331,8 @@ export function CaixaPageClient({ arenaId }: Props) {
   <h1>${arena.name ?? ''}</h1>
   ${addressParts ? `<p class="center muted">${addressParts}</p>` : ''}
   ${cityLine ? `<p class="center muted">${cityLine}</p>` : ''}
-  ${arena.cpfCnpj ? `<p class="center muted">CNPJ: ${arena.cpfCnpj}</p>` : ''}
-  ${arena.phone ? `<p class="center muted">Tel: ${arena.phone}</p>` : ''}
+  ${arena.cpfCnpj ? `<p class="center muted">CPF/CNPJ: ${formatCpfCnpj(arena.cpfCnpj)}</p>` : ''}
+  ${arena.phone ? `<p class="center muted">Tel: ${formatPhone(arena.phone)}</p>` : ''}
   <div class="sep"></div>
   <p class="center"><strong>RESUMO DE CAIXA</strong></p>
   <p class="center muted">Documento de conferência interna</p>
@@ -402,10 +408,7 @@ export function CaixaPageClient({ arenaId }: Props) {
                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-arena-navy-800/30 pointer-events-none">
                                     R$
                                 </span>
-                                <Input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
+                                <DecimalInput
                                     value={openingBalance}
                                     onChange={(e) => setOpeningBalance(e.target.value)}
                                     placeholder="0,00"
@@ -426,7 +429,7 @@ export function CaixaPageClient({ arenaId }: Props) {
                         </div>
                         <Button
                             onClick={handleOpenCaixa}
-                            disabled={isOpening || openingBalance === ''}
+                            disabled={isOpening || openingBalance.trim() === ''}
                             className="w-full h-10 bg-arena-button hover:bg-arena-button-hover text-white font-bold"
                         >
                             {isOpening ? 'Abrindo...' : 'Abrir caixa'}

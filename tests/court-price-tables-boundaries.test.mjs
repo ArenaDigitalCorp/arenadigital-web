@@ -142,7 +142,7 @@ test('o valor mensal sugerido também não sobrescreve edição do gestor', () =
     /prev === '' \|\| prev === sugeridoAnterior \? texto : prev/
   )
   assert.match(bookingModal, /const sugeridoAnterior = lastAutoValorBlocos\.current/)
-  assert.match(bookingModal, /valor_mensal: Number\(valorMensal\)/)
+  assert.match(bookingModal, /valor_mensal: \(parseBrazilianDecimal\(valorMensal\) \?\? Number\.NaN\)/)
 })
 
 test('reserva de plano existente não é reprecificada ao abrir', () => {

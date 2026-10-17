@@ -1,5 +1,8 @@
 'use client';
 
+import { DecimalInput } from '@/components/ui/decimal-input'
+import { parseBrazilianDecimal } from '@/lib/format'
+import { formatPhone } from '@/lib/brasil-document'
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Search,
@@ -188,7 +191,7 @@ function AthleteSearchField({
                       {athlete.nome_perfil}
                     </p>
                     <p className="text-[10px] uppercase font-black text-arena-navy-800/40 tracking-tight">
-                      {athlete.telefone}
+                      {formatPhone(athlete.telefone)}
                     </p>
                   </div>
                 </button>
@@ -226,7 +229,7 @@ function AthleteSearchField({
                 {selectedAthlete.nome_perfil}
               </p>
               <p className="text-[10px] uppercase font-black text-arena-navy-800/40 tracking-tight">
-                {selectedAthlete.telefone}
+                {formatPhone(selectedAthlete.telefone)}
               </p>
             </div>
           </div>
@@ -295,6 +298,8 @@ export function BookingModal({
   const [endTime, setEndTime] = useState('');
   /** Valor da locação (quadra), sem serviços — o total enviado ao servidor inclui serviços. */
   const [courtPrice, setCourtPrice] = useState(defaultPrice.toString());
+  const parsedCourtPrice = parseBrazilianDecimal(courtPrice);
+  const validCourtPrice = parsedCourtPrice !== null && Number.isFinite(parsedCourtPrice) && parsedCourtPrice >= 0;
   const [serviceLines, setServiceLines] = useState<BookingServiceLineLocal[]>(
     []
   );
@@ -948,7 +953,7 @@ export function BookingModal({
     [existingBooking]
   );
   const locacaoRateio = existingBooking
-    ? Number(String(courtPrice).replace(',', '.')) || 0
+    ? (parsedCourtPrice ?? Number.NaN)
     : (resumoBlocosAvulso[0]?.valor ?? 0);
   const responsavelNome = selectedAthlete?.nome_perfil ?? search.trim();
   const rateioPessoas = useMemo<RateioPessoa[]>(() => {
@@ -991,7 +996,7 @@ export function BookingModal({
   }, [splitBillingPerParticipant, rateioEditado, dividirRateioIgualmente]);
 
   const parteRateio = (key: string) =>
-    Number((rateioValores[key] ?? '0').replace(',', '.') || '0');
+    (parseBrazilianDecimal(rateioValores[key] ?? '0') ?? Number.NaN);
   const somaPartesRateio = rateioPessoas.reduce(
     (s, p) => s + (Number.isFinite(parteRateio(p.key)) ? parteRateio(p.key) : 0),
     0
@@ -1207,7 +1212,7 @@ export function BookingModal({
 
   /** Pró-rata aplicado sobre o valor que o gestor realmente vai cobrar. */
   const primeiraMensalidade = useMemo(() => {
-    const cobrado = Number(valorMensal) || 0;
+    const cobrado = (parseBrazilianDecimal(valorMensal) ?? Number.NaN) || 0;
     return (
       Math.round(cobrado * fracaoPrimeiroMes(blocosSelecionados, inicioVigencia, agora) * 100) /
       100
@@ -1218,7 +1223,7 @@ export function BookingModal({
    * mensal cheio — senão é ruído repetindo o mesmo número duas vezes. */
   const mesAtualDivergeDoRecorrente =
     resumoBlocos.ocorrenciasPrimeiroMes > 0 &&
-    Math.round(primeiraMensalidade * 100) !== Math.round((Number(valorMensal) || 0) * 100);
+    Math.round(primeiraMensalidade * 100) !== Math.round(((parseBrazilianDecimal(valorMensal) ?? Number.NaN) || 0) * 100);
 
   const proximoMesNome = useMemo(() => {
     const nome = format(startOfMonth(addMonths(inicioVigencia, 1)), 'MMMM', {
@@ -1255,8 +1260,8 @@ export function BookingModal({
       toast.error(avulsoEndTimeError);
       return;
     }
-    const court = Number(courtPrice);
-    if (Number.isNaN(court) || court < 0) {
+    const court = parsedCourtPrice;
+    if (court === null || !validCourtPrice) {
       toast.error('Informe um valor válido para a locação');
       return;
     }
@@ -1486,7 +1491,7 @@ export function BookingModal({
       toast.error('Selecione um atleta vinculado à arena');
       return;
     }
-    if (!valorMensal || isNaN(Number(valorMensal))) {
+    if (!valorMensal || !Number.isFinite(parseBrazilianDecimal(valorMensal) ?? Number.NaN)) {
       toast.error('Informe o valor mensal');
       return;
     }
@@ -1506,7 +1511,7 @@ export function BookingModal({
           horario_inicio: `${String(bloco.from).padStart(2, '0')}:00`,
           horario_fim: `${String(bloco.to).padStart(2, '0')}:00`,
         })),
-        valor_mensal: Number(valorMensal),
+        valor_mensal: (parseBrazilianDecimal(valorMensal) ?? Number.NaN),
         additional_athlete_ids: additionalParticipants.map((p) => p.id),
         // A tabela do primeiro bloco, mesmo critério que o plano usa para
         // court_id e horário. É o que identifica um plano de professor depois.
@@ -1661,6 +1666,10 @@ export function BookingModal({
       toast.error('Marque ao menos um horário na grade');
       return;
     }
+    if (resumoBlocosAvulso.some((bloco) => !Number.isFinite(bloco.valor) || bloco.valor < 0)) {
+      toast.error('Informe um valor válido para todos os horários escolhidos');
+      return;
+    }
     setConflicts([]);
     setIsCheckingConflicts(true);
     try {
@@ -1704,6 +1713,10 @@ export function BookingModal({
     }
     if (bookingType === 'avulso' && avulsoEndTimeError) {
       toast.error(avulsoEndTimeError);
+      return;
+    }
+    if (bookingType === 'avulso' && !validCourtPrice) {
+      toast.error('Informe um valor válido para a locação');
       return;
     }
     setConflicts([]);
@@ -1800,13 +1813,13 @@ export function BookingModal({
   );
   const hasPaidParticipants = existingCobrancas.some((c) => c.valor_pago > 0);
   const totalDisplay =
-    (splitBillingPerParticipant ? somaPartesRateio : Number(courtPrice) || 0) +
+    (splitBillingPerParticipant ? somaPartesRateio : (validCourtPrice ? parsedCourtPrice! : Number.NaN)) +
     servicesSumDisplay;
   const fmtBrl = (n: number) =>
-    new Intl.NumberFormat('pt-BR', {
+    Number.isFinite(n) ? new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL',
-    }).format(n);
+    }).format(n) : '—';
   const recurrenceWeeksDisplay = Math.max(1, Math.floor(recurrenceWeeks) || 1);
   const recurrenceMesesAprox = Math.max(
     1,
@@ -2160,13 +2173,19 @@ export function BookingModal({
                         <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-arena-navy-800/40">
                           R$
                         </span>
-                        <Input
+                        <DecimalInput
                           value={courtPrice}
                           onChange={(e) => setCourtPrice(e.target.value)}
+                          aria-invalid={!validCourtPrice}
                           placeholder="00,00"
                           className="h-14 rounded-xl border-arena-navy-800/10 pl-12 font-bold text-arena-navy-800 focus:border-arena-button focus:ring-arena-button"
                         />
                       </div>
+                      {!validCourtPrice && (
+                        <p role="alert" className="text-xs text-red-600">
+                          Informe um valor válido para a locação.
+                        </p>
+                      )}
                       {avulsoSuggested !== null && (
                         <p className="text-[11px] font-medium text-arena-navy-800/45">
                           Sugerido pela tabela: {fmtBrl(avulsoSuggested)}
@@ -2372,7 +2391,7 @@ export function BookingModal({
                       </p>
                     ) : existingBooking && serviceLines.length > 0 ? (
                       <p className="mt-2 text-[11px] font-medium text-arena-navy-800/45">
-                        Locação {fmtBrl(Number(courtPrice) || 0)} + serviços{' '}
+                        Locação {fmtBrl(validCourtPrice ? parsedCourtPrice! : Number.NaN)} + serviços{' '}
                         {fmtBrl(servicesSumDisplay)}
                       </p>
                     ) : null}
@@ -2600,7 +2619,7 @@ export function BookingModal({
                         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-arena-navy-800/40 font-bold text-sm">
                           R$
                         </span>
-                        <Input
+                        <DecimalInput
                           type="number"
                           min={0}
                           value={valorMensal}

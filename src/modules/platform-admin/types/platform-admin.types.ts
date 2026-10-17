@@ -42,6 +42,7 @@ export type PlatformArena = {
   ownerName: string | null
   ownerEmail: string
   registrationEmail: string
+  registrationLegalName?: string | null
   registrationPhone: string
   registrationDocument: string
   registrationAddress: string

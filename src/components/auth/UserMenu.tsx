@@ -1,5 +1,6 @@
 "use client"
 
+import { formatCpf } from '@/lib/brasil-document'
 import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -250,7 +251,7 @@ export function UserMenu({
             <div className="grid gap-3 sm:grid-cols-2">
               <DetailRow icon={Mail} label="Email" value={dbUser?.email ?? user.email ?? "Nao informado"} />
               <DetailRow icon={UserIcon} label="Nome" value={dbUser?.name ?? fullName ?? "Nao informado"} />
-              <DetailRow icon={IdCard} label="CPF" value={dbUser?.cpf ?? "Nao informado"} />
+              <DetailRow icon={IdCard} label="CPF" value={formatCpf(dbUser?.cpf) || "Não informado"} />
               <DetailRow icon={Shield} label="Perfil" value={dbUser?.role ?? "Nao informado"} />
               <DetailRow icon={CalendarDays} label="Conta criada em" value={formatDate(dbUser?.created_at ?? user.created_at)} />
               <DetailRow icon={KeyRound} label="Ultimo acesso" value={formatDate(user.last_sign_in_at)} />

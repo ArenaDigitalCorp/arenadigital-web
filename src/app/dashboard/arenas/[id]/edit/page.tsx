@@ -97,6 +97,7 @@ export default async function EditArenaPage({
                         paymentSettings={paymentSettings.data}
                         cancellationPolicySettings={cancellationPolicySettings.data}
                         registration={{
+                            legalName: arena.legal_name,
                             email: arena.email ?? '',
                             phone: arena.phone ?? '',
                             document: arena.cpf_cnpj ?? '',

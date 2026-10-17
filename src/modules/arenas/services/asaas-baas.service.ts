@@ -1,3 +1,4 @@
+import { normalizeCpfCnpj } from '@/lib/brasil-document'
 import 'server-only'
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
@@ -175,7 +176,7 @@ async function asaasRequest<T>(path: string, apiKey: string, init: { method?: 'G
 
 export async function findAsaasSubaccountsByDocument(cpfCnpj: string): Promise<AsaasSubaccountSummary[]> {
   assertBaasEnabled()
-  const document = cpfCnpj.replace(/\D/gu, '')
+  const document = normalizeCpfCnpj(cpfCnpj)
   const response = await asaasRequest<AsaasSubaccountList>(
     `/v3/accounts?cpfCnpj=${encodeURIComponent(document)}&limit=3`,
     parentApiKey(),
@@ -252,7 +253,7 @@ export async function recoverAsaasSubaccountCredential(input: {
   if (input.accountId) {
     account = await getAsaasSubaccountById(input.accountId)
   } else {
-    const document = input.cpfCnpj.replace(/\D/gu, '')
+    const document = normalizeCpfCnpj(input.cpfCnpj)
     const response = await asaasRequest<AsaasSubaccountList>(
       `/v3/accounts?cpfCnpj=${encodeURIComponent(document)}&limit=2`,
       apiKey,

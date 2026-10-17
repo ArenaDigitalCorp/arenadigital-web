@@ -12,6 +12,7 @@ import type { Turma, TurmasPageData } from '../types'
 import { TurmasTab } from './TurmasTab'
 import { ProfessoresTab } from './ProfessoresTab'
 import { AtletasTab } from './AtletasTab'
+import { TurmasAthleteCatalog } from './TurmasAthleteCatalog'
 import { TurmaFormModal } from './TurmaFormModal'
 import { TurmaAlunosModal } from './TurmaAlunosModal'
 import { ProfessorDetalheModal } from './ProfessorDetalheModal'
@@ -124,30 +125,38 @@ export function TurmasPageClient({ arenaId, dados }: Props) {
       </div>
 
       {formulario.aberto && (
-        <TurmaFormModal
-          key={formulario.chave}
+        <TurmasAthleteCatalog key={formulario.chave} arenaId={arenaId} catalogo={catalogo}
+          title={turmaFormulario ? `Editar turma ${turmaFormulario.codigo}` : 'Nova turma'}
+          onClose={() => setFormulario({ aberto: false })}>
+          {(selectionCatalog, catalogState) => <TurmaFormModal
           arenaId={arenaId}
           turma={turmaFormulario}
           turmas={turmas}
-          catalogo={catalogo}
+          catalogo={selectionCatalog}
+          catalogState={catalogState}
           onCancelar={() => setFormulario({ aberto: false })}
           onSalvo={(mensagem) => {
             setFormulario({ aberto: false })
             toast.success(mensagem)
             recarregar()
           }}
-        />
+        />}
+        </TurmasAthleteCatalog>
       )}
 
       {turmaAlunos && (
-        <TurmaAlunosModal
+        <TurmasAthleteCatalog key={turmaAlunos.id} arenaId={arenaId} catalogo={catalogo}
+          title={`Alunos da turma ${turmaAlunos.codigo}`} onClose={() => setAlunosTurmaId(null)}>
+          {(selectionCatalog, catalogState) => <TurmaAlunosModal
           arenaId={arenaId}
           turma={turmaAlunos}
-          catalogo={catalogo}
+          catalogo={selectionCatalog}
+          catalogState={catalogState}
           onFechar={() => setAlunosTurmaId(null)}
           onAlterado={recarregar}
           onAbrirAtleta={(a) => abrirAtleta(a.id)}
-        />
+        />}
+        </TurmasAthleteCatalog>
       )}
 
       {turmaEncerrar && (

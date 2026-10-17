@@ -1,5 +1,6 @@
 'use client';
 
+import { formatCpfCnpj, formatPhone } from '@/lib/brasil-document'
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { ChevronLeft, Clock, Loader2, Printer, Trash2, Undo2 } from 'lucide-react';
@@ -197,8 +198,8 @@ export default function OrderDetailsPage() {
   <h1>${arena.name}</h1>
   ${addressParts ? `<p class="center muted">${addressParts}</p>` : ''}
   ${cityLine ? `<p class="center muted">${cityLine}</p>` : ''}
-  ${arena.cpfCnpj ? `<p class="center muted">CNPJ: ${arena.cpfCnpj}</p>` : ''}
-  ${arena.phone ? `<p class="center muted">Tel: ${arena.phone}</p>` : ''}
+  ${arena.cpfCnpj ? `<p class="center muted">CPF/CNPJ: ${formatCpfCnpj(arena.cpfCnpj)}</p>` : ''}
+  ${arena.phone ? `<p class="center muted">Tel: ${formatPhone(arena.phone)}</p>` : ''}
   <div class="sep"></div>
   <p class="center"><strong>ROMANEIO DE COMANDA</strong></p>
   <p class="center muted">Não é documento fiscal</p>

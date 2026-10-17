@@ -1,5 +1,6 @@
 'use client'
 
+import { DecimalInput } from '@/components/ui/decimal-input'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { addMonths, parseISO } from 'date-fns'
 import {
@@ -545,7 +546,7 @@ export function AjustarMensalidadesMesModal({
                                 <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-arena-navy-800/40">
                                   R$
                                 </span>
-                                <Input
+                                <DecimalInput
                                   inputMode="decimal"
                                   aria-label={`Novo valor de ${l.atleta}`}
                                   aria-invalid={erroValor !== null}

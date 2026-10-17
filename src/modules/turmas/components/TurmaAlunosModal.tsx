@@ -22,11 +22,13 @@ import {
 import { desvincularAlunoAction, vincularAlunoAction } from '../actions'
 import type { Atleta, Matricula, Turma, TurmasCatalogo } from '../types'
 import { Ordenavel, useOrdenacao } from './Ordenavel'
+import type { TurmasAthleteCatalogState } from './TurmasAthleteCatalog'
 
 interface Props {
   arenaId: string
   turma: Turma
   catalogo: TurmasCatalogo
+  catalogState?: TurmasAthleteCatalogState
   onFechar: () => void
   /** Chamado depois que o banco gravou uma entrada ou saída. */
   onAlterado: () => void
@@ -45,7 +47,7 @@ interface Linha {
   nivelFora: boolean
 }
 
-export function TurmaAlunosModal({ arenaId, turma, catalogo, onFechar, onAlterado, onAbrirAtleta }: Props) {
+export function TurmaAlunosModal({ arenaId, turma, catalogo, catalogState, onFechar, onAlterado, onAbrirAtleta }: Props) {
   const encerrada = turma.status === 'encerrada'
   const [aba, setAba] = useState<Aba>(encerrada ? 'historico' : 'ativos')
   const [busca, setBusca] = useState('')
@@ -121,7 +123,7 @@ export function TurmaAlunosModal({ arenaId, turma, catalogo, onFechar, onAlterad
   const entradaAntesDaCriacao = Boolean(entrada) && entrada < turma.criadaEm
 
   const vincular = async () => {
-    if (!selecionado || !entrada || entradaAntesDaCriacao || lotada || salvando) return
+    if (catalogState?.ready === false || !selecionado?.membro || !entrada || entradaAntesDaCriacao || lotada || salvando) return
     setSalvando('vincular')
     setErro(null)
     try {
@@ -156,7 +158,7 @@ export function TurmaAlunosModal({ arenaId, turma, catalogo, onFechar, onAlterad
   const saidaInvalida = Boolean(saindo && matriculaSaindo && (!saindo.saida || saindo.saida < matriculaSaindo.entrada))
 
   const confirmarSaida = async () => {
-    if (!saindo || saidaInvalida || salvando) return
+    if (catalogState?.ready === false || !saindo || saidaInvalida || salvando) return
     setSalvando('desvincular')
     setErro(null)
     try {
@@ -191,6 +193,7 @@ export function TurmaAlunosModal({ arenaId, turma, catalogo, onFechar, onAlterad
       size="wide"
     >
       <div className="space-y-6 pr-1">
+        {catalogState?.feedback}
         <div className="flex flex-wrap gap-x-6 gap-y-2 rounded-lg border border-arena-navy-800/10 bg-arena-navy-800/[0.02] px-4 py-3 text-sm">
           <Info rotulo="Professor" valor={nomeAtleta(catalogo, turma.professorId)} />
           <Info rotulo="Esporte" valor={esporte?.nome ?? '—'} />
@@ -299,7 +302,7 @@ export function TurmaAlunosModal({ arenaId, turma, catalogo, onFechar, onAlterad
             </div>
             <Button
               type="button"
-              disabled={!selecionado || !entrada || entradaAntesDaCriacao || lotada || salvando !== null}
+              disabled={catalogState?.ready === false || !selecionado?.membro || !entrada || entradaAntesDaCriacao || lotada || salvando !== null}
               onClick={() => void vincular()}
               className="h-11 bg-arena-button px-5 font-semibold text-white hover:bg-arena-button-hover"
             >
@@ -311,6 +314,9 @@ export function TurmaAlunosModal({ arenaId, turma, catalogo, onFechar, onAlterad
               Vincular
             </Button>
           </div>
+          {selecionado && !selecionado.membro && (
+            <p role="alert" className="text-sm text-red-600">Este atleta não está mais vinculado à arena. Escolha outro atleta.</p>
+          )}
           {entradaAntesDaCriacao && (
             <p className="mt-2 text-xs font-medium text-red-600">
               A entrada não pode ser antes da criação da turma ({formatData(turma.criadaEm)}).
@@ -422,7 +428,7 @@ export function TurmaAlunosModal({ arenaId, turma, catalogo, onFechar, onAlterad
                                 <Button
                                   type="button"
                                   size="sm"
-                                  disabled={saidaInvalida || salvando !== null}
+                                  disabled={catalogState?.ready === false || saidaInvalida || salvando !== null}
                                   onClick={() => void confirmarSaida()}
                                   className="h-9 bg-red-600 text-white hover:bg-red-700"
                                 >

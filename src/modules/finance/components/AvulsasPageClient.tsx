@@ -1,5 +1,6 @@
 "use client"
 
+import { formatPhone } from '@/lib/brasil-document'
 import { Fragment, useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { format, parseISO } from "date-fns"
@@ -271,7 +272,7 @@ export function AvulsasPageClient({ arenaId, initialItems, modosPagamento, initi
                                                                 <ChevronDown className={cn("h-3 w-3 transition-transform", isExpanded && "rotate-180")} />
                                                             </button>
                                                         ) : item.atleta?.telefone ? (
-                                                            <p className="text-[11px] text-arena-navy-800/40">{item.atleta.telefone}</p>
+                                                            <p className="text-[11px] text-arena-navy-800/40">{formatPhone(item.atleta.telefone)}</p>
                                                         ) : null}
                                                     </div>
                                                 </div>

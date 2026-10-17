@@ -14,6 +14,7 @@ export type ArenaSignupAddress = {
 export type ArenaSignupIntent = {
   version: 1
   arenaName: string
+  arenaLegalName?: string
   arenaDocument: string
   phone: string
   cpf: string
@@ -26,6 +27,7 @@ export function createArenaSignupIntent(input: ArenaSignupIntentInput): ArenaSig
   return {
     version: 1,
     arenaName: input.arenaName.trim(),
+    ...(input.arenaLegalName !== undefined ? { arenaLegalName: input.arenaLegalName.trim() } : {}),
     arenaDocument: input.arenaDocument.trim(),
     phone: input.phone.trim(),
     cpf: input.cpf.trim(),
@@ -42,6 +44,7 @@ export function readArenaSignupIntent(appMetadata: unknown): ArenaSignupIntent |
   const intent = rawIntent as Record<string, unknown>
   if (intent.version !== 1) return null
   if (typeof intent.arenaName !== 'string' || !intent.arenaName.trim()) return null
+  if (intent.arenaLegalName !== undefined && typeof intent.arenaLegalName !== 'string') return null
   if (typeof intent.arenaDocument !== 'string' || !intent.arenaDocument.trim()) return null
   if (typeof intent.phone !== 'string' || !intent.phone.trim()) return null
   if (typeof intent.cpf !== 'string') return null
@@ -52,6 +55,7 @@ export function readArenaSignupIntent(appMetadata: unknown): ArenaSignupIntent |
 
   return createArenaSignupIntent({
     arenaName: intent.arenaName,
+    arenaLegalName: intent.arenaLegalName as string | undefined,
     arenaDocument: intent.arenaDocument,
     phone: intent.phone,
     cpf: intent.cpf,

@@ -83,6 +83,7 @@ export async function resolveSelfServiceArenaSignup(input: {
   operationId: string
   arenaName: string
   phone: string
+  arenaLegalName?: string
   document: string
   addressData: ArenaSignupAddress
 }): Promise<SelfServiceArenaSignupResult> {
@@ -94,6 +95,7 @@ export async function resolveSelfServiceArenaSignup(input: {
     p_phone: input.phone,
     p_document: input.document,
     p_address_data: addressData,
+    ...(input.arenaLegalName !== undefined ? { p_legal_name: input.arenaLegalName } : {}),
   })
 
   if (error) throw new Error(`Não foi possível resolver o cadastro da arena: ${error.message}`)

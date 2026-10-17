@@ -35,7 +35,8 @@ import {
     assertArenaFinancialOnboardingAccess as assertFinancialOnboardingAccess,
     type ArenaFinancialOnboardingAccess,
 } from '@/modules/arenas/services/financial-onboarding-access'
-import { arenaSchema } from '@/modules/arenas/schemas/arena.schema'
+import { arenaSchema, arenaUpdateSchema } from '@/modules/arenas/schemas/arena.schema'
+import { getArenaLegalNameError } from '@/modules/arenas/domain/arena-legal-name'
 import {
     appBookingModeAcceptsPreBookings,
     normalizeAppBookingMode,
@@ -131,6 +132,7 @@ export async function createArenaAction(input: CreateArenaDTO) {
         )
         const payload = {
             ...parsed,
+            legal_name: parsed.legal_name?.trim() || null,
             ...(location ? { location } : {}),
             app_booking_mode: appBookingMode,
             accepts_app_booking_requests: appBookingModeAcceptsPreBookings(appBookingMode),
@@ -194,7 +196,17 @@ export async function getMunicipioByIbgeAction(codigoIbge: number) {
 export async function updateArenaAction(arenaId: string, input: UpdateArenaDTO) {
     try {
         await assertArenaAdminAccess(arenaId)
-        const safeInput = arenaSchema.partial().parse(input)
+        const safeInput = arenaUpdateSchema.parse(input)
+        if (safeInput.cpf_cnpj !== undefined || safeInput.legal_name !== undefined) {
+            const { data: current, error } = await getSupabaseAdmin()
+                .from('arenas').select('cpf_cnpj, legal_name').eq('id', arenaId).single()
+            if (error) throw new Error(error.message)
+            const message = getArenaLegalNameError(
+                safeInput.cpf_cnpj !== undefined ? safeInput.cpf_cnpj : current.cpf_cnpj,
+                safeInput.legal_name !== undefined ? safeInput.legal_name : current.legal_name,
+            )
+            if (message) throw new Error(message)
+        }
         const location = (await resolveArenaLocation(safeInput as unknown as Partial<CreateArenaDTO>)) ?? undefined
         const hasAppBookingModeUpdate = safeInput.app_booking_mode !== undefined
             || safeInput.accepts_app_booking_requests !== undefined
@@ -206,6 +218,7 @@ export async function updateArenaAction(arenaId: string, input: UpdateArenaDTO) 
             : undefined
         const payload = {
             ...safeInput,
+            ...(safeInput.legal_name !== undefined ? { legal_name: safeInput.legal_name?.trim() || null } : {}),
             ...(location ? { location } : {}),
             ...(appBookingMode ? {
                 app_booking_mode: appBookingMode,
