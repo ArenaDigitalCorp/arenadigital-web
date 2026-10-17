@@ -42,6 +42,7 @@ export function loadTypescriptModule(path, imports = {}, globals = {}) {
       Headers,
       AbortController,
       AbortSignal,
+      crypto,
       ReadableStream,
       Buffer,
       TextEncoder,

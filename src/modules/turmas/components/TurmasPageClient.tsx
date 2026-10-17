@@ -128,11 +128,12 @@ export function TurmasPageClient({ arenaId, dados }: Props) {
         <TurmasAthleteCatalog key={formulario.chave} arenaId={arenaId} catalogo={catalogo}
           title={turmaFormulario ? `Editar turma ${turmaFormulario.codigo}` : 'Nova turma'}
           onClose={() => setFormulario({ aberto: false })}>
-          {(selectionCatalog) => <TurmaFormModal
+          {(selectionCatalog, catalogState) => <TurmaFormModal
           arenaId={arenaId}
           turma={turmaFormulario}
           turmas={turmas}
           catalogo={selectionCatalog}
+          catalogState={catalogState}
           onCancelar={() => setFormulario({ aberto: false })}
           onSalvo={(mensagem) => {
             setFormulario({ aberto: false })
@@ -146,10 +147,11 @@ export function TurmasPageClient({ arenaId, dados }: Props) {
       {turmaAlunos && (
         <TurmasAthleteCatalog key={turmaAlunos.id} arenaId={arenaId} catalogo={catalogo}
           title={`Alunos da turma ${turmaAlunos.codigo}`} onClose={() => setAlunosTurmaId(null)}>
-          {(selectionCatalog) => <TurmaAlunosModal
+          {(selectionCatalog, catalogState) => <TurmaAlunosModal
           arenaId={arenaId}
           turma={turmaAlunos}
           catalogo={selectionCatalog}
+          catalogState={catalogState}
           onFechar={() => setAlunosTurmaId(null)}
           onAlterado={recarregar}
           onAbrirAtleta={(a) => abrirAtleta(a.id)}
