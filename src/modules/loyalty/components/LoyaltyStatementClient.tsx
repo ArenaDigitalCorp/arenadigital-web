@@ -9,8 +9,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 
-import { format } from "date-fns"
-import { ptBR } from "date-fns/locale"
+import { LoyaltyLocalDate } from './LoyaltyLocalDate'
 import { useLoyaltyPage } from "../lib/use-loyalty-page"
 import type { LoyaltyTransaction, PaginatedResult } from "../types/loyalty.types"
 
@@ -134,10 +133,10 @@ export function LoyaltyStatementClient({ arenaId, userId, initialData }: { arena
                                         <tr key={tx.id} className="hover:bg-gray-50/50 transition-all group">
                                             <td className="px-8 py-5 whitespace-nowrap">
                                                 <p className="text-sm font-bold text-arena-navy-800">
-                                                    {format(new Date(tx.data_registro), "dd/MM/yyyy", { locale: ptBR })}
+                                                    <LoyaltyLocalDate value={tx.data_registro} />
                                                 </p>
                                                 <p className="text-[10px] text-gray-400 font-bold">
-                                                    {format(new Date(tx.data_registro), "HH:mm")}
+                                                    <LoyaltyLocalDate value={tx.data_registro} time />
                                                 </p>
                                             </td>
                                             <td className="px-8 py-5">
@@ -170,7 +169,7 @@ export function LoyaltyStatementClient({ arenaId, userId, initialData }: { arena
                                             <td className="px-8 py-5 whitespace-nowrap">
                                                 {tx.data_vencimento ? (
                                                     <p className="text-sm font-medium text-gray-500">
-                                                        {format(new Date(tx.data_vencimento), "dd/MM/yyyy", { locale: ptBR })}
+                                                        <LoyaltyLocalDate value={tx.data_vencimento} />
                                                     </p>
                                                 ) : (
                                                     <span className="text-xs text-gray-300 font-medium">-</span>
