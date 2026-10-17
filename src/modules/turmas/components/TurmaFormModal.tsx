@@ -52,12 +52,14 @@ import {
   turmasAtivas,
 } from '../lib'
 import type { BlocoHorario, DiaSemana, RecorrenciaExistente, Turma, TurmasCatalogo } from '../types'
+import type { TurmasAthleteCatalogState } from './TurmasAthleteCatalog'
 
 interface Props {
   arenaId: string
   turma: Turma | null
   turmas: Turma[]
   catalogo: TurmasCatalogo
+  catalogState?: TurmasAthleteCatalogState
   onCancelar: () => void
   /** Chamado depois que o banco gravou; recebe a mensagem de sucesso. */
   onSalvo: (mensagem: string) => void
@@ -78,7 +80,7 @@ function blocoVazio(): BlocoHorario {
   return { id: crypto.randomUUID(), espacoId: '', diaSemana: 1, inicio: '19:00', fim: '20:00' }
 }
 
-export function TurmaFormModal({ arenaId, turma, turmas, catalogo, onCancelar, onSalvo }: Props) {
+export function TurmaFormModal({ arenaId, turma, turmas, catalogo, catalogState, onCancelar, onSalvo }: Props) {
   const editando = turma !== null
 
   const [professorId, setProfessorId] = useState(turma?.professorId ?? '')
@@ -287,9 +289,14 @@ export function TurmaFormModal({ arenaId, turma, turmas, catalogo, onCancelar, o
   const erro = (campo: Campo) => (tentouSalvar || campo === 'vagas' ? erros[campo] : undefined)
 
   const salvar = async (mesmoComSobreposicao = false) => {
+    if (catalogState?.ready === false) return
     setTentouSalvar(true)
     setErroServidor(null)
     if (Object.keys(erros).length > 0 || !esporte || salvando) return
+    if (alunosIniciais.some(id => !catalogo.atletas.some(a => a.id === id && a.membro))) {
+      setErroServidor('Um atleta selecionado não está mais vinculado à arena. Remova-o da seleção antes de salvar.')
+      return
+    }
     if (turmasSobrepostas.length > 0 && !mesmoComSobreposicao) {
       setConfirmandoSobreposicao(true)
       return
@@ -396,7 +403,7 @@ export function TurmaFormModal({ arenaId, turma, turmas, catalogo, onCancelar, o
               <Button
                 type="button"
                 variant="outline"
-                disabled={salvando}
+                disabled={salvando || catalogState?.ready === false}
                 onClick={() => void salvar(true)}
                 className="h-11 border-red-300 bg-white px-5 font-semibold text-red-700 hover:bg-red-100 hover:text-red-800"
               >
@@ -436,7 +443,7 @@ export function TurmaFormModal({ arenaId, turma, turmas, catalogo, onCancelar, o
               </Button>
               <Button
                 type="button"
-                disabled={salvando}
+                disabled={salvando || catalogState?.ready === false}
                 onClick={() => void salvar()}
                 className="h-11 bg-arena-button px-6 font-semibold text-white hover:bg-arena-button-hover"
               >
@@ -449,6 +456,7 @@ export function TurmaFormModal({ arenaId, turma, turmas, catalogo, onCancelar, o
       }
     >
       <div className="space-y-8 pr-1">
+        {catalogState?.feedback}
         <Secao titulo="Identificação">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Campo
