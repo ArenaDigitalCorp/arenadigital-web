@@ -82,7 +82,7 @@ function one<T>(value: T | T[] | null): T | null {
 
 function normalizeStatus(status: string, startTime: string): AppBookingRequestStatus {
   if (status === 'pending' && Date.parse(startTime) <= Date.now()) return 'expired'
-  if (status === 'approved' || status === 'rejected' || status === 'expired') return status
+  if (status === 'approved' || status === 'rejected' || status === 'expired' || status === 'cancelled') return status
   return 'pending'
 }
 

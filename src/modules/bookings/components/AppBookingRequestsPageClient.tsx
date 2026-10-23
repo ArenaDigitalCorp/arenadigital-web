@@ -48,7 +48,7 @@ import type {
   AppBookingRequestView,
 } from '@/modules/bookings/types/app-booking-request.types'
 
-type Filter = 'pending' | 'approved' | 'rejected' | 'expired' | 'all'
+type Filter = AppBookingRequestStatus | 'all'
 type QueueEntry =
   | { kind: 'group'; group: AppBookingRequestGroupView }
   | { kind: 'single'; request: AppBookingRequestView }
@@ -87,6 +87,11 @@ const STATUS_META: Record<AppBookingRequestStatus, {
     label: 'Expirada',
     classes: 'border-slate-200 bg-slate-100 text-slate-600',
     icon: TimerReset,
+  },
+  cancelled: {
+    label: 'Cancelada pelo atleta',
+    classes: 'border-slate-200 bg-slate-100 text-slate-600',
+    icon: XCircle,
   },
 }
 
@@ -371,6 +376,7 @@ export function AppBookingRequestsPageClient({
     { value: 'approved', label: 'Aprovadas' },
     { value: 'rejected', label: 'Recusadas' },
     { value: 'expired', label: 'Expiradas' },
+    { value: 'cancelled', label: 'Canceladas' },
     { value: 'all', label: 'Todas', count: requests.length + groups.length },
   ]
 

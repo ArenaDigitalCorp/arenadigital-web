@@ -1,4 +1,4 @@
-export type AppBookingRequestStatus = 'pending' | 'approved' | 'rejected' | 'expired'
+export type AppBookingRequestStatus = 'pending' | 'approved' | 'rejected' | 'expired' | 'cancelled'
 
 export interface AppBookingRequestParticipantView {
   id: string
