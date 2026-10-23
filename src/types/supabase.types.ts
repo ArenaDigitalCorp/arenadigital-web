@@ -229,6 +229,7 @@ export type Database = {
           accepted_booking_id: string | null
           arena_id: string
           athlete_id: string
+          cancelled_at: string | null
           court_id: string
           created_at: string
           duration_minutes: number
@@ -247,6 +248,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          cancelled_at?: string | null
           accepted_booking_id?: string | null
           arena_id: string
           athlete_id: string
@@ -268,6 +270,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          cancelled_at?: string | null
           accepted_booking_id?: string | null
           arena_id?: string
           athlete_id?: string
@@ -6555,6 +6558,10 @@ export type Database = {
       cancel_monthly_plan_atomic: {
         Args: { p_arena_id: string; p_plan_id: string }
         Returns: Json
+      }
+      cancel_my_app_booking_request: {
+        Args: { p_request_id: string }
+        Returns: Database["public"]["Tables"]["app_booking_requests"]["Row"]
       }
       cancel_my_booking: { Args: { p_booking_id: string }; Returns: string }
       cancel_open_game_request: {
