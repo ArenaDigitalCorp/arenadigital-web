@@ -1,5 +1,6 @@
 "use client"
 
+import { NativeSelect } from "@/components/ui/native-select"
 import { ArenaCommissionFields } from "./ArenaCommissionFields"
 
 import type { FormEvent } from "react"
@@ -537,10 +538,10 @@ export function ArenaPixSplitSettingsCard({
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="baas-company-type">Natureza jurídica</Label>
-                            <select id="baas-company-type" value={onboardingForm.companyType} onChange={(event) => setOnboardingForm((form) => ({ ...form, companyType: event.target.value as AsaasCompanyType | "" }))} className="h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" required>
+                            <NativeSelect id="baas-company-type" value={onboardingForm.companyType} onChange={(event) => setOnboardingForm((form) => ({ ...form, companyType: event.target.value as AsaasCompanyType | "" }))} className="h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" required>
                                 <option value="" disabled>Selecione</option>
                                 {COMPANY_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
-                            </select>
+                            </NativeSelect>
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="baas-email">E-mail</Label>

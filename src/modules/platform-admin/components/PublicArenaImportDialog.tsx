@@ -1,5 +1,6 @@
 "use client"
 
+import { NativeSelect } from "@/components/ui/native-select"
 import { useMemo, useRef, useState, useTransition } from "react"
 import {
   ArrowLeft,
@@ -468,7 +469,7 @@ export function PublicArenaImportDialog({
                   <div className="mt-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
                     <label className="block text-xs font-medium text-slate-700">
                       Origem do arquivo
-                      <select
+                      <NativeSelect
                         value={source}
                         onChange={(event) => setSource(event.target.value as PublicArenaImportSource)}
                         className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-normal outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20"
@@ -476,7 +477,7 @@ export function PublicArenaImportDialog({
                         <option value="csv">CSV próprio</option>
                         <option value="receita_cnpj">Exportado da Receita / CNPJ</option>
                         <option value="brasilapi">Exportado da BrasilAPI</option>
-                      </select>
+                      </NativeSelect>
                       <span className="mt-1 block text-[11px] font-normal leading-4 text-slate-400">Todas as origens usam o mesmo modelo CSV.</span>
                     </label>
                     <div>
@@ -509,18 +510,18 @@ export function PublicArenaImportDialog({
                       <div className="grid gap-4 sm:grid-cols-2">
                         <label className="text-xs font-medium text-slate-700">
                           Estado
-                          <select
+                          <NativeSelect
                             value={stateCode ?? ""}
                             onChange={(event) => void loadMunicipalities(Number(event.target.value))}
                             className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-normal outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20"
                           >
                             <option value="">Selecione o estado</option>
                             {options?.states.map((state) => <option key={state.code} value={state.code}>{state.name} ({state.uf})</option>)}
-                          </select>
+                          </NativeSelect>
                         </label>
                         <label className="text-xs font-medium text-slate-700">
                           Município
-                          <select
+                          <NativeSelect
                             value={municipalityId ?? ""}
                             disabled={!stateCode || loadingMunicipalities}
                             onChange={(event) => setMunicipalityId(Number(event.target.value) || null)}
@@ -528,7 +529,7 @@ export function PublicArenaImportDialog({
                           >
                             <option value="">{loadingMunicipalities ? "Carregando municípios…" : "Selecione o município"}</option>
                             {municipalities.map((city) => <option key={city.code} value={city.code}>{city.name}</option>)}
-                          </select>
+                          </NativeSelect>
                         </label>
                       </div>
 

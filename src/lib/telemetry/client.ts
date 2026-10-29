@@ -99,7 +99,11 @@ export function track(event: string, params: TelemetryParams = {}) {
   const safeEvent = EVENT_NAME_PATTERN.test(event) ? event : 'telemetry_invalid_event'
   const safeParams = logfireEvent('info', safeEvent, params)
 
-  window.gtag?.('event', safeEvent, safeParams)
+  try {
+    window.gtag?.('event', safeEvent, safeParams)
+  } catch {
+    // Analytics failure must not interrupt a completed business operation.
+  }
 }
 
 export function trackAction(
@@ -136,7 +140,10 @@ export function trackClientError(source: string, error?: unknown) {
 }
 
 export function trackScreenView(pathname: string) {
-  track('screen_view', {
+  if (typeof window === 'undefined') return
+  // GA4 measures web page views automatically. Keep the technical screen event
+  // in Logfire so GA4 does not count the same visit as both a page and a screen.
+  logfireEvent('info', 'screen_view', {
     screen_name: pathname,
     page_path: pathname,
     query_present: typeof window !== 'undefined' && window.location.search.length > 0,
