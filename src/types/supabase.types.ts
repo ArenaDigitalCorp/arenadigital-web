@@ -6277,6 +6277,22 @@ export type Database = {
       }
     }
     Functions: {
+      preview_arena_data_cleanup: {
+        Args: { p_actor_user_id: string; p_arena_id: string; p_modules: string[]; p_reason: string; p_cutoff?: string | null }
+        Returns: Json
+      }
+      execute_arena_data_cleanup: {
+        Args: { p_actor_user_id: string; p_arena_id: string; p_operation_id: string; p_confirmation_name: string; p_confirm_test_data: boolean }
+        Returns: Json
+      }
+      restore_arena_data_cleanup: {
+        Args: { p_actor_user_id: string; p_arena_id: string; p_operation_id: string; p_confirmation_name: string; p_reason: string }
+        Returns: Json
+      }
+      list_arena_data_cleanups: {
+        Args: { p_actor_user_id: string; p_arena_id?: string | null; p_before_created_at?: string | null; p_before_id?: string | null }
+        Returns: Json
+      }
       _insert_monthly_plan_month_bookings: {
         Args: {
           p_additional_athlete_ids?: string[]

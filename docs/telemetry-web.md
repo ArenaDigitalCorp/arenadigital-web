@@ -8,7 +8,7 @@ O web usa OpenTelemetry como padrão de instrumentação e Logfire como destino 
 - `logfire` cria logs e spans de negócio no servidor, preservando os campos estruturados e a sanitização já existente.
 - `@pydantic/logfire-browser` captura traces do navegador, navegação e erros globais.
 - O proxy `/logfire-proxy/v1/traces` encaminha os traces do browser para o endpoint OTLP usando `LOGFIRE_TOKEN` somente no servidor.
-- Google Analytics 4 ficou opcional e deve ser usado apenas para analytics de produto, caso ainda seja necessário.
+- Google Analytics 4 usa a propriedade `G-0H2NWTG99B` nos builds de produção para analytics de produto, mantendo o Logfire para observabilidade técnica.
 
 Esse desenho segue a integração oficial do Logfire para Next.js: OpenTelemetry no servidor, SDK browser com instrumentações web e um proxy same-origin para não expor o token no cliente. Consulte a [integração do Logfire com Next.js](https://pydantic.dev/docs/logfire/typescript-sdk/frameworks/nextjs/) e a [referência do SDK browser](https://pydantic.dev/docs/logfire/typescript-sdk/packages/browser/).
 
@@ -34,13 +34,25 @@ NEXT_PUBLIC_APP_VERSION=0.1.0
 
 O token nunca deve usar o prefixo `NEXT_PUBLIC_`. O navegador chama apenas `/logfire-proxy/v1/traces`; o proxy adiciona a autorização no servidor. Em produção, altere `LOGFIRE_ENVIRONMENT` para `production` e configure as variáveis no provedor de hospedagem, sem versioná-las no repositório.
 
-O GA4 é opcional:
+O GA4 carrega a tag `G-0H2NWTG99B` por padrão nos builds de produção. Para usar
+outra propriedade, configure no build:
 
 ```env
-NEXT_PUBLIC_GA_MEASUREMENT_ID=G-XXXXXXXXXX
+NEXT_PUBLIC_GA_MEASUREMENT_ID=G-0H2NWTG99B
 ```
 
-Sem essa variável, nenhum script do GA4 é carregado.
+Em desenvolvimento, a tag só carrega quando essa variável é definida explicitamente.
+Um valor vazio desativa a tag em qualquer ambiente. Nenhuma variável de ambiente
+do hosting é alterada automaticamente pela aplicação.
+
+A tag fica no layout raiz, com `next/script` e `afterInteractive`, evitando uma
+instalação por tela e mantendo o carregamento da interface independente dela.
+As visualizações web usam o `page_view` automático do GA4. No fluxo web da
+propriedade, manter a medição aprimorada de mudanças de histórico habilitada para
+acompanhar a navegação entre rotas do Next.js. Não emitir também `screen_view`
+para o GA4: esse evento técnico continua no Logfire. Essa configuração segue a
+[orientação do Google para aplicações de página única](https://developers.google.com/analytics/devguides/collection/ga4/single-page-applications).
+O código não modifica as configurações da propriedade no painel do Google.
 
 ## Onde ver as informações
 

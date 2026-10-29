@@ -1,5 +1,6 @@
 "use client"
 
+import { NativeSelect } from "@/components/ui/native-select"
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import {
@@ -96,7 +97,7 @@ export function SettingsSection({ overview, initialArenaId }: { overview: Platfo
           description="Onboarding da subconta, aprovação cadastral e taxa aplicada às reservas do aplicativo."
           className="mt-4"
           action={customerArenas.length > 0 ? (
-            <label className="text-xs font-bold text-slate-600">Arena<select value={paymentArenaId} onChange={(event) => setPaymentArenaId(event.target.value)} className="mt-1 block h-10 min-w-64 rounded-xl border border-slate-300 bg-white px-3 text-sm font-normal text-slate-950">{customerArenas.map((arena) => <option key={arena.id} value={arena.id}>{arena.name}</option>)}</select></label>
+            <label className="text-xs font-bold text-slate-600">Arena<NativeSelect value={paymentArenaId} onChange={(event) => setPaymentArenaId(event.target.value)} className="mt-1 block h-10 min-w-64 rounded-xl border border-slate-300 bg-white px-3 text-sm font-normal text-slate-950">{customerArenas.map((arena) => <option key={arena.id} value={arena.id}>{arena.name}</option>)}</NativeSelect></label>
           ) : undefined}
         >
           <div className="p-4">
@@ -129,9 +130,9 @@ export function SettingsSection({ overview, initialArenaId }: { overview: Platfo
         <div className="mt-4 grid gap-4 xl:grid-cols-[.8fr_1.2fr]">
           <Panel eyebrow="Acesso operacional" title="Conceder plano interno" description="Uso de funcionário, sem cobrança e com motivo auditável.">
             <div className="space-y-4 p-5">
-              <label className="block text-xs font-bold text-slate-600">Funcionário<select value={employeeId} onChange={(event) => { setEmployeeId(event.target.value); setArenaId("") }} className="mt-2 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-normal"><option value="">Selecione</option>{activePrincipals.map((principal) => <option key={principal.userId} value={principal.userId}>{principal.name || principal.email}</option>)}</select></label>
-              <label className="block text-xs font-bold text-slate-600">Arena vinculada<select value={arenaId} onChange={(event) => setArenaId(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-normal"><option value="">Selecione</option>{eligibleArenas.map((arena) => <option key={arena.id} value={arena.id}>{arena.name}</option>)}</select></label>
-              <label className="block text-xs font-bold text-slate-600">Operação<select value={planEnabled ? "grant" : "revoke"} onChange={(event) => setPlanEnabled(event.target.value === "grant")} className="mt-2 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-normal"><option value="grant">Conceder plano interno</option><option value="revoke">Revogar plano interno</option></select></label>
+              <label className="block text-xs font-bold text-slate-600">Funcionário<NativeSelect value={employeeId} onChange={(event) => { setEmployeeId(event.target.value); setArenaId("") }} className="mt-2 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-normal"><option value="">Selecione</option>{activePrincipals.map((principal) => <option key={principal.userId} value={principal.userId}>{principal.name || principal.email}</option>)}</NativeSelect></label>
+              <label className="block text-xs font-bold text-slate-600">Arena vinculada<NativeSelect value={arenaId} onChange={(event) => setArenaId(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-normal"><option value="">Selecione</option>{eligibleArenas.map((arena) => <option key={arena.id} value={arena.id}>{arena.name}</option>)}</NativeSelect></label>
+              <label className="block text-xs font-bold text-slate-600">Operação<NativeSelect value={planEnabled ? "grant" : "revoke"} onChange={(event) => setPlanEnabled(event.target.value === "grant")} className="mt-2 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-normal"><option value="grant">Conceder plano interno</option><option value="revoke">Revogar plano interno</option></NativeSelect></label>
               <Textarea value={planReason} onChange={(event) => setPlanReason(event.target.value)} placeholder="Motivo obrigatório para auditoria" className="min-h-24" />
               <Button onClick={saveInternalPlan} disabled={pending} className={cn("w-full rounded-xl", planEnabled ? "bg-orange-500 text-arena-navy-950 hover:bg-orange-400" : "bg-rose-700 text-white hover:bg-rose-600")}><CircleDollarSign className="h-4 w-4" />{planEnabled ? "Conceder sem cobrança" : "Revogar plano"}</Button>
             </div>
