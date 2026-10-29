@@ -32,9 +32,24 @@ export const cleanupOperationSchema = z.object({
     canExecute: z.boolean(), blockers: z.array(z.object({code:z.string(),message:z.string(),count:z.number().nonnegative(),requiredModule:z.enum(CLEANUP_MODULE_IDS).nullable().optional()})),
     recordCount: z.number().int().nonnegative().optional(), effectCount: z.number().int().nonnegative().optional(),
     moduleCounts: z.array(z.object({module:z.enum(CLEANUP_MODULE_IDS),label:z.string(),count:z.number().int().nonnegative()})).optional(),
+    dependencies: z.array(z.object({
+      from: z.enum(CLEANUP_MODULE_IDS), to: z.enum(CLEANUP_MODULE_IDS).nullable(), label: z.string(),
+      kind: z.enum(['foreign_key','financial_source','stock_source','closed_cash']),
+      count: z.number().int().nonnegative(), includedCount: z.number().int().nonnegative(),
+      missingCount: z.number().int().nonnegative(), blockedCount: z.number().int().nonnegative(), canInclude: z.boolean(),
+    })).optional(),
   }),
 })
 
 export const cleanupHistoryCursorSchema = z.object({
   createdAt: z.string().datetime({offset:true}), id: z.string().uuid(),
 }).strict().nullable()
+
+export const cleanupSelectionInputSchema = cleanupPreviewSchema.omit({reason:true}).extend({
+  modules: z.array(z.enum(CLEANUP_MODULE_IDS)).max(CLEANUP_MODULES.length),
+}).strict()
+export const cleanupSelectionSchema = z.object({
+  arenaId: z.string().uuid(), requestedModules: z.array(z.enum(CLEANUP_MODULE_IDS)),
+  modules: z.array(z.enum(CLEANUP_MODULE_IDS)), cutoff: z.string().datetime({offset:true}),
+  dependencies: cleanupOperationSchema.shape.summary.shape.dependencies.unwrap(), resolved: z.literal(true),
+}).refine(value => new Set(value.modules).size===value.modules.length && value.requestedModules.every(id=>value.modules.includes(id)), 'Não foi possível validar os vínculos da seleção.')

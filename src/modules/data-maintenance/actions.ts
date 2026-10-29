@@ -5,8 +5,20 @@ import { z } from 'zod'
 import { assertPlatformSuperAdminAccess, AuthorizationError } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { fetchAllSupabaseRows } from '@/lib/supabase-pagination'
-import { cleanupPreviewSchema, cleanupExecuteSchema, cleanupRestoreSchema, cleanupOperationSchema, cleanupHistoryCursorSchema } from './schema'
-import type { CleanupArena, CleanupOperation, CleanupResult } from './types'
+import { cleanupPreviewSchema, cleanupExecuteSchema, cleanupRestoreSchema, cleanupOperationSchema, cleanupHistoryCursorSchema, cleanupSelectionInputSchema, cleanupSelectionSchema } from './schema'
+import type { CleanupArena, CleanupOperation, CleanupResult, CleanupSelection } from './types'
+
+export async function resolveArenaCleanupSelection(input: unknown): Promise<CleanupResult<CleanupSelection>> {
+  try {
+    const actor = await assertPlatformSuperAdminAccess()
+    const parsed = cleanupSelectionInputSchema.parse(input)
+    const {data,error} = await getSupabaseAdmin().rpc('resolve_arena_cleanup_selection', {
+      p_actor_user_id:actor.dbUserId, p_arena_id:parsed.arenaId, p_modules:parsed.modules, p_cutoff:parsed.cutoff,
+    })
+    if (error) throw error
+    return {success:true,data:cleanupSelectionSchema.parse(data)}
+  } catch (error) { return failure(error) }
+}
 
 function failure(error: unknown, restoring = false): { success: false; error: string; unavailable?: boolean } {
   if (error instanceof z.ZodError) return { success: false, error: error.issues[0]?.message ?? 'Confira os dados informados.' }
