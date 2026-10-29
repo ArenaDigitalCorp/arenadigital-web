@@ -6277,6 +6277,10 @@ export type Database = {
       }
     }
     Functions: {
+      resolve_arena_cleanup_selection: {
+        Args: { p_actor_user_id: string; p_arena_id: string; p_modules: string[]; p_cutoff?: string | null }
+        Returns: Json
+      }
       preview_arena_data_cleanup: {
         Args: { p_actor_user_id: string; p_arena_id: string; p_modules: string[]; p_reason: string; p_cutoff?: string | null }
         Returns: Json

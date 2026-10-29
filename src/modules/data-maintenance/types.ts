@@ -2,6 +2,17 @@ import type { CleanupModule } from './catalog'
 export type { CleanupModule } from './catalog'
 export type CleanupArena = { id: string; name: string; document: string | null; kind: string }
 export type CleanupBlocker = { code: string; message: string; count: number; requiredModule?: CleanupModule | null }
+export type CleanupDependency = {
+  from: CleanupModule
+  to: CleanupModule | null
+  label: string
+  kind: 'foreign_key' | 'financial_source' | 'stock_source' | 'closed_cash'
+  count: number
+  includedCount: number
+  missingCount: number
+  blockedCount: number
+  canInclude: boolean
+}
 export type CleanupOperation = {
   id: string
   arenaId: string
@@ -27,6 +38,15 @@ export type CleanupOperation = {
     recordCount?: number
     effectCount?: number
     moduleCounts?: Array<{ module: CleanupModule; label: string; count: number }>
+    dependencies?: CleanupDependency[]
   }
 }
 export type CleanupResult<T> = { success: true; data: T } | { success: false; error: string; unavailable?: boolean }
+export type CleanupSelection = {
+  arenaId: string
+  requestedModules: CleanupModule[]
+  modules: CleanupModule[]
+  cutoff: string
+  dependencies: CleanupDependency[]
+  resolved: true
+}
