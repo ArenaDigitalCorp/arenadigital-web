@@ -1,5 +1,6 @@
 "use client"
 
+import { NativeSelect } from "@/components/ui/native-select"
 import { FormEvent, useMemo, useState, useTransition } from "react"
 import { format } from "date-fns"
 import { ExternalLink, Megaphone, Pencil, Plus, Trash2 } from "lucide-react"
@@ -128,7 +129,7 @@ function SelectField<T extends string>({
   options: Array<{ value: T; label: string }>
 }) {
   return (
-    <select
+    <NativeSelect
       value={value}
       onChange={(event) => onChange(event.target.value as T)}
       className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
@@ -138,7 +139,7 @@ function SelectField<T extends string>({
           {option.label}
         </option>
       ))}
-    </select>
+    </NativeSelect>
   )
 }
 
@@ -154,7 +155,7 @@ function OptionSelect({
   placeholder: string
 }) {
   return (
-    <select
+    <NativeSelect
       value={value}
       onChange={(event) => onChange(event.target.value)}
       className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
@@ -165,7 +166,7 @@ function OptionSelect({
           {option.name}
         </option>
       ))}
-    </select>
+    </NativeSelect>
   )
 }
 

@@ -1,5 +1,6 @@
 "use client"
 
+import { NativeSelect } from "@/components/ui/native-select"
 import { useState, useTransition } from "react"
 import { Eye, EyeOff, Save, ShieldAlert } from "lucide-react"
 import { toast } from "sonner"
@@ -67,7 +68,7 @@ export function PlatformArenaProfileCard({ arena }: { arena: PlatformArena }) {
       <div className="mt-5 grid gap-4">
         <label className="block text-xs font-bold uppercase tracking-wide text-slate-500">
           Tipo da arena
-          <select
+          <NativeSelect
             value={platformKind}
             onChange={(event) => setPlatformKind(event.target.value as PlatformArenaKind)}
             className="mt-2 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold normal-case tracking-normal text-slate-950"
@@ -75,7 +76,7 @@ export function PlatformArenaProfileCard({ arena }: { arena: PlatformArena }) {
             {(Object.keys(KIND_LABEL) as PlatformArenaKind[]).map((kind) => (
               <option key={kind} value={kind} disabled={kindTransitionDisabled(kind)}>{KIND_LABEL[kind]}</option>
             ))}
-          </select>
+          </NativeSelect>
           {arena.ownerId === null && (
             <span className="mt-2 block text-xs font-normal normal-case tracking-normal text-slate-500">
               Para virar cliente, este local precisa passar pelo fluxo de vínculo com uma conta proprietária.

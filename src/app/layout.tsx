@@ -8,7 +8,8 @@ import { TelemetryPageView } from "@/components/telemetry/TelemetryPageView";
 import Script from "next/script";
 import "./globals.css";
 
-const googleAnalyticsId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
+const googleAnalyticsId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID
+  ?? (process.env.NODE_ENV === "production" ? "G-0H2NWTG99B" : undefined);
 
 const exo = Exo({
   variable: "--font-exo",

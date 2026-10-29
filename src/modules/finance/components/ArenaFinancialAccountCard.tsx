@@ -1,5 +1,6 @@
 'use client'
 
+import { NativeSelect } from "@/components/ui/native-select"
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { format } from 'date-fns'
 import Link from 'next/link'
@@ -300,13 +301,13 @@ export function ArenaFinancialAccountCard({ arenaId }: { arenaId: string }) {
           <div className="grid gap-4 py-2">
             <label className="grid gap-2 text-sm font-bold text-arena-navy-800">
               Tipo da chave
-              <select
+              <NativeSelect
                 className="h-10 rounded-md border border-input bg-transparent px-3 text-sm"
                 value={pixKeyType}
                 onChange={(event) => { setPixKeyType(event.target.value as ArenaPixKeyType); setPixKey('') }}
               >
                 {PIX_KEY_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
-              </select>
+              </NativeSelect>
             </label>
             <label className="grid gap-2 text-sm font-bold text-arena-navy-800">
               Chave Pix

@@ -1,5 +1,6 @@
 "use client"
 
+import { NativeSelect } from "@/components/ui/native-select"
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import {
   Bot,
@@ -542,7 +543,7 @@ export function PublicArenaImportCampaigns({
                   </label>
                   <label className="text-xs font-bold text-slate-700">
                     Estado para selecionar municípios
-                    <select
+                    <NativeSelect
                       value={stateCode ?? ""}
                       onChange={(event) => void loadMunicipalities(Number(event.target.value))}
                       className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-normal"
@@ -551,7 +552,7 @@ export function PublicArenaImportCampaigns({
                       {options?.states.map((state) => (
                         <option key={state.code} value={state.code}>{state.name} ({state.uf})</option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </label>
                 </div>
 

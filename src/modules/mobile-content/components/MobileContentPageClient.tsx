@@ -1,5 +1,7 @@
 "use client"
 
+import { NativeSelect } from "@/components/ui/native-select"
+
 import { FormEvent, ReactNode, useState, useTransition } from "react"
 import { format } from "date-fns"
 import { CalendarPlus, Megaphone, Plus, Sparkles, UsersRound } from "lucide-react"
@@ -84,7 +86,7 @@ function OptionSelect({
   required?: boolean
 }) {
   return (
-    <select
+    <NativeSelect
       value={value}
       required={required}
       onChange={(event) => onChange(event.target.value)}
@@ -96,7 +98,7 @@ function OptionSelect({
           {option.name}
         </option>
       ))}
-    </select>
+    </NativeSelect>
   )
 }
 

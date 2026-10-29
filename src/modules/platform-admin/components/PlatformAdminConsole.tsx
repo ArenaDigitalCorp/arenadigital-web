@@ -1,5 +1,6 @@
 "use client"
 
+import { NativeSelect } from "@/components/ui/native-select"
 import Link from 'next/link'
 import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
@@ -261,7 +262,7 @@ export function PlatformAdminConsole({ overview, surface = 'platform' }: Props) 
             <div className="grid gap-4 md:grid-cols-2">
               <label className="space-y-1.5 text-sm font-medium text-slate-700">
                 Conta
-                <select
+                <NativeSelect
                   className={SELECT_CLASS}
                   value={principalUserId}
                   disabled={overview.currentAccessLevel !== 'super_admin'}
@@ -276,11 +277,11 @@ export function PlatformAdminConsole({ overview, surface = 'platform' }: Props) 
                   {overview.users.map((user) => (
                     <option key={user.id} value={user.id}>{user.name || user.email} · {user.email}</option>
                   ))}
-                </select>
+                </NativeSelect>
               </label>
               <label className="space-y-1.5 text-sm font-medium text-slate-700">
                 Nível de acesso
-                <select
+                <NativeSelect
                   className={SELECT_CLASS}
                   value={principalLevel}
                   disabled={overview.currentAccessLevel !== 'super_admin'}
@@ -289,11 +290,11 @@ export function PlatformAdminConsole({ overview, surface = 'platform' }: Props) 
                   <option value="employee">Funcionário</option>
                   <option value="platform_admin">Admin da plataforma</option>
                   <option value="super_admin">Superadmin</option>
-                </select>
+                </NativeSelect>
               </label>
               <label className="space-y-1.5 text-sm font-medium text-slate-700">
                 Operação
-                <select
+                <NativeSelect
                   className={SELECT_CLASS}
                   value={principalEnabled ? 'enable' : 'revoke'}
                   disabled={overview.currentAccessLevel !== 'super_admin'}
@@ -301,7 +302,7 @@ export function PlatformAdminConsole({ overview, surface = 'platform' }: Props) 
                 >
                   <option value="enable">Conceder ou atualizar</option>
                   <option value="revoke">Revogar acesso</option>
-                </select>
+                </NativeSelect>
               </label>
               <label className="space-y-1.5 text-sm font-medium text-slate-700">
                 Expiração opcional
@@ -366,7 +367,7 @@ export function PlatformAdminConsole({ overview, surface = 'platform' }: Props) 
             <div className="grid gap-4 md:grid-cols-2">
               <label className="space-y-1.5 text-sm font-medium text-slate-700">
                 Funcionário
-                <select
+                <NativeSelect
                   className={SELECT_CLASS}
                   value={planEmployeeId}
                   onChange={(event) => {
@@ -380,23 +381,23 @@ export function PlatformAdminConsole({ overview, surface = 'platform' }: Props) 
                       {employee.name || employee.email} · {accessLabel(employee.accessLevel)}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </label>
               <label className="space-y-1.5 text-sm font-medium text-slate-700">
                 Arena vinculada
-                <select className={SELECT_CLASS} value={planArenaId} onChange={(event) => setPlanArenaId(event.target.value)}>
+                <NativeSelect className={SELECT_CLASS} value={planArenaId} onChange={(event) => setPlanArenaId(event.target.value)}>
                   <option value="">Selecione</option>
                   {eligibleArenas.map((arena) => (
                     <option key={arena.id} value={arena.id}>{arena.name} · {arena.ownerEmail}</option>
                   ))}
-                </select>
+                </NativeSelect>
               </label>
               <label className="space-y-1.5 text-sm font-medium text-slate-700 md:col-span-2">
                 Operação
-                <select className={SELECT_CLASS} value={planEnabled ? 'enable' : 'revoke'} onChange={(event) => setPlanEnabled(event.target.value === 'enable')}>
+                <NativeSelect className={SELECT_CLASS} value={planEnabled ? 'enable' : 'revoke'} onChange={(event) => setPlanEnabled(event.target.value === 'enable')}>
                   <option value="enable">Conceder plano interno</option>
                   <option value="revoke">Revogar plano interno</option>
-                </select>
+                </NativeSelect>
               </label>
             </div>
             {planEmployeeId && eligibleArenas.length === 0 && (

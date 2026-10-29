@@ -1,5 +1,6 @@
 "use client"
 
+import { NativeSelect } from "@/components/ui/native-select"
 import { Card } from "@/components/ui/card";
 import { BarChart3, ArrowRight } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -149,14 +150,14 @@ export function FinanceDashboardClient({ arenaId, initialSummary, initialRecentE
                             </div>
                             <h3 className="text-xl font-bold text-arena-navy-800">Comparativo</h3>
                         </div>
-                        <select
+                        <NativeSelect
                             value={period}
                             onChange={(e) => setPeriod(e.target.value as '7d' | '30d')}
                             className="bg-white border border-arena-navy-800/10 rounded-lg px-3 py-2 text-sm text-arena-navy-800/60 focus:outline-none focus:ring-2 focus:ring-arena-button/20 transition-all font-bold"
                         >
                             <option value="7d">Última semana</option>
                             <option value="30d">Últimos 30 dias</option>
-                        </select>
+                        </NativeSelect>
                     </div>
 
                     <div className="flex gap-8 flex-1">
