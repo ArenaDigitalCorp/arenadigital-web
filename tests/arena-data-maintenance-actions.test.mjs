@@ -11,6 +11,7 @@ function harness({denied=false,rpcError=null,cacheError=false}={}) {
     '@/lib/server-auth':{AuthorizationError,assertPlatformSuperAdminAccess:async()=>{if(denied)throw new AuthorizationError('Denied');return {dbUserId:actorId}}},
     '@/lib/supabase-server':{getSupabaseAdmin:()=>({rpc:async(name,args)=>{
       calls.push({name,args});if(rpcError)return {data:null,error:rpcError}
+      if(name==='resolve_arena_cleanup_selection')return {data:{arenaId:args.p_arena_id,requestedModules:args.p_modules,modules:args.p_modules,cutoff:'2026-10-28T12:00:00.123456Z',dependencies:[],resolved:true},error:null}
       return {data:name==='list_arena_data_cleanups'?[operation]:{...operation,status:name==='execute_arena_data_cleanup'?'completed':name==='restore_arena_data_cleanup'?'restored':'preview'},error:null}
     }})},
     'next/cache':{revalidatePath:path=>{invalidations.push(path);if(cacheError)throw Error('cache unavailable')}},
@@ -96,4 +97,14 @@ test('history cursor remains validated and bound to the selected arena and serve
   assert.equal(subject.calls[0].args.p_before_id,operation.id)
   assert.equal((await subject.listArenaCleanups(arenaId,{createdAt:'invalid',id:operation.id})).success,false)
   assert.equal(subject.calls.length,1)
+})
+
+test('live selection resolution authenticates the actor and does not accept client SQL or a forged actor',async()=>{
+ const denied=harness({denied:true});assert.equal((await denied.resolveArenaCleanupSelection({})).success,false);assert.equal(denied.calls.length,0)
+ const subject=harness(),input={arenaId,modules:['bookings'],cutoff:null}
+ const result=await subject.resolveArenaCleanupSelection(input);assert.equal(result.success,true)
+ assert.equal(subject.calls[0].name,'resolve_arena_cleanup_selection');assert.equal(subject.calls[0].args.p_actor_user_id,actorId)
+ assert.equal(subject.calls[0].args.p_arena_id,arenaId)
+ for(const extra of [{actorUserId:'forged'},{tables:['users']},{sql:'delete from users'}])assert.equal((await subject.resolveArenaCleanupSelection({...input,...extra})).success,false)
+ assert.equal(subject.calls.length,1)
 })
