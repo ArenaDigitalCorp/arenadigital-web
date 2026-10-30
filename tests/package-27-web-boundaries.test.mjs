@@ -106,8 +106,9 @@ test('package 27 clients stop on structured failures before local success state'
     source('src/modules/rotativos/components/CadastradosTab.tsx'),
   ])
 
-  for (const action of ['upsertArenaPromotionAction', 'upsertArenaHighlightAction', 'upsertOpenGameAction']) {
+  for (const action of ['upsertArenaPromotionAction', 'upsertOpenGameAction']) {
     assert.match(mobileClient, new RegExp(`${action}\\([\\s\\S]{0,700}if \\(!result\\.success\\)[\\s\\S]{0,100}return`))
   }
+  assert.doesNotMatch(mobileClient, /upsertArenaHighlightAction\(/)
   assert.match(rotativoClient, /setRotativoStatusAction[\s\S]{0,180}if \(result\.success\)[\s\S]{0,220}else \{[\s\S]{0,80}toast\.error/)
 })

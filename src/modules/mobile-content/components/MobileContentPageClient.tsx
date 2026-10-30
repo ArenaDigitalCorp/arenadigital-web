@@ -1,10 +1,9 @@
 "use client"
 
 import { NativeSelect } from "@/components/ui/native-select"
-
 import { FormEvent, ReactNode, useState, useTransition } from "react"
 import { format } from "date-fns"
-import { CalendarPlus, Megaphone, Plus, Sparkles, UsersRound } from "lucide-react"
+import { CalendarPlus, Megaphone, Plus, UsersRound } from "lucide-react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -15,18 +14,14 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { DashboardTabs } from "@/components/dashboard/DashboardTabs"
 import {
-  listArenaHighlightsAction,
   listArenaOpenGamesAction,
   listArenaPromotionsAction,
-  setArenaHighlightActiveAction,
   setArenaPromotionActiveAction,
-  upsertArenaHighlightAction,
   upsertArenaPromotionAction,
   upsertOpenGameAction,
 } from "@/modules/mobile-content/actions/mobileContentActions"
 import type {
   MobileContentOption,
-  MobileHighlight,
   MobileOpenGame,
   MobilePromotion,
 } from "@/modules/mobile-content/types/mobile-content.types"
@@ -40,7 +35,6 @@ interface Props {
   sports: MobileContentOption[]
   athletes: MobileContentOption[]
   initialPromotions: MobilePromotion[]
-  initialHighlights: MobileHighlight[]
   initialOpenGames: MobileOpenGame[]
 }
 
@@ -48,10 +42,6 @@ const NONE_VALUE = "__none__"
 
 function todayKey() {
   return format(new Date(), "yyyy-MM-dd")
-}
-
-function toOptionalValue(value: string) {
-  return value === NONE_VALUE || value.trim() === "" ? null : value
 }
 
 function formatDateTime(value: string | null | undefined) {
@@ -108,25 +98,14 @@ export function MobileContentPageClient({
   sports,
   athletes,
   initialPromotions,
-  initialHighlights,
   initialOpenGames,
 }: Props) {
   const [activeTab, setActiveTab] = useState<TabValue>("promotions")
   const [promotions, setPromotions] = useState(initialPromotions)
-  const [highlights, setHighlights] = useState(initialHighlights)
   const [openGames, setOpenGames] = useState(initialOpenGames)
   const [isPending, startTransition] = useTransition()
 
   const [promotionDraft, setPromotionDraft] = useState({ title: "", image_url: "" })
-
-  const [highlightDraft, setHighlightDraft] = useState({
-    title: "",
-    description: "",
-    image_url: "",
-    sport_id: NONE_VALUE,
-    priority: "0",
-    active: true,
-  })
 
   const [openGameDraft, setOpenGameDraft] = useState({
     sport_id: "",
@@ -141,11 +120,6 @@ export function MobileContentPageClient({
   const refreshPromotions = async () => {
     const result = await listArenaPromotionsAction(arenaId)
     if (result.success) setPromotions(result.data)
-  }
-
-  const refreshHighlights = async () => {
-    const result = await listArenaHighlightsAction(arenaId)
-    if (result.success) setHighlights(result.data)
   }
 
   const refreshOpenGames = async () => {
@@ -173,29 +147,6 @@ export function MobileContentPageClient({
       toast.success("Divulgação de horário publicada no app.")
       setPromotionDraft({ title: "", image_url: "" })
       await refreshPromotions()
-    })
-  }
-
-  const saveHighlight = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    startTransition(async () => {
-      const result = await upsertArenaHighlightAction(arenaId, {
-        title: highlightDraft.title.trim(),
-        description: highlightDraft.description.trim() || null,
-        image_url: highlightDraft.image_url.trim() || null,
-        sport_id: toOptionalValue(highlightDraft.sport_id),
-        priority: Number(highlightDraft.priority || 0),
-        active: highlightDraft.active,
-      })
-
-      if (!result.success) {
-        toast.error(result.error)
-        return
-      }
-
-      toast.success("Destaque salvo para o app.")
-      setHighlightDraft((draft) => ({ ...draft, title: "", description: "", image_url: "" }))
-      await refreshHighlights()
     })
   }
 
@@ -235,23 +186,12 @@ export function MobileContentPageClient({
     })
   }
 
-  const toggleHighlight = (highlight: MobileHighlight, active: boolean) => {
-    startTransition(async () => {
-      const result = await setArenaHighlightActiveAction(arenaId, highlight.id, active)
-      if (!result.success) {
-        toast.error(result.error)
-        return
-      }
-      setHighlights((rows) => rows.map((row) => (row.id === highlight.id ? { ...row, active } : row)))
-    })
-  }
-
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-bold text-gray-900">Conteúdo do app</h1>
         <p className="text-sm text-gray-500">
-          Publique horários disponíveis, destaques e vagas abertas da {arenaName}.
+          Publique horários disponíveis e vagas abertas da {arenaName}.
         </p>
       </div>
 
@@ -307,58 +247,14 @@ export function MobileContentPageClient({
       )}
 
       {activeTab === "highlights" && (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,380px)_1fr]">
-          <Card className="h-fit p-5">
-            <form className="space-y-4" onSubmit={saveHighlight}>
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-arena-orange" />
-                <h2 className="font-bold text-gray-900">Novo destaque</h2>
-              </div>
-              <Field label="Título">
-                <Input required value={highlightDraft.title} onChange={(event) => setHighlightDraft((draft) => ({ ...draft, title: event.target.value }))} />
-              </Field>
-              <Field label="Descrição">
-                <Textarea value={highlightDraft.description} onChange={(event) => setHighlightDraft((draft) => ({ ...draft, description: event.target.value }))} />
-              </Field>
-              <Field label="Imagem URL">
-                <Input value={highlightDraft.image_url} onChange={(event) => setHighlightDraft((draft) => ({ ...draft, image_url: event.target.value }))} />
-              </Field>
-              <Field label="Esporte">
-                <OptionSelect value={highlightDraft.sport_id} onChange={(sport_id) => setHighlightDraft((draft) => ({ ...draft, sport_id }))} options={sports} placeholder="Todos os esportes" />
-              </Field>
-              <div className="grid grid-cols-[1fr_auto] items-end gap-3">
-                <Field label="Prioridade">
-                  <Input type="number" value={highlightDraft.priority} onChange={(event) => setHighlightDraft((draft) => ({ ...draft, priority: event.target.value }))} />
-                </Field>
-                <div className="flex h-10 items-center gap-2">
-                  <Switch checked={highlightDraft.active} onCheckedChange={(active) => setHighlightDraft((draft) => ({ ...draft, active }))} />
-                  <span className="text-sm font-medium text-gray-600">Ativo</span>
-                </div>
-              </div>
-              <Button type="submit" disabled={isPending} className="w-full bg-arena-navy-800 text-white hover:bg-[#001D2C]">
-                <Plus className="h-4 w-4" />
-                Salvar destaque
-              </Button>
-            </form>
-          </Card>
-
-          <div className="space-y-3">
-            {highlights.map((highlight) => (
-              <Card key={highlight.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="font-bold text-gray-900">{highlight.title}</h3>
-                    <Badge variant={highlight.active ? "default" : "secondary"}>{highlight.active ? "Ativo" : "Pausado"}</Badge>
-                  </div>
-                  <p className="text-sm text-gray-500">{highlight.description || "Sem descrição"}</p>
-                  <p className="text-xs text-gray-400">{highlight.sports?.name ?? "Todos os esportes"} · prioridade {highlight.priority}</p>
-                </div>
-                <Switch checked={highlight.active} onCheckedChange={(active) => toggleHighlight(highlight, active)} />
-              </Card>
-            ))}
-            {highlights.length === 0 && <Card className="p-8 text-center text-sm text-gray-500">Nenhum destaque publicado.</Card>}
-          </div>
-        </div>
+        <Card className="space-y-2 p-5">
+          <h2 className="font-bold text-gray-900">Destaque automático de nova arena</h2>
+          <p className="text-sm leading-relaxed text-gray-500">
+            Novas arenas aparecem na Home quando ficam ativas e visíveis no app.
+            O destaque usa o banner da arena e não tem prazo de expiração.
+            Se a arena ficar oculta ou inativa, o post também deixa de aparecer.
+          </p>
+        </Card>
       )}
 
       {activeTab === "open-games" && (
