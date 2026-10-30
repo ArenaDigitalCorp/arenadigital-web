@@ -5,7 +5,6 @@ import { SupabaseArenaRepository } from "@/modules/arenas/repositories/SupabaseA
 import { MobileContentPageClient } from "@/modules/mobile-content/components/MobileContentPageClient"
 import {
   listArenaAthletesForMobileContentAction,
-  listArenaHighlightsAction,
   listArenaOpenGamesAction,
   listArenaPromotionsAction,
 } from "@/modules/mobile-content/actions/mobileContentActions"
@@ -27,11 +26,10 @@ export default async function ArenaMobileContentPage({
   const supabase = getSupabaseAdmin()
   const arenaRepo = new SupabaseArenaRepository(supabase)
 
-  const [arena, courtsRaw, promotions, highlights, openGames, athletes] = await Promise.all([
+  const [arena, courtsRaw, promotions, openGames, athletes] = await Promise.all([
     arenaRepo.findById(id),
     supabase.from("courts").select("id, name").eq("arena_id", id).order("name"),
     listArenaPromotionsAction(id),
-    listArenaHighlightsAction(id),
     listArenaOpenGamesAction(id),
     listArenaAthletesForMobileContentAction(id),
   ])
@@ -51,7 +49,6 @@ export default async function ArenaMobileContentPage({
       sports={arena.sports ?? []}
       athletes={athletes.success ? athletes.data : []}
       initialPromotions={promotions.success ? promotions.data : []}
-      initialHighlights={highlights.success ? highlights.data : []}
       initialOpenGames={openGames.success ? openGames.data : []}
     />
   )
