@@ -8,14 +8,15 @@ export function includableDependencies(edges: CleanupDependency[], selected: Cle
 
 export function dependencyGroups(edges: CleanupDependency[], selected: CleanupModule[]) {
   const available = includableDependencies(edges, selected)
-  const groups = new Map<string, { to: CleanupModule | null; label: string; from: CleanupModule[]; count: number; missing: number; blocked: number }>()
+  const groups = new Map<string, { key:string; to: CleanupModule | null; label: string; from: CleanupModule[]; count: number; missing: number; blocked: number; reasons:NonNullable<CleanupDependency['reasons']> }>()
   for (const edge of edges) {
-    const key = edge.to ?? 'protected'
-    const group = groups.get(key) ?? { to: edge.to, label: edge.label, from: [], count: 0, missing: 0, blocked: 0 }
+    const key = edge.to ?? `protected:${edge.label}`
+    const group = groups.get(key) ?? { key,to: edge.to, label: edge.label, from: [], count: 0, missing: 0, blocked: 0,reasons:[] }
     if (!group.from.includes(edge.from)) group.from.push(edge.from)
     group.count += edge.count
     group.missing += edge.missingCount
     group.blocked += edge.blockedCount
+    group.reasons=[...new Set([...group.reasons,...(edge.reasons??[])])]
     groups.set(key, group)
   }
   return [...groups.values()].map(group => ({ ...group, status: group.blocked > 0 || (group.missing > 0 && (!group.to || !available.includes(group.to))) ? 'protected' as const : group.missing > 0 ? 'required' as const : 'included' as const }))

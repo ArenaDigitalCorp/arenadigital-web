@@ -27,7 +27,7 @@ export const CLEANUP_MODULES = [
     "id": "bookings",
     "group": "Reservas e agenda",
     "label": "Reservas",
-    "description": "Reservas e seus participantes e serviços. A prévia aponta pagamentos e outros vínculos que também precisam ser selecionados."
+    "description": "Reservas, participantes, serviços e grupos do app com suas regras de cancelamento. Pagamentos do provedor e checkouts em andamento permanecem protegidos."
   },
   {
     "id": "booking_requests",
