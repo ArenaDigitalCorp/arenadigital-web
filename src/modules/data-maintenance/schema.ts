@@ -33,6 +33,7 @@ export const cleanupOperationSchema = z.object({
     recordCount: z.number().int().nonnegative().optional(), effectCount: z.number().int().nonnegative().optional(),
     moduleCounts: z.array(z.object({module:z.enum(CLEANUP_MODULE_IDS),label:z.string(),count:z.number().int().nonnegative()})).optional(),
     bookingGroups: z.object({groups:z.number().int().nonnegative(),items:z.number().int().nonnegative(),policySnapshots:z.number().int().nonnegative()}).optional(),
+    groupPaymentHistory: z.object({payments:z.number().int().nonnegative(),webhooks:z.number().int().nonnegative(),refundDecisions:z.number().int().nonnegative(),refundAttempts:z.number().int().nonnegative()}).optional(),
     dependencies: z.array(z.object({
       from: z.enum(CLEANUP_MODULE_IDS), to: z.enum(CLEANUP_MODULE_IDS).nullable(), label: z.string(),
       kind: z.enum(['foreign_key','financial_source','stock_source','closed_cash']),

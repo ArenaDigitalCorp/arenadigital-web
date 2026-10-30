@@ -40,6 +40,7 @@ export type CleanupOperation = {
     effectCount?: number
     moduleCounts?: Array<{ module: CleanupModule; label: string; count: number }>
     bookingGroups?: { groups: number; items: number; policySnapshots: number }
+    groupPaymentHistory?: { payments: number; webhooks: number; refundDecisions: number; refundAttempts: number }
     dependencies?: CleanupDependency[]
   }
 }

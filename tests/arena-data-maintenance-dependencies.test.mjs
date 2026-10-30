@@ -79,3 +79,25 @@ test('ownership follows explicit roots through cycles and shared children',()=>{
  assert.equal(shared.fullyExplained,true)
  assert.equal(selectionOwnership(['bookings'],['bookings','arena_users'],[]).fullyExplained,false)
 })
+
+test('group reservations visibly include provider charges, webhooks and completed refunds',()=>{
+ const edges=[edge({from:'bookings',to:'group_payment_history',label:'Cobranças de reservas em grupo pelo app',count:4,includedCount:4,missingCount:0,canInclude:false}),edge({from:'group_payment_history',to:'bookings',count:12,includedCount:12,missingCount:0,canInclude:false})]
+ const html=render(edges,['bookings','group_payment_history'],{groupPaymentHistory:{payments:4,webhooks:8,refundDecisions:1,refundAttempts:1}})
+ assert.match(html,/Também será excluído junto das reservas/)
+ assert.match(html,/Cobranças de reservas em grupo pelo app/)
+ assert.match(html,/Cobranças incluídas na limpeza/)
+ assert.match(html,/Eventos/);assert.match(html,/Decisões de estorno/);assert.match(html,/Tentativas de estorno/)
+ assert.match(html,/não cancela cobranças nem envia estornos ao Asaas/)
+ assert.doesNotMatch(html,/Bloqueia a limpeza|Histórico financeiro preservado/)
+ const owned=selectionOwnership(['bookings'],['bookings','group_payment_history'],edges)
+ assert.deepEqual(Array.from(owned.requiredBy('group_payment_history')),['bookings'])
+ assert.deepEqual(Array.from(owned.requiredBy('bookings')),[])
+ assert.equal(owned.fullyExplained,true)
+ const inverse=selectionOwnership(['group_payment_history'],['bookings','group_payment_history'],edges)
+ assert.deepEqual(Array.from(inverse.requiredBy('bookings')),['group_payment_history'])
+})
+test('including the payment module never turns in-flight finance into a success state',()=>{
+ const html=render([],['bookings','group_payment_history'],{blockers:[{code:'group_finance_in_progress',message:'Conciliação em andamento',count:1}],groupPaymentHistory:{payments:1,webhooks:0,refundDecisions:0,refundAttempts:0}})
+ assert.match(html,/A seleção tem impedimentos/)
+ assert.doesNotMatch(html,/Os vínculos necessários estão na seleção|Nenhum vínculo adicional/)
+})

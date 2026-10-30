@@ -161,9 +161,9 @@ test('global search keeps manual roots limited to visible results',async()=>{
   const roots=h.calls.filter(call=>call.name==='resolve').at(-1).input.modules
   assert.ok(roots.includes('inventory'));assert.ok(!roots.includes('arena_users'));assert.ok(!roots.includes('financial_transactions'))
 })
-test('all 37 choices remain reachable and clearing removes automatic dependencies too',async()=>{
+test('all 38 choices remain reachable and clearing removes automatic dependencies too',async()=>{
   const h=harness();h.render();await h.flush();for(const entry of catalog)assert.ok(h.input(entry.label),entry.label)
-  h.button('Selecionar tudo').props.onClick();await h.flush();assert.match(text(h.render()),/37\s+grupos/)
+  h.button('Selecionar tudo').props.onClick();await h.flush();assert.match(text(h.render()),/38\s+grupos/)
   h.button('Limpar seleção').props.onClick();await h.flush();assert.equal(h.input('Lançamentos manuais').props.checked,false)
 })
 test('history and restoration retain separately confirmed arena and reason',async()=>{
