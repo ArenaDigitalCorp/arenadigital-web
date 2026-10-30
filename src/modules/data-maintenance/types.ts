@@ -12,6 +12,7 @@ export type CleanupDependency = {
   missingCount: number
   blockedCount: number
   canInclude: boolean
+  reasons?: Array<'financial' | 'other_arena' | 'after_cutoff' | 'protected_reference'>
 }
 export type CleanupOperation = {
   id: string
@@ -38,6 +39,7 @@ export type CleanupOperation = {
     recordCount?: number
     effectCount?: number
     moduleCounts?: Array<{ module: CleanupModule; label: string; count: number }>
+    bookingGroups?: { groups: number; items: number; policySnapshots: number }
     dependencies?: CleanupDependency[]
   }
 }
