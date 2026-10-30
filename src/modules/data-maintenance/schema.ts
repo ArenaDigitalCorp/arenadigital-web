@@ -32,11 +32,13 @@ export const cleanupOperationSchema = z.object({
     canExecute: z.boolean(), blockers: z.array(z.object({code:z.string(),message:z.string(),count:z.number().nonnegative(),requiredModule:z.enum(CLEANUP_MODULE_IDS).nullable().optional()})),
     recordCount: z.number().int().nonnegative().optional(), effectCount: z.number().int().nonnegative().optional(),
     moduleCounts: z.array(z.object({module:z.enum(CLEANUP_MODULE_IDS),label:z.string(),count:z.number().int().nonnegative()})).optional(),
+    bookingGroups: z.object({groups:z.number().int().nonnegative(),items:z.number().int().nonnegative(),policySnapshots:z.number().int().nonnegative()}).optional(),
     dependencies: z.array(z.object({
       from: z.enum(CLEANUP_MODULE_IDS), to: z.enum(CLEANUP_MODULE_IDS).nullable(), label: z.string(),
       kind: z.enum(['foreign_key','financial_source','stock_source','closed_cash']),
       count: z.number().int().nonnegative(), includedCount: z.number().int().nonnegative(),
       missingCount: z.number().int().nonnegative(), blockedCount: z.number().int().nonnegative(), canInclude: z.boolean(),
+      reasons: z.array(z.enum(['financial','other_arena','after_cutoff','protected_reference'])).optional(),
     })).optional(),
   }),
 })
