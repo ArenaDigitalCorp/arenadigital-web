@@ -27,7 +27,7 @@ export const CLEANUP_MODULES = [
     "id": "bookings",
     "group": "Reservas e agenda",
     "label": "Reservas",
-    "description": "Reservas, participantes, serviços e grupos do app com suas regras de cancelamento. Pagamentos do provedor e checkouts em andamento permanecem protegidos."
+    "description": "Reservas, participantes, serviços e grupos do app. Cobranças e eventos vinculados entram na seleção; fluxos financeiros em andamento continuam bloqueados."
   },
   {
     "id": "booking_requests",
@@ -70,6 +70,12 @@ export const CLEANUP_MODULES = [
     "group": "Financeiro",
     "label": "Cobranças locais de reservas",
     "description": "Rateios e pagamentos registrados no painel. Não remove o histórico de pagamentos do Asaas."
+  },
+  {
+    "id": "group_payment_history",
+    "group": "Financeiro",
+    "label": "Cobranças de reservas em grupo pelo app",
+    "description": "Registros locais de cobranças, eventos e estornos dos grupos. As reservas vinculadas entram juntas. Não cancela cobranças nem envia estornos ao Asaas."
   },
   {
     "id": "station_orders",
