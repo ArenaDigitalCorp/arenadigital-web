@@ -1,5 +1,6 @@
 "use client"
 
+import { NativeSelect } from "@/components/ui/native-select"
 import { useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { format } from "date-fns"
@@ -205,8 +206,8 @@ export function UsersSection({ overview }: { overview: PlatformAdminOverview }) 
               {overview.currentAccessLevel === "super_admin" ? (
                 <div className="space-y-4 p-5">
                   <div><p className="text-sm font-black">Acesso à plataforma</p><p className="mt-1 text-xs leading-5 text-slate-500">Não concede acesso a nenhuma arena de cliente.</p></div>
-                  <label className="block text-xs font-bold text-slate-600">Nível<select value={accessLevel} onChange={(event) => setAccessLevel(event.target.value as PlatformAccessLevel)} disabled={!accessEnabled} className="mt-2 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-normal disabled:bg-slate-100"><option value="employee">Funcionário</option><option value="platform_admin">Admin da plataforma</option><option value="super_admin">Super admin</option></select></label>
-                  <label className="block text-xs font-bold text-slate-600">Operação<select value={accessEnabled ? "enable" : "revoke"} onChange={(event) => setAccessEnabled(event.target.value === "enable")} className="mt-2 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-normal"><option value="enable">Conceder ou alterar</option><option value="revoke">Revogar acesso</option></select></label>
+                  <label className="block text-xs font-bold text-slate-600">Nível<NativeSelect value={accessLevel} onChange={(event) => setAccessLevel(event.target.value as PlatformAccessLevel)} disabled={!accessEnabled} className="mt-2 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-normal disabled:bg-slate-100"><option value="employee">Funcionário</option><option value="platform_admin">Admin da plataforma</option><option value="super_admin">Super admin</option></NativeSelect></label>
+                  <label className="block text-xs font-bold text-slate-600">Operação<NativeSelect value={accessEnabled ? "enable" : "revoke"} onChange={(event) => setAccessEnabled(event.target.value === "enable")} className="mt-2 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-normal"><option value="enable">Conceder ou alterar</option><option value="revoke">Revogar acesso</option></NativeSelect></label>
                   {accessEnabled && <label className="block text-xs font-bold text-slate-600">Expiração opcional<Input type="datetime-local" value={expiresAt} onChange={(event) => setExpiresAt(event.target.value)} className="mt-2 h-11 rounded-xl" /></label>}
                   <Textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Motivo obrigatório para auditoria" className="min-h-24" />
                   <Button onClick={saveAccess} disabled={pending} className={cn("w-full rounded-xl text-white", accessEnabled ? "bg-arena-navy-950 hover:bg-arena-navy-800" : "bg-rose-700 hover:bg-rose-600")}><KeyRound className="h-4 w-4" />{accessEnabled ? "Salvar acesso" : "Revogar acesso"}</Button>

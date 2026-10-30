@@ -1,5 +1,6 @@
 "use client"
 
+import { NativeSelect } from "@/components/ui/native-select"
 import { formatCpf, formatPhone } from '@/lib/brasil-document'
 import { Loader2, ChevronLeft, ChevronRight, Eye, ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -222,14 +223,14 @@ export function AthletesTable({
                     </p>
                     <label className="flex items-center gap-2 text-xs text-arena-navy-800/60">
                         Por página
-                        <select
+                        <NativeSelect
                             aria-label="Atletas por página"
                             value={pageSize}
                             onChange={event => onPageSizeChange(Number(event.target.value) as AthletePageSize)}
                             className="h-8 rounded-md border border-slate-200 bg-white px-2 text-arena-navy-800 focus-visible:outline-teal-600"
                         >
                             {ATHLETES_PAGE_SIZES.map(size => <option key={size} value={size}>{size}</option>)}
-                        </select>
+                        </NativeSelect>
                     </label>
                 </div>
                 {!error && total > 0 && (

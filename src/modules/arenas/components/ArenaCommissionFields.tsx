@@ -1,5 +1,6 @@
 "use client"
 
+import { NativeSelect } from "@/components/ui/native-select"
 import { useState } from "react"
 import { DecimalInput } from "@/components/ui/decimal-input"
 import { parseBrazilianDecimal } from "@/lib/format"
@@ -26,14 +27,14 @@ export function ArenaCommissionFields({ value, onChange }: {
             <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                     <Label htmlFor="platform-commission-mode">Tipo de comissão</Label>
-                    <select id="platform-commission-mode" value={value.commissionMode} onChange={(event) => onChange({
+                    <NativeSelect id="platform-commission-mode" value={value.commissionMode} onChange={(event) => onChange({
                         commissionMode: event.target.value as Commission["commissionMode"],
                         platformFeeBasisPoints: event.target.value === "fixed" ? 0 : 200,
                         commissionFixedCents: event.target.value === "fixed" ? 200 : 0,
                     })} className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm">
                         <option value="percentage_net">Percentual sobre o líquido</option>
                         <option value="fixed">Valor fixo por cobrança</option>
-                    </select>
+                    </NativeSelect>
                 </div>
                 <div className="space-y-2">
                     <Label htmlFor="platform-split-fee">{fixed ? "Comissão por cobrança (R$)" : "Comissão sobre o líquido (%)"}</Label>
