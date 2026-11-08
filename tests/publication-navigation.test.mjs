@@ -28,6 +28,19 @@ function pageSubject({ platform = false, denied = false } = {}) {
         if (denied) throw new Error('Acesso negado')
       },
     },
+    '@/modules/arenas/repositories/SupabaseArenaRepository': {
+      SupabaseArenaRepository: class {
+        async findById(id) {
+          calls.push(['arena',id])
+          return {id, name:'Arena A', sports:[]}
+        }
+      },
+    },
+    '@/modules/mobile-content/actions/mobileContentActions': {
+      listArenaPromotionsAction: async id => {calls.push(['promotions',id]); return {success:true,data:[]}},
+      listArenaOpenGamesAction: async id => {calls.push(['games',id]); return {success:true,data:[]}},
+      listArenaAthletesForMobileContentAction: async id => {calls.push(['athletes',id]); return {success:true,data:[]}},
+    },
     '@/lib/supabase-server': {getSupabaseAdmin: () => ({from: table => {
       calls.push(['query',table])
       return {select: () => ({eq: () => ({single:async()=>({data:{id:arena,name:'Arena A'}})}),order: async()=>({data:[]})})}
