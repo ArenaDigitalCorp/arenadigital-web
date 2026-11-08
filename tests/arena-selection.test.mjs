@@ -74,7 +74,8 @@ for (const isCollapsed of [false, true]) {
     const context = { arenas, selectedArena: 'arena-a', setSelectedArena: (id) => selected.push(id), isLoadingArenas: false }
     const { ArenaSelector } = load('src/components/dashboard/ArenaSelector.tsx', {
       '@/contexts/ArenaContext': { useArena: () => context },
-      'next/navigation': { useRouter: () => ({ push: (path) => routes.push(path) }) },
+      '@/lib/arena-permissions': { canManageArena: arena => arena.isOwner || arena.role === 'Gestor' },
+      'next/navigation': { usePathname: () => '/dashboard', useRouter: () => ({ push: (path) => routes.push(path) }) },
       '@/components/ui/select': Object.fromEntries(['Select', 'SelectContent', 'SelectItem', 'SelectTrigger', 'SelectValue'].map((name) => [name, name])),
       '@/components/ui/skeleton': { Skeleton: 'Skeleton' }, '@/lib/utils': { cn: (...args) => args.join(' ') },
     })
@@ -86,5 +87,21 @@ for (const isCollapsed of [false, true]) {
     select.props.onValueChange('arena-b')
     assert.deepEqual(selected, ['arena-b'])
     assert.deepEqual(routes, ['/dashboard'])
+  })
+}
+
+for (const role of ['Owner', 'Gestor', 'Atendente', 'Caixa']) {
+  test(`switching arena within publications preserves the section only for managers: ${role}`, () => {
+    const routes = []
+    const context = { arenas: [arenas[0], {...arenas[1], role, isOwner: role === 'Owner'}], selectedArena: 'arena-a', setSelectedArena: () => {}, isLoadingArenas: false }
+    const { ArenaSelector } = load('src/components/dashboard/ArenaSelector.tsx', {
+      '@/contexts/ArenaContext': { useArena: () => context },
+      '@/lib/arena-permissions': { canManageArena: arena => arena.isOwner || arena.role === 'Gestor' },
+      'next/navigation': { usePathname: () => '/dashboard/publications/arena-a', useRouter: () => ({push: path => routes.push(path)}) },
+      '@/components/ui/select': Object.fromEntries(['Select', 'SelectContent', 'SelectItem', 'SelectTrigger', 'SelectValue'].map(name => [name,name])),
+      '@/components/ui/skeleton': {Skeleton:'Skeleton'}, '@/lib/utils': {cn: () => ''},
+    })
+    ArenaSelector({}).props.children.props.onValueChange('arena-b')
+    assert.deepEqual(routes, [role === 'Owner' || role === 'Gestor' ? '/dashboard/publications/arena-b' : '/dashboard'])
   })
 }

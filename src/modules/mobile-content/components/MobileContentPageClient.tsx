@@ -1,5 +1,7 @@
 "use client"
 
+import Link from "next/link"
+
 import { NativeSelect } from "@/components/ui/native-select"
 import { FormEvent, ReactNode, useState, useTransition } from "react"
 import { format } from "date-fns"
@@ -188,8 +190,11 @@ export function MobileContentPageClient({
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
+      <Link href={`/dashboard/publications/${arenaId}`} className="inline-flex text-sm font-medium text-arena-navy-800 underline underline-offset-4">
+        Voltar às publicações
+      </Link>
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold text-gray-900">Conteúdo do app</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Horários e jogos no app</h1>
         <p className="text-sm text-gray-500">
           Publique horários disponíveis e vagas abertas da {arenaName}.
         </p>
@@ -248,6 +253,7 @@ export function MobileContentPageClient({
 
       {activeTab === "highlights" && (
         <Card className="space-y-2 p-5">
+          <Link className="font-medium text-orange-600 underline" href={`/dashboard/arenas/${arenaId}/publications`}>Gerenciar publicações e campanhas</Link>
           <h2 className="font-bold text-gray-900">Destaque automático de nova arena</h2>
           <p className="text-sm leading-relaxed text-gray-500">
             Novas arenas aparecem na Home quando ficam ativas e visíveis no app.

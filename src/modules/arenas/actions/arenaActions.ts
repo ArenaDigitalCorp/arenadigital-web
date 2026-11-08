@@ -1,5 +1,6 @@
 "use server"
 
+import { setArenaReceivingBookingModeAction } from './receivingSetupActions'
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 import { getLocationPointFromAddress } from '@/lib/geocoding'
@@ -197,6 +198,9 @@ export async function updateArenaAction(arenaId: string, input: UpdateArenaDTO) 
     try {
         await assertArenaAdminAccess(arenaId)
         const safeInput = arenaUpdateSchema.parse(input)
+        if (safeInput.app_booking_mode !== undefined || safeInput.accepts_app_booking_requests !== undefined) {
+            throw new Error('Altere a modalidade na configuração da operação de reservas.')
+        }
         if (safeInput.cpf_cnpj !== undefined || safeInput.legal_name !== undefined) {
             const { data: current, error } = await getSupabaseAdmin()
                 .from('arenas').select('cpf_cnpj, legal_name').eq('id', arenaId).single()
@@ -208,22 +212,10 @@ export async function updateArenaAction(arenaId: string, input: UpdateArenaDTO) 
             if (message) throw new Error(message)
         }
         const location = (await resolveArenaLocation(safeInput as unknown as Partial<CreateArenaDTO>)) ?? undefined
-        const hasAppBookingModeUpdate = safeInput.app_booking_mode !== undefined
-            || safeInput.accepts_app_booking_requests !== undefined
-        const appBookingMode = hasAppBookingModeUpdate
-            ? normalizeAppBookingMode(
-                safeInput.app_booking_mode,
-                safeInput.accepts_app_booking_requests,
-            )
-            : undefined
         const payload = {
             ...safeInput,
             ...(safeInput.legal_name !== undefined ? { legal_name: safeInput.legal_name?.trim() || null } : {}),
             ...(location ? { location } : {}),
-            ...(appBookingMode ? {
-                app_booking_mode: appBookingMode,
-                accepts_app_booking_requests: appBookingModeAcceptsPreBookings(appBookingMode),
-            } : {}),
         } as unknown as UpdateArenaDTO
         const arena = await new SupabaseArenaRepository(getSupabaseAdmin()).update(arenaId, payload)
         revalidatePath(`/dashboard/arenas/${arenaId}/edit`)
@@ -238,8 +230,9 @@ export async function updateArenaAction(arenaId: string, input: UpdateArenaDTO) 
 export async function updateArenaAppBookingModeAction(
     arenaId: string,
     appBookingMode: AppBookingMode,
+    revision: number = 0,
 ) {
-    return updateArenaAction(arenaId, { app_booking_mode: appBookingMode })
+    return setArenaReceivingBookingModeAction(arenaId, appBookingMode, revision)
 }
 
 function defaultPixSplitSettings(): ArenaPixSplitSettings {

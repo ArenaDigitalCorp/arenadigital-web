@@ -8,7 +8,6 @@ import {
     FilePenLine,
     Loader2,
     Plus,
-    ShieldCheck,
     Trash2,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -25,6 +24,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { cancellationPolicyTiersSchema } from "@/modules/arenas/schemas/cancellation-policy.schema"
 import {
     createArenaCancellationPolicyDraftAction,
     publishArenaCancellationPolicyAction,
@@ -57,11 +57,23 @@ function editableTier(tier: ArenaCancellationPolicyTier | undefined, key: string
     }
 }
 
+/** A persisted 0h / 0% fallback is represented by the summary, not a mandatory rule.
+ * Explicit legacy refunds at 0h remain visible and editable. */
+function configuredTiers(tiers: ArenaCancellationPolicyTier[]): ArenaCancellationPolicyTier[] {
+    const hasPositiveThreshold = tiers.some((tier) => tier.minimumHoursBeforeStart > 0)
+    return tiers.filter((tier) => !hasPositiveThreshold || tier.minimumHoursBeforeStart !== 0 || tier.refundPercentage !== 0)
+}
+
+function fallbackSummary(tiers: ArenaCancellationPolicyTier[]): string | null {
+    const configured = configuredTiers(tiers)
+    if (!configured.length) return null
+    const minimum = Math.min(...configured.map((tier) => tier.minimumHoursBeforeStart))
+    return minimum > 0 ? `Menos de ${minimum}h: sem reembolso.` : null
+}
+
 function rowsFromSettings(settings: ArenaCancellationPolicySettings): EditableTier[] {
-    const tiers = settings.draftPolicy?.tiers ?? []
-    if (tiers.length === 0) {
-        return [{ ...editableTier(undefined, "required-zero-tier"), minimumHoursBeforeStart: "0" }]
-    }
+    const tiers = configuredTiers(settings.draftPolicy?.tiers ?? [])
+    if (tiers.length === 0) return [editableTier(undefined, "first-rule")]
     return tiers
         .slice()
         .sort((left, right) => right.minimumHoursBeforeStart - left.minimumHoursBeforeStart)
@@ -89,11 +101,14 @@ function parsedTiers(rows: EditableTier[]): ArenaCancellationPolicyTier[] | null
         tiers.push({ minimumHoursBeforeStart, refundPercentage })
     }
 
-    return tiers.sort((left, right) => left.minimumHoursBeforeStart - right.minimumHoursBeforeStart)
+    const result = cancellationPolicyTiersSchema.safeParse(tiers)
+    return result.success
+        ? result.data.sort((left, right) => left.minimumHoursBeforeStart - right.minimumHoursBeforeStart)
+        : null
 }
 
 function policyFingerprint(tiers: ArenaCancellationPolicyTier[]): string {
-    return JSON.stringify(tiers.slice().sort(
+    return JSON.stringify(configuredTiers(tiers).sort(
         (left, right) => left.minimumHoursBeforeStart - right.minimumHoursBeforeStart,
     ))
 }
@@ -107,26 +122,29 @@ function formatPublishedAt(value: string | null): string {
 }
 
 function PolicyTiers({ tiers }: { tiers: ArenaCancellationPolicyTier[] }) {
+    const fallback = fallbackSummary(tiers)
+    const sortedTiers = configuredTiers(tiers)
+        .slice()
+        .sort((left, right) => right.minimumHoursBeforeStart - left.minimumHoursBeforeStart)
     return (
-        <div className="grid gap-2 md:grid-cols-3">
-            {tiers
-                .slice()
-                .sort((left, right) => right.minimumHoursBeforeStart - left.minimumHoursBeforeStart)
-                .map((tier) => (
-                    <div
-                        key={tier.minimumHoursBeforeStart}
-                        className="rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3"
-                    >
-                        <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">
-                            {tier.minimumHoursBeforeStart === 0
-                                ? "Próximo ao início"
-                                : `${tier.minimumHoursBeforeStart}h ou mais`}
-                        </p>
-                        <p className="mt-1 text-lg font-black text-slate-950">
-                            {tier.refundPercentage}% de reembolso
-                        </p>
-                    </div>
-                ))}
+        <div className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+                {sortedTiers.map((tier, index) => {
+                    const upperThreshold = sortedTiers[index - 1]?.minimumHoursBeforeStart
+                    const rangeLabel = upperThreshold === undefined
+                        ? tier.minimumHoursBeforeStart === 0 ? "Até o início da reserva" : `${tier.minimumHoursBeforeStart}h ou mais antes do início`
+                        : tier.minimumHoursBeforeStart === 0
+                            ? `Menos de ${upperThreshold}h antes do início`
+                            : `De ${tier.minimumHoursBeforeStart}h até menos de ${upperThreshold}h antes do início`
+                    return (
+                        <div key={tier.minimumHoursBeforeStart} className="min-w-40 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+                            <p className="text-xs text-slate-500">{rangeLabel}</p>
+                            <p className="mt-1 text-sm font-semibold text-arena-navy-800">{tier.refundPercentage}% de reembolso</p>
+                        </div>
+                    )
+                })}
+            </div>
+            {fallback && <p className="text-xs leading-5 text-slate-500">{fallback}</p>}
         </div>
     )
 }
@@ -206,47 +224,38 @@ export function ArenaCancellationPolicyCard({ arenaId, initialSettings, onSettin
     }
 
     return (
-        <section className="px-5 py-7 sm:px-8" aria-labelledby="cancellation-policy-title">
-            <div>
-                <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-                    <div className="flex items-start gap-3">
-                        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-arena-navy-800 text-white shadow-sm">
-                            <ShieldCheck className="h-5 w-5" aria-hidden="true" />
-                        </div>
-                        <div>
-                            <p className="text-[11px] font-black uppercase tracking-[0.14em] text-arena-button">
-                                Configuração complementar
-                            </p>
-                            <h3 id="cancellation-policy-title" className="mt-1 text-base font-bold text-arena-navy-800">
-                                Política de cancelamento
-                            </h3>
-                            <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
-                                Defina quanto o atleta recebe de volta conforme a antecedência do cancelamento.
-                            </p>
-                        </div>
+        <section className="px-5 py-6 sm:px-7" aria-labelledby="cancellation-policy-title">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <div className="flex items-center gap-2.5">
+                        <span className="grid size-6 shrink-0 place-items-center rounded-full bg-arena-button text-xs font-bold text-white" aria-hidden="true">2</span>
+                        <h3 id="cancellation-policy-title" className="text-base font-bold text-arena-navy-800">Política de cancelamento</h3>
                     </div>
-                    <Badge className={settings.currentPolicy
-                        ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                        : "border-amber-200 bg-amber-50 text-amber-800"}
-                    >
-                        {settings.currentPolicy ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Clock3 className="h-3.5 w-3.5" />}
-                        {settings.currentPolicy ? `Versão ${settings.currentPolicy.version} publicada` : "Publicação pendente"}
-                    </Badge>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+                        Defina quanto o atleta recebe de volta conforme a antecedência do cancelamento.
+                    </p>
                 </div>
+                <Badge className={settings.currentPolicy
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                    : "border-amber-200 bg-amber-50 text-amber-800"}
+                >
+                    {settings.currentPolicy ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Clock3 className="h-3.5 w-3.5" />}
+                    {settings.currentPolicy ? `Versão ${settings.currentPolicy.version} publicada` : "Publicação pendente"}
+                </Badge>
             </div>
 
-            <div className="mt-6 space-y-6">
+            <div className="mt-5 space-y-5">
                 {settings.currentPolicy ? (
                     <div className="space-y-3">
                         <div className="flex flex-wrap items-end justify-between gap-3">
                             <div>
-                                <p className="text-sm font-bold text-slate-950">Regra vigente</p>
-                                <p className="mt-1 text-xs text-slate-500">
+                                <p className="text-sm font-semibold text-arena-navy-800">Regra vigente</p>
+                                <p className="mt-1 text-xs leading-5 text-slate-500">
                                     Publicada em {formatPublishedAt(settings.currentPolicy.publishedAt)}. Reservas já contratadas preservam a versão aceita.
                                 </p>
                             </div>
                             {settings.publishedVersions.length > 1 && (
-                                <span className="text-xs font-medium text-slate-400">
+                                <span className="text-xs text-slate-500">
                                     {settings.publishedVersions.length - 1} versão(ões) anterior(es) preservada(s)
                                 </span>
                             )}
@@ -254,97 +263,86 @@ export function ArenaCancellationPolicyCard({ arenaId, initialSettings, onSettin
                         <PolicyTiers tiers={settings.currentPolicy.tiers} />
                     </div>
                 ) : (
-                    <div className="rounded-xl border border-amber-200/80 bg-amber-50/60 px-4 py-4 text-sm text-amber-950">
-                        <div className="flex items-start gap-3">
-                            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" aria-hidden="true" />
-                            <div>
-                                <p className="font-bold">Publicação necessária somente para pagamento online</p>
-                                <p className="mt-1 leading-6 text-amber-800">
-                                    Pré-reservas continuam disponíveis sem esta etapa. Para cobrar no app, crie, revise e publique uma política. Nenhum valor sugerido será ativado automaticamente.
-                                </p>
-                            </div>
-                        </div>
+                    <div className="flex gap-2.5 rounded-lg border border-amber-200 bg-amber-50/50 px-3 py-3 text-xs leading-5 text-amber-900">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                        <p>Publique a primeira política para liberar o pagamento online. Pré-reservas não exigem esta etapa. Nenhum valor sugerido será ativado automaticamente.</p>
                     </div>
                 )}
 
                 {!settings.draftPolicy ? (
-                    <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 sm:flex-row sm:items-center">
+                    <div className="flex flex-col items-start justify-between gap-3 rounded-lg border border-dashed border-slate-300 bg-slate-50/70 px-4 py-4 sm:flex-row sm:items-center">
                         <div>
-                            <p className="font-bold text-slate-950">
+                            <p className="text-sm font-semibold text-arena-navy-800">
                                 {settings.currentPolicy ? "Criar uma nova versão" : "Configurar a primeira política"}
                             </p>
-                            <p className="mt-1 text-sm leading-6 text-slate-500">
-                                O rascunho não afeta reservas até que seja publicado.
-                            </p>
+                            <p className="mt-1 text-xs leading-5 text-slate-500">Prepare as regras e publique quando estiverem prontas.</p>
                         </div>
-                        <Button className="bg-arena-button text-white hover:bg-arena-button-hover" onClick={() => void handleCreateDraft()} disabled={busy !== null}>
+                        <Button size="sm" className="bg-arena-button text-white hover:bg-arena-button-hover" onClick={() => void handleCreateDraft()} disabled={busy !== null}>
                             {busy === "create" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FilePenLine className="h-4 w-4" />}
                             Criar rascunho
                         </Button>
                     </div>
                 ) : (
-                    <div className="space-y-5 rounded-2xl border border-slate-200 bg-slate-50/55 p-4 sm:p-5">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="space-y-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
                             <div>
-                                <p className="font-bold text-slate-950">Rascunho da versão {settings.draftPolicy.version}</p>
-                                <p className="mt-1 text-sm text-slate-500">
-                                    A maior antecedência compatível será aplicada. A faixa de 0 hora é obrigatória.
+                                <p className="text-sm font-semibold text-arena-navy-800">Rascunho da versão {settings.draftPolicy.version}</p>
+                                <p className="mt-1 text-xs leading-5 text-slate-500">
+                                    A maior antecedência compatível será aplicada. Abaixo da menor regra, o reembolso é zero.
                                 </p>
                             </div>
-                            <Badge variant="outline" className="border-slate-200 bg-white text-slate-700">
-                                {isDirty ? "Alterações não salvas" : "Rascunho salvo"}
-                            </Badge>
+                            <span role="status" className="text-xs text-slate-500">{isDirty ? "Alterações não salvas" : "Rascunho salvo"}</span>
                         </div>
 
-                        <div className="space-y-3">
-                            {rows.map((row, index) => (
-                                <div key={row.key} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-                                    <div className="space-y-2">
-                                        <Label htmlFor={`hours-${row.key}`}>Antecedência mínima (horas)</Label>
-                                        <Input
-                                            id={`hours-${row.key}`}
-                                            type="number"
-                                            min={0}
-                                            step={1}
-                                            inputMode="numeric"
-                                            value={row.minimumHoursBeforeStart}
-                                            onChange={(event) => updateRow(row.key, "minimumHoursBeforeStart", event.target.value)}
-                                            placeholder={index === rows.length - 1 ? "0" : "Ex.: 24"}
-                                        />
+                        <fieldset disabled={busy !== null} className="space-y-3">
+                            <legend className="sr-only">Regras de cancelamento</legend>
+                            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                                {rows.map((row, index) => (
+                                    <div key={row.key} className="relative rounded-lg border border-slate-200 bg-slate-50/70 p-3 pr-10">
+                                        <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Regra {index + 1}</p>
+                                        <div className="space-y-2.5">
+                                            <div className="flex items-center gap-2">
+                                                <Label htmlFor={`hours-${row.key}`} className="sr-only">Antecedência da regra {index + 1} (horas)</Label>
+                                                <Input
+                                                    id={`hours-${row.key}`}
+                                                    aria-describedby={`hours-${row.key}-hint`}
+                                                    type="number" min={0} step={1} inputMode="numeric"
+                                                    value={row.minimumHoursBeforeStart}
+                                                    onChange={(event) => updateRow(row.key, "minimumHoursBeforeStart", event.target.value)}
+                                                    placeholder="Ex.: 4"
+                                                    className="h-9 w-20 bg-white px-2 text-sm font-semibold text-arena-navy-800"
+                                                />
+                                                <span id={`hours-${row.key}-hint`} className="text-xs text-slate-600">horas ou mais</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Label htmlFor={`refund-${row.key}`} className="sr-only">Percentual de reembolso da regra {index + 1}</Label>
+                                                <Input
+                                                    id={`refund-${row.key}`}
+                                                    aria-describedby={`refund-${row.key}-hint`}
+                                                    type="number" min={0} max={100} step={1} inputMode="numeric"
+                                                    value={row.refundPercentage}
+                                                    onChange={(event) => updateRow(row.key, "refundPercentage", event.target.value)}
+                                                    placeholder="0–100"
+                                                    className="h-9 w-20 bg-white px-2 text-sm font-semibold text-arena-navy-800"
+                                                />
+                                                <span id={`refund-${row.key}-hint`} className="text-xs text-slate-600">% de reembolso</span>
+                                            </div>
+                                        </div>
+                                        <Button
+                                            type="button" variant="ghost" size="icon-sm"
+                                            className="absolute right-1 top-1 text-slate-400 hover:bg-rose-50 hover:text-rose-700"
+                                            aria-label={`Remover regra ${index + 1}`}
+                                            disabled={rows.length === 1 || busy !== null}
+                                            onClick={() => setRows((current) => current.filter((candidate) => candidate.key !== row.key))}
+                                        >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                        </Button>
                                     </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor={`refund-${row.key}`}>Reembolso (%)</Label>
-                                        <Input
-                                            id={`refund-${row.key}`}
-                                            type="number"
-                                            min={0}
-                                            max={100}
-                                            step={1}
-                                            inputMode="numeric"
-                                            value={row.refundPercentage}
-                                            onChange={(event) => updateRow(row.key, "refundPercentage", event.target.value)}
-                                            placeholder="0 a 100"
-                                        />
-                                    </div>
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        className="justify-self-end text-slate-400 hover:bg-rose-50 hover:text-rose-700"
-                                        aria-label="Remover faixa"
-                                        disabled={rows.length === 1 || busy !== null}
-                                        onClick={() => setRows((current) => current.filter((candidate) => candidate.key !== row.key))}
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                </div>
-                            ))}
-                        </div>
-
-                        <div className="flex flex-col justify-between gap-3 sm:flex-row">
+                                ))}
+                            </div>
                             <Button
-                                type="button"
-                                variant="outline"
+                                type="button" variant="outline" size="sm"
+                                className="border-dashed border-orange-300 bg-orange-50/40 text-orange-700 hover:bg-orange-50"
                                 disabled={busy !== null || rows.length >= 100}
                                 onClick={() => setRows((current) => [
                                     ...current,
@@ -352,27 +350,26 @@ export function ArenaCancellationPolicyCard({ arenaId, initialSettings, onSettin
                                 ])}
                             >
                                 <Plus className="h-4 w-4" />
-                                Adicionar faixa
+                                Adicionar nova regra
                             </Button>
-                            <div className="flex flex-col gap-2 sm:flex-row">
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    disabled={busy !== null || !isDirty || !normalizedRows}
-                                    onClick={() => void handleSaveDraft()}
-                                >
-                                    {busy === "save" && <Loader2 className="h-4 w-4 animate-spin" />}
-                                    Salvar rascunho
-                                </Button>
-                                <Button
-                                    type="button"
-                                    className="bg-arena-button text-white hover:bg-arena-button-hover"
-                                    disabled={busy !== null || isDirty || settings.draftPolicy.tiers.length === 0}
-                                    onClick={() => setPublishDialogOpen(true)}
-                                >
-                                    Publicar política
-                                </Button>
-                            </div>
+                        </fieldset>
+
+                        {normalizedRows && fallbackSummary(normalizedRows) && (
+                            <p role="status" className="rounded-lg bg-slate-50 px-3 py-2.5 text-xs leading-5 text-slate-600">{fallbackSummary(normalizedRows)}</p>
+                        )}
+                        <p className="text-xs leading-5 text-slate-500">Salvar o rascunho não altera a política vigente. Publique a nova versão para aplicá-la às próximas reservas.</p>
+                        <div className="flex flex-wrap justify-end gap-2">
+                            <Button type="button" variant="outline" disabled={busy !== null || !isDirty || !normalizedRows} onClick={() => void handleSaveDraft()}>
+                                {busy === "save" && <Loader2 className="h-4 w-4 animate-spin" />}
+                                Salvar rascunho
+                            </Button>
+                            <Button
+                                type="button" className="bg-arena-button text-white hover:bg-arena-button-hover"
+                                disabled={busy !== null || isDirty || settings.draftPolicy.tiers.length === 0}
+                                onClick={() => setPublishDialogOpen(true)}
+                            >
+                                Publicar política
+                            </Button>
                         </div>
                     </div>
                 )}

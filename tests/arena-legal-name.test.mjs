@@ -61,6 +61,7 @@ test('signup rejects a company without legal name before creating any account', 
 
 test('finance prefill uses legal name and never substitutes the trade name', () => {
   const { ArenaPixSplitSettingsCard } = loadTypescriptModule('src/modules/arenas/components/ArenaPixSplitSettingsCard.tsx', {
+    '@/modules/arenas/actions/receivingSetupActions': {},
     '@/modules/arenas/actions/arenaActions': {},
   })
   const render = (legalName, holderName = '') => renderToStaticMarkup(React.createElement(ArenaPixSplitSettingsCard, {
@@ -69,8 +70,8 @@ test('finance prefill uses legal name and never substitutes the trade name', () 
     registration: { legalName, email: '', phone: '', document: '', address: '', addressNumber: '', complement: '', province: '', postalCode: '' },
     accessMode: 'arena',
   }))
-  assert.match(render('Empresa Ltda', 'Titular antigo'), /id="baas-name"[^>]*value="Empresa Ltda"/)
-  assert.match(render(undefined, 'Titular antigo'), /id="baas-name"[^>]*value="Titular antigo"/)
+  assert.match(render('Empresa Ltda', 'Titular antigo'), /<dd[^>]*>Empresa Ltda<\/dd>/)
+  assert.match(render(undefined, 'Titular antigo'), /<dd[^>]*>Titular antigo<\/dd>/)
   assert.match(render(undefined), /id="baas-name"[^>]*value=""/)
 })
 
@@ -97,8 +98,8 @@ test('partial edits cannot erase a company legal name or introduce CNPJ without 
   assert.equal((await updateArenaAction('arena-test', { cpf_cnpj: cnpj })).success, false)
   assert.equal(writes.length, 0)
   current = { cpf_cnpj: cnpj, legal_name: null }
-  assert.equal((await updateArenaAction('arena-test', { app_booking_mode: 'disabled' })).success, true)
-  assert.equal(writes.length, 1, 'Operational updates remain available for legacy companies')
+  assert.equal((await updateArenaAction('arena-test', { app_booking_mode: 'disabled' })).success, false)
+  assert.equal(writes.length, 0, 'Booking mode changes must use the dedicated activation flow')
   assert.equal((await updateArenaAction('arena-test', { legal_name: '  Empresa Ltda  ' })).success, true)
-  assert.equal(writes[1].legal_name, 'Empresa Ltda')
+  assert.equal(writes[0].legal_name, 'Empresa Ltda')
 })

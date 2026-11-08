@@ -3,6 +3,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { revalidatePath } from 'next/cache'
+import { z } from 'zod'
 import {
   assertArenaAdminAccess,
   assertArenaBackofficeAccess,
@@ -11,6 +12,7 @@ import {
   assertPlatformAdminAccess,
 } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
+import { authorizePublicationScope } from '@/modules/publications/authorization'
 import {
   appHomeContentActionSchema,
   arenaHighlightActionSchema,
@@ -29,12 +31,16 @@ import type {
 const MOBILE_CONTENT_REVALIDATE_PATHS = [
   '/dashboard',
   '/dashboard/admin/mobile-content',
+  '/admin/publications',
   '/dashboard/settings/arenas',
 ]
 
 function revalidateMobileContent(arenaId?: string) {
   for (const path of MOBILE_CONTENT_REVALIDATE_PATHS) revalidatePath(path)
-  if (arenaId) revalidatePath(`/dashboard/arenas/${arenaId}`)
+  if (arenaId) {
+    revalidatePath(`/dashboard/arenas/${arenaId}`)
+    revalidatePath(`/dashboard/publications/${arenaId}`)
+  }
 }
 
 function normalizeError(err: unknown, fallback: string) {
@@ -143,11 +149,11 @@ export async function deleteAppHomeContentAction(contentId: string): Promise<Mob
 
 export async function listArenaPromotionsAction(arenaId: string): Promise<MobileContentResult<MobilePromotion[]>> {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await authorizePublicationScope(arenaId, 'read', 'arena')
     const supabase = getSupabaseAdmin() as any
     const { data, error } = await supabase
       .from('arena_promotions')
-      .select('*, arenas(id, name), courts(id, name), sports(id, name)')
+      .select('*, arenas(id, name), courts!arena_promotions_court_id_fkey(id, name), sports(id, name)')
       .eq('arena_id', arenaId)
       .order('priority', { ascending: false })
       .order('created_at', { ascending: false })
@@ -164,7 +170,7 @@ export async function upsertArenaPromotionAction(
   input: unknown
 ): Promise<MobileContentResult<MobilePromotion | null>> {
   try {
-    await assertArenaAdminAccess(arenaId)
+    await authorizePublicationScope(arenaId, 'save', 'arena')
     const parsed = arenaPromotionActionSchema.parse(input)
     if (!parsed.id && !parsed.image_url) throw new Error('Informe a imagem da divulgação de horário.')
     if (parsed.court_id) await assertCourtAccess(parsed.court_id, arenaId)
@@ -205,7 +211,7 @@ export async function setArenaPromotionActiveAction(
   active: boolean
 ): Promise<MobileContentResult<null>> {
   try {
-    await assertArenaAdminAccess(arenaId)
+    await authorizePublicationScope(arenaId, active ? 'publish' : 'pause', 'arena')
     const supabase = getSupabaseAdmin() as any
     const { error } = await supabase
       .from('arena_promotions')
@@ -297,11 +303,11 @@ export async function setArenaHighlightActiveAction(
 
 export async function listArenaOpenGamesAction(arenaId: string): Promise<MobileContentResult<MobileOpenGame[]>> {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await authorizePublicationScope(arenaId, 'read', 'arena')
     const supabase = getSupabaseAdmin() as any
     const { data, error } = await supabase
       .from('open_games')
-      .select('*, arenas(id, name), sports(id, name), atleta:owner_atleta_id(id, nome_perfil)')
+      .select('*, arenas(id, name), sports(id, name), atleta:owner_atleta_id(id, name:nome_perfil)')
       .eq('arena_id', arenaId)
       .order('date', { ascending: true })
       .order('start_time', { ascending: true })
@@ -318,26 +324,28 @@ export async function upsertOpenGameAction(
   input: unknown
 ): Promise<MobileContentResult<MobileOpenGame | null>> {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await authorizePublicationScope(arenaId, 'save', 'arena')
     const parsed = openGameActionSchema.parse(input)
-    if (parsed.booking_id) await assertBookingAccess(parsed.booking_id, arenaId)
+    if (!parsed.id && parsed.booking_id) await assertBookingAccess(parsed.booking_id, arenaId)
     await assertAthleteBelongsToArena(arenaId, parsed.owner_atleta_id)
     const supabase = getSupabaseAdmin() as any
     const payload = {
       arena_id: arenaId,
-      booking_id: parsed.booking_id ?? null,
       sport_id: parsed.sport_id,
       owner_atleta_id: parsed.owner_atleta_id,
       date: parsed.date,
       start_time: parsed.start_time,
       end_time: parsed.end_time,
       needed_players: parsed.needed_players ?? 1,
-      current_players: parsed.current_players ?? 0,
-      level_min_id: parsed.level_min_id ?? null,
-      level_max_id: parsed.level_max_id ?? null,
-      status: parsed.status ?? 'open',
-      visibility: parsed.visibility ?? 'public',
       notes: parsed.notes ?? null,
+      ...(!parsed.id ? {
+        booking_id: parsed.booking_id ?? null,
+        current_players: parsed.current_players ?? 0,
+        level_min_id: parsed.level_min_id ?? null,
+        level_max_id: parsed.level_max_id ?? null,
+        status: parsed.status ?? 'open',
+        visibility: parsed.visibility ?? 'public',
+      } : {}),
     }
 
     const query = parsed.id
@@ -353,9 +361,34 @@ export async function upsertOpenGameAction(
   }
 }
 
+export async function cancelArenaOpenGameAction(
+  arenaId: string,
+  gameId: string
+): Promise<MobileContentResult<null>> {
+  try {
+    await authorizePublicationScope(arenaId, 'pause', 'arena')
+    const id = z.string().uuid().parse(gameId)
+    const supabase = getSupabaseAdmin() as any
+    const { data, error } = await supabase
+      .from('open_games')
+      .update({ status: 'cancelled' })
+      .eq('id', id)
+      .eq('arena_id', arenaId)
+      .select('id')
+      .maybeSingle()
+
+    if (error) throw new Error(error.message)
+    if (!data) throw new Error('Jogo aberto não encontrado nesta arena.')
+    revalidateMobileContent(arenaId)
+    return { success: true, data: null }
+  } catch (err) {
+    return { success: false, data: null, error: normalizeError(err, 'Erro ao cancelar jogo aberto') }
+  }
+}
+
 export async function listArenaAthletesForMobileContentAction(arenaId: string): Promise<MobileContentResult<MobileContentOption[]>> {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await authorizePublicationScope(arenaId, 'read', 'arena')
     const supabase = getSupabaseAdmin() as any
     const { data, error } = await supabase
       .from('arenas_atleta')

@@ -73,7 +73,7 @@ function amountFromInput(value: string): number | null {
   return Number.isSafeInteger(cents) ? cents : null
 }
 
-export function ArenaFinancialAccountCard({ arenaId }: { arenaId: string }) {
+export function ArenaFinancialAccountCard({ arenaId, receivingContext = false }: { arenaId: string; receivingContext?: boolean }) {
   const period = useMemo(() => closedPeriod(), [])
   const [overview, setOverview] = useState<ArenaFinancialOverview | null>(null)
   const [loading, setLoading] = useState(true)
@@ -194,15 +194,15 @@ export function ArenaFinancialAccountCard({ arenaId }: { arenaId: string }) {
         <Button className="mt-4" variant="outline" onClick={() => void load()}>
           Tentar novamente
         </Button>
-        <AsaasProviderNotice className="mt-4" />
+        {!receivingContext && <AsaasProviderNotice className="mt-4" />}
       </Card>
     )
   }
 
   return (
     <>
-      <AsaasProviderNotice className="mb-6" />
-      {!overview.accountReady && (
+      {!receivingContext && <AsaasProviderNotice className="mb-6" />}
+      {!receivingContext && !overview.accountReady && (
         <Card className="mb-6 flex flex-col gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="font-black text-amber-950">Ative a conta de recebimento da Arena</p>
@@ -217,76 +217,58 @@ export function ArenaFinancialAccountCard({ arenaId }: { arenaId: string }) {
           </Button>
         </Card>
       )}
-      <Card className="overflow-hidden rounded-2xl border-none bg-[#071F33] text-white shadow-xl">
-          <div className="grid lg:grid-cols-[1.45fr_1fr]">
-            <div className="relative overflow-hidden p-6 sm:p-7">
-            <div className="absolute -right-16 -top-20 h-52 w-52 rounded-full bg-arena-button/20 blur-3xl" />
-            <div className="relative">
-              <div className="flex items-center justify-between gap-4">
-                <p className="text-sm font-semibold text-white/55">Disponível para saque</p>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  aria-label="Atualizar conta financeira"
-                  className="text-white hover:bg-white/10 hover:text-white"
-                  disabled={refreshing}
-                  onClick={() => void load(true)}
-                >
-                  <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
-                </Button>
-              </div>
-
-              <p className="mt-2 text-4xl font-black tracking-tight lg:text-5xl">
-                {formatCents(overview.balanceCents)}
+      <Card className="gap-0 overflow-hidden rounded-xl border-0 bg-[#071F33] py-0 text-white shadow-sm">
+        <div className="grid md:grid-cols-[1.55fr_1fr]">
+          <div className="min-w-0 px-5 py-5 sm:px-6">
+            <div className="flex items-center justify-between gap-3">
+              <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-300">
+                <WalletCards className="size-4" /> Carteira da arena
               </p>
-              <div className="mt-5 flex flex-wrap gap-3">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/8 px-3 py-1.5 text-xs font-bold text-white/65">
-                  <Clock3 className="h-3.5 w-3.5" />
-                  Extrato até {new Date(`${overview.statementPeriod.finishDate}T12:00:00`).toLocaleDateString('pt-BR')}
-                </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-400/10 px-3 py-1.5 text-xs font-bold text-emerald-300">
-                  <ShieldCheck className="h-3.5 w-3.5" />
-                  Subconta protegida
-                </span>
-              </div>
+              <Button size="icon" variant="ghost" aria-label="Atualizar conta financeira"
+                className="size-8 text-slate-300 hover:bg-white/10 hover:text-white"
+                disabled={refreshing} onClick={() => void load(true)}>
+                <RefreshCw className={cn('size-3.5', refreshing && 'animate-spin')} />
+              </Button>
+            </div>
+            <p className="mt-1 text-xs text-slate-300">Saldo disponível para saque</p>
+            <p className={cn('mt-1 font-heading font-bold tracking-tight', overview.balanceCents === null ? 'text-xl leading-8' : 'text-3xl leading-9 tabular-nums')}>
+              {formatCents(overview.balanceCents)}
+            </p>
+            {overview.balanceCents === null && <p className="mt-1 text-xs leading-5 text-slate-400">
+              {overview.accountReady ? 'Não foi possível consultar o saldo. Tente atualizar.' : 'O saldo ficará disponível após a aprovação da conta.'}
+            </p>}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[11px] text-slate-300">
+                <Clock3 className="size-3" />
+                Extrato até {new Date(`${overview.statementPeriod.finishDate}T12:00:00`).toLocaleDateString('pt-BR')}
+              </span>
+              {overview.accountReady && <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-400/10 px-2.5 py-1 text-[11px] font-medium text-emerald-300">
+                <ShieldCheck className="size-3" /> Subconta protegida
+              </span>}
             </div>
           </div>
-
-            <div className="border-t border-white/10 bg-white/[0.04] p-6 sm:p-7 lg:border-l lg:border-t-0">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/45">Destino Pix do saque</p>
-                <p className="mt-2 text-lg font-black">
-                  {overview.destination.configured
-                    ? overview.destination.maskedPixKey
-                    : 'Ainda não configurado'}
-                </p>
-                <p className="mt-1 text-sm text-white/50">
-                  {overview.destination.configured
-                    ? `Chave ${overview.destination.pixKeyType} protegida no cofre`
-                    : 'Cadastre uma chave Pix da própria Arena.'}
-                </p>
-              </div>
-              <WalletCards className="h-6 w-6 text-[#FFB000]" />
-            </div>
-            <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-              <Button
-                className="bg-white text-[#071F33] hover:bg-white/90"
-                onClick={() => setDestinationOpen(true)}
-              >
+          <div className="flex min-w-0 flex-col justify-center border-t border-white/10 bg-[#152D40] px-5 py-5 sm:px-6 md:border-l md:border-t-0">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-300">Destino Pix do saque</p>
+            <p className="mt-2 break-all text-sm font-semibold">
+              {overview.destination.configured ? overview.destination.maskedPixKey : 'Ainda não configurado'}
+            </p>
+            <p className="mt-1 text-xs leading-5 text-slate-400">
+              {overview.destination.configured
+                ? `Chave ${overview.destination.pixKeyType} protegida no cofre`
+                : 'Cadastre uma chave Pix da própria Arena.'}
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button size="sm" className="h-9 bg-white px-3 text-xs font-medium text-arena-navy-800 hover:bg-slate-100"
+                onClick={() => setDestinationOpen(true)}>
                 {overview.destination.configured ? 'Alterar destino' : 'Cadastrar Pix'}
               </Button>
-              <Button
-                className="bg-arena-button text-white hover:bg-arena-button/90"
-                disabled={!overview.accountReady || !overview.destination.configured}
-                onClick={openWithdrawal}
-              >
-                <ArrowDownToLine className="mr-2 h-4 w-4" />
-                Solicitar saque
+              <Button size="sm" className="h-9 bg-arena-button px-3 text-xs font-medium text-white hover:bg-arena-button-hover disabled:bg-white/10 disabled:text-slate-400 disabled:opacity-100"
+                disabled={!overview.accountReady || !overview.destination.configured} onClick={openWithdrawal}>
+                <ArrowDownToLine className="size-3.5" /> Solicitar saque
               </Button>
             </div>
           </div>
-          </div>
+        </div>
       </Card>
 
       <Dialog open={destinationOpen} onOpenChange={(open) => !savingDestination && setDestinationOpen(open)}>
