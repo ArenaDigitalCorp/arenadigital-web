@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
+import { loadTypescriptModule } from './helpers/load-typescript-module.mjs'
 
 const [actions, schema, component, editPage, operationsPanel] = await Promise.all([
   readFile(new URL('../src/modules/arenas/actions/cancellationPolicyActions.ts', import.meta.url), 'utf8'),
@@ -30,7 +31,10 @@ test('web validation mirrors the database safe coverage and percentage contract'
   assert.match(schema, /minimumHoursBeforeStart: z\.number\(\)\.int\(\)\.min\(0\)/u)
   assert.match(schema, /refundPercentage: z\.number\(\)\.int\(\)\.min\(0\)\.max\(100\)/u)
   assert.match(schema, /Não repita a mesma antecedência/u)
-  assert.match(schema, /thresholds\.has\(0\)/u)
+  const { cancellationPolicyTiersSchema } = loadTypescriptModule('src/modules/arenas/schemas/cancellation-policy.schema.ts')
+  assert.equal(cancellationPolicyTiersSchema.safeParse([{ minimumHoursBeforeStart: 4, refundPercentage: 100 }]).success, true)
+  assert.equal(cancellationPolicyTiersSchema.safeParse([{ minimumHoursBeforeStart: 0, refundPercentage: 50 }]).success, true)
+  assert.equal(cancellationPolicyTiersSchema.safeParse([{ minimumHoursBeforeStart: 4, refundPercentage: 100 }, { minimumHoursBeforeStart: 4, refundPercentage: 50 }]).success, false)
 })
 
 test('draft UX does not silently publish a suggested commercial policy', () => {

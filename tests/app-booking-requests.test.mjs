@@ -19,13 +19,12 @@ const sidebar = readFileSync(
   'utf8',
 )
 
-test('arena setting is explicit and defaults off', () => {
-  assert.match(bookingSettings, /normalizeAppBookingMode/u)
-  assert.match(bookingSettings, /value: "disabled"/u)
-  assert.match(bookingSettings, /value: "pre_booking"/u)
-  assert.match(bookingSettings, /value: "online_payment"/u)
-  assert.match(bookingSettings, /onlineBookingReady/u)
-  assert.match(bookingSettings, /Concluir configuração abaixo/u)
+test('arena exposes the three modes and distinguishes selection from effective state', () => {
+  for (const mode of ['disabled', 'pre_booking', 'online_payment']) assert.ok(bookingSettings.includes(mode))
+  assert.match(bookingSettings, /selectedMode/u)
+  assert.match(bookingSettings, /savedMode/u)
+  assert.match(bookingSettings, /Aguardando aprovação/u)
+  assert.match(bookingSettings, /Salvar modalidade/u)
 })
 
 test('request queue is tenant-authorized and reviews only through the service RPC', () => {

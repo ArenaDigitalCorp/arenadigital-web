@@ -18,6 +18,8 @@ interface Props {
     refreshKey: string | null
     onUploaded?: () => void
     disabled?: boolean
+    embedded?: boolean
+    onDocumentsReadyChange?: (ready: boolean) => void
 }
 
 const DOCUMENT_STATUS_LABELS: Record<ArenaAsaasDocumentGroup["status"], string> = {
@@ -28,6 +30,16 @@ const DOCUMENT_STATUS_LABELS: Record<ArenaAsaasDocumentGroup["status"], string> 
     REJECTED: "Reenvio solicitado",
     IGNORED: "Dispensado",
     UNKNOWN: "Consultar situação",
+}
+
+/** Selection is not submission: only provider states or a confirmed submitted attempt count. */
+export function areReceivingDocumentsSubmitted(groups: ArenaAsaasDocumentGroup[] | null): boolean {
+    if (!groups?.length) return false
+    return groups.every(group => {
+        if (group.status === "UNKNOWN" || ["unknown", "processing", "failed"].includes(group.attemptStatus ?? "")) return false
+        return ["PENDING", "AWAITING_APPROVAL", "APPROVED", "IGNORED"].includes(group.status)
+            || (group.status === "NOT_SENT" && group.attemptStatus === "submitted")
+    })
 }
 
 function responseError(value: unknown, fallback: string): string {
@@ -129,11 +141,17 @@ function DocumentUploadForm({
                         ref={inputRef}
                         id={inputId}
                         type="file"
+                        tabIndex={-1}
                         accept={imagesOnly ? "image/jpeg,image/png" : "image/jpeg,image/png,application/pdf"}
                         onChange={(event) => selectFile(event.target.files?.[0] ?? null)}
                         aria-describedby={`${inputId}-hint`}
-                        className="h-auto min-h-11 bg-white text-xs file:mr-3 file:font-semibold"
+                        className="sr-only"
                     />
+                    <Button type="button" variant="outline" size="sm" onClick={() => inputRef.current?.click()} className="h-auto min-h-10 max-w-full justify-start bg-white text-xs" aria-describedby={`${inputId}-hint`}>
+                        <Upload className="size-4 shrink-0" aria-hidden="true"/>
+                        <span className="min-w-0 truncate">{file ? file.name : "Escolher documento"}</span>
+                    </Button>
+                    {file && <p className="text-xs text-slate-500" role="status">Arquivo selecionado. Clique em enviar para encaminhar à análise.</p>}
                     <p id={`${inputId}-hint`} className="text-xs leading-5 text-slate-500">
                         {formatHint}, até 3 MB. O arquivo será encaminhado ao Asaas para análise.
                     </p>
@@ -210,12 +228,14 @@ export function ArenaAsaasDocumentList({ arenaId, groups, disabled = false, onUp
     )
 }
 
-export function ArenaAsaasDocumentsPanel({ arenaId, refreshKey, onUploaded, disabled = false }: Props) {
+export function ArenaAsaasDocumentsPanel({ arenaId, refreshKey, onUploaded, disabled = false, embedded = false, onDocumentsReadyChange }: Props) {
     const headingId = useId()
     const [groups, setGroups] = useState<ArenaAsaasDocumentGroup[] | null>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [uploadAvailable, setUploadAvailable] = useState(true)
+    const [loadedFor, setLoadedFor] = useState<string | null>(null)
+    const requestedContext = `${arenaId}:${refreshKey ?? ""}`
     const controllerRef = useRef<AbortController | null>(null)
 
     const refresh = useCallback(async () => {
@@ -236,6 +256,7 @@ export function ArenaAsaasDocumentsPanel({ arenaId, refreshKey, onUploaded, disa
             }
             if (!controller.signal.aborted) {
                 setGroups(result.data.groups)
+                setLoadedFor(requestedContext)
                 setUploadAvailable(result.data.uploadAvailable !== false)
             }
         } catch (cause) {
@@ -246,12 +267,16 @@ export function ArenaAsaasDocumentsPanel({ arenaId, refreshKey, onUploaded, disa
         } finally {
             if (!controller.signal.aborted) setLoading(false)
         }
-    }, [arenaId])
+    }, [arenaId, requestedContext])
 
     useEffect(() => {
         void refresh()
         return () => controllerRef.current?.abort()
     }, [refresh, refreshKey])
+
+    const documentsSubmitted = !loading && !error && loadedFor === requestedContext && areReceivingDocumentsSubmitted(groups)
+    useEffect(() => { onDocumentsReadyChange?.(documentsSubmitted) }, [documentsSubmitted, onDocumentsReadyChange])
+    useEffect(() => () => { onDocumentsReadyChange?.(false) }, [onDocumentsReadyChange])
 
     async function afterUpload() {
         await refresh()
@@ -259,10 +284,10 @@ export function ArenaAsaasDocumentsPanel({ arenaId, refreshKey, onUploaded, disa
     }
 
     return (
-        <section aria-labelledby={headingId} className="mt-5 border-t border-slate-200 pt-5">
+        <section aria-labelledby={headingId} className={embedded ? "" : "mt-5 border-t border-slate-200 pt-5"}>
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                    <h5 id={headingId} className="text-sm font-bold text-slate-950">Documentos solicitados</h5>
+                    <h5 id={headingId} className={embedded ? "sr-only" : "text-sm font-bold text-slate-950"}>Documentos solicitados</h5>
                     <p className="mt-1 text-xs leading-5 text-slate-500">Confira as exigências do Asaas para concluir o cadastro.</p>
                 </div>
                 <Button type="button" variant="ghost" size="sm" onClick={() => void refresh()} disabled={loading || disabled} className="min-h-11">
@@ -281,6 +306,13 @@ export function ArenaAsaasDocumentsPanel({ arenaId, refreshKey, onUploaded, disa
                 <p role="status" className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">O envio de arquivos pelo painel ainda não está disponível. Entre em contato com a equipe Arena Digital para concluir a configuração.</p>
             )}
             {!loading && groups?.length === 0 && <p role="status" className="mt-4 rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-600">O Asaas não retornou documentos solicitados nesta consulta. Acompanhe a situação cadastral acima.</p>}
+            {!loading && !error && groups && groups.length > 0 && (
+                <p role="status" className={cn("mt-3 rounded-lg px-3 py-2 text-xs leading-5", documentsSubmitted ? "bg-emerald-50 text-emerald-800" : "bg-slate-50 text-slate-600")}>
+                    {documentsSubmitted
+                        ? "Envios confirmados. A solicitação de pagamento online também exige a política publicada; a ativação aguarda a aprovação da conta."
+                        : "Conclua o envio de todos os documentos solicitados antes de solicitar pagamento online. Escolher um arquivo ainda não confirma o envio."}
+                </p>
+            )}
             {groups && groups.length > 0 && (
                 <ArenaAsaasDocumentList arenaId={arenaId} groups={groups} disabled={disabled || loading} onUploaded={afterUpload} />
             )}

@@ -47,11 +47,11 @@ test('receiving settings exclusively own balance, Pix and withdrawal controls', 
   const dashboard = await source('src/modules/finance/components/FinanceDashboardClient.tsx')
   const card = await source('src/modules/finance/components/ArenaFinancialAccountCard.tsx')
 
-  assert.match(editPage, /<ArenaFinancialAccountCard arenaId=\{id\} \/>/u)
+  assert.match(editPage, /<ArenaFinancialAccountCard arenaId=\{id\} receivingContext \/>/u)
   assert.match(editPage, /Dados de recebimento/u)
   assert.doesNotMatch(financePage, /ArenaFinancialAccountCard/u)
   assert.doesNotMatch(dashboard, /financialAccountActivity/u)
-  assert.match(card, /Disponível para saque/u)
+  assert.match(card, /Saldo disponível para saque/u)
   assert.match(card, /Destino Pix do saque/u)
   assert.match(card, /Ir para o cadastro/u)
   assert.match(card, /tab=receiving#receiving-account-title/u)

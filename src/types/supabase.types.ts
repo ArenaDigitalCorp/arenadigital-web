@@ -6277,6 +6277,19 @@ export type Database = {
       }
     }
     Functions: {
+      get_arena_receiving_setup: {
+        Args: { p_arena_id: string }
+        Returns: Json
+      }
+      save_arena_receiving_draft: {
+        Args: { p_arena_id: string; p_payload: Json; p_revision?: number | null }
+        Returns: Json
+      }
+      set_arena_receiving_booking_mode: {
+        Args: {
+          p_preserve_pending?: boolean; p_arena_id: string; p_mode: string; p_revision?: number | null }
+        Returns: Json
+      }
       resolve_arena_cleanup_selection: {
         Args: { p_actor_user_id: string; p_arena_id: string; p_modules: string[]; p_cutoff?: string | null }
         Returns: Json
