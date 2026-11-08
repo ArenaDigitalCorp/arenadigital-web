@@ -29,6 +29,7 @@ import type {
 const MOBILE_CONTENT_REVALIDATE_PATHS = [
   '/dashboard',
   '/dashboard/admin/mobile-content',
+  '/admin/publications',
   '/dashboard/settings/arenas',
 ]
 

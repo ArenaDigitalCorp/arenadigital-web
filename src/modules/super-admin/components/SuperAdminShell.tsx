@@ -10,6 +10,7 @@ import {
   Database,
   LayoutDashboard,
   Menu,
+  Megaphone,
   Settings2,
   ShieldCheck,
   UserCog,
@@ -48,6 +49,7 @@ const NAVIGATION: Array<{ label: string; items: NavigationItem[] }> = [
     label: "Negócio",
     items: [
       { href: "/admin/finance", label: "Financeiro", description: "Receita e cobrança", icon: WalletCards },
+      { href: "/admin/publications", label: "Publicações do app", description: "Campanhas e comunicados", icon: Megaphone },
       { href: "/admin/engagement", label: "Engajamento", description: "Saúde da base", icon: Activity },
     ],
   },
