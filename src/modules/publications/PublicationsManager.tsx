@@ -121,6 +121,7 @@ export function PublicationsManager({
   arenas,
   sports = [],
 }: Props) {
+  const context = platform ? "platform" : "arena";
   const [items, setItems] = useState(initialItems),
     [draft, setDraft] = useState<ReturnType<typeof newDraft> | null>(null);
   const [busy, setBusy] = useState(false),
@@ -178,7 +179,7 @@ export function PublicationsManager({
     setBusy(true);
     setError("");
     try {
-      setItems(await listPublications(arenaId));
+      setItems(await listPublications(arenaId, context));
       setNow(Date.now());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha ao atualizar.");
@@ -212,6 +213,7 @@ export function PublicationsManager({
     setNotice("");
     try {
       const result = await changePublication({
+        context,
         action,
         id: item.id,
         revision: item.revision,
@@ -271,6 +273,7 @@ export function PublicationsManager({
             ? old
             : new Date(value).toISOString();
       const result = await changePublication({
+        context,
         action: "save",
         id: draft.id,
         revision: draft.revision,
@@ -315,6 +318,7 @@ export function PublicationsManager({
     try {
       const data = new FormData();
       data.append("file", file);
+      data.append("context", context);
       if (draft.arena_id) data.append("arenaId", draft.arena_id);
       const response = await fetch("/api/publications/upload", {
         method: "POST",
@@ -366,7 +370,7 @@ export function PublicationsManager({
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
-            {author} · Comunicação
+            {platform ? "Área admin" : "Painel da arena"} · {author}
           </p>
           <h1 className="font-heading text-2xl font-bold tracking-tight text-arena-navy-950 sm:text-3xl">
             Publicações
@@ -1050,6 +1054,7 @@ export function PublicationsManager({
                               const result = await publicationHistory(
                                 item.id,
                                 item.arena_id,
+                                context,
                               );
                               if (result.success)
                                 setHistory({

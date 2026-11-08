@@ -1,9 +1,4 @@
-import { redirect } from "next/navigation";
-import {
-  assertArenaAdminAccess,
-  getPlatformAccessLevel,
-  requireAuthenticatedDbUser,
-} from "@/lib/server-auth";
+import { authorizePublicationScope } from "@/modules/publications/authorization";
 import { getSupabaseAdmin } from "@/lib/supabase-server";
 import { listPublications } from "@/modules/publications/actions";
 import { PublicationsManager } from "@/modules/publications/PublicationsManager";
@@ -13,13 +8,9 @@ export default async function ArenaPublicationsPage({
   params: Promise<{ arenaId: string }>;
 }) {
   const { arenaId: id } = await params;
-  const actor = await requireAuthenticatedDbUser();
-  const level = await getPlatformAccessLevel(actor.dbUserId);
-  if (level === "super_admin" || level === "platform_admin")
-    redirect("/admin/publications");
-  await assertArenaAdminAccess(id);
+  await authorizePublicationScope(id, "read", "arena");
   const [items, { data, error }] = await Promise.all([
-    listPublications(id),
+    listPublications(id, "arena"),
     getSupabaseAdmin().from("arenas").select("id,name").eq("id", id).single(),
   ]);
   if (error || !data) throw new Error("Não foi possível carregar a arena.");

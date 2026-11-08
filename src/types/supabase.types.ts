@@ -6302,6 +6302,10 @@ export type Database = {
           p_preserve_pending?: boolean; p_arena_id: string; p_mode: string; p_revision?: number | null }
         Returns: Json
       }
+      can_author_home_publication: {
+        Args: { p_arena_id: string }
+        Returns: boolean
+      }
       list_home_publications: {
         Args: { p_arena_id?: string | null }
         Returns: Json
@@ -6311,7 +6315,7 @@ export type Database = {
         Returns: Json
       }
       manage_home_publication: {
-        Args: { p_action: string; p_id?: string | null; p_arena_id?: string | null; p_payload?: Json; p_revision?: number | null }
+        Args: { p_context?: "arena" | "platform"; p_action: string; p_id?: string | null; p_arena_id?: string | null; p_payload?: Json; p_revision?: number | null }
         Returns: Json
       }
       visible_home_publication_ids: {
