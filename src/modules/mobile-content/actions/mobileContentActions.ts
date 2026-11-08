@@ -153,7 +153,7 @@ export async function listArenaPromotionsAction(arenaId: string): Promise<Mobile
     const supabase = getSupabaseAdmin() as any
     const { data, error } = await supabase
       .from('arena_promotions')
-      .select('*, arenas(id, name), courts(id, name), sports(id, name)')
+      .select('*, arenas(id, name), courts!arena_promotions_court_id_fkey(id, name), sports(id, name)')
       .eq('arena_id', arenaId)
       .order('priority', { ascending: false })
       .order('created_at', { ascending: false })
