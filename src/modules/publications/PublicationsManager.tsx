@@ -1,6 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useState, useRef } from "react";
+import Link from "next/link";
 import {
   Megaphone,
   Plus,
@@ -368,12 +369,12 @@ export function PublicationsManager({
             {author} · Comunicação
           </p>
           <h1 className="font-heading text-2xl font-bold tracking-tight text-arena-navy-950 sm:text-3xl">
-            Publicações do app
+            Publicações
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-500">
             {platform
               ? "Crie conteúdos da Arena Digital e acompanhe as publicações das arenas."
-              : "Compartilhe novidades da sua arena na Home dos atletas."}
+              : "Crie comunicados, promoções, publicidades e novidades da sua arena para a Home dos atletas."}
           </p>
         </div>
         {!draft && !moderating && (
@@ -401,6 +402,14 @@ export function PublicationsManager({
           </Button>
         )}
       </header>
+      {!platform && !draft && (
+        <p className="text-sm text-slate-500">
+          Para divulgar uma vaga ou disponibilidade específica, acesse{" "}
+          <Link className="font-medium text-arena-navy-800 underline underline-offset-4" href={`/dashboard/arenas/${arenaId}/mobile-content/scheduling`}>
+            horários e jogos
+          </Link>.
+        </p>
+      )}
       {error && (
         <div
           role="alert"
