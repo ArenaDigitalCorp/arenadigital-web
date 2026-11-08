@@ -95,6 +95,10 @@ export type Database = {
       }
       app_home_content: {
         Row: {
+          arena_id: string | null
+          archived: boolean
+          blocked_reason: string | null
+          revision: number
           active: boolean
           city_id: number | null
           created_at: string
@@ -114,6 +118,10 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          arena_id?: string | null
+          archived?: boolean
+          blocked_reason?: string | null
+          revision?: number
           active?: boolean
           city_id?: number | null
           created_at?: string
@@ -133,6 +141,10 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          arena_id?: string | null
+          archived?: boolean
+          blocked_reason?: string | null
+          revision?: number
           active?: boolean
           city_id?: number | null
           created_at?: string
@@ -6288,6 +6300,22 @@ export type Database = {
       set_arena_receiving_booking_mode: {
         Args: {
           p_preserve_pending?: boolean; p_arena_id: string; p_mode: string; p_revision?: number | null }
+        Returns: Json
+      }
+      list_home_publications: {
+        Args: { p_arena_id?: string | null }
+        Returns: Json
+      }
+      home_publication_history: {
+        Args: { p_id: string }
+        Returns: Json
+      }
+      manage_home_publication: {
+        Args: { p_action: string; p_id?: string | null; p_arena_id?: string | null; p_payload?: Json; p_revision?: number | null }
+        Returns: Json
+      }
+      visible_home_publication_ids: {
+        Args: { p_ids: string[] }
         Returns: Json
       }
       resolve_arena_cleanup_selection: {
