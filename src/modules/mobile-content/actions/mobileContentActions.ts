@@ -35,7 +35,10 @@ const MOBILE_CONTENT_REVALIDATE_PATHS = [
 
 function revalidateMobileContent(arenaId?: string) {
   for (const path of MOBILE_CONTENT_REVALIDATE_PATHS) revalidatePath(path)
-  if (arenaId) revalidatePath(`/dashboard/arenas/${arenaId}`)
+  if (arenaId) {
+    revalidatePath(`/dashboard/arenas/${arenaId}`)
+    revalidatePath(`/dashboard/arenas/${arenaId}/mobile-content/scheduling`)
+  }
 }
 
 function normalizeError(err: unknown, fallback: string) {

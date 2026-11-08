@@ -19,6 +19,7 @@ type DashboardSection =
   | 'templates-mensagens'
   | 'reports'
   | 'notifications'
+  | 'publications'
 
 type AccessibleArenaTarget = {
   arenaId: string
@@ -103,11 +104,13 @@ export async function resolveDashboardDefaultRoute(section: DashboardSection): P
       : '/dashboard/settings/arenas'
   }
 
-  if (section === 'finance' || section === 'products' || section === 'users' || section === 'reports') {
+  if (section === 'finance' || section === 'products' || section === 'users' || section === 'reports' || section === 'publications') {
     const adminArena = arenas.find((arena) => canManageArena(arena))
     if (!adminArena) return '/dashboard'
 
     switch (section) {
+      case 'publications':
+        return `/dashboard/publications/${adminArena.arenaId}`
       case 'finance':
         return `/dashboard/finance/${adminArena.arenaId}`
       case 'products':

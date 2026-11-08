@@ -16,7 +16,6 @@ import {
   CalendarDays,
   Clock,
   LayoutGrid,
-  Smartphone,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -230,22 +229,6 @@ export function ArenaDetailPageClient({
         {canManage && activeTab === 'espacos' && (
           <div className="space-y-6">
             <div className="flex flex-wrap justify-end gap-3">
-              <Link
-                href={`/dashboard/arenas/${arenaId}/publications`}
-                className="inline-flex items-center rounded-md border px-3 py-2 text-sm font-medium"
-              >
-                Publicações do app
-              </Link>
-
-              <Button
-                asChild
-                className="bg-arena-navy-800/10 hover:bg-arena-navy-800/20 text-arena-navy-800 font-bold gap-2"
-              >
-                <Link href={`/dashboard/arenas/${arenaId}/mobile-content`}>
-                  <Smartphone className="w-4 h-4" />
-                  Conteúdo do app
-                </Link>
-              </Button>
               {courts.length > 0 && (
                 <>
                 <Button

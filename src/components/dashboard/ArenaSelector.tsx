@@ -1,6 +1,6 @@
 "use client"
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useArena } from "@/contexts/ArenaContext";
 import {
   Select,
@@ -10,17 +10,22 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { canManageArena } from "@/lib/arena-permissions";
 import { cn } from "@/lib/utils";
 
 export function ArenaSelector({ isCollapsed }: { isCollapsed?: boolean }) {
     const { arenas, selectedArena, setSelectedArena, isLoadingArenas } = useArena();
 
     const router = useRouter();
+    const pathname = usePathname();
 
     const selectArena = (arenaId: string) => {
         if (arenaId === selectedArena || !arenas.some((arena) => arena.id === arenaId)) return;
         setSelectedArena(arenaId);
-        router.push("/dashboard");
+        const target = arenas.find((arena) => arena.id === arenaId);
+        router.push(pathname.startsWith("/dashboard/publications") && target && canManageArena(target)
+            ? `/dashboard/publications/${arenaId}`
+            : "/dashboard");
     };
 
     if (isLoadingArenas) {

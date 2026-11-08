@@ -18,6 +18,7 @@ import {
     BarChart2,
     ClipboardList,
     GraduationCap,
+    Megaphone,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -46,6 +47,7 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
     const isAdmin = selectedArenaDetails ? canManageArena(selectedArenaDetails) : false;
     const canAccessSubscription = Boolean(isAdmin);
 
+    const publicationsHref = selectedArena ? `/dashboard/publications/${selectedArena}` : "/dashboard/publications";
     const arenaHref = selectedArena ? `/dashboard/arenas/${selectedArena}` : "/dashboard/arenas";
     const stationsHref = selectedArena ? `/dashboard/arenas/${selectedArena}/stations` : "/dashboard/stations";
     const financeHref = selectedArena ? `/dashboard/finance/${selectedArena}` : "/dashboard/finance";
@@ -89,6 +91,8 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
         !p.includes("/mensalistas") &&
         !p.includes("/pre-reservas") &&
         !p.includes("/avulsas") &&
+        !p.includes("/publications") &&
+        !p.includes("/mobile-content") &&
         // Só a edição da própria arena (Perfil da Arena) sai daqui — edição de um
         // espaço específico (/spaces/{id}/edit) continua contando como Espaços.
         !/\/dashboard\/arenas\/[^/]+\/edit$/.test(p);
@@ -112,6 +116,14 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                 tutorialKey: "spaces",
                 href: arenaHref,
                 isActive: espacosActive,
+                requiresAdmin: true,
+            },
+            {
+                icon: Megaphone,
+                label: "Publicações",
+                tutorialKey: "publications",
+                href: publicationsHref,
+                isActive: (p: string) => p.startsWith("/dashboard/publications") || p.includes("/mobile-content"),
                 requiresAdmin: true,
             },
             {

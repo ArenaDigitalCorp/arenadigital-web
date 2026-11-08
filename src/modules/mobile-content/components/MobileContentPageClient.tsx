@@ -190,8 +190,11 @@ export function MobileContentPageClient({
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
+      <Link href={`/dashboard/publications/${arenaId}`} className="inline-flex text-sm font-medium text-arena-navy-800 underline underline-offset-4">
+        Voltar às publicações
+      </Link>
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold text-gray-900">Conteúdo do app</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Horários e jogos no app</h1>
         <p className="text-sm text-gray-500">
           Publique horários disponíveis e vagas abertas da {arenaName}.
         </p>

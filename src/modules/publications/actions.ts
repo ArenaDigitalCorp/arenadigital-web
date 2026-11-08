@@ -85,7 +85,7 @@ export async function changePublication(input: unknown) {
       "/admin/publications",
       "/dashboard/admin/mobile-content",
       ...(value.arenaId
-        ? [`/dashboard/arenas/${value.arenaId}/publications`]
+        ? [`/dashboard/publications/${value.arenaId}`, `/dashboard/arenas/${value.arenaId}/publications`]
         : []),
     ]) {
       try {
