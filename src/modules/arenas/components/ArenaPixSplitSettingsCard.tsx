@@ -1,6 +1,6 @@
 "use client"
 
-import { NativeSelect } from "@/components/ui/native-select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ArenaCommissionFields } from "./ArenaCommissionFields"
 
 import type { FormEvent } from "react"
@@ -18,7 +18,8 @@ import {
     Loader2,
     RefreshCw,
     ShieldCheck,
-    WalletCards,
+    ChevronDown,
+    Save,
     XCircle,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -38,6 +39,8 @@ import {
     syncArenaAsaasSubaccountStatusAction,
     updateArenaPixSplitSettingsAction,
 } from "@/modules/arenas/actions/arenaActions"
+import type { ReceivingDraftSnapshot } from "@/modules/arenas/types/receiving-setup.types"
+import { saveArenaReceivingDraftAction } from "@/modules/arenas/actions/receivingSetupActions"
 import type {
     ArenaAsaasOnboardingStatus,
     ArenaPixSplitSettings,
@@ -46,6 +49,20 @@ import type {
 import { cn } from "@/lib/utils"
 import { AsaasProviderNotice } from "@/components/payments/asaas-provider-notice"
 import { ArenaAsaasDocumentsPanel } from "@/modules/arenas/components/ArenaAsaasDocumentsPanel"
+
+export type ReceivingDraftFields = {
+    name: string
+    email: string
+    cpfCnpj: string
+    companyType: AsaasCompanyType | ""
+    mobilePhone: string
+    incomeValue: string
+    address: string
+    addressNumber: string
+    complement: string
+    province: string
+    postalCode: string
+}
 
 interface Props {
     arenaId: string
@@ -62,11 +79,13 @@ interface Props {
         province: string
         postalCode: string
     }
+    initialReceivingDraft?: ReceivingDraftSnapshot | null
     accessMode?: "platform" | "arena"
     onSettingsChange?: (settings: ArenaPixSplitSettings) => void
+    onDocumentsReadyChange?: (ready: boolean) => void
 }
 
-type BusyOperation = "create" | "reconcile" | "recover" | "sync" | "save" | null
+type BusyOperation = "create" | "reconcile" | "recover" | "sync" | "save" | "draft" | null
 
 const AUTOMATIC_INITIAL_SYNC_DELAY_MS = 15_000
 const AUTOMATIC_LOCAL_REFRESH_MS = 10_000
@@ -143,9 +162,13 @@ export function ArenaPixSplitSettingsCard({
     initialSettings,
     registration,
     accessMode = "platform",
+    initialReceivingDraft,
     onSettingsChange,
+    onDocumentsReadyChange,
 }: Props) {
     const [settings, setSettings] = useState(initialSettings)
+    const [documentGroupsReady, setDocumentGroupsReady] = useState(false)
+    const onDocumentGroupsReadyChange = useCallback((ready: boolean) => setDocumentGroupsReady(ready), [])
     const [operationalForm, setOperationalForm] = useState(initialSettings)
     const [busy, setBusy] = useState<BusyOperation>(null)
     const [automaticUpdateError, setAutomaticUpdateError] = useState<string | null>(null)
@@ -153,11 +176,12 @@ export function ArenaPixSplitSettingsCard({
     const [showOnboarding, setShowOnboarding] = useState(!initialSettings.onboardingStarted)
     const [reconcileAccountId, setReconcileAccountId] = useState("")
     const [reconcileWalletId, setReconcileWalletId] = useState("")
-    const [onboardingForm, setOnboardingForm] = useState({
+    const [draftSaved, setDraftSaved] = useState(false)
+    const [draftRevision, setDraftRevision] = useState(initialReceivingDraft?.revision ?? null)
+    const [onboardingForm, setOnboardingForm] = useState<ReceivingDraftFields>({
         name: registration.legalName || initialSettings.holderName || "",
         email: registration.email,
         cpfCnpj: initialSettings.holderDocument || registration.document,
-        companyType: "" as AsaasCompanyType | "",
         mobilePhone: registration.phone,
         incomeValue: "",
         address: registration.address,
@@ -165,7 +189,20 @@ export function ArenaPixSplitSettingsCard({
         complement: registration.complement,
         province: registration.province,
         postalCode: registration.postalCode,
+        ...initialReceivingDraft?.data,
+        companyType: COMPANY_TYPES.some(type => type.value === initialReceivingDraft?.data.companyType)
+            ? initialReceivingDraft!.data.companyType as AsaasCompanyType : "",
     })
+
+    const [reviewRegistration, setReviewRegistration] = useState(false)
+    // Keep the initial field set stable so inputs do not disappear while typing.
+    const [reusedFields] = useState(() => (Object.keys(onboardingForm) as Array<keyof ReceivingDraftFields>)
+        .filter(key => key !== 'companyType' && key !== 'incomeValue' && Boolean(onboardingForm[key].trim())))
+    const registrationLabels: Partial<Record<keyof ReceivingDraftFields, string>> = {
+        name: 'Nome ou razão social', cpfCnpj: 'CNPJ', email: 'E-mail', mobilePhone: 'Celular',
+        address: 'Endereço', addressNumber: 'Número', complement: 'Complemento', province: 'Bairro', postalCode: 'CEP',
+    }
+    const needsInput = (key: keyof ReceivingDraftFields) => reviewRegistration || !reusedFields.includes(key) || !onboardingForm[key].trim()
 
     const isApproved =
         settings.onboardingStatus === "APPROVED" &&
@@ -173,6 +210,9 @@ export function ArenaPixSplitSettingsCard({
         settings.paymentFlow === "arena_subaccount_split"
     const isRejected = settings.onboardingStatus === "REJECTED"
     const isPlatform = accessMode === "platform"
+
+    const documentsReady = settings.enabled || settings.documentationStatus === "APPROVED" || documentGroupsReady
+    useEffect(() => { onDocumentsReadyChange?.(documentsReady) }, [documentsReady, onDocumentsReadyChange])
 
     const updateSettings = useCallback((next: ArenaPixSplitSettings) => {
         setSettings(next)
@@ -241,8 +281,26 @@ export function ArenaPixSplitSettingsCard({
         updateSettings,
     ])
 
+    async function handleSaveDraft() {
+        if (busy || settings.onboardingStarted) return
+        setBusy("draft")
+        setDraftSaved(false)
+        try {
+            const result = await saveArenaReceivingDraftAction(arenaId, onboardingForm, draftRevision)
+            if (!result.success) throw new Error(result.error)
+            setDraftRevision(result.data.revision)
+            setDraftSaved(true)
+            toast.success("Dados de recebimento salvos. Nenhum cadastro foi enviado ao Asaas.")
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Não foi possível salvar os dados de recebimento.")
+        } finally {
+            setBusy(null)
+        }
+    }
+
     async function handleCreateSubaccount(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()
+        if (busy || settings.onboardingStarted) return
         const companyType = onboardingForm.companyType
         if (!companyType) {
             toast.error("Selecione a natureza jurídica da empresa.")
@@ -265,6 +323,7 @@ export function ArenaPixSplitSettingsCard({
             toast.success("Cadastro financeiro iniciado. A aprovação será acompanhada automaticamente.")
             if (result.warning) toast.info(result.warning)
         } catch (error) {
+            setReviewRegistration(true)
             toast.error(error instanceof Error ? error.message : "Não foi possível criar a subconta Asaas.")
         } finally {
             setBusy(null)
@@ -346,135 +405,69 @@ export function ArenaPixSplitSettingsCard({
 
     return (
         <section className="px-5 py-7 sm:px-8" aria-labelledby="receiving-account-title">
-            <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
-                <div className="flex items-start gap-3">
-                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-slate-950 text-white">
-                        <WalletCards className="h-5 w-5" aria-hidden="true" />
-                    </div>
-                    <div>
-                        <p className="text-[11px] font-black uppercase tracking-[0.14em] text-arena-button">
-                            Recebimento das reservas
-                        </p>
-                        <h3 id="receiving-account-title" className="mt-1 text-base font-bold text-arena-navy-800">Conta de recebimento</h3>
-                        <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
-                            {settings.onboardingStarted
-                                ? "Acompanhe a validação do Asaas e as solicitações de documentos abaixo."
-                                : isPlatform
-                                    ? "Onboarding financeiro da arena e configuração da taxa da plataforma."
-                                    : "Confirme os dados da empresa para ativar o recebimento das reservas online."}
-                        </p>
-                    </div>
+            <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <h3 id="receiving-account-title" className="flex items-center gap-2 text-base font-bold text-arena-navy-800">
+                        <span className="grid size-6 shrink-0 place-items-center rounded-full bg-arena-button text-xs font-bold text-white">3</span>
+                        Conta de recebimento
+                    </h3>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+                        {settings.onboardingStarted
+                            ? "Acompanhe o cadastro e os documentos solicitados pelo Asaas."
+                            : "Prepare os dados da empresa. Você pode salvar e continuar depois, independentemente da política de cancelamento."}
+                    </p>
                 </div>
-                <div className="flex flex-wrap items-center gap-2" aria-live="polite">
-                    <Badge variant="outline" className={cn(
-                        "h-7",
-                        settings.enabled
-                            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                            : isRejected
-                                ? "border-rose-200 bg-rose-50 text-rose-800"
-                                : "border-slate-200 bg-slate-50 text-slate-600",
-                    )}>
-                        {settings.enabled
-                            ? <Check className="h-3.5 w-3.5" />
-                            : isRejected
-                                ? <XCircle className="h-3.5 w-3.5" />
-                                : <CircleDashed className="h-3.5 w-3.5" />}
-                        {isPlatform
-                            ? settings.enabled ? "Split ativo" : "Split inativo"
-                            : settings.enabled ? "Recebimento ativo" : isRejected ? "Cadastro recusado" : isApproved ? "Conta aprovada" : settings.onboardingStarted ? "Em análise" : "Aguardando ativação"}
-                    </Badge>
-                    <Badge variant="outline" className={cn(
-                        "h-7",
-                        "border-sky-200 bg-sky-50 text-sky-800",
-                    )}>
-                        {settings.onboardingStarted ? "Cadastro iniciado" : isPlatform ? "Não configurado" : "Não iniciado"}
-                    </Badge>
-                </div>
+                <Badge variant="outline" className={cn("h-7", settings.enabled ? "border-emerald-200 bg-emerald-50 text-emerald-800" : isRejected ? "border-rose-200 bg-rose-50 text-rose-800" : "border-amber-200 bg-amber-50 text-amber-800")}>
+                    {settings.enabled ? <Check className="size-3.5"/> : isRejected ? <XCircle className="size-3.5"/> : <CircleDashed className="size-3.5"/>}
+                    {settings.enabled ? "Conta aprovada" : isRejected ? "Cadastro recusado" : settings.onboardingStarted ? "Cadastro iniciado" : "Pendente"}
+                </Badge>
             </div>
 
-            <AsaasProviderNotice className="mt-5" />
-
             {settings.onboardingStarted && (
-                <div className="mt-7 grid gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(280px,.72fr)]">
-                    <section aria-labelledby="asaas-validation-title">
-                        <div className="flex items-start justify-between gap-4">
-                            <div>
-                                <h4 id="asaas-validation-title" className="text-sm font-bold text-slate-950">Acompanhamento automático</h4>
-                                <p className="mt-1 text-xs text-slate-500">Última atualização do Asaas: {formatDate(settings.lastStatusCheckedAt)}</p>
-                            </div>
-                            <Button type="button" variant="outline" size="sm" onClick={handleSync} disabled={busy !== null}>
-                                {busy === "sync" ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-                                Atualizar agora
-                            </Button>
+                <div className="space-y-3">
+                    <details open className="group overflow-hidden rounded-xl border border-slate-200">
+                        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 bg-slate-50 px-4 py-4 text-sm font-semibold text-arena-navy-800 [&::-webkit-details-marker]:hidden">
+                            <span>1　Registro operacional</span><ChevronDown className="size-4 transition-transform group-open:rotate-180"/>
+                        </summary>
+                        <div className="border-t border-slate-200 px-4 py-2 sm:px-5">
+                            <dl className="divide-y divide-slate-100 text-sm">
+                                <div className="flex flex-wrap justify-between gap-3 py-3"><dt className="text-slate-500">Titular</dt><dd className="font-medium text-arena-navy-800">{settings.holderName || "Em validação"}</dd></div>
+                                <div className="flex flex-wrap justify-between gap-3 py-3"><dt className="text-slate-500">CNPJ</dt><dd className="font-medium text-arena-navy-800">{settings.holderDocument || "Em validação"}</dd></div>
+                                {isPlatform && <>
+                                    <div className="flex flex-wrap justify-between gap-3 py-3"><dt className="text-slate-500">Conta Asaas</dt><dd className="break-all font-mono text-xs">{settings.asaasAccountId || "Pendente"}</dd></div>
+                                    <div className="flex flex-wrap justify-between gap-3 py-3"><dt className="text-slate-500">Wallet</dt><dd className="break-all font-mono text-xs">{settings.asaasWalletId || "Pendente"}</dd></div>
+                                    <div className="flex flex-wrap justify-between gap-3 py-3"><dt className="text-slate-500">Webhook exclusivo</dt><dd className="text-xs">{settings.webhookConfigured ? "Token registrado" : "Ausente"}</dd></div>
+                                </>}
+                            </dl>
                         </div>
-                        <div className="mt-4 border-y border-slate-200">
-                            <StatusLine label="Aprovação final" status={settings.onboardingStatus} icon={ShieldCheck} />
-                            <StatusLine label="Cadastro empresarial" status={settings.commercialInfoStatus} icon={Building2} />
-                            <StatusLine label="Conta bancária" status={settings.bankAccountInfoStatus} icon={Landmark} />
-                            <StatusLine label="Documentos do responsável" status={settings.documentationStatus} icon={FileCheck2} />
-                        </div>
-                        {automaticUpdateError && (
-                            <p className="mt-4 text-xs font-semibold text-amber-800" role="status">
-                                {automaticUpdateError} Você pode usar “Atualizar agora” sem reiniciar o cadastro.
-                            </p>
-                        )}
-                        {settings.onboardingUrl && (settings.documentationStatus === "PENDING" || settings.documentationStatus === "REJECTED") && (
-                            <Button asChild variant="outline" className="mt-4 w-full sm:w-auto">
-                                <a href={settings.onboardingUrl} target="_blank" rel="noreferrer">
-                                    <ExternalLink className="h-4 w-4" />
-                                    Enviar documentos solicitados
-                                </a>
-                            </Button>
-                        )}
-                        {!settings.onboardingUrl && settings.documentationStatus === "PENDING" && settings.hasPaymentAccount && (
-                            <p className="mt-4 text-xs leading-5 text-slate-600" role="status">
-                                Não há um link de envio nesta consulta. Confira os documentos abaixo: cada solicitação indica como concluir o envio ao Asaas.
-                            </p>
-                        )}
-                        {settings.hasPaymentAccount && !settings.credentialRecoveryRequired && (
-                            <ArenaAsaasDocumentsPanel
-                                arenaId={arenaId}
-                                refreshKey={settings.lastStatusCheckedAt ?? settings.updatedAt}
-                                onUploaded={() => { void handleSync() }}
-                                disabled={busy !== null}
-                            />
-                        )}
-                    </section>
-
-                    <section aria-labelledby="asaas-account-title" className="lg:border-l lg:border-slate-200 lg:pl-7">
-                        <h4 id="asaas-account-title" className="text-sm font-bold text-slate-950">Registro operacional</h4>
-                        <dl className="mt-4 space-y-4 text-sm">
-                            {isPlatform ? (
-                                <>
-                                    <div>
-                                        <dt className="text-xs text-slate-500">Conta Asaas</dt>
-                                        <dd className="mt-1 break-all font-mono text-xs font-semibold text-slate-800">{settings.asaasAccountId || "Pendente"}</dd>
-                                    </div>
-                                    <div>
-                                        <dt className="text-xs text-slate-500">Wallet</dt>
-                                        <dd className="mt-1 break-all font-mono text-xs font-semibold text-slate-800">{settings.asaasWalletId || "Pendente"}</dd>
-                                    </div>
-                                </>
-                            ) : (
-                                <>
-                                    <div>
-                                        <dt className="text-xs text-slate-500">Titular</dt>
-                                        <dd className="mt-1 text-xs font-semibold text-slate-800">{settings.holderName || "Em validação"}</dd>
-                                    </div>
-                                    <div>
-                                        <dt className="text-xs text-slate-500">CNPJ</dt>
-                                        <dd className="mt-1 text-xs font-semibold text-slate-800">{settings.holderDocument || "Em validação"}</dd>
-                                    </div>
-                                </>
+                    </details>
+                    <details open className="group overflow-hidden rounded-xl border border-slate-200">
+                        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 bg-slate-50 px-4 py-4 text-sm font-semibold text-arena-navy-800 [&::-webkit-details-marker]:hidden">
+                            <span>2　Documentos solicitados</span><ChevronDown className="size-4 transition-transform group-open:rotate-180"/>
+                        </summary>
+                        <div className="border-t border-slate-200 p-4 sm:p-5">
+                            {settings.onboardingUrl && (settings.documentationStatus === "PENDING" || settings.documentationStatus === "REJECTED") && (
+                                <Button asChild variant="outline" className="mb-4 w-full sm:w-auto"><a href={settings.onboardingUrl} target="_blank" rel="noopener noreferrer"><ExternalLink className="size-4"/>Enviar documentos solicitados</a></Button>
                             )}
-                            <div className="flex items-center justify-between gap-4 border-t border-slate-100 pt-4">
-                                <dt className="text-xs text-slate-500">Webhook exclusivo</dt>
-                                <dd className={cn("flex items-center gap-1.5 text-xs font-bold", settings.webhookConfigured ? "text-emerald-700" : "text-rose-700")}>
-                                    {settings.webhookConfigured ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
-                                    {settings.webhookConfigured ? "Token registrado" : "Ausente"}
-                                </dd>
-                            </div>
-                        </dl>
+                            {!settings.onboardingUrl && settings.documentationStatus === "PENDING" && settings.hasPaymentAccount && (
+                                <p className="mb-4 text-xs leading-5 text-slate-500" role="status">Não há um link de envio nesta consulta. Confira os documentos abaixo: cada solicitação indica como concluir o envio ao Asaas.</p>
+                            )}
+                            {settings.hasPaymentAccount && !settings.credentialRecoveryRequired && <ArenaAsaasDocumentsPanel arenaId={arenaId} refreshKey={settings.lastStatusCheckedAt ?? settings.updatedAt} onUploaded={() => { void handleSync() }} disabled={busy !== null} onDocumentsReadyChange={onDocumentGroupsReadyChange} embedded />}
+                            {settings.credentialRecoveryRequired && <p className="text-sm text-slate-500">Os documentos estarão disponíveis após a conferência do cadastro financeiro.</p>}
+                        </div>
+                    </details>
+                    <section aria-labelledby="asaas-validation-title" className="rounded-xl border border-slate-200 p-4 sm:p-5">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div><h4 id="asaas-validation-title" className="text-sm font-semibold text-arena-navy-800">Situação da conta</h4><p className="mt-1 text-xs text-slate-500">Atualização do Asaas: {formatDate(settings.lastStatusCheckedAt)}</p></div>
+                            <Button type="button" variant="ghost" size="sm" onClick={handleSync} disabled={busy !== null}>{busy === "sync" ? <Loader2 className="animate-spin"/> : <RefreshCw/>}Atualizar agora</Button>
+                        </div>
+                        <div className="mt-3 grid gap-x-6 sm:grid-cols-2">
+                            <StatusLine label="Aprovação final" status={settings.onboardingStatus} icon={ShieldCheck}/>
+                            <StatusLine label="Cadastro empresarial" status={settings.commercialInfoStatus} icon={Building2}/>
+                            <StatusLine label="Conta bancária" status={settings.bankAccountInfoStatus} icon={Landmark}/>
+                            <StatusLine label="Documentos do responsável" status={settings.documentationStatus} icon={FileCheck2}/>
+                        </div>
+                        {automaticUpdateError && <p className="mt-3 text-xs font-semibold text-amber-800" role="status">{automaticUpdateError} Você pode usar “Atualizar agora” sem reiniciar o cadastro.</p>}
                     </section>
                 </div>
             )}
@@ -518,72 +511,96 @@ export function ArenaPixSplitSettingsCard({
             )}
 
             {(showOnboarding && !settings.onboardingStarted) && (
-                <form onSubmit={handleCreateSubaccount} className="mt-7" aria-labelledby="asaas-onboarding-title">
-                    <div className="border-b border-slate-200 pb-4">
-                        <h4 id="asaas-onboarding-title" className="text-sm font-bold text-slate-950">
-                            Ativar recebimentos online
-                        </h4>
-                        <p className="mt-1 text-xs leading-5 text-slate-500">
-                            Somente ao confirmar estes dados criaremos a conta de pagamento no Asaas. Depois disso, a Arena Digital acompanhará a aprovação automaticamente.
-                        </p>
-                    </div>
+                <details open className="group overflow-hidden rounded-xl border border-slate-200">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 bg-slate-50 px-4 py-4 text-sm font-semibold text-arena-navy-800 [&::-webkit-details-marker]:hidden">
+                        <span id="asaas-onboarding-title">1　Registro operacional</span><ChevronDown className="size-4 transition-transform group-open:rotate-180"/>
+                    </summary>
+                    <form onSubmit={handleCreateSubaccount} onChange={() => setDraftSaved(false)} className="border-t border-slate-200 p-4 sm:p-5" aria-labelledby="asaas-onboarding-title">
+                    <fieldset disabled={busy !== null}>
+                    <p className="text-xs leading-5 text-slate-500">Aproveitamos os dados já informados no cadastro da arena ou no rascunho. Confira as informações e complete apenas o que falta.</p>
+                    {(reusedFields.length > 0 || reviewRegistration) && <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-xs font-semibold text-arena-navy-800">Dados já informados</p>
+                            <Button type="button" variant="ghost" size="sm" onClick={() => setReviewRegistration(value => !value)}>
+                                {reviewRegistration ? 'Concluir revisão' : 'Revisar dados'}
+                            </Button>
+                        </div>
+                        {!reviewRegistration && <dl className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                            {reusedFields.filter(key => onboardingForm[key].trim()).map(key => <div key={key} className="min-w-0">
+                                <dt className="text-xs text-slate-500">{registrationLabels[key]}</dt>
+                                <dd className="mt-1 break-words text-sm text-arena-navy-800">{onboardingForm[key]}</dd>
+                            </div>)}
+                        </dl>}
+                        {reviewRegistration && <p className="mt-2 text-xs text-slate-500">As correções abaixo valem para o cadastro de recebimento.</p>}
+                    </div>}
                     <div className="mt-5 grid gap-x-4 gap-y-5 md:grid-cols-2 xl:grid-cols-3">
-                        <div className="space-y-2 xl:col-span-2">
+                        {needsInput('name') && <div className="space-y-2 xl:col-span-2">
                             <Label htmlFor="baas-name">Nome ou razão social</Label>
                             <Input id="baas-name" value={onboardingForm.name} onChange={(event) => setOnboardingForm((form) => ({ ...form, name: event.target.value }))} autoComplete="organization" required />
-                        </div>
-                        <div className="space-y-2">
+                        </div>}
+                        {needsInput('cpfCnpj') && <div className="space-y-2">
                             <Label htmlFor="baas-document">CNPJ</Label>
                             <MaskedInput mask="cnpj" id="baas-document" value={onboardingForm.cpfCnpj} onChange={(event) => setOnboardingForm((form) => ({ ...form, cpfCnpj: event.target.value }))} inputMode="text" autoComplete="off" required />
-                        </div>
+                        </div>}
                         <div className="space-y-2">
                             <Label htmlFor="baas-company-type">Natureza jurídica</Label>
-                            <NativeSelect id="baas-company-type" value={onboardingForm.companyType} onChange={(event) => setOnboardingForm((form) => ({ ...form, companyType: event.target.value as AsaasCompanyType | "" }))} className="h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" required>
-                                <option value="" disabled>Selecione</option>
-                                {COMPANY_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
-                            </NativeSelect>
+                            <Select value={onboardingForm.companyType} onValueChange={(value) => { setDraftSaved(false); setOnboardingForm(form => ({...form, companyType: value as AsaasCompanyType})) }} disabled={busy !== null}>
+                                <SelectTrigger id="baas-company-type"><SelectValue placeholder="Selecione"/></SelectTrigger>
+                                <SelectContent>{COMPANY_TYPES.map(type => <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>)}</SelectContent>
+                            </Select>
                         </div>
-                        <div className="space-y-2">
+                        {needsInput('email') && <div className="space-y-2">
                             <Label htmlFor="baas-email">E-mail</Label>
                             <Input id="baas-email" type="email" value={onboardingForm.email} onChange={(event) => setOnboardingForm((form) => ({ ...form, email: event.target.value }))} autoComplete="email" required />
-                        </div>
-                        <div className="space-y-2">
+                        </div>}
+                        {needsInput('mobilePhone') && <div className="space-y-2">
                             <Label htmlFor="baas-phone">Celular</Label>
                             <MaskedInput mask="phone" id="baas-phone" value={onboardingForm.mobilePhone} onChange={(event) => setOnboardingForm((form) => ({ ...form, mobilePhone: event.target.value }))} inputMode="tel" autoComplete="tel" required />
-                        </div>
+                        </div>}
                         <div className="space-y-2">
                             <Label htmlFor="baas-income">Faturamento mensal (R$)</Label>
                             <DecimalInput id="baas-income" value={onboardingForm.incomeValue} onChange={(event) => setOnboardingForm((form) => ({ ...form, incomeValue: event.target.value }))} inputMode="decimal" required />
                         </div>
-                        <div className="space-y-2 xl:col-span-2">
+                        {needsInput('address') && <div className="space-y-2 xl:col-span-2">
                             <Label htmlFor="baas-address">Endereço</Label>
                             <Input id="baas-address" value={onboardingForm.address} onChange={(event) => setOnboardingForm((form) => ({ ...form, address: event.target.value }))} autoComplete="street-address" required />
-                        </div>
-                        <div className="space-y-2">
+                        </div>}
+                        {needsInput('addressNumber') && <div className="space-y-2">
                             <Label htmlFor="baas-address-number">Número</Label>
                             <Input id="baas-address-number" value={onboardingForm.addressNumber} onChange={(event) => setOnboardingForm((form) => ({ ...form, addressNumber: event.target.value }))} required />
-                        </div>
-                        <div className="space-y-2">
+                        </div>}
+                        {reviewRegistration && <div className="space-y-2">
                             <Label htmlFor="baas-complement">Complemento</Label>
                             <Input id="baas-complement" value={onboardingForm.complement} onChange={(event) => setOnboardingForm((form) => ({ ...form, complement: event.target.value }))} />
-                        </div>
-                        <div className="space-y-2">
+                        </div>}
+                        {needsInput('province') && <div className="space-y-2">
                             <Label htmlFor="baas-province">Bairro</Label>
                             <Input id="baas-province" value={onboardingForm.province} onChange={(event) => setOnboardingForm((form) => ({ ...form, province: event.target.value }))} required />
-                        </div>
-                        <div className="space-y-2">
+                        </div>}
+                        {needsInput('postalCode') && <div className="space-y-2">
                             <Label htmlFor="baas-postal-code">CEP</Label>
                             <MaskedInput mask="cep" id="baas-postal-code" value={onboardingForm.postalCode} onChange={(event) => setOnboardingForm((form) => ({ ...form, postalCode: event.target.value }))} inputMode="numeric" autoComplete="postal-code" required />
-                        </div>
+                        </div>}
                     </div>
-                    <div className="mt-6 flex justify-end border-t border-slate-200 pt-5">
-                        <Button type="submit" disabled={busy !== null} className="bg-slate-950 text-white hover:bg-slate-800">
+                    {!reusedFields.length && !reviewRegistration && <Button type="button" variant="ghost" size="sm" className="mt-3" onClick={() => setReviewRegistration(true)}>Adicionar complemento / revisar dados</Button>}
+                    <p className="mt-4 text-xs leading-5 text-slate-500">Salvar rascunho permite continuar depois. O cadastro só é enviado ao Asaas ao confirmar.</p>
+                    <div className="mt-6 flex flex-wrap items-center justify-end gap-3 border-t border-slate-200 pt-5">
+                        {draftSaved && <span role="status" className="mr-auto text-xs font-medium text-emerald-700">Rascunho salvo</span>}
+                        {!isPlatform && <Button type="button" variant="outline" disabled={busy !== null} onClick={() => void handleSaveDraft()}>{busy === "draft" ? <Loader2 className="animate-spin"/> : <Save/>}Salvar rascunho</Button>}
+                        <Button type="submit" disabled={busy !== null} className="bg-arena-button text-white hover:bg-arena-button-hover">
                             {busy === "create" ? <Loader2 className="animate-spin" /> : <Building2 />}
-                            Confirmar e iniciar ativação
+                            Confirmar e iniciar cadastro
                         </Button>
                     </div>
-                </form>
+                    </fieldset>
+                    </form>
+                </details>
             )}
+
+            {!settings.onboardingStarted && <details open className="group mt-3 overflow-hidden rounded-xl border border-slate-200">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 bg-slate-50 px-4 py-4 text-sm font-semibold text-arena-navy-800 [&::-webkit-details-marker]:hidden"><span>2　Documentos solicitados</span><ChevronDown className="size-4 transition-transform group-open:rotate-180"/></summary>
+                <p className="border-t border-slate-200 p-4 text-sm leading-6 text-slate-500">Confirme o cadastro acima para consultar quais documentos o Asaas solicita para sua empresa. Os documentos enviados serão analisados antes da aprovação.</p>
+            </details>}
 
             {isApproved && isPlatform && (
                 <form onSubmit={handleOperationalSave} className="mt-7 border-t border-slate-200 pt-6" aria-labelledby="split-operation-title">
@@ -617,7 +634,7 @@ export function ArenaPixSplitSettingsCard({
                     <div>
                         <p className="text-sm font-bold text-emerald-950">Conta de recebimento aprovada</p>
                         <p className="mt-1 text-xs leading-5 text-emerald-800">
-                            O recebimento foi ativado automaticamente. Para oferecer reservas online, publique também a política de cancelamento da Arena.
+                            A conta está pronta para receber. O pagamento online depende também da política de cancelamento publicada e da solicitação de ativação da Arena.
                         </p>
                     </div>
                 </div>
@@ -632,6 +649,7 @@ export function ArenaPixSplitSettingsCard({
                             : "O recebimento permanece bloqueado até a aprovação do Asaas. Confira os status e conclua as pendências indicadas acima."}
                 </div>
             )}
+            {isPlatform && <AsaasProviderNotice className="mt-6" />}
         </section>
     )
 }

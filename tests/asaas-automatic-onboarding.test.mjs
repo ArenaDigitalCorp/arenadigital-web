@@ -44,9 +44,9 @@ test('approved provider snapshot activates receiving only after every local safe
 test('arena onboarding confirms legal data and follows status automatically', async () => {
   const card = await source('src/modules/arenas/components/ArenaPixSplitSettingsCard.tsx')
 
-  assert.match(card, /companyType: "" as AsaasCompanyType \| ""/u)
-  assert.match(card, /Ativar recebimentos online/u)
-  assert.match(card, /Confirmar e iniciar ativação/u)
+  assert.match(card, /companyType: COMPANY_TYPES.some/u)
+  assert.match(card, /Registro operacional/u)
+  assert.match(card, /Confirmar e iniciar cadastro/u)
   assert.match(card, /getArenaPixSplitSettingsAction/u)
   assert.match(card, /AUTOMATIC_INITIAL_SYNC_DELAY_MS = 15_000/u)
   assert.match(card, /AUTOMATIC_LOCAL_REFRESH_MS/u)

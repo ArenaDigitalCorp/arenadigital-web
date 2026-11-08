@@ -6,9 +6,9 @@ import { loadTypescriptModule, realReact as React } from './helpers/load-typescr
 const actions = new Proxy({}, { get: () => async () => { throw new Error('Unexpected action during SSR') } })
 const { ArenaPixSplitSettingsCard } = loadTypescriptModule(
   'src/modules/arenas/components/ArenaPixSplitSettingsCard.tsx',
-  { '@/modules/arenas/actions/arenaActions': actions },
+  { '@/modules/arenas/actions/receivingSetupActions': actions, '@/modules/arenas/actions/arenaActions': actions },
 )
-const { ArenaAsaasDocumentList } = loadTypescriptModule('src/modules/arenas/components/ArenaAsaasDocumentsPanel.tsx')
+const { ArenaAsaasDocumentList, areReceivingDocumentsSubmitted } = loadTypescriptModule('src/modules/arenas/components/ArenaAsaasDocumentsPanel.tsx')
 const { parseAsaasDocumentGroups } = loadTypescriptModule('src/modules/arenas/domain/asaas-documents.ts')
 
 const pending = {
@@ -161,4 +161,28 @@ test('document descriptions are rendered as escaped text and busy state disables
   assert.ok(html.includes('&lt;script&gt;'))
   assert.ok(!html.includes('<script>synthetic-test()'))
   assert.match(html, /<fieldset[^>]*disabled=""/u)
+})
+
+
+test('online request requires a loaded nonempty list with every document submitted', () => {
+  assert.equal(areReceivingDocumentsSubmitted(null), false)
+  assert.equal(areReceivingDocumentsSubmitted([]), false)
+  assert.equal(areReceivingDocumentsSubmitted([{ status: 'NOT_SENT' }]), false)
+  assert.equal(areReceivingDocumentsSubmitted([{ status: 'PENDING' }, { status: 'NOT_SENT' }]), false)
+  assert.equal(areReceivingDocumentsSubmitted(['PENDING', 'AWAITING_APPROVAL', 'APPROVED', 'IGNORED'].map(status => ({ status }))), true)
+})
+
+test('confirmed uploads count while provider status catches up but rejected or unknown documents do not', () => {
+  assert.equal(areReceivingDocumentsSubmitted([{ status: 'NOT_SENT', attemptStatus: 'submitted' }]), true)
+  for (const status of ['REJECTED', 'UNKNOWN']) {
+    assert.equal(areReceivingDocumentsSubmitted([{ status, attemptStatus: 'submitted' }]), false, status)
+  }
+})
+
+test('unknown, processing or failed attempts cannot enable the online request', () => {
+  for (const attemptStatus of ['unknown', 'processing', 'failed']) {
+    for (const status of ['NOT_SENT', 'PENDING', 'APPROVED']) {
+      assert.equal(areReceivingDocumentsSubmitted([{ status, attemptStatus }]), false, `${status}: ${attemptStatus}`)
+    }
+  }
 })

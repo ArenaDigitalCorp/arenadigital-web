@@ -1,210 +1,47 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import {
-    Ban,
-    CalendarClock,
-    Check,
-    CreditCard,
-    Info,
-    Loader2,
-    LockKeyhole,
-} from "lucide-react"
-import { toast } from "sonner"
-import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
-import { updateArenaAppBookingModeAction } from "@/modules/arenas/actions/arenaActions"
-import {
-    normalizeAppBookingMode,
-    type AppBookingMode,
-} from "@/modules/arenas/domain/app-booking-mode"
+import { Ban, CalendarClock, Check, CreditCard, Loader2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
+import type { AppBookingMode } from '../domain/app-booking-mode'
+import type { ArenaReceivingSetup } from '../types/receiving-setup.types'
 
 type Props = {
-    arenaId: string
-    initialMode: unknown
-    legacyAcceptsRequests?: boolean
-    onlineBookingReady: boolean
-    onlineBookingMissing: string[]
-    onSelectionChange?: (mode: AppBookingMode) => void
-    onRequestOnlineConfiguration?: () => void
+  selectedMode: AppBookingMode
+  savedMode: AppBookingMode
+  setup: ArenaReceivingSetup | null
+  busy: boolean
+  onSelectionChange: (mode: AppBookingMode) => void
+  onSave: (mode: AppBookingMode) => void
+  onCancel: () => void
 }
-
-const OPTIONS: Array<{
-    value: AppBookingMode
-    title: string
-    description: string
-    icon: typeof CalendarClock
-}> = [
-    {
-        value: "disabled",
-        title: "Desativado",
-        description: "A Arena permanece visível, mas combina as reservas fora do aplicativo.",
-        icon: Ban,
-    },
-    {
-        value: "pre_booking",
-        title: "Pré-reserva",
-        description: "O atleta solicita, a Arena aprova e o pagamento acontece presencialmente.",
-        icon: CalendarClock,
-    },
-    {
-        value: "online_payment",
-        title: "Pagamento online",
-        description: "A reserva é confirmada por Pix, com split e política de cancelamento.",
-        icon: CreditCard,
-    },
-]
-
-export function ArenaAppBookingSettingsCard({
-    arenaId,
-    initialMode,
-    legacyAcceptsRequests = false,
-    onlineBookingReady,
-    onlineBookingMissing,
-    onSelectionChange,
-    onRequestOnlineConfiguration,
-}: Props) {
-    const router = useRouter()
-    const normalizedInitialMode = normalizeAppBookingMode(initialMode, legacyAcceptsRequests)
-    const [savedMode, setSavedMode] = useState<AppBookingMode>(normalizedInitialMode)
-    const [selectedMode, setSelectedMode] = useState<AppBookingMode>(normalizedInitialMode)
-    const [saving, setSaving] = useState(false)
-    const isDirty = selectedMode !== savedMode
-
-    async function handleSave() {
-        if (selectedMode === "online_payment" && !onlineBookingReady) {
-            onRequestOnlineConfiguration?.()
-            toast.info("Conclua a política e a conta de recebimento para ativar o pagamento online.")
-            return
-        }
-        setSaving(true)
-        try {
-            const result = await updateArenaAppBookingModeAction(arenaId, selectedMode)
-            if (!result.success) throw new Error(result.error)
-            const nextMode = normalizeAppBookingMode(
-                result.data?.app_booking_mode,
-                result.data?.accepts_app_booking_requests ?? false,
-            )
-            setSelectedMode(nextMode)
-            setSavedMode(nextMode)
-            toast.success("Modalidade de reserva atualizada.")
-            router.refresh()
-        } catch (error) {
-            toast.error(error instanceof Error ? error.message : "Não foi possível atualizar as reservas pelo aplicativo.")
-        } finally {
-            setSaving(false)
-        }
-    }
-
-    return (
-        <section className="px-5 py-7 sm:px-8" aria-labelledby="app-booking-settings-title">
-            <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
-                <div className="flex items-start gap-3">
-                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-arena-navy-800 text-white shadow-sm">
-                        <CalendarClock className="h-5 w-5" aria-hidden="true" />
-                    </div>
-                    <div>
-                        <p className="text-[11px] font-black uppercase tracking-[0.14em] text-arena-button">
-                            Modalidade no aplicativo
-                        </p>
-                        <h3 id="app-booking-settings-title" className="mt-1 text-base font-bold text-arena-navy-800">
-                            Como os atletas poderão reservar
-                        </h3>
-                        <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
-                            Escolha uma modalidade. Nenhuma opção é ativada automaticamente para a Arena.
-                        </p>
-                    </div>
-                </div>
-                <span className={cn(
-                    "inline-flex h-7 w-fit items-center gap-1.5 rounded-full border px-3 text-xs font-bold",
-                    savedMode === "disabled"
-                        ? "border-slate-200 bg-slate-50 text-slate-600"
-                        : "border-emerald-200 bg-emerald-50 text-emerald-800",
-                )}>
-                    {savedMode === "disabled" ? <Ban className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
-                    {savedMode === "disabled"
-                        ? "Reservas desativadas"
-                        : savedMode === "pre_booking"
-                            ? "Pré-reserva ativa"
-                            : "Pagamento online ativo"}
-                </span>
-            </div>
-
-            <div className="mt-6 grid gap-3 lg:grid-cols-3" role="radiogroup" aria-label="Modo de reservas pelo aplicativo">
-                {OPTIONS.map((option) => {
-                    const Icon = option.icon
-                    const selected = selectedMode === option.value
-                    const requiresOnlineConfiguration = option.value === "online_payment" && !onlineBookingReady
-                    return (
-                        <button
-                            key={option.value}
-                            type="button"
-                            role="radio"
-                            aria-checked={selected}
-                            onClick={() => {
-                                setSelectedMode(option.value)
-                                onSelectionChange?.(option.value)
-                            }}
-                            className={cn(
-                                "group relative min-h-40 rounded-2xl border p-5 text-left transition-[border-color,box-shadow,transform,background-color] duration-200",
-                                selected
-                                    ? "border-arena-button bg-[#fffdfa] shadow-[0_14px_34px_-24px_rgba(240,125,42,0.9)] ring-2 ring-arena-button/15"
-                                    : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-sm",
-                            )}
-                        >
-                            <div className="flex items-start justify-between gap-3">
-                                <div className={cn(
-                                    "grid h-10 w-10 place-items-center rounded-xl",
-                                    selected ? "bg-arena-button text-white" : "bg-slate-100 text-slate-500",
-                                )}>
-                                    <Icon className="h-5 w-5" aria-hidden="true" />
-                                </div>
-                                {requiresOnlineConfiguration ? (
-                                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-amber-700">
-                                        <LockKeyhole className="h-3 w-3" />
-                                        Configurar
-                                    </span>
-                                ) : selected ? (
-                                    <span className="grid h-6 w-6 place-items-center rounded-full bg-arena-button text-white">
-                                        <Check className="h-3.5 w-3.5" />
-                                    </span>
-                                ) : null}
-                            </div>
-                            <p className="mt-5 text-sm font-black text-arena-navy-800">{option.title}</p>
-                            <p className="mt-1 text-xs font-medium leading-relaxed text-slate-500">{option.description}</p>
-                        </button>
-                    )
-                })}
-            </div>
-
-            <div className="mt-5 flex flex-col gap-4 rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-start gap-2.5 text-xs leading-5 text-slate-600">
-                    <Info className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
-                    <div>
-                        <p className="font-semibold text-slate-700">
-                            Na pré-reserva, solicitações pendentes não ocupam a agenda.
-                        </p>
-                        <p>O horário só é bloqueado depois que a Arena aprova a solicitação.</p>
-                        {!onlineBookingReady && (
-                            <p className="mt-1 font-semibold text-amber-800">
-                                Para pagamento online, falta: {onlineBookingMissing.join(" e ")}.
-                            </p>
-                        )}
-                    </div>
-                </div>
-                <Button
-                    type="button"
-                    className="shrink-0 bg-arena-button text-white hover:bg-arena-button-hover"
-                    disabled={(!isDirty && !(selectedMode === "online_payment" && !onlineBookingReady)) || saving}
-                    onClick={() => void handleSave()}
-                >
-                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                    {selectedMode === "online_payment" && !onlineBookingReady
-                        ? "Concluir configuração abaixo"
-                        : "Salvar modalidade"}
-                </Button>
-            </div>
-        </section>
-    )
+const OPTIONS = [
+  {value:'disabled',title:'Desativado',description:'A arena permanece visível, mas combina as reservas fora do aplicativo.',icon:Ban},
+  {value:'pre_booking',title:'Pré-reserva',description:'O atleta solicita. A arena aprova e o pagamento acontece presencialmente.',icon:CalendarClock},
+  {value:'online_payment',title:'Pagamento online',description:'A reserva é confirmada por Pix, com split e política de cancelamento.',icon:CreditCard},
+] as const
+export function ArenaAppBookingSettingsCard({ selectedMode, savedMode, setup, busy, onSelectionChange, onSave, onCancel }: Props) {
+  const pending=setup?.intent_status==='pending'
+  return <section className="space-y-4 px-5 py-6 sm:px-7" aria-labelledby="app-booking-settings-title">
+    <div><h3 id="app-booking-settings-title" className="flex items-center gap-2.5 text-sm font-bold text-arena-navy-800"><span className="grid size-6 place-items-center rounded-full bg-arena-navy-800/5 text-xs">1</span>Modalidade do aplicativo</h3><p className="ml-8 mt-1 text-xs text-slate-500">Escolha como os atletas poderão efetuar reservas.</p></div>
+    <div className="grid gap-3 lg:grid-cols-3" role="radiogroup" aria-label="Modo de reservas pelo aplicativo">
+      {OPTIONS.map(option=>{
+        const Icon=option.icon, selected=selectedMode===option.value
+        return <button key={option.value} type="button" role="radio" aria-checked={selected} disabled={busy} onClick={()=>onSelectionChange(option.value)} className={cn('relative flex min-h-36 flex-col items-start rounded-xl border p-4 text-left transition-colors disabled:opacity-60',selected?'border-arena-button bg-orange-50/30 shadow-sm':'border-slate-200 bg-white hover:border-slate-300')}>
+          <div className="mb-3 flex w-full items-center justify-between gap-2"><span className={cn('grid size-8 shrink-0 place-items-center rounded-lg',selected?'bg-arena-button text-white':'bg-slate-100 text-slate-500')}><Icon className="size-4"/></span>
+            {option.value==='online_payment' && pending ? <span role="status" className="rounded-full bg-amber-50 px-2 py-1 text-[10px] font-medium text-amber-800">Aguardando aprovação</span> : savedMode===option.value ? <span className="text-[10px] font-medium text-emerald-700">{savedMode==='disabled'?'Modalidade atual':'Ativo'}</span>:null}
+          </div>
+          <b className="text-xs text-arena-navy-800">{option.title}</b><p className="mt-1 pr-3 text-xs leading-relaxed text-slate-500">{option.description}</p>
+          {selected && <Check className="absolute bottom-3 right-3 size-3.5 text-arena-button"/>}
+        </button>
+      })}
+    </div>
+    {selectedMode==='online_payment' ? <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2.5 text-xs leading-relaxed text-sky-900">
+      {savedMode==='online_payment' ? 'Pagamento online ativo. Você pode preparar uma nova versão da política sem alterar as condições das reservas existentes.' : pending ? 'Solicitação enviada. A modalidade atual permanece ativa durante a análise. O pagamento online será ativado após a aprovação da conta e a publicação da política.' : <>Prepare a política e a conta abaixo. Ao solicitar o pagamento online, a modalidade atual será mantida durante a análise. O <strong>Pagamento online</strong> será ativado após a aprovação.</>}
+    </div> : <div className="flex flex-wrap items-center justify-between gap-3">
+      <p className="max-w-xl text-xs leading-relaxed text-slate-500">{pending ? 'Você pode alterar a modalidade atual sem interromper a análise. O pagamento online será ativado após a aprovação.' : selectedMode==='pre_booking' ? 'Na pré-reserva, solicitações pendentes não ocupam a agenda. O horário é bloqueado quando a arena aprova.' : 'Política e conta de recebimento aparecem ao selecionar Pagamento online. Seus dados salvos são preservados.'}</p>
+      <Button type="button" className="bg-arena-button text-white hover:bg-arena-button-hover" disabled={busy||!setup||selectedMode===savedMode} onClick={()=>onSave(selectedMode)}>{busy?<Loader2 className="size-4 animate-spin"/>:<Check className="size-4"/>}Salvar modalidade</Button>
+    </div>}
+    {pending&&<div className="flex justify-end"><Button type="button" variant="outline" disabled={busy} onClick={onCancel}>Cancelar solicitação online</Button></div>}
+  </section>
 }
