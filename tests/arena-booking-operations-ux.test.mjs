@@ -30,21 +30,21 @@ test('Arena profile and receiving settings are separated into explicit tabs', ()
   assert.doesNotMatch(arenaForm, /name="app_booking_mode"/u)
 })
 
-test('app booking mode has an independent and explicit save journey', () => {
-  assert.match(bookingCard, /updateArenaAppBookingModeAction/u)
+test('mode saving and account provisioning remain separate actions', () => {
+  assert.match(operationsPanel, /setArenaReceivingBookingModeAction/u)
   assert.match(bookingCard, /Salvar modalidade/u)
-  assert.match(bookingCard, /requiresOnlineConfiguration = option\.value === "online_payment" && !onlineBookingReady/u)
   assert.match(bookingCard, /solicitações pendentes não ocupam a agenda/u)
-  assert.match(paymentCard, /Somente ao confirmar estes dados criaremos a conta de pagamento/u)
+  assert.match(paymentCard, /Confirmar e iniciar cadastro/u)
+  assert.match(paymentCard, /Salvar rascunho/u)
   assert.doesNotMatch(bookingCard, /createArenaAsaasSubaccountAction/u)
   assert.match(paymentCard, /onSubmit=\{handleCreateSubaccount\}/u)
 })
 
-test('all operational cards share the same embedded visual hierarchy', () => {
-  assert.match(operationsPanel, /divide-y divide-slate-200/u)
-  assert.match(operationsPanel, /effectiveOnlineBookingReady/u)
+test('policy and receiving are visually conditional without discarding in-progress form state', () => {
+  assert.match(operationsPanel, /hidden=\{!onlineSelected\}/u)
   assert.match(operationsPanel, /onSettingsChange/u)
-  assert.match(cancellationCard, /Configuração complementar/u)
-  assert.match(cancellationCard, /Pré-reservas continuam disponíveis/u)
-  assert.match(paymentCard, /Recebimento das reservas/u)
+  assert.match(cancellationCard, /Política de cancelamento/u)
+  assert.match(cancellationCard, /Salvar rascunho/u)
+  assert.match(paymentCard, /Registro operacional/u)
+  assert.match(paymentCard, /Documentos solicitados/u)
 })

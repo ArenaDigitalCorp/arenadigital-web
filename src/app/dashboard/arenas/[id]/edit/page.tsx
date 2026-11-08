@@ -5,8 +5,10 @@ import { ArenaForm } from '@/modules/arenas/components/ArenaForm'
 import { ArenaBookingOperationsPanel } from '@/modules/arenas/components/ArenaBookingOperationsPanel'
 import { getArenaPixSplitSettingsAction } from '@/modules/arenas/actions/arenaActions'
 import { getArenaCancellationPolicySettingsAction } from '@/modules/arenas/actions/cancellationPolicyActions'
+import { getArenaReceivingSetupAction } from '@/modules/arenas/actions/receivingSetupActions'
 import { ArenaFinancialAccountCard } from '@/modules/finance/components/ArenaFinancialAccountCard'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Button } from '@/components/ui/button'
 import { redirect } from 'next/navigation'
 
 function textField(value: unknown): string {
@@ -38,10 +40,11 @@ export default async function EditArenaPage({
     }
 
     const { dbUserId } = await requireAuthenticatedDbUser()
-    const [arena, paymentSettings, cancellationPolicySettings] = await Promise.all([
+    const [arena, paymentSettings, cancellationPolicySettings, receivingSetup] = await Promise.all([
         new SupabaseArenaRepository(getSupabaseAdmin()).findById(id),
         getArenaPixSplitSettingsAction(id),
         getArenaCancellationPolicySettingsAction(id),
+        getArenaReceivingSetupAction(id),
     ])
 
     if (!arena) redirect('/dashboard/settings/arenas')
@@ -88,10 +91,23 @@ export default async function EditArenaPage({
                     forceMount
                     className="mt-7 space-y-6 data-[state=inactive]:hidden"
                 >
-                    <ArenaFinancialAccountCard arenaId={id} />
-                    <ArenaBookingOperationsPanel
+                    <ArenaFinancialAccountCard arenaId={id} receivingContext />
+                    {(!paymentSettings.success || !cancellationPolicySettings.success) ? (
+                        <section role="alert" className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950">
+                            <p className="font-semibold">Não foi possível carregar a configuração de reservas.</p>
+                            {!paymentSettings.success && <p>A conta de recebimento está temporariamente indisponível para consulta.</p>}
+                            {!cancellationPolicySettings.success && <p>A política de cancelamento está temporariamente indisponível para consulta.</p>}
+                            <p>Carregue os dados novamente antes de revisar ou alterar as configurações.</p>
+                            <Button asChild variant="outline">
+                                <a href={`/dashboard/arenas/${id}/edit?tab=receiving`}>Carregar novamente</a>
+                            </Button>
+                        </section>
+                    ) : <ArenaBookingOperationsPanel
+                        key={id}
                         arenaId={id}
                         arenaName={arena.name}
+                        initialSetup={receivingSetup.success ? receivingSetup.data : null}
+                        initialSetupError={receivingSetup.success ? undefined : receivingSetup.error}
                         initialMode={arena.app_booking_mode}
                         legacyAcceptsRequests={arena.accepts_app_booking_requests}
                         paymentSettings={paymentSettings.data}
@@ -107,7 +123,7 @@ export default async function EditArenaPage({
                             province: arena.neighborhood ?? '',
                             postalCode: arena.zip_code ?? '',
                         }}
-                    />
+                    />}
                 </TabsContent>
             </Tabs>
         </div>

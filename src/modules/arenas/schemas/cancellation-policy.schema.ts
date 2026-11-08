@@ -5,6 +5,8 @@ export const cancellationPolicyTierSchema = z.object({
     refundPercentage: z.number().int().min(0).max(100),
 })
 
+// A missing zero-hour tier means no refund below the smallest configured threshold.
+// The database materializes that fallback; explicit legacy zero-hour refunds remain valid.
 export const cancellationPolicyTiersSchema = z
     .array(cancellationPolicyTierSchema)
     .min(1, "Adicione ao menos uma faixa de cancelamento.")
@@ -22,11 +24,4 @@ export const cancellationPolicyTiersSchema = z
             }
             thresholds.add(tier.minimumHoursBeforeStart)
         })
-
-        if (!thresholds.has(0)) {
-            context.addIssue({
-                code: "custom",
-                message: "Inclua uma faixa de 0 hora para cobrir cancelamentos próximos ao início.",
-            })
-        }
     })

@@ -37,7 +37,7 @@ function harness(tiers = [{ minimumHoursBeforeStart: 0, refundPercentage: 100 },
   }
   const field = prefix => collect(render(), node => node.props?.id?.startsWith?.(prefix))[0]
   const save = () => collect(render(), node => typeof node.props?.onClick === 'function' && text(node).includes('Salvar rascunho'))[0]
-  return { requests, errors, field, save, change(prefix, value) { field(prefix).props.onChange({ target: { value } }) } }
+  return { requests, errors, render, field, save, change(prefix, value) { field(prefix).props.onChange({ target: { value } }) } }
 }
 
 test('clearing either cancellation field stays visible and blocks the real save handler', async () => {
@@ -56,7 +56,7 @@ test('clearing either cancellation field stays visible and blocks the real save 
 
 test('an untouched new draft cannot silently turn its missing refund into zero', async () => {
   const fixture = harness([])
-  assert.equal(fixture.field('hours-').props.value, '0')
+  assert.equal(fixture.field('hours-').props.value, '')
   assert.equal(fixture.field('refund-').props.value, '')
   assert.equal(fixture.save().props.disabled, true)
   fixture.save().props.onClick()
@@ -96,4 +96,68 @@ test('fractions, overflow, nondecimal text and nonstrings cannot be coerced into
       assert.deepEqual(fixture.requests, [], `${prefix}/${String(value)}`)
     }
   }
+})
+
+
+test('a positive rule saves without a mandatory zero-hour field and explains the fallback', async () => {
+  const fixture = harness([])
+  fixture.change('hours-', '4')
+  fixture.change('refund-', '100')
+  assert.equal(fixture.save().props.disabled, false)
+  assert.match(text(fixture.render()), /Menos de 4h: sem reembolso/)
+  fixture.save().props.onClick()
+  await Promise.resolve()
+  assert.deepEqual(fixture.requests, [[{ minimumHoursBeforeStart: 4, refundPercentage: 100 }]])
+})
+
+test('the database zero-refund fallback stays implicit when editing positive rules', async () => {
+  const fixture = harness([{ minimumHoursBeforeStart: 0, refundPercentage: 0 }, { minimumHoursBeforeStart: 4, refundPercentage: 100 }])
+  assert.equal(collect(fixture.render(), node => node.props?.id?.startsWith?.('hours-') && node.props?.onChange).length, 1)
+  fixture.change('refund-', '75')
+  fixture.save().props.onClick()
+  await Promise.resolve()
+  assert.deepEqual(fixture.requests, [[{ minimumHoursBeforeStart: 4, refundPercentage: 75 }]])
+  assert.match(text(fixture.render()), /Menos de 4h: sem reembolso/)
+})
+
+test('legacy refunds at zero hours remain explicit and survive edits to another threshold', async () => {
+  const fixture = harness([{ minimumHoursBeforeStart: 0, refundPercentage: 50 }, { minimumHoursBeforeStart: 4, refundPercentage: 100 }])
+  assert.equal(collect(fixture.render(), node => node.props?.id?.startsWith?.('hours-') && node.props?.onChange).length, 2)
+  fixture.change('hours-', '8')
+  fixture.save().props.onClick()
+  await Promise.resolve()
+  assert.deepEqual(fixture.requests, [[{ minimumHoursBeforeStart: 0, refundPercentage: 50 }, { minimumHoursBeforeStart: 8, refundPercentage: 100 }]])
+  assert.doesNotMatch(text(fixture.render()), /Menos de \d+h: sem reembolso/)
+})
+
+test('a sole zero-hour zero-refund rule is retained instead of becoming an empty policy', async () => {
+  const fixture = harness([{ minimumHoursBeforeStart: 0, refundPercentage: 0 }])
+  assert.equal(fixture.field('hours-').props.value, '0')
+  assert.equal(fixture.field('refund-').props.value, '0')
+  fixture.change('refund-', '10')
+  fixture.save().props.onClick()
+  await Promise.resolve()
+  assert.deepEqual(fixture.requests, [[{ minimumHoursBeforeStart: 0, refundPercentage: 10 }]])
+})
+
+test('duplicate thresholds cannot be sent from the editor', async () => {
+  const fixture = harness([{ minimumHoursBeforeStart: 4, refundPercentage: 50 }, { minimumHoursBeforeStart: 24, refundPercentage: 100 }])
+  fixture.change('hours-', '4')
+  assert.equal(fixture.save().props.disabled, true)
+  fixture.save().props.onClick()
+  await Promise.resolve()
+  assert.deepEqual(fixture.requests, [])
+})
+
+test('one hundred configured rules remain editable after the server adds its fallback', async () => {
+  const saved = [{ minimumHoursBeforeStart: 0, refundPercentage: 0 }, ...Array.from({ length: 100 }, (_, index) => ({ minimumHoursBeforeStart: index + 1, refundPercentage: 100 }))]
+  const fixture = harness(saved)
+  assert.equal(collect(fixture.render(), node => node.props?.id?.startsWith?.('hours-') && node.props?.onChange).length, 100)
+  assert.equal(fixture.save().props.disabled, true, 'Normalized persisted fallback does not mark the draft dirty')
+  fixture.change('refund-', '75')
+  assert.equal(fixture.save().props.disabled, false)
+  fixture.save().props.onClick()
+  await Promise.resolve()
+  assert.equal(fixture.requests[0].length, 100)
+  assert.equal(fixture.requests[0].some(tier => tier.minimumHoursBeforeStart === 0), false)
 })
