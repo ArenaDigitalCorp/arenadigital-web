@@ -1,4 +1,6 @@
 import { z } from "zod";
+export const publicationContextSchema = z.enum(["arena", "platform"]);
+export type PublicationContext = z.infer<typeof publicationContextSchema>;
 export const kinds = {
   announcement: "Comunicado",
   ad: "Publicidade",

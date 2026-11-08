@@ -6,6 +6,8 @@ import { assertPlatformAdminAccess } from "@/lib/server-auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   publicationSchema,
+  publicationContextSchema,
+  type PublicationContext,
   eventSchema,
   actionSchema,
   type PublicationAction,
@@ -14,9 +16,10 @@ import {
 async function authorize(
   arenaId: string | null,
   operation: PublicationAction | "read" = "read",
+  context: PublicationContext = arenaId ? "arena" : "platform",
 ) {
   if (arenaId) z.string().uuid().parse(arenaId);
-  await authorizePublicationScope(arenaId, operation);
+  await authorizePublicationScope(arenaId, operation, context);
 }
 
 async function rpc(name: string, args: Record<string, unknown>) {
@@ -31,16 +34,28 @@ async function rpc(name: string, args: Record<string, unknown>) {
   if (error) throw new Error(error.message);
   return data;
 }
-export async function listPublications(arenaId: string | null) {
-  await authorize(arenaId);
+export async function listPublications(
+  arenaId: string | null,
+  context: PublicationContext = arenaId ? "arena" : "platform",
+) {
+  await authorize(arenaId, "read", context);
   return publicationSchema
     .array()
     .parse(await rpc("list_home_publications", { p_arena_id: arenaId }));
 }
-export async function publicationHistory(id: string, arenaId: string | null) {
+export async function publicationHistory(
+  id: string,
+  arenaId: string | null,
+  context: PublicationContext = arenaId ? "arena" : "platform",
+) {
   try {
-    await authorize(arenaId);
+    await authorize(arenaId, "read", context);
     z.string().uuid().parse(id);
+    if (context === "arena") {
+      const items = await listPublications(arenaId, context);
+      if (!items.some((item) => item.id === id))
+        throw new Error("Publicação não encontrada nesta arena.");
+    }
     return {
       success: true as const,
       data: eventSchema
@@ -62,6 +77,7 @@ export async function changePublication(input: unknown) {
     const value = z
       .object({
         action: actionSchema,
+        context: publicationContextSchema,
         id: z.string().uuid().nullable(),
         arenaId: z.string().uuid().nullable(),
         revision: z.number().int().positive().nullable(),
@@ -69,12 +85,13 @@ export async function changePublication(input: unknown) {
       })
       .strict()
       .parse(input);
-    await authorize(value.arenaId, value.action);
+    await authorize(value.arenaId, value.action, value.context);
     if (value.action === "block" || value.action === "unblock")
       await assertPlatformAdminAccess();
     const data = publicationSchema.parse(
       await rpc("manage_home_publication", {
         p_action: value.action,
+        p_context: value.context,
         p_id: value.id,
         p_arena_id: value.arenaId,
         p_payload: value.payload,
