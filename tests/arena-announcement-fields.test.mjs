@@ -3,6 +3,7 @@ import test from 'node:test'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { z } from 'zod'
 
 const source = readFileSync(new URL('../src/modules/mobile-content/actions/mobileContentActions.ts', import.meta.url), 'utf8')
 const component = readFileSync(new URL('../src/modules/mobile-content/components/MobileContentPageClient.tsx', import.meta.url), 'utf8')
@@ -21,7 +22,16 @@ function actionHarness({ denyAccess = false } = {}) {
   const cjsModule = { exports: {} }
   const auth = async () => { if (denyAccess) throw new Error('Acesso negado'); isAuthorized = true }
   const require = (path) => {
+    if (path === 'zod') return { z }
     if (path === 'next/cache') return { revalidatePath() {} }
+    if (path === '@/modules/publications/authorization') return {
+      authorizePublicationScope: async (arenaId, operation, context) => {
+        assert.equal(arenaId, 'arena-a')
+        assert.equal(operation, 'save')
+        assert.equal(context, 'arena')
+        await auth()
+      },
+    }
     if (path === '@/lib/server-auth') return { assertArenaAdminAccess: auth, assertCourtAccess: auth }
     if (path === '@/lib/supabase-server') return { getSupabaseAdmin: () => ({ from: () => query }) }
     if (path === '../schemas/mobile-content-action.schema') return { arenaPromotionActionSchema: { parse: (input) => input } }
