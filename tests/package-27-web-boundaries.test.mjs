@@ -53,12 +53,12 @@ test('mobile content service-role writes validate tenant relations and allowlist
   const promotion = exportedFunctionBody(actions, 'upsertArenaPromotionAction')
   const openGame = exportedFunctionBody(actions, 'upsertOpenGameAction')
 
-  assert.match(promotion, /assertArenaAdminAccess\(arenaId\)/)
+  assert.match(promotion, /authorizePublicationScope\(arenaId, 'save', 'arena'\)/)
   assert.match(promotion, /assertCourtAccess\(parsed\.court_id, arenaId\)/)
   assert.doesNotMatch(promotion, /\.\.\.input/)
   assert.match(promotion, /arena_id: arenaId/)
 
-  assert.match(openGame, /assertArenaBackofficeAccess\(arenaId\)/)
+  assert.match(openGame, /authorizePublicationScope\(arenaId, 'save', 'arena'\)/)
   assert.match(openGame, /assertBookingAccess\(parsed\.booking_id, arenaId\)/)
   assert.match(openGame, /assertAthleteBelongsToArena\(arenaId, parsed\.owner_atleta_id\)/)
   assert.doesNotMatch(openGame, /\.\.\.input/)

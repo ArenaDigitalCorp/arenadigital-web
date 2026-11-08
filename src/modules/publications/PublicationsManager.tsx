@@ -1,7 +1,6 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useState, useRef } from "react";
-import Link from "next/link";
 import {
   Megaphone,
   Plus,
@@ -49,12 +48,26 @@ import {
   type PublicationEvent,
 } from "./model";
 
+import { ActivityPublicationEditor, type ActivityKind } from "./ActivityPublicationEditor";
+import { ActivityPublicationCard, activityStatus } from "./ActivityPublicationCard";
+import {
+  listArenaPromotionsAction,
+  listArenaOpenGamesAction,
+  setArenaPromotionActiveAction,
+  cancelArenaOpenGameAction,
+} from "@/modules/mobile-content/actions/mobileContentActions";
+import type { MobilePromotion, MobileOpenGame, MobileContentOption } from "@/modules/mobile-content/types/mobile-content.types";
+
 type Props = {
   initialItems: Publication[];
   arenaId: string | null;
   platform: boolean;
   arenas: { id: string; name: string }[];
   sports?: { id: string; name: string }[];
+  arenaSports?: MobileContentOption[];
+  athletes?: MobileContentOption[];
+  initialPromotions?: MobilePromotion[];
+  initialOpenGames?: MobileOpenGame[];
 };
 const actions: Record<string, string> = {
   save: "Salvou alterações",
@@ -120,8 +133,18 @@ export function PublicationsManager({
   platform,
   arenas,
   sports = [],
+  arenaSports = [],
+  athletes = [],
+  initialPromotions = [],
+  initialOpenGames = [],
 }: Props) {
   const context = platform ? "platform" : "arena";
+  const [promotions, setPromotions] = useState(initialPromotions);
+  const [openGames, setOpenGames] = useState(initialOpenGames);
+  const [activityDraft, setActivityDraft] = useState<{
+    kind: ActivityKind; promotion?: MobilePromotion; game?: MobileOpenGame;
+  } | null>(null);
+  const [cancelGame, setCancelGame] = useState<MobileOpenGame | null>(null);
   const [items, setItems] = useState(initialItems),
     [draft, setDraft] = useState<ReturnType<typeof newDraft> | null>(null);
   const [busy, setBusy] = useState(false),
@@ -179,10 +202,53 @@ export function PublicationsManager({
     setBusy(true);
     setError("");
     try {
-      setItems(await listPublications(arenaId, context));
+      const [nextItems, nextPromotions, nextGames] = await Promise.all([
+        listPublications(arenaId, context),
+        !platform && arenaId ? listArenaPromotionsAction(arenaId) : null,
+        !platform && arenaId ? listArenaOpenGamesAction(arenaId) : null,
+      ]);
+      setItems(nextItems);
+      if (nextPromotions) {
+        if (!nextPromotions.success) throw new Error(nextPromotions.error);
+        setPromotions(nextPromotions.data);
+      }
+      if (nextGames) {
+        if (!nextGames.success) throw new Error(nextGames.error);
+        setOpenGames(nextGames.data);
+      }
       setNow(Date.now());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha ao atualizar.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  function chooseType(value: string) {
+    if (!platform && (value === "availability" || value === "open_game")) {
+      setDraft(null);
+      setActivityDraft({ kind: value });
+    } else if (Object.hasOwn(kinds, value)) {
+      setActivityDraft(null);
+      setDraft((current) => ({ ...(current ?? newDraft(arenaId)), kind: value as Publication["kind"] }));
+    }
+    setError("");
+    setNotice("");
+  }
+  async function changeActivity(item: MobilePromotion | MobileOpenGame) {
+    if (!arenaId || platform) return;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const result = "title" in item
+        ? await setArenaPromotionActiveAction(arenaId, item.id, !item.active)
+        : await cancelArenaOpenGameAction(arenaId, item.id);
+      if (!result.success) throw new Error(result.error);
+      setCancelGame(null);
+      await refresh();
+      setNotice("title" in item ? (item.active ? "Horário retirado do ar." : "Horário publicado.") : "Jogo cancelado.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Não foi possível atualizar a publicação.");
     } finally {
       setBusy(false);
     }
@@ -349,6 +415,14 @@ export function PublicationsManager({
         .toLocaleLowerCase("pt-BR")
         .includes(search.toLocaleLowerCase("pt-BR")),
   );
+  const visibleActivities = platform ? [] : [
+    ...promotions.map((item) => ({ kind: "availability" as const, item })),
+    ...openGames.map((item) => ({ kind: "open_game" as const, item })),
+  ].filter(({ item }) =>
+    (filter === "Todas" || activityStatus(item, now) === filter) &&
+    ("title" in item ? `${item.title} ${item.description ?? ""}` : `${item.sports?.name ?? "Jogo"} ${item.notes ?? ""} ${item.atleta?.name ?? ""}`)
+      .toLocaleLowerCase("pt-BR").includes(search.toLocaleLowerCase("pt-BR")),
+  ).sort((a, b) => b.item.created_at.localeCompare(a.item.created_at));
   const update = (key: string, value: unknown) =>
     setDraft((d) => (d ? { ...d, [key]: value } : null));
   const field = "block space-y-2 text-sm font-medium text-arena-navy-800";
@@ -378,10 +452,10 @@ export function PublicationsManager({
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-500">
             {platform
               ? "Crie conteúdos da Arena Digital e acompanhe as publicações das arenas."
-              : "Crie comunicados, promoções, publicidades e novidades da sua arena para a Home dos atletas."}
+              : "Publique conteúdos, horários disponíveis e jogos da sua arena para os atletas."}
           </p>
         </div>
-        {!draft && !moderating && (
+        {!draft && !activityDraft && !moderating && (
           <Button
             className={primary}
             disabled={disabled}
@@ -399,21 +473,13 @@ export function PublicationsManager({
           <Button
             variant="outline"
             disabled={disabled}
-            onClick={() => setDraft(null)}
+            onClick={() => { setDraft(null); setActivityDraft(null); }}
           >
             <ArrowLeft />
             Voltar às publicações
           </Button>
         )}
       </header>
-      {!platform && !draft && (
-        <p className="text-sm text-slate-500">
-          Para divulgar uma vaga ou disponibilidade específica, acesse{" "}
-          <Link className="font-medium text-arena-navy-800 underline underline-offset-4" href={`/dashboard/arenas/${arenaId}/mobile-content/scheduling`}>
-            horários e jogos
-          </Link>.
-        </p>
-      )}
       {error && (
         <div
           role="alert"
@@ -430,7 +496,23 @@ export function PublicationsManager({
           {notice}
         </div>
       )}
-      {draft ? (
+      {activityDraft && arenaId && !platform ? (
+        <ActivityPublicationEditor
+          key={`${activityDraft.kind}:${activityDraft.promotion?.id ?? activityDraft.game?.id ?? "new"}`}
+          {...activityDraft}
+          arenaId={arenaId}
+          author={author}
+          sports={arenaSports}
+          athletes={athletes}
+          onTypeChange={chooseType}
+          onCancel={() => setActivityDraft(null)}
+          onSaved={async () => {
+            setActivityDraft(null);
+            await refresh();
+            setNotice("Publicação salva.");
+          }}
+        />
+      ) : draft ? (
         <section
           aria-label="Editor de publicação"
           className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]"
@@ -466,11 +548,14 @@ export function PublicationsManager({
                     <PublicationSelect
                       label="Tipo de publicação"
                       value={draft.kind}
-                      onChange={(v) => update("kind", v)}
-                      options={Object.entries(kinds).map(([value, label]) => ({
-                        value,
-                        label,
-                      }))}
+                      onChange={chooseType}
+                      options={[
+                        ...Object.entries(kinds).map(([value, label]) => ({ value, label })),
+                        ...(!platform && !draft.id ? [
+                          { value: "availability", label: "Horário disponível" },
+                          { value: "open_game", label: "Jogo aberto" },
+                        ] : []),
+                      ]}
                       disabled={disabled}
                     />
                   </label>
@@ -1077,8 +1162,23 @@ export function PublicationsManager({
                   </article>
                 );
               })}
+              {visibleActivities.map(({ kind, item }) => (
+                <ActivityPublicationCard
+                  key={`${kind}:${item.id}`}
+                  item={item}
+                  author={author}
+                  now={now}
+                  disabled={disabled}
+                  onEdit={() => {
+                    setActivityDraft("title" in item ? { kind: "availability", promotion: item } : { kind: "open_game", game: item });
+                    setError("");
+                    setNotice("");
+                  }}
+                  onToggle={() => "title" in item ? void changeActivity(item) : setCancelGame(item)}
+                />
+              ))}
             </div>
-            {!visible.length && (
+            {!visible.length && !visibleActivities.length && (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-5 py-14 text-center">
                 <span className="mx-auto mb-4 grid size-12 place-items-center rounded-full bg-slate-50 text-slate-400">
                   <Megaphone className="size-5" />
@@ -1102,6 +1202,19 @@ export function PublicationsManager({
           </section>
         </>
       )}
+      <Dialog open={!!cancelGame} onOpenChange={(open) => { if (!open && !busy) setCancelGame(null); }}>
+        <DialogContent showCloseButton={!busy}>
+          <DialogHeader>
+            <DialogTitle>Cancelar jogo?</DialogTitle>
+            <DialogDescription>O jogo ficará cancelado e deixará de receber participantes. Esta ação não cancela a reserva do espaço.</DialogDescription>
+          </DialogHeader>
+          {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+          <DialogFooter>
+            <Button variant="outline" disabled={busy} onClick={() => setCancelGame(null)}>Voltar</Button>
+            <Button variant="destructive" disabled={busy} onClick={() => cancelGame && void changeActivity(cancelGame)}>Cancelar jogo</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={!!block}
         onOpenChange={(open) => {
