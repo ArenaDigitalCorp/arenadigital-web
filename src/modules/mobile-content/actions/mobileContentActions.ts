@@ -40,7 +40,6 @@ function revalidateMobileContent(arenaId?: string) {
   if (arenaId) {
     revalidatePath(`/dashboard/arenas/${arenaId}`)
     revalidatePath(`/dashboard/publications/${arenaId}`)
-    revalidatePath(`/dashboard/arenas/${arenaId}/mobile-content/scheduling`)
   }
 }
 
