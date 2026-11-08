@@ -1,3 +1,4 @@
+import { publicationContextSchema } from "@/modules/publications/model";
 import { authorizePublicationScope } from "@/modules/publications/authorization";
 import { NextRequest, NextResponse } from "next/server";
 import { AuthorizationError } from "@/lib/server-auth";
@@ -15,7 +16,8 @@ export async function POST(request: NextRequest) {
     validateMultipartContentLength(request.headers.get("content-length"));
     const form = await request.formData();
     const arenaId = z.string().uuid().nullable().parse(form.get("arenaId"));
-    await authorizePublicationScope(arenaId, "upload");
+    const context = publicationContextSchema.parse(form.get("context"));
+    await authorizePublicationScope(arenaId, "upload", context);
     const file = form.get("file");
     if (!(file instanceof File))
       return NextResponse.json(

@@ -36,10 +36,10 @@ function subject({
   const authorizationCalls = [];
   const loaded = loadTypescriptModule("src/modules/publications/actions.ts", {
     "./authorization": {
-      authorizePublicationScope: async (arenaId, operation) => {
-        authorizationCalls.push({ arenaId, operation });
-        if (arenaId && denyArena) throw Error("Sem acesso à arena");
-        if (!arenaId && denyPlatform) throw Error("Sem acesso à plataforma");
+      authorizePublicationScope: async (arenaId, operation, context) => {
+        authorizationCalls.push({ arenaId, operation, context });
+        if (context === "arena" && denyArena) throw Error("Sem acesso à arena");
+        if (context === "platform" && denyPlatform) throw Error("Sem acesso à plataforma");
       },
     },
     "@/lib/server-auth": {
@@ -54,7 +54,7 @@ function subject({
       createSupabaseServerClient: async () => ({
         rpc: async (name, args) => {
           calls.push({ name, args });
-          return { data: row, error: rpcError };
+          return { data: name === "list_home_publications" ? [row] : name === "home_publication_history" ? [] : row, error: rpcError };
         },
       }),
     },
@@ -68,6 +68,7 @@ function subject({
 }
 const input = {
   action: "pause",
+  context: "arena",
   id: row.id,
   arenaId: arena,
   revision: 2,
@@ -108,7 +109,7 @@ test("arena authorization precedes mutation and prevents RPC on denial", async (
 test("moderation requires additional platform authorization", async () => {
   const s = subject({ denyPlatform: true });
   assert.equal(
-    (await s.changePublication({ ...input, action: "block" })).success,
+    (await s.changePublication({ ...input, action: "block", context: "platform" })).success,
     false,
   );
   assert.equal(s.calls.length, 0);
@@ -141,58 +142,114 @@ test("caller cannot supply an actor or a new scope outside the validated envelop
   assert.equal(s.calls.length, 0);
 });
 
-test("platform moderator can read arena publications without general arena membership", async () => {
-  const calls = [];
-  const { authorizePublicationScope } = loadTypescriptModule(
-    "src/modules/publications/authorization.ts",
-    {
-      "@/lib/server-auth": {
-        requireAuthenticatedDbUser: async () => ({ dbUserId: "admin" }),
-        getPlatformAccessLevel: async () => "platform_admin",
-        assertPlatformAdminAccess: async () => calls.push("platform"),
-        assertArenaAdminAccess: async () => {
-          throw Error("No arena membership");
-        },
-      },
-    },
-  );
-  await authorizePublicationScope(arena);
-  assert.deepEqual(calls, ["platform"]);
-});
-test("ordinary manager must pass arena membership and cannot gain platform scope", async () => {
-  const calls = [];
-  const { authorizePublicationScope } = loadTypescriptModule(
-    "src/modules/publications/authorization.ts",
-    {
-      "@/lib/server-auth": {
-        requireAuthenticatedDbUser: async () => ({ dbUserId: "manager" }),
-        getPlatformAccessLevel: async () => null,
-        assertPlatformAdminAccess: async () => {
-          throw Error("Forbidden");
-        },
-        assertArenaAdminAccess: async (id) => {
-          calls.push(id);
-          if (id !== arena) throw Error("Forbidden");
-        },
-      },
-    },
-  );
-  await authorizePublicationScope(arena);
-  await assert.rejects(authorizePublicationScope(null), /Forbidden/);
-  await assert.rejects(authorizePublicationScope(row.id), /Forbidden/);
-  assert.deepEqual(calls, [arena, row.id]);
-});
 class Denied extends Error {
-  status = 403;
+  constructor(message, status = 403) { super(message); this.status = status; }
 }
+function authorizationSubject({ platform = true, ownedArenas = [arena], rpcError = null } = {}) {
+  const calls = [];
+  const imports = {
+    "@/lib/server-auth": {
+      AuthorizationError: Denied,
+      requireAuthenticatedDbUser: async () => ({ dbUserId: platform ? "admin-owner" : "manager" }),
+      getPlatformAccessLevel: async () => platform ? "super_admin" : null,
+      assertPlatformAdminAccess: async () => {
+        calls.push(["platform"]);
+        if (!platform) throw new Denied("Forbidden");
+      },
+      // An existing general admin guard must not bypass the publication-specific
+      // membership check, even when the platform account is highly privileged.
+      assertArenaAdminAccess: async () => { throw Error("Use explicit publication membership"); },
+    },
+    "@/lib/supabase/server": {
+      createSupabaseServerClient: async () => ({ rpc: async (name, args) => {
+        calls.push(["membership", name, args.p_arena_id]);
+        assert.equal(name, "can_author_home_publication");
+        return {data: ownedArenas.includes(args.p_arena_id), error: rpcError};
+      }}),
+    },
+  };
+  return { ...loadTypescriptModule("src/modules/publications/authorization.ts", imports), calls, imports };
+}
+
+test("platform moderation context can read and remove arena publications without ownership", async () => {
+  const s = authorizationSubject({ownedArenas: []});
+  for (const action of ["read", "pause", "block", "unblock"]) {
+    await s.authorizePublicationScope(arena, action, "platform");
+  }
+  assert.deepEqual(s.calls, [["platform"], ["platform"], ["platform"], ["platform"]]);
+});
+
+test("dual-role account authors its arena through explicit membership, never platform privilege", async () => {
+  const s = authorizationSubject();
+  for (const action of ["read", "save", "publish", "pause", "archive", "restore", "upload"]) {
+    await s.authorizePublicationScope(arena, action, "arena");
+  }
+  assert.equal(s.calls.length, 7);
+  assert.ok(s.calls.every(call => call[0] === "membership" && call[2] === arena));
+});
+
+test("platform authority cannot authorize authorship for an unrelated arena", async () => {
+  const s = authorizationSubject();
+  for (const action of ["read", "save", "publish", "pause", "archive", "restore", "upload"]) {
+    await assert.rejects(s.authorizePublicationScope(row.id, action, "arena"));
+  }
+  assert.equal(s.calls.filter(call => call[0] === "platform").length, 0);
+});
+
+test("ordinary arena manager cannot request platform authority", async () => {
+  const s = authorizationSubject({platform:false});
+  await s.authorizePublicationScope(arena, "save", "arena");
+  await assert.rejects(s.authorizePublicationScope(null, "save", "platform"), /Forbidden/);
+  await assert.rejects(s.authorizePublicationScope(arena, "block", "platform"), /Forbidden/);
+  await assert.rejects(s.authorizePublicationScope(row.id, "save", "arena"));
+});
+
+test("arena context cannot target global content or perform platform moderation", async () => {
+  const s = authorizationSubject();
+  await assert.rejects(s.authorizePublicationScope(null, "save", "arena"));
+  for (const action of ["block", "unblock"]) {
+    await assert.rejects(s.authorizePublicationScope(arena, action, "arena"));
+  }
+});
+
+test("platform authorship remains global even when the account owns the target arena", async () => {
+  const s = authorizationSubject();
+  for (const action of ["save", "publish", "archive", "restore", "upload"]) {
+    await assert.rejects(s.authorizePublicationScope(arena, action, "platform"));
+    await s.authorizePublicationScope(null, action, "platform");
+  }
+  assert.equal(s.calls.filter(call => call[0] === "membership").length, 0);
+});
+
+test("unavailable membership verification fails closed", async () => {
+  const s = authorizationSubject({rpcError:{message:"Unavailable"}});
+  await assert.rejects(s.authorizePublicationScope(arena, "publish", "arena"));
+});
+
+test("authorization rejects malformed contexts and arena identifiers before any privilege check", async () => {
+  const s = authorizationSubject();
+  for (const context of [null, "unknown", {}]) {
+    await assert.rejects(s.authorizePublicationScope(arena, "read", context));
+  }
+  await assert.rejects(s.authorizePublicationScope("invalid", "read", "arena"));
+  assert.equal(s.calls.length, 0);
+});
+
+test("omitted read context follows the arena scope without a platform bypass", async () => {
+  const s = authorizationSubject();
+  await s.authorizePublicationScope(arena);
+  await s.authorizePublicationScope(null);
+  assert.deepEqual(s.calls, [["membership", "can_author_home_publication", arena], ["platform"]]);
+});
+
 function uploadSubject({ denied = false, failStorage = false } = {}) {
   const calls = [];
   const { POST } = loadTypescriptModule(
     "src/app/api/publications/upload/route.ts",
     {
       "@/modules/publications/authorization": {
-        authorizePublicationScope: async (id, operation) => {
-          calls.push(["authorize", id, operation]);
+        authorizePublicationScope: async (id, operation, context) => {
+          calls.push(["authorize", id, operation, context]);
           if (denied) throw new Denied("Forbidden");
         },
       },
@@ -210,12 +267,14 @@ function uploadSubject({ denied = false, failStorage = false } = {}) {
 }
 function uploadRequest({
   arenaId = arena,
+  context = arenaId ? "arena" : "platform",
   bytes = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
   name = "a.png",
   type = "image/png",
 } = {}) {
   const form = new FormData();
   if (arenaId) form.set("arenaId", arenaId);
+  if (context !== null) form.set("context", context);
   form.set("file", new File([bytes], name, { type }));
   return new Request("http://localhost/api/publications/upload", {
     method: "POST",
@@ -229,7 +288,7 @@ test("publication upload checks scope before writing and uses server-generated o
   assert.deepEqual(await res.json(), {
     url: "https://example.invalid/upload.png",
   });
-  assert.deepEqual(s.calls[0], ["authorize", arena, "upload"]);
+  assert.deepEqual(s.calls[0], ["authorize", arena, "upload", "arena"]);
   assert.match(
     s.calls[1][1],
     new RegExp(`^publications/${arena}/[a-f0-9-]+\\.png$`),
@@ -243,6 +302,8 @@ test("publication upload rejects spoofed images and malformed scope before stora
     { bytes: Buffer.from("not an image") },
     { name: "a.svg", type: "image/svg+xml" },
     { arenaId: "invalid" },
+    { context: null },
+    { context: "unknown" },
   ]) {
     const s = uploadSubject();
     assert.equal((await s.POST(uploadRequest(options))).status, 400);
@@ -258,67 +319,76 @@ test("platform image upload supports null arena and hides storage failure detail
   assert.doesNotMatch(JSON.stringify(await res.json()), /private storage/);
 });
 
-test("authorship operations cannot use platform authority to impersonate an arena, even if also a manager", async () => {
-  let arenaMembershipChecks = 0;
-  const { authorizePublicationScope } = loadTypescriptModule(
-    "src/modules/publications/authorization.ts",
-    {
-      "@/lib/server-auth": {
-        AuthorizationError: Denied,
-        requireAuthenticatedDbUser: async () => ({ dbUserId: "admin-owner" }),
-        getPlatformAccessLevel: async () => "super_admin",
-        assertPlatformAdminAccess: async () => {},
-        assertArenaAdminAccess: async () => {
-          arenaMembershipChecks++;
-        },
-      },
-    },
-  );
-  for (const action of ["save", "publish", "archive", "restore", "upload"]) {
-    await assert.rejects(
-      authorizePublicationScope(arena, action),
-      /somente como Arena Digital/,
-    );
-    await authorizePublicationScope(null, action);
+test("server mutation forwards context and revision as part of the authorized RPC envelope", async () => {
+  for (const context of ["arena", "platform"]) {
+    const s = subject();
+    const value = {...input, action:context === "arena" ? "publish" : "block", context};
+    await s.changePublication(value);
+    assert.deepEqual(s.authorizationCalls, [{arenaId:arena,operation:value.action,context}]);
+    assert.equal(s.calls.length,1);
+    assert.equal(s.calls[0].args.p_context,context);
+    assert.equal(s.calls[0].args.p_revision,2);
+    assert.equal(s.calls[0].args.p_arena_id,arena);
   }
-  for (const action of ["read", "pause", "block", "unblock"]) {
-    await authorizePublicationScope(arena, action);
-  }
-  assert.equal(arenaMembershipChecks, 0);
 });
 
-test("server action passes the requested operation to the authorship guard", async () => {
-  const s = subject();
-  await s.changePublication({ ...input, action: "publish" });
-  assert.deepEqual(s.authorizationCalls, [
-    { arenaId: arena, operation: "publish" },
+test("missing or invalid mutation context never reaches authorization or the database", async () => {
+  for (const context of [undefined,null,"super_admin",{}]) {
+    const s=subject();
+    const result=await s.changePublication({...input,context});
+    assert.equal(result.success,false);
+    assert.equal(s.authorizationCalls.length,0);
+    assert.equal(s.calls.length,0);
+  }
+});
+
+test("list and history retain the selected context for their authorization", async () => {
+  const s=subject();
+  await s.listPublications(arena,"arena");
+  await s.publicationHistory(row.id,arena,"platform");
+  assert.deepEqual(s.authorizationCalls,[
+    {arenaId:arena,operation:"read",context:"arena"},
+    {arenaId:arena,operation:"read",context:"platform"},
   ]);
 });
 
-test("platform upload cannot write arena media even when general arena access would succeed", async () => {
-  const writes = [];
-  const { POST } = loadTypescriptModule(
-    "src/app/api/publications/upload/route.ts",
-    {
-      "@/lib/server-auth": {
-        AuthorizationError: Denied,
-        requireAuthenticatedDbUser: async () => ({ dbUserId: "admin-owner" }),
-        getPlatformAccessLevel: async () => "super_admin",
-        assertPlatformAdminAccess: async () => {},
-        assertArenaAdminAccess: async () => {},
-      },
-      "@/lib/r2Client": {
-        uploadToR2: async (...args) => {
-          writes.push(args);
-          return "https://example.invalid/a.png";
-        },
-      },
-    },
-  );
-  const response = await POST(uploadRequest());
-  assert.equal(response.status, 403);
-  assert.match((await response.json()).error, /somente como Arena Digital/);
-  assert.equal(writes.length, 0);
-  assert.equal((await POST(uploadRequest({ arenaId: null }))).status, 200);
-  assert.equal(writes.length, 1);
+test("arena history accepts only a publication returned in the authorized arena", async () => {
+  const s = subject();
+  const result = await s.publicationHistory(row.id, arena, "arena");
+  assert.equal(result.success, true);
+  assert.deepEqual(s.authorizationCalls, [
+    { arenaId: arena, operation: "read", context: "arena" },
+    { arenaId: arena, operation: "read", context: "arena" },
+  ]);
+  assert.deepEqual(s.calls.map(call => call.name), ["list_home_publications", "home_publication_history"]);
+  assert.equal(s.calls[0].args.p_arena_id, arena);
+  assert.equal(s.calls[1].args.p_id, row.id);
+});
+
+test("arena history cannot expose a publication from another scope through its ID", async () => {
+  const s = subject();
+  const result = await s.publicationHistory("f9300000-0000-4000-8000-000000000002", arena, "arena");
+  assert.equal(result.success, false);
+  assert.deepEqual(s.calls.map(call => call.name), ["list_home_publications"]);
+});
+
+test("upload isolates platform and arena media even for the same dual-role account", async () => {
+  const writes=[];
+  const s=authorizationSubject();
+  const {POST}=loadTypescriptModule("src/app/api/publications/upload/route.ts",{
+    ...s.imports,
+    "@/lib/r2Client":{uploadToR2:async(_buffer,key)=>{writes.push(key);return "https://example.invalid/a.png";}},
+  });
+  const denied=await POST(uploadRequest({context:"platform"}));
+  assert.equal(denied.status,403);
+  assert.equal(writes.length,0);
+  const global=await POST(uploadRequest({arenaId:null,context:"platform"}));
+  assert.equal(global.status,200);
+  assert.match(writes[0],/^publications\/platform\//);
+  const owned=await POST(uploadRequest({context:"arena"}));
+  assert.equal(owned.status,200);
+  assert.ok(writes[1].startsWith(`publications/${arena}/`));
+  assert.equal((await POST(uploadRequest({arenaId:row.id,context:"arena"}))).status,403);
+  assert.equal((await POST(uploadRequest({arenaId:null,context:"arena"}))).status,403);
+  assert.equal(writes.length,2);
 });
