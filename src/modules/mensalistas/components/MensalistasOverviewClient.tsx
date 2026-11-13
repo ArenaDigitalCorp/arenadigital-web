@@ -239,25 +239,7 @@ export function MensalistasOverviewClient({ arenaId, competencia, overview }: Pr
           </p>
           <Button variant="outline" onClick={ajuste.atualizar}>Tentar novamente</Button>
         </div>
-      ) : totalParaAnalise > 0 && (
-        <div role="status" className="flex flex-col gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-3">
-            <Calendar className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
-            <div className="space-y-1">
-              <p className="text-sm font-bold text-arena-navy-800">
-                {totalParaAnalise} {totalParaAnalise === 1 ? 'recorrência precisa' : 'recorrências precisam'} de revisão em {format(competenciaDate, 'MMMM', { locale: ptBR })}
-              </p>
-              <p className="text-sm text-arena-navy-800/70">
-                Os jogos do mês indicam valores diferentes dos cobrados. Confira as sugestões e confirme os ajustes.
-              </p>
-            </div>
-          </div>
-          <Button onClick={ajuste.abrir} className="shrink-0 gap-2 rounded-xl font-bold">
-            <SlidersHorizontal className="h-4 w-4" />
-            Revisar ajustes
-          </Button>
-        </div>
-      )}
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
