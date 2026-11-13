@@ -160,3 +160,28 @@ test('actions materializam o mês antes da prévia e mandam o valor esperado ao 
   assert.match(actions, /valor_esperado: item\.valorEsperado/)
   assert.match(actions, /p_competencia: `\$\{parsed\.competencia\}-01`/)
 })
+
+
+test('agenda preparada permite confirmar cobrança igual sem precisar gerar jogos', () => {
+  const l = linha({ valorAtual: 500, calendario: { revisao: 2, revisadoEm: null, agendaStatus: 'preparada' } })
+  assert.equal(precisaAnalise(l), true)
+  assert.equal(selecionadaPorPadrao(l), true)
+  assert.equal(semAlteracao(l, 500), false)
+  l.calendario.revisadoEm = '2026-11-13T10:00:00Z'
+  assert.equal(precisaAnalise(l), false)
+  assert.equal(semAlteracao(l, 500), true)
+})
+
+test('conflito legado fica visível e impede confirmar cobrança', () => {
+  const l = linha({ valorAtual: 500, calendario: { revisao: 3, revisadoEm: null, agendaStatus: 'conflito' } })
+  assert.equal(precisaAnalise(l), true)
+  assert.equal(editavel(l), false)
+  assert.equal(selecionadaPorPadrao(l), false)
+})
+
+test('recorrência por blocos também confirma o registro mensal preparado', () => {
+  const l = linha({ porBlocos: true, valorAtual: 500, calendario: { revisao: 2, revisadoEm: null, agendaStatus: 'preparada' } })
+  assert.equal(editavel(l), true)
+  assert.equal(precisaAnalise(l), true)
+  assert.equal(semAlteracao(l, 500), false)
+})

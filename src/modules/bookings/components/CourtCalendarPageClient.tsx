@@ -132,7 +132,7 @@ function SingleBookingCard({ booking, court, slot, isEnd, onClick }: {
         textSecondary: 'text-orange-600',
     }
     const styles = isPendingPix ? pendingPixStyles : isReservado ? reservadoStyles : sportStyles
-    const statusLabel = isPendingPix ? 'Pix pendente' : isReservado ? 'Ag. Confirmação' : 'Confirmado'
+    const statusLabel = booking.horario_protegido ? 'Horário protegido' : isPendingPix ? 'Pix pendente' : isReservado ? 'Ag. pagamento' : 'Confirmado'
     return (
         <div
             className={cn(

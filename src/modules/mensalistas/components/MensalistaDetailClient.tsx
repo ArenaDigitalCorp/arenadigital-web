@@ -54,6 +54,7 @@ import { RetirarCreditoModal } from './RetirarCreditoModal'
 import { EncerramentoModal } from './EncerramentoModal'
 import { ReajustarValorModal } from './ReajustarValorModal'
 import { PausarPlanoModal } from './PausarPlanoModal'
+import { HistoricoCompetencias } from './HistoricoCompetencias'
 import {
   CREDITO_TIPO_LABEL,
   SUBCONTA_GERAL_LABEL,
@@ -1186,6 +1187,8 @@ export function MensalistaDetailClient({
           </div>
         </Card>
       )}
+
+      <HistoricoCompetencias meses={detalhe.historicoCompetencias ?? []} />
 
       {/* Histórico de pagamentos */}
       <Card className="border-none shadow-sm bg-white overflow-hidden">
