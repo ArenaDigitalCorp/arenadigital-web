@@ -1316,8 +1316,8 @@ export async function getReajusteMesPreviewAction(
 }
 
 /**
- * Aplica o que o gestor confirmou no "Ajustar mensalidades do mês" — só a
- * cobrança daquela competência (o valor do plano não muda). O `operationId`
+ * Aplica o que o gestor confirmou no "Ajustar mensalidades do mês": ajusta a
+ * cobrança e completa as reservas daquela competência (o contrato não muda). O `operationId`
  * vem do cliente: reenviar o mesmo lote não reaplica nada.
  */
 export async function aplicarReajusteMesLoteAction(
@@ -1348,6 +1348,8 @@ export async function aplicarReajusteMesLoteAction(
     const row = (data ?? {}) as Record<string, unknown>
     const itens = (Array.isArray(row.itens) ? row.itens : []) as Record<string, unknown>[]
     revalidateMensalistaPaths(parsed.arenaId)
+    revalidatePath(`/dashboard/arenas/${parsed.arenaId}`)
+    revalidatePath(`/dashboard/arenas/${parsed.arenaId}/courts`)
     return {
       success: true,
       data: {
@@ -1361,6 +1363,7 @@ export async function aplicarReajusteMesLoteAction(
           status: String(item.status) as ReajusteMesItemStatus,
           valorAnterior: item.valor_anterior == null ? null : Number(item.valor_anterior),
           valorNovo: item.valor_novo == null ? null : Number(item.valor_novo),
+          reservasCriadas: Number(item.reservas_criadas ?? 0),
         })),
         idempotent: Boolean(row.idempotent ?? false),
       },
