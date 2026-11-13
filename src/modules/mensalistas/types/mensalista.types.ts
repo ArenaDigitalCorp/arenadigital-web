@@ -181,6 +181,7 @@ export interface ReajusteMesLinha {
     revisao: number
     revisadoEm: string | null
     agendaStatus: 'pendente' | 'preparada' | 'conflito'
+    cobrancaErro?: string | null
     agendaErro: string | null
   }
   planoId: string
@@ -226,6 +227,8 @@ export interface HistoricoCompetencia {
   valor_confirmado: number | null
   revisado_em: string | null
   revisado_por_nome: string | null
+  calculado_em?: string | null
+  cobranca_erro?: string | null
   agenda_status: string | null
   eventos: {
     id: string

@@ -4,6 +4,7 @@ import { setImmediate as flush } from 'node:timers/promises'
 import { hookController } from './helpers/hook-controller.mjs'
 
 const pendente = {
+  calendario: { agendaStatus: 'conflito' },
   porBlocos: false, mensalidadeStatus: 'aberto', valorAtual: 400, valorSugerido: 500,
 }
 const resposta = (linhas = [pendente]) => ({ success: true, data: { linhas } })
@@ -54,10 +55,10 @@ test('sem diferença, quitadas, canceladas e blocos não abrem revisão', async 
   const { hook, chamadas } = setup()
   hook.render()
   chamadas[0].resolve(resposta([
-    { ...pendente, valorAtual: 500 },
+    { ...pendente, calendario: { agendaStatus: 'preparada' }, valorAtual: 500 },
     { ...pendente, mensalidadeStatus: 'quitado' },
     { ...pendente, mensalidadeStatus: 'cancelado' },
-    { ...pendente, porBlocos: true },
+    { ...pendente, calendario: { agendaStatus: 'preparada', revisadoEm: null }, porBlocos: true },
   ]))
   await flush()
   assert.equal(hook.render().total, 0)
@@ -110,7 +111,7 @@ test('atualizar após aplicar remove o aviso e preserva a tela de resultado', as
   await flush()
   hook.render().atualizar()
   hook.render()
-  chamadas[1].resolve(resposta([{ ...pendente, valorAtual: 500 }]))
+  chamadas[1].resolve(resposta([{ ...pendente, calendario: { agendaStatus: 'preparada' }, valorAtual: 500 }]))
   await flush()
   assert.equal(hook.render().total, 0)
   assert.equal(hook.render().aberto, true)
@@ -142,4 +143,21 @@ test('sair da página antes da resposta descarta a consulta', async () => {
   await flush()
   assert.equal(hook.render().aberto, false)
   assert.equal(hook.render().total, 0)
+})
+
+ test('diferença de calendário sem exceção não pede confirmação', async () => {
+  const { hook, chamadas } = setup()
+  hook.render()
+  chamadas[0].resolve(resposta([{ ...pendente, calendario: { agendaStatus: 'preparada', revisadoEm: null } }]))
+  await flush()
+  assert.equal(hook.render().aberto, false)
+  assert.equal(hook.render().total, 0)
+})
+test('pendência financeira abre com motivo e pode ser resolvida sem lote de ajuste', async () => {
+  const { hook, chamadas } = setup()
+  hook.render()
+  chamadas[0].resolve(resposta([{ ...pendente, calendario: { agendaStatus: 'preparada', cobrancaErro: 'Confira o rateio' } }]))
+  await flush()
+  assert.equal(hook.render().aberto, true)
+  assert.equal(hook.render().linhas[0].calendario.cobrancaErro, 'Confira o rateio')
 })

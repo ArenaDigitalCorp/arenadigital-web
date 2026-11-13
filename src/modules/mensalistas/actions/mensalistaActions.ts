@@ -1287,7 +1287,7 @@ export async function getReajusteMesPreviewAction(
     if (error) throw new Error(error.message)
 
     type PreviewRow = Database['public']['Functions']['mensalista_reajuste_mes_preview']['Returns'][number] & {
-      calendario?: { revisao: number; revisado_em: string | null; agenda_status: 'pendente' | 'preparada' | 'conflito'; agenda_erro: string | null } | null
+      calendario?: { revisao: number; revisado_em: string | null; agenda_status: 'pendente' | 'preparada' | 'conflito'; agenda_erro: string | null; cobranca_erro?: string | null } | null
     }
     const rows = (Array.isArray(data) ? data : []) as unknown as PreviewRow[]
     const linhas: ReajusteMesLinha[] = rows.map((row) => ({
@@ -1296,6 +1296,7 @@ export async function getReajusteMesPreviewAction(
         revisadoEm: row.calendario.revisado_em,
         agendaStatus: row.calendario.agenda_status,
         agendaErro: row.calendario.agenda_erro,
+        cobrancaErro: row.calendario.cobranca_erro,
       } : undefined,
       planoId: row.plano_id,
       athleteId: row.athlete_id,
