@@ -1,7 +1,7 @@
 'use client'
 
 import { formatPhone } from '@/lib/brasil-document'
-import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { addMonths, format, parseISO, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -25,8 +25,7 @@ import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { arenaDataTable } from '@/lib/arena-data-table'
 import { formatCurrency, formatCompetenciaShort, formatDate, toCompetencia } from '@/lib/format'
-import { getReajusteMesPreviewAction } from '@/modules/mensalistas/actions/mensalistaActions'
-import { precisaAnalise } from '@/modules/mensalistas/reajuste-mes'
+import { useAvisoReajusteMes } from '@/modules/mensalistas/use-aviso-reajuste-mes'
 import { AjustarMensalidadesMesModal } from './AjustarMensalidadesMesModal'
 import type {
   MensalistasOverview,
@@ -111,24 +110,8 @@ export function MensalistasOverviewClient({ arenaId, competencia, overview }: Pr
   )
   const [situacaoFilter, setSituacaoFilter] = useState<SituacaoFilter>('todas')
   const [soAtraso, setSoAtraso] = useState(false)
-  const [ajusteOpen, setAjusteOpen] = useState(false)
-  // Quantas recorrências do mês exibido precisam de análise (contador do botão).
-  // Vem depois da página, para não atrasar a visão geral.
-  const [paraAnalise, setParaAnalise] = useState<{ competencia: string; total: number } | null>(null)
-  const [recontar, setRecontar] = useState(0)
-
-  useEffect(() => {
-    let ativo = true
-    getReajusteMesPreviewAction(arenaId, competencia).then((res) => {
-      if (ativo && res.success && res.data) {
-        setParaAnalise({ competencia, total: res.data.linhas.filter(precisaAnalise).length })
-      }
-    })
-    return () => {
-      ativo = false
-    }
-  }, [arenaId, competencia, recontar])
-  const totalParaAnalise = paraAnalise?.competencia === competencia ? paraAnalise.total : 0
+  const ajuste = useAvisoReajusteMes(arenaId, competencia)
+  const totalParaAnalise = ajuste.total
 
   const todosStatusSelecionados = ALL_STATUS_PLANO.every((s) => statusFiltros.has(s))
 
@@ -192,7 +175,7 @@ export function MensalistasOverviewClient({ arenaId, competencia, overview }: Pr
         <div className="flex flex-wrap items-center gap-3">
         <Button
           variant="outline"
-          onClick={() => setAjusteOpen(true)}
+          onClick={ajuste.abrir}
           className="h-11 gap-2 rounded-xl font-bold"
           title="Ajustar as mensalidades do mês pelos jogos de cada recorrência"
         >
@@ -234,15 +217,47 @@ export function MensalistasOverviewClient({ arenaId, competencia, overview }: Pr
       </div>
 
       <AjustarMensalidadesMesModal
-        open={ajusteOpen}
-        onClose={() => setAjusteOpen(false)}
+        key={`${arenaId}:${competencia}`}
+        open={ajuste.aberto}
+        onClose={ajuste.fechar}
         onApplied={() => {
-          setRecontar((n) => n + 1)
+          ajuste.atualizar()
           router.refresh()
         }}
         arenaId={arenaId}
         competenciaInicial={competencia}
       />
+
+      {ajuste.carregando ? (
+        <p role="status" className="text-sm text-arena-navy-800/60">
+          Conferindo os jogos e os valores das mensalidades deste mês…
+        </p>
+      ) : ajuste.erro ? (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <p className="text-sm font-medium text-amber-900">
+            Não foi possível conferir os ajustes das mensalidades deste mês.
+          </p>
+          <Button variant="outline" onClick={ajuste.atualizar}>Tentar novamente</Button>
+        </div>
+      ) : totalParaAnalise > 0 && (
+        <div role="status" className="flex flex-col gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <Calendar className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+            <div className="space-y-1">
+              <p className="text-sm font-bold text-arena-navy-800">
+                {totalParaAnalise} {totalParaAnalise === 1 ? 'recorrência precisa' : 'recorrências precisam'} de revisão em {format(competenciaDate, 'MMMM', { locale: ptBR })}
+              </p>
+              <p className="text-sm text-arena-navy-800/70">
+                Os jogos do mês indicam valores diferentes dos cobrados. Confira as sugestões e confirme os ajustes.
+              </p>
+            </div>
+          </div>
+          <Button onClick={ajuste.abrir} className="shrink-0 gap-2 rounded-xl font-bold">
+            <SlidersHorizontal className="h-4 w-4" />
+            Revisar ajustes
+          </Button>
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard

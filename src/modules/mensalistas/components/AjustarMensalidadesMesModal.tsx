@@ -190,6 +190,11 @@ export function AjustarMensalidadesMesModal({
       )
       setEditadas(new Set())
       setSelecionadas(new Set(novas.filter(selecionadaPorPadrao).map((l) => l.planoId)))
+    }).catch(() => {
+      if (!ativo) return
+      setCarregando(false)
+      setErro('Não foi possível carregar as mensalidades do mês. Tente novamente.')
+      setLinhas([])
     })
     return () => {
       ativo = false
@@ -224,6 +229,7 @@ export function AjustarMensalidadesMesModal({
     paraEnviar.map((l) => ({ valorAtual: l.valorAtual, novoValor: novoDe(l) }))
   )
   const mesLabel = formatCompetencia(competencia)
+  const reservasCriadas = resultado?.itens.reduce((total, item) => total + item.reservasCriadas, 0) ?? 0
 
   function alternar(planoId: string, marcada: boolean) {
     setSelecionadas((atual) => {
@@ -328,6 +334,8 @@ export function AjustarMensalidadesMesModal({
       setEtapa('resultado')
       operationIdRef.current = null
       if (res.data.aplicados > 0) onApplied()
+    } catch {
+      toast.error('Não foi possível confirmar o resultado. Tente novamente para conferir o mesmo ajuste.')
     } finally {
       setAplicando(false)
     }
@@ -337,7 +345,7 @@ export function AjustarMensalidadesMesModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && !aplicando && onClose()}>
-      <DialogContent className="flex max-h-[92vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-6xl">
+      <DialogContent className="block max-h-[92vh] overflow-y-auto p-0 sm:flex sm:max-w-6xl sm:flex-col sm:gap-0 sm:overflow-hidden">
         <DialogHeader className="space-y-3 border-b border-slate-100 px-6 pb-4 pt-6">
           <div className="flex flex-wrap items-center justify-between gap-3 pr-8">
             <div>
@@ -346,8 +354,8 @@ export function AjustarMensalidadesMesModal({
               </DialogTitle>
               <DialogDescription className="text-xs text-arena-navy-800/50">
                 Compara os jogos de cada recorrência com o mês anterior e sugere o valor
-                pelo preço por jogo do contrato. Só muda a cobrança deste mês — o valor
-                do plano continua o mesmo.
+                pelo preço por jogo do contrato. Ao confirmar, ajusta a cobrança e completa
+                as reservas deste mês, incluindo o quinto jogo. O contrato continua o mesmo.
               </DialogDescription>
             </div>
             <div className="flex items-center rounded-xl border border-arena-navy-800/5 bg-gray-50 p-1">
@@ -633,7 +641,7 @@ export function AjustarMensalidadesMesModal({
                 placeholder={`Observação (opcional) — ex.: ${mesLabel} com 5 jogos`}
                 className="h-9 md:flex-1"
               />
-              <div className="flex items-center justify-end gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
                 <Button variant="outline" onClick={onClose}>
                   Cancelar
                 </Button>
@@ -654,8 +662,9 @@ export function AjustarMensalidadesMesModal({
           <>
             <div className="min-h-[220px] flex-1 space-y-3 overflow-y-auto px-6 py-4">
               <p className="text-sm text-arena-navy-800/70">
-                Confira antes de aplicar. Muda <b>só a cobrança de {mesLabel}</b>; o valor dos
-                planos continua o mesmo.
+                Confira os valores e jogos de <b>{mesLabel}</b>. Ao confirmar, as reservas
+                que faltam no mês serão criadas. Se houver conflito de horário, a cobrança
+                dessa recorrência será mantida para você revisar.
               </p>
               <ul className="divide-y divide-slate-100 rounded-xl border border-slate-100">
                 {paraEnviar.map((l) => {
@@ -720,6 +729,9 @@ export function AjustarMensalidadesMesModal({
                     Impacto no mês: {diferencaTexto(resultado.impacto)}
                     {resultado.ignorados > 0 &&
                       ` · ${resultado.ignorados} ${resultado.ignorados === 1 ? 'ficou' : 'ficaram'} de fora`}
+                  </p>
+                  <p className="text-sm text-arena-navy-800/60">
+                    {reservasCriadas} {reservasCriadas === 1 ? 'nova reserva' : 'novas reservas'} na agenda.
                   </p>
                 </div>
               </div>
