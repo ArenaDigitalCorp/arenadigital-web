@@ -42,6 +42,7 @@ export const MOTIVO_IGNORADO_LABEL: Record<ReajusteMesItemStatus, string> = {
   duplicado: 'Repetida no lote',
   sem_alteracao: 'Sem alteração',
   nao_encontrado: 'Recorrência não encontrada',
+  conflito_agenda: 'Conflito na agenda — cobrança mantida; revise o horário',
 }
 
 function round2(valor: number): number {

@@ -223,6 +223,7 @@ export type ReajusteMesItemStatus =
   | 'duplicado'
   | 'sem_alteracao'
   | 'nao_encontrado'
+  | 'conflito_agenda'
 
 export interface ReajusteMesLoteResultado {
   loteId: string
@@ -235,6 +236,7 @@ export interface ReajusteMesLoteResultado {
     status: ReajusteMesItemStatus
     valorAnterior: number | null
     valorNovo: number | null
+    reservasCriadas: number
   }[]
   idempotent: boolean
 }
