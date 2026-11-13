@@ -201,7 +201,7 @@ export function AjustarMensalidadesMesModal({
     }
   }, [open, arenaId, competencia, recarga])
 
-  const editaveisOuVisiveis = useMemo(() => linhas.filter((l) => !l.porBlocos), [linhas])
+  const editaveisOuVisiveis = useMemo(() => linhas.filter((l) => !l.porBlocos || l.calendario != null), [linhas])
   const porBlocos = linhas.length - editaveisOuVisiveis.length
   const comMudancaDeJogos = editaveisOuVisiveis.filter((l) => variacaoJogos(l) !== 'igual').length
   const paraAnalise = editaveisOuVisiveis.filter(precisaAnalise).length
@@ -211,7 +211,7 @@ export function AjustarMensalidadesMesModal({
   const visiveis = useMemo(() => {
     const termo = normalizeString(busca.trim())
     return editaveisOuVisiveis.filter((l) => {
-      const noFiltro = filtro === 'todas' || precisaAnalise(l) || selecionadas.has(l.planoId)
+      const noFiltro = filtro === 'todas' || precisaAnalise(l) || l.calendario?.agendaStatus === 'conflito' || selecionadas.has(l.planoId)
       const naBusca =
         !termo || normalizeString(`${l.atleta} ${l.recorrencia}`).includes(termo)
       return noFiltro && naBusca
@@ -324,6 +324,7 @@ export function AjustarMensalidadesMesModal({
           planoId: l.planoId,
           novoValor: Number(novoDe(l).toFixed(2)),
           valorEsperado: l.valorAtual,
+          revisaoEsperada: l.calendario?.revisao,
         })),
       })
       if (!res.success || !res.data) {
@@ -353,9 +354,9 @@ export function AjustarMensalidadesMesModal({
                 Ajustar mensalidades do mês
               </DialogTitle>
               <DialogDescription className="text-xs text-arena-navy-800/50">
-                Compara os jogos de cada recorrência com o mês anterior e sugere o valor
-                pelo preço por jogo do contrato. Ao confirmar, ajusta a cobrança e completa
-                as reservas deste mês, incluindo o quinto jogo. O contrato continua o mesmo.
+                As reservas são preparadas automaticamente, incluindo o quinto jogo.
+                Confira a previsão e confirme a cobrança deste mês. Os horários futuros
+                continuam protegidos pelo contrato, independentemente desta revisão.
               </DialogDescription>
             </div>
             <div className="flex items-center rounded-xl border border-arena-navy-800/5 bg-gray-50 p-1">
@@ -527,6 +528,10 @@ export function AjustarMensalidadesMesModal({
                         <div className="min-w-0">
                           <p className="truncate text-sm font-bold text-arena-navy-800">{l.atleta}</p>
                           <p className="truncate text-xs text-arena-navy-800/50">{l.recorrencia}</p>
+                          {l.calendario && <p className={cn('mt-1 text-xs', l.calendario.agendaStatus === 'conflito' ? 'text-red-700' : 'text-arena-navy-800/70')}>
+                            {l.calendario.agendaStatus === 'conflito' ? l.calendario.agendaErro ?? 'Concilie uma reserva existente na agenda.'
+                              : l.calendario.revisadoEm ? 'Cobrança confirmada' : l.calendario.agendaStatus === 'pendente' ? 'Agenda em preparação' : 'Agenda preparada · confirmar cobrança'}
+                          </p>}
                         </div>
                         <div className="col-start-2 md:col-start-auto">
                           <RotuloCelular>Jogos</RotuloCelular>
@@ -662,8 +667,8 @@ export function AjustarMensalidadesMesModal({
           <>
             <div className="min-h-[220px] flex-1 space-y-3 overflow-y-auto px-6 py-4">
               <p className="text-sm text-arena-navy-800/70">
-                Confira os valores e jogos de <b>{mesLabel}</b>. Ao confirmar, as reservas
-                que faltam no mês serão criadas. Se houver conflito de horário, a cobrança
+                Confira os valores e jogos de <b>{mesLabel}</b>. A confirmação registra
+                a cobrança e o responsável pela revisão no histórico do mês. Se houver uma pendência na agenda, a cobrança
                 dessa recorrência será mantida para você revisar.
               </p>
               <ul className="divide-y divide-slate-100 rounded-xl border border-slate-100">

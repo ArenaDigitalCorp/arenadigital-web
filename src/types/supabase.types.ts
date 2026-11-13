@@ -9,6 +9,147 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      mensalista_competencia_eventos: {
+        Row: {
+          anterior: Json | null
+          arena_id: string
+          atual: Json
+          created_at: string
+          id: string
+          mensalidade_id: string
+          registered_by: string | null
+          tipo: string
+        }
+        Insert: {
+          anterior?: Json | null
+          arena_id: string
+          atual: Json
+          created_at?: string
+          id?: string
+          mensalidade_id: string
+          registered_by?: string | null
+          tipo: string
+        }
+        Update: {
+          anterior?: Json | null
+          arena_id?: string
+          atual?: Json
+          created_at?: string
+          id?: string
+          mensalidade_id?: string
+          registered_by?: string | null
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mensalista_competencia_eventos_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mensalista_competencia_eventos_mensalidade_id_fkey"
+            columns: ["mensalidade_id"]
+            isOneToOne: false
+            referencedRelation: "mensalista_mensalidades"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mensalista_competencia_eventos_registered_by_fkey"
+            columns: ["registered_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mensalista_competencias: {
+        Row: {
+          agenda_erro: string | null
+          agenda_status: string
+          arena_id: string
+          competencia: string
+          contrato: Json
+          created_at: string
+          jogos: number
+          jogos_em_pausa: number
+          mensalidade_id: string
+          plano_id: string
+          revisado_em: string | null
+          revisado_por: string | null
+          revisao: number
+          updated_at: string
+          valor_confirmado: number | null
+          valor_previsto: number
+        }
+        Insert: {
+          agenda_erro?: string | null
+          agenda_status?: string
+          arena_id: string
+          competencia: string
+          contrato: Json
+          created_at?: string
+          jogos: number
+          jogos_em_pausa: number
+          mensalidade_id: string
+          plano_id: string
+          revisado_em?: string | null
+          revisado_por?: string | null
+          revisao?: number
+          updated_at?: string
+          valor_confirmado?: number | null
+          valor_previsto: number
+        }
+        Update: {
+          agenda_erro?: string | null
+          agenda_status?: string
+          arena_id?: string
+          competencia?: string
+          contrato?: Json
+          created_at?: string
+          jogos?: number
+          jogos_em_pausa?: number
+          mensalidade_id?: string
+          plano_id?: string
+          revisado_em?: string | null
+          revisado_por?: string | null
+          revisao?: number
+          updated_at?: string
+          valor_confirmado?: number | null
+          valor_previsto?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mensalista_competencias_arena_id_fkey"
+            columns: ["arena_id"]
+            isOneToOne: false
+            referencedRelation: "arenas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mensalista_competencias_mensalidade_id_fkey"
+            columns: ["mensalidade_id"]
+            isOneToOne: true
+            referencedRelation: "mensalista_mensalidades"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mensalista_competencias_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "planos_mensalista"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mensalista_competencias_revisado_por_fkey"
+            columns: ["revisado_por"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       app_booking_request_groups: {
         Row: {
           operation_id: string
@@ -6289,6 +6430,32 @@ export type Database = {
       }
     }
     Functions: {
+      mensalista_horarios_futuros: {
+        Args: { p_arena_id: string; p_fim: string; p_inicio: string }
+        Returns: {
+          athlete_name: string
+          court_id: string
+          fim: string
+          inicio: string
+          plano_id: string
+        }[]
+      }
+      mensalista_historico_competencias: {
+        Args: { p_arena_id: string; p_athlete_id: string }
+        Returns: Json
+      }
+      mensalista_reajuste_mes_preview_v2: {
+        Args: { p_arena_id: string; p_competencia: string }
+        Returns: Json
+      }
+      preparar_mensalista_competencias: {
+        Args: {
+          p_arena_id: string
+          p_competencia: string
+          p_registered_by?: string
+        }
+        Returns: Json
+      }
       get_arena_receiving_setup: {
         Args: { p_arena_id: string }
         Returns: Json

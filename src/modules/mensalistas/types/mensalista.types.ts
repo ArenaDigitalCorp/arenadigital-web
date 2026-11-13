@@ -142,6 +142,7 @@ export interface PagamentoComContexto extends PagamentoRow {
 }
 
 export interface MensalistaDetalhe {
+  historicoCompetencias?: HistoricoCompetencia[]
   competencia: string
   resumo: MensalistaResumo
   recorrencias: RecorrenciaResumo[]
@@ -176,6 +177,12 @@ export interface RegistrarPagamentoInput {
 
 /** Uma recorrência na prévia do "Ajustar mensalidades do mês" (mensalista_reajuste_mes_preview). */
 export interface ReajusteMesLinha {
+  calendario?: {
+    revisao: number
+    revisadoEm: string | null
+    agendaStatus: 'pendente' | 'preparada' | 'conflito'
+    agendaErro: string | null
+  }
   planoId: string
   athleteId: string
   atleta: string
@@ -204,6 +211,30 @@ export interface ReajusteMesLinha {
   valorPago: number
   /** valor por jogo × jogos líquidos; null em plano por blocos ou sem jogos de contrato. */
   valorSugerido: number | null
+}
+
+export interface HistoricoCompetencia {
+  recorrencia: string
+  id: string
+  plano_id: string
+  competencia: string
+  valor_total: number
+  valor_pago: number
+  status: string
+  jogos: number | null
+  valor_previsto: number | null
+  valor_confirmado: number | null
+  revisado_em: string | null
+  revisado_por_nome: string | null
+  agenda_status: string | null
+  eventos: {
+    id: string
+    tipo: string
+    created_at: string
+    responsavel: string | null
+    anterior: Record<string, unknown> | null
+    atual: Record<string, unknown>
+  }[]
 }
 
 export interface ReajusteMesPreview {
