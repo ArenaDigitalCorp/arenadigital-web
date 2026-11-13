@@ -90,7 +90,7 @@ test('mensalista billing mutations use typed atomic RPCs behind server authoriza
   const source = await readFile(billingActionPath, 'utf8')
 
   for (const rpcName of [
-    'generate_mensalista_mensalidades_atomic',
+    'preparar_mensalista_competencias',
     'configure_mensalista_rateio_atomic',
     'remove_mensalista_rateio_participante_atomic',
     'register_mensalista_payment_atomic',
@@ -119,7 +119,7 @@ test('mensalista billing mutations use typed atomic RPCs behind server authoriza
   assert.match(source, /\.rpc\(\s*['"]reajustar_plano_mensalista_atomic['"]/)
   assert.match(source, /\.rpc\(\s*['"]pausar_plano_mensalista_atomic['"]/)
   assert.match(source, /\.rpc\(\s*['"]remover_pausa_mensalista_atomic['"]/)
-  assert.match(source, /\.rpc\(\s*['"]mensalista_reajuste_mes_preview['"]/)
+  assert.match(source, /\.rpc\(\s*['"]mensalista_reajuste_mes_preview_v2['"]/)
   assert.match(source, /\.rpc\(\s*['"]reajustar_mensalidades_mes_lote_atomic['"]/)
 
   assert.equal(

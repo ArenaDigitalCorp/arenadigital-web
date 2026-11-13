@@ -16,6 +16,8 @@ export type BookingParticipantEmbed = {
 }
 
 export type Booking = Row & {
+  /** Calendar-only projection of the weekly contract, never a writable booking. */
+  horario_protegido?: boolean
   courts?: { id: string; name: string } | null
   sports?: { id: string; name: string } | null
   atleta?: { id: string; nome_perfil: string; telefone: string } | null

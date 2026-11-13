@@ -24,6 +24,23 @@ function isBlockingBooking(row: ConflictBookingRow): boolean {
 export class SupabaseBookingRepository implements IBookingRepository {
   constructor(private readonly client: SupabaseClient) {}
 
+  private async withProtectedSlots(rows: Booking[], arenaId: string, start?: string, end?: string, courtId?: string): Promise<Booking[]> {
+    if (!start || !end) return rows
+    const { data, error } = await this.client.rpc('mensalista_horarios_futuros', {
+      p_arena_id: arenaId, p_inicio: start, p_fim: end,
+    })
+    if (error) throw new Error(`Não foi possível conferir os horários dos mensalistas: ${error.message}`)
+    const protectedSlots = (data ?? []) as { plano_id: string; court_id: string; inicio: string; fim: string; athlete_name: string }[]
+    const virtual = protectedSlots.filter((slot) => !courtId || slot.court_id === courtId).map((slot) => ({
+      id: `contrato:${slot.plano_id}:${slot.court_id}:${slot.inicio}`,
+      arena_id: arenaId, court_id: slot.court_id, start_time: slot.inicio, end_time: slot.fim,
+      athlete_name: slot.athlete_name, plano_mensalista_id: slot.plano_id,
+      booking_type: 'mensalista', status: 'reservado', price: null, rental_price: 0,
+      horario_protegido: true,
+    } as Booking))
+    return [...rows, ...virtual].sort((a, b) => a.start_time.localeCompare(b.start_time))
+  }
+
   async findByArena(arenaId: string, startDate?: string, endDate?: string): Promise<Booking[]> {
     let query = this.client
       .from('bookings')
@@ -35,7 +52,7 @@ export class SupabaseBookingRepository implements IBookingRepository {
 
     const { data, error } = await query.order('start_time', { ascending: true });
     if (error) throw new Error(`SupabaseBookingRepository.findByArena: ${error.message}`);
-    return (data ?? []) as unknown as Booking[];
+    return this.withProtectedSlots((data ?? []) as unknown as Booking[], arenaId, startDate, endDate);
   }
 
   async findByCourt(courtId: string, startDate?: string, endDate?: string): Promise<Booking[]> {
@@ -49,7 +66,9 @@ export class SupabaseBookingRepository implements IBookingRepository {
 
     const { data, error } = await query.order('start_time', { ascending: true });
     if (error) throw new Error(`SupabaseBookingRepository.findByCourt: ${error.message}`);
-    return (data ?? []) as unknown as Booking[];
+    const { data: court, error: courtError } = await this.client.from('courts').select('arena_id').eq('id', courtId).single();
+    if (courtError || !court) throw new Error('Quadra não encontrada');
+    return this.withProtectedSlots((data ?? []) as unknown as Booking[], court.arena_id, startDate, endDate, courtId);
   }
 
   async findByArenaWithSports(arenaId: string, startDate: string, endDate: string): Promise<Booking[]> {
@@ -62,7 +81,7 @@ export class SupabaseBookingRepository implements IBookingRepository {
       .order('start_time', { ascending: true });
 
     if (error) throw new Error(`SupabaseBookingRepository.findByArenaWithSports: ${error.message}`);
-    return (data ?? []) as unknown as Booking[];
+    return this.withProtectedSlots((data ?? []) as unknown as Booking[], arenaId, startDate, endDate);
   }
 
   /**
