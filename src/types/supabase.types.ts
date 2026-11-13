@@ -67,6 +67,8 @@ export type Database = {
       mensalista_competencias: {
         Row: {
           agenda_erro: string | null
+          calculado_em: string | null
+          cobranca_erro: string | null
           agenda_status: string
           arena_id: string
           competencia: string
@@ -85,6 +87,8 @@ export type Database = {
         }
         Insert: {
           agenda_erro?: string | null
+          calculado_em?: string | null
+          cobranca_erro?: string | null
           agenda_status?: string
           arena_id: string
           competencia: string
@@ -103,6 +107,8 @@ export type Database = {
         }
         Update: {
           agenda_erro?: string | null
+          calculado_em?: string | null
+          cobranca_erro?: string | null
           agenda_status?: string
           arena_id?: string
           competencia?: string

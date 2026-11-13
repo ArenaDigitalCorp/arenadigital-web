@@ -16,7 +16,7 @@ import {
   CircleDollarSign,
   Eye,
   Users,
-  SlidersHorizontal,
+
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -26,7 +26,7 @@ import { cn } from '@/lib/utils'
 import { arenaDataTable } from '@/lib/arena-data-table'
 import { formatCurrency, formatCompetenciaShort, formatDate, toCompetencia } from '@/lib/format'
 import { useAvisoReajusteMes } from '@/modules/mensalistas/use-aviso-reajuste-mes'
-import { AjustarMensalidadesMesModal } from './AjustarMensalidadesMesModal'
+import { PendenciasMensalistasModal } from './PendenciasMensalistasModal'
 import type {
   MensalistasOverview,
   MensalistaResumo,
@@ -173,20 +173,10 @@ export function MensalistasOverviewClient({ arenaId, competencia, overview }: Pr
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-        <Button
-          variant="outline"
-          onClick={ajuste.abrir}
-          className="h-11 gap-2 rounded-xl font-bold"
-          title="Ajustar as mensalidades do mês pelos jogos de cada recorrência"
-        >
-          <SlidersHorizontal className="h-4 w-4 text-arena-button" />
-          Ajustar mensalidades do mês
-          {totalParaAnalise > 0 && (
-            <span className="rounded-full bg-arena-button px-2 py-0.5 text-[11px] font-black text-white">
-              {totalParaAnalise}
-            </span>
-          )}
-        </Button>
+        {totalParaAnalise > 0 && <Button variant="outline" onClick={ajuste.abrir} className="h-11 gap-2 rounded-xl font-bold">
+          <AlertTriangleIcon className="h-4 w-4" />
+          Ver pendências ({totalParaAnalise})
+        </Button>}
         <div className="flex items-center bg-gray-50 rounded-xl p-1 border border-arena-navy-800/5">
           <Button
             variant="ghost"
@@ -216,26 +206,25 @@ export function MensalistasOverviewClient({ arenaId, competencia, overview }: Pr
         </div>
       </div>
 
-      <AjustarMensalidadesMesModal
-        key={`${arenaId}:${competencia}`}
+      <PendenciasMensalistasModal
         open={ajuste.aberto}
         onClose={ajuste.fechar}
-        onApplied={() => {
-          ajuste.atualizar()
-          router.refresh()
-        }}
+        onRetry={() => { ajuste.atualizar(); router.refresh() }}
         arenaId={arenaId}
-        competenciaInicial={competencia}
+        competencia={competencia}
+        linhas={ajuste.linhas}
+        carregando={ajuste.carregando}
+        erro={ajuste.erro}
       />
 
       {ajuste.carregando ? (
         <p role="status" className="text-sm text-arena-navy-800/60">
-          Conferindo os jogos e os valores das mensalidades deste mês…
+          Preparando as reservas e cobranças deste mês…
         </p>
       ) : ajuste.erro ? (
         <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
           <p className="text-sm font-medium text-amber-900">
-            Não foi possível conferir os ajustes das mensalidades deste mês.
+            Não foi possível verificar as pendências deste mês.
           </p>
           <Button variant="outline" onClick={ajuste.atualizar}>Tentar novamente</Button>
         </div>

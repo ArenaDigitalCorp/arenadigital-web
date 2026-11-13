@@ -2,15 +2,16 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { getReajusteMesPreviewAction } from '@/modules/mensalistas/actions/mensalistaActions'
-import { precisaAnalise } from './reajuste-mes'
+import { temPendenciaMensal } from './pendencias-mes'
+import type { ReajusteMesLinha } from './types/mensalista.types'
 
-/** Reutiliza a prévia do ajuste; abrir a revisão nunca aplica um lote. */
+/** A preparação automática só pede intervenção nas exceções. */
 export function useAvisoReajusteMes(arenaId: string, competencia: string) {
   const chave = `${arenaId}:${competencia}`
   const [consulta, setConsulta] = useState<{
     chave: string
     recarga: number
-    total: number
+    linhas: ReajusteMesLinha[]
     erro: boolean
   } | null>(null)
   const [aberto, setAberto] = useState<string | null>(null)
@@ -32,17 +33,18 @@ export function useAvisoReajusteMes(arenaId: string, competencia: string) {
         const res = await getReajusteMesPreviewAction(arenaId, competencia)
         if (!ativo) return
         if (!res.success || !res.data) {
-          setConsulta({ chave, recarga, total: 0, erro: true })
+          setConsulta({ chave, recarga, linhas: [], erro: true })
           return
         }
-        const total = res.data.linhas.filter(precisaAnalise).length
-        setConsulta({ chave, recarga, total, erro: false })
+        const linhas = res.data.linhas.filter(temPendenciaMensal)
+        const total = linhas.length
+        setConsulta({ chave, recarga, linhas, erro: false })
         if (total > 0 && !apresentados.current.has(chave)) {
           apresentados.current.add(chave)
           setAberto(chave)
         }
       } catch {
-        if (ativo) setConsulta({ chave, recarga, total: 0, erro: true })
+        if (ativo) setConsulta({ chave, recarga, linhas: [], erro: true })
       }
     }
     void consultar()
@@ -56,7 +58,8 @@ export function useAvisoReajusteMes(arenaId: string, competencia: string) {
 
   const atual = consulta?.chave === chave && consulta.recarga === recarga ? consulta : null
   return {
-    total: atual?.total ?? 0,
+    total: atual?.linhas.length ?? 0,
+    linhas: atual?.linhas ?? [],
     carregando: atual === null,
     erro: atual?.erro ?? false,
     aberto: aberto === chave,
