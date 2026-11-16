@@ -1,4 +1,5 @@
 "use client";
+import { PublicationReach } from "./PublicationReach";
 /* eslint-disable @next/next/no-img-element */
 
 import { useRef, useState, type FormEvent } from "react";
@@ -96,6 +97,7 @@ function ActivityEditorForm({
   const [draft, setDraft] = useState(() => {
     const today = localInput(new Date().toISOString()).slice(0, 10);
     return {
+      reachKm: String((availability ? promotion?.reach_km : game?.reach_km) ?? 30),
       title: promotion?.title ?? "",
       description: promotion?.description ?? "",
       imageUrl: promotion?.image_url ?? "",
@@ -178,6 +180,7 @@ function ActivityEditorForm({
           title: draft.title.trim(),
           description: draft.description.trim() || null,
           image_url: draft.imageUrl,
+          reach_km: Number(draft.reachKm),
           sport_id: draft.sportId || null,
           starts_at: startsAt,
           ends_at: endsAt,
@@ -211,6 +214,7 @@ function ActivityEditorForm({
         }
         const result = await upsertOpenGameAction(arenaId, {
           ...(game ? { id: game.id } : {}),
+          reach_km: Number(draft.reachKm),
           sport_id: draft.sportId,
           owner_atleta_id: draft.ownerId,
           date,
@@ -279,7 +283,8 @@ function ActivityEditorForm({
               </>
             ) : (
               <div className="grid gap-5 sm:grid-cols-2">
-                <label className={field}>Modalidade
+                <PublicationReach value={Number(draft.reachKm)} onChange={(value) => update("reachKm", String(value))} disabled={disabled} />
+              <label className={field}>Modalidade
                   <PublicationSelect label="Modalidade" value={draft.sportId} onChange={(value) => update("sportId", value)} options={[{ value: "", label: "Selecione a modalidade" }, ...sportOptions.map((sport) => ({ value: sport.id, label: sport.name }))]} disabled={disabled} />
                 </label>
                 <label className={field}>Responsável pelo jogo
@@ -302,9 +307,12 @@ function ActivityEditorForm({
           </section>
           <section className="space-y-5 p-5 sm:p-7">
             {availability ? (
+              <>
+              <PublicationReach value={Number(draft.reachKm)} onChange={(value) => update("reachKm", String(value))} disabled={disabled} />
               <label className={field}>Modalidade
                 <PublicationSelect label="Modalidade" value={draft.sportId} onChange={(value) => update("sportId", value)} options={[{ value: "", label: "Todas as modalidades" }, ...sportOptions.map((sport) => ({ value: sport.id, label: sport.name }))]} disabled={disabled} />
               </label>
+              </>
             ) : (
               <>
                 <label className={`${field} max-w-xs`}>Vagas para atletas

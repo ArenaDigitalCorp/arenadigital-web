@@ -178,6 +178,7 @@ export async function upsertArenaPromotionAction(
     const payload = {
       arena_id: arenaId,
       court_id: parsed.court_id ?? null,
+      ...(parsed.reach_km !== undefined ? { reach_km: parsed.reach_km } : {}),
       sport_id: parsed.sport_id ?? null,
       title: parsed.title,
       ...(!parsed.id || parsed.description !== undefined ? { description: parsed.description ?? null } : {}),
@@ -333,6 +334,7 @@ export async function upsertOpenGameAction(
       arena_id: arenaId,
       sport_id: parsed.sport_id,
       owner_atleta_id: parsed.owner_atleta_id,
+      ...(parsed.reach_km !== undefined ? { reach_km: parsed.reach_km } : {}),
       date: parsed.date,
       start_time: parsed.start_time,
       end_time: parsed.end_time,
