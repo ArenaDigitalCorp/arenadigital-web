@@ -69,6 +69,20 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, onEdit, bookin
 
     if (!booking || !court) return null
 
+    if (booking.horario_protegido) return (
+        <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+            <DialogContent className="rounded-2xl sm:max-w-md">
+                <DialogHeader><DialogTitle>Horário protegido pelo contrato</DialogTitle></DialogHeader>
+                <p className="font-semibold text-arena-navy-800">{booking.athlete_name}</p>
+                <p className="text-sm text-arena-navy-800/70">{format(parseISO(booking.start_time), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })} · {court.name}</p>
+                <p className="text-sm text-arena-navy-800/70">Este horário pertence a uma recorrência semanal e está reservado para o mensalista. A cobrança é controlada separadamente em cada mês.</p>
+                <Link className="font-semibold text-arena-button hover:underline" href={`/dashboard/arenas/${booking.arena_id}/mensalistas?competencia=${format(parseISO(booking.start_time), 'yyyy-MM')}`}>
+                    Gerenciar mensalistas deste mês
+                </Link>
+            </DialogContent>
+        </Dialog>
+    )
+
     const startTime = parseISO(booking.start_time)
     const endTime = parseISO(booking.end_time)
     const status = statusPresentation(booking.status)

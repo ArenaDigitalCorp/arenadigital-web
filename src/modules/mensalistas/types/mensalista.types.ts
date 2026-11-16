@@ -142,6 +142,7 @@ export interface PagamentoComContexto extends PagamentoRow {
 }
 
 export interface MensalistaDetalhe {
+  historicoCompetencias?: HistoricoCompetencia[]
   competencia: string
   resumo: MensalistaResumo
   recorrencias: RecorrenciaResumo[]
@@ -176,6 +177,13 @@ export interface RegistrarPagamentoInput {
 
 /** Uma recorrência na prévia do "Ajustar mensalidades do mês" (mensalista_reajuste_mes_preview). */
 export interface ReajusteMesLinha {
+  calendario?: {
+    revisao: number
+    revisadoEm: string | null
+    agendaStatus: 'pendente' | 'preparada' | 'conflito'
+    cobrancaErro?: string | null
+    agendaErro: string | null
+  }
   planoId: string
   athleteId: string
   atleta: string
@@ -206,6 +214,32 @@ export interface ReajusteMesLinha {
   valorSugerido: number | null
 }
 
+export interface HistoricoCompetencia {
+  recorrencia: string
+  id: string
+  plano_id: string
+  competencia: string
+  valor_total: number
+  valor_pago: number
+  status: string
+  jogos: number | null
+  valor_previsto: number | null
+  valor_confirmado: number | null
+  revisado_em: string | null
+  revisado_por_nome: string | null
+  calculado_em?: string | null
+  cobranca_erro?: string | null
+  agenda_status: string | null
+  eventos: {
+    id: string
+    tipo: string
+    created_at: string
+    responsavel: string | null
+    anterior: Record<string, unknown> | null
+    atual: Record<string, unknown>
+  }[]
+}
+
 export interface ReajusteMesPreview {
   /** `YYYY-MM`. */
   competencia: string
@@ -223,6 +257,7 @@ export type ReajusteMesItemStatus =
   | 'duplicado'
   | 'sem_alteracao'
   | 'nao_encontrado'
+  | 'conflito_agenda'
 
 export interface ReajusteMesLoteResultado {
   loteId: string
@@ -235,6 +270,7 @@ export interface ReajusteMesLoteResultado {
     status: ReajusteMesItemStatus
     valorAnterior: number | null
     valorNovo: number | null
+    reservasCriadas: number
   }[]
   idempotent: boolean
 }

@@ -1,5 +1,6 @@
 'use server'
 
+import type { Database } from '@/types/supabase.types'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import {
   assertArenaBackofficeAccess,
@@ -29,6 +30,7 @@ import {
 } from '@/modules/mensalistas/credito-recorrencia'
 import type {
   AtrasoCompetencia,
+  HistoricoCompetencia,
   CobrancaRow,
   CreditoComRecorrencia,
   CreditoRow,
@@ -112,7 +114,7 @@ export async function getMensalistasOverviewAction(
     const supabase = getSupabaseAdmin()
 
     const { error: genError } = await supabase.rpc(
-      'generate_mensalista_mensalidades_atomic',
+      'preparar_mensalista_competencias',
       {
         p_arena_id: parsedArena,
         p_competencia: competenciaDate,
@@ -332,7 +334,7 @@ export async function getMensalistaDetailAction(
     const supabase = getSupabaseAdmin()
 
     const { error: genError } = await supabase.rpc(
-      'generate_mensalista_mensalidades_atomic',
+      'preparar_mensalista_competencias',
       {
         p_arena_id: parsedArena,
         p_competencia: competenciaDate,
@@ -737,6 +739,11 @@ export async function getMensalistaDetailAction(
       atrasoMeses: atrasos.length,
     }
 
+    const { data: historicoCompetencias, error: historicoError } = await supabase.rpc('mensalista_historico_competencias', {
+      p_arena_id: parsedArena, p_athlete_id: parsedAthlete,
+    })
+    if (historicoError) throw new Error(historicoError.message)
+
     return {
       success: true,
       data: {
@@ -745,6 +752,7 @@ export async function getMensalistaDetailAction(
         recorrencias,
         atrasos,
         historicoPagamentos,
+        historicoCompetencias: (historicoCompetencias ?? []) as unknown as HistoricoCompetencia[],
         creditos,
         creditoSaldo,
         creditoSubcontas,
@@ -1265,20 +1273,31 @@ export async function getReajusteMesPreviewAction(
     const competenciaDate = `${parsedComp}-01`
     const supabase = getSupabaseAdmin()
 
-    const { error: genError } = await supabase.rpc('generate_mensalista_mensalidades_atomic', {
+    const { error: genError } = await supabase.rpc('preparar_mensalista_competencias', {
       p_arena_id: parsedArena,
       p_competencia: competenciaDate,
       p_registered_by: dbUserId,
     })
     if (genError) throw new Error(genError.message)
 
-    const { data, error } = await supabase.rpc('mensalista_reajuste_mes_preview', {
+    const { data, error } = await supabase.rpc('mensalista_reajuste_mes_preview_v2', {
       p_arena_id: parsedArena,
       p_competencia: competenciaDate,
     })
     if (error) throw new Error(error.message)
 
-    const linhas: ReajusteMesLinha[] = (data ?? []).map((row) => ({
+    type PreviewRow = Database['public']['Functions']['mensalista_reajuste_mes_preview']['Returns'][number] & {
+      calendario?: { revisao: number; revisado_em: string | null; agenda_status: 'pendente' | 'preparada' | 'conflito'; agenda_erro: string | null; cobranca_erro?: string | null } | null
+    }
+    const rows = (Array.isArray(data) ? data : []) as unknown as PreviewRow[]
+    const linhas: ReajusteMesLinha[] = rows.map((row) => ({
+      calendario: row.calendario ? {
+        revisao: row.calendario.revisao,
+        revisadoEm: row.calendario.revisado_em,
+        agendaStatus: row.calendario.agenda_status,
+        agendaErro: row.calendario.agenda_erro,
+        cobrancaErro: row.calendario.cobranca_erro,
+      } : undefined,
       planoId: row.plano_id,
       athleteId: row.athlete_id,
       atleta: row.athlete_name,
@@ -1316,8 +1335,8 @@ export async function getReajusteMesPreviewAction(
 }
 
 /**
- * Aplica o que o gestor confirmou no "Ajustar mensalidades do mês" — só a
- * cobrança daquela competência (o valor do plano não muda). O `operationId`
+ * Aplica o que o gestor confirmou no "Ajustar mensalidades do mês": ajusta a
+ * cobrança e completa as reservas daquela competência (o contrato não muda). O `operationId`
  * vem do cliente: reenviar o mesmo lote não reaplica nada.
  */
 export async function aplicarReajusteMesLoteAction(
@@ -1338,6 +1357,7 @@ export async function aplicarReajusteMesLoteAction(
           plano_id: item.planoId,
           novo_valor: item.novoValor,
           valor_esperado: item.valorEsperado,
+          revisao_esperada: item.revisaoEsperada,
         })),
         p_observacao: parsed.observacao,
         p_registered_by: dbUserId,
@@ -1348,6 +1368,8 @@ export async function aplicarReajusteMesLoteAction(
     const row = (data ?? {}) as Record<string, unknown>
     const itens = (Array.isArray(row.itens) ? row.itens : []) as Record<string, unknown>[]
     revalidateMensalistaPaths(parsed.arenaId)
+    revalidatePath(`/dashboard/arenas/${parsed.arenaId}`)
+    revalidatePath(`/dashboard/arenas/${parsed.arenaId}/courts`)
     return {
       success: true,
       data: {
@@ -1361,6 +1383,7 @@ export async function aplicarReajusteMesLoteAction(
           status: String(item.status) as ReajusteMesItemStatus,
           valorAnterior: item.valor_anterior == null ? null : Number(item.valor_anterior),
           valorNovo: item.valor_novo == null ? null : Number(item.valor_novo),
+          reservasCriadas: Number(item.reservas_criadas ?? 0),
         })),
         idempotent: Boolean(row.idempotent ?? false),
       },

@@ -11,3 +11,10 @@ As ações e o upload enviam o contexto `arena` ou `platform`, que é validado n
 Os endereços anteriores `/dashboard/arenas/[id]/publications` e `/dashboard/arenas/[id]/mobile-content` encaminham à nova tela. A rota separada de horários e jogos foi removida. Horário disponível e Jogo aberto são tipos do mesmo editor, exclusivos da arena, e aparecem na mesma listagem e busca. Seus dados continuam em `arena_promotions` e `open_games`, preservando as integrações de reservas e participação do app. Horários permitem editar, publicar e retirar do ar; jogos permitem editar e cancelar com confirmação, sem cancelar a reserva. A edição de jogo preserva no banco inscrições, reserva vinculada, visibilidade, situação e níveis.
 
 Deploy: aplicar primeiro a migration `20261108210000_home_publication_context.sql` do repositório `arenadigital-db`, depois publicar a web. Promover cada repositório por `main` → `homolog`; produção depende de validação posterior.
+
+O alcance das publicações de arena é configurável de 0 a 30 km (padrão 30).
+Zero é somente favoritos; favoritos recebem mesmo fora do raio. Sem localização
+válida do atleta ou da arena, somente favoritos. Modalidade é informativa e não
+filtra o público. A mesma regra vale para horários e jogos abertos, preservando a
+privacidade dos jogos. Requer migrations `20261116150000` e `20261116150100` antes
+da web e o app com `get_home_feed_nearby` para receber por localização.

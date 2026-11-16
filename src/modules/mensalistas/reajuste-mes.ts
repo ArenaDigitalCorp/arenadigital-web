@@ -42,6 +42,7 @@ export const MOTIVO_IGNORADO_LABEL: Record<ReajusteMesItemStatus, string> = {
   duplicado: 'Repetida no lote',
   sem_alteracao: 'Sem alteração',
   nao_encontrado: 'Recorrência não encontrada',
+  conflito_agenda: 'Conflito na agenda — cobrança mantida; revise o horário',
 }
 
 function round2(valor: number): number {
@@ -57,7 +58,8 @@ export function arredondar(valor: number, modo: Arredondamento): number {
 /** Quitada/cancelada não se ajusta; plano por blocos já é proporcional sozinho. */
 export function editavel(linha: ReajusteMesLinha): boolean {
   return (
-    !linha.porBlocos &&
+    (!linha.porBlocos || linha.calendario != null) &&
+    linha.calendario?.agendaStatus !== 'conflito' &&
     linha.mensalidadeStatus !== 'quitado' &&
     linha.mensalidadeStatus !== 'cancelado'
   )
@@ -65,10 +67,12 @@ export function editavel(linha: ReajusteMesLinha): boolean {
 
 /** O valor cobrado no mês difere do que os jogos do mês sugerem. */
 export function precisaAnalise(linha: ReajusteMesLinha): boolean {
+  if (linha.calendario?.agendaStatus === 'conflito' && !['quitado', 'cancelado'].includes(linha.mensalidadeStatus)) return true
   return (
     editavel(linha) &&
     linha.valorSugerido != null &&
-    Math.abs(linha.valorSugerido - linha.valorAtual) >= 0.01
+    (Math.abs(linha.valorSugerido - linha.valorAtual) >= 0.01 ||
+      (linha.calendario != null && !linha.calendario.revisadoEm))
   )
 }
 
@@ -89,7 +93,7 @@ export function selos(linha: ReajusteMesLinha): SeloReajuste[] {
  * estreia e encerramento vêm desmarcados: o gestor olha uma a uma.
  */
 export function selecionadaPorPadrao(linha: ReajusteMesLinha): boolean {
-  return precisaAnalise(linha) && selos(linha).length === 0
+  return editavel(linha) && precisaAnalise(linha) && selos(linha).length === 0
 }
 
 /** Ponto de partida do campo "Novo": a sugestão arredondada, ou o valor atual sem sugestão. */
@@ -107,7 +111,8 @@ export function validarNovoValor(linha: ReajusteMesLinha, novo: number): ErroNov
 }
 
 export function semAlteracao(linha: ReajusteMesLinha, novo: number): boolean {
-  return Math.abs(novo - linha.valorAtual) < 0.005
+  return Math.abs(novo - linha.valorAtual) < 0.005 &&
+    (linha.calendario == null || linha.calendario.revisadoEm != null)
 }
 
 export function variacaoJogos(linha: ReajusteMesLinha): 'sobe' | 'desce' | 'igual' {

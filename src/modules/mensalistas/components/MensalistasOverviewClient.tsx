@@ -1,7 +1,7 @@
 'use client'
 
 import { formatPhone } from '@/lib/brasil-document'
-import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { addMonths, format, parseISO, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -16,7 +16,7 @@ import {
   CircleDollarSign,
   Eye,
   Users,
-  SlidersHorizontal,
+
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,9 +25,8 @@ import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { arenaDataTable } from '@/lib/arena-data-table'
 import { formatCurrency, formatCompetenciaShort, formatDate, toCompetencia } from '@/lib/format'
-import { getReajusteMesPreviewAction } from '@/modules/mensalistas/actions/mensalistaActions'
-import { precisaAnalise } from '@/modules/mensalistas/reajuste-mes'
-import { AjustarMensalidadesMesModal } from './AjustarMensalidadesMesModal'
+import { useAvisoReajusteMes } from '@/modules/mensalistas/use-aviso-reajuste-mes'
+import { PendenciasMensalistasModal } from './PendenciasMensalistasModal'
 import type {
   MensalistasOverview,
   MensalistaResumo,
@@ -111,24 +110,8 @@ export function MensalistasOverviewClient({ arenaId, competencia, overview }: Pr
   )
   const [situacaoFilter, setSituacaoFilter] = useState<SituacaoFilter>('todas')
   const [soAtraso, setSoAtraso] = useState(false)
-  const [ajusteOpen, setAjusteOpen] = useState(false)
-  // Quantas recorrências do mês exibido precisam de análise (contador do botão).
-  // Vem depois da página, para não atrasar a visão geral.
-  const [paraAnalise, setParaAnalise] = useState<{ competencia: string; total: number } | null>(null)
-  const [recontar, setRecontar] = useState(0)
-
-  useEffect(() => {
-    let ativo = true
-    getReajusteMesPreviewAction(arenaId, competencia).then((res) => {
-      if (ativo && res.success && res.data) {
-        setParaAnalise({ competencia, total: res.data.linhas.filter(precisaAnalise).length })
-      }
-    })
-    return () => {
-      ativo = false
-    }
-  }, [arenaId, competencia, recontar])
-  const totalParaAnalise = paraAnalise?.competencia === competencia ? paraAnalise.total : 0
+  const ajuste = useAvisoReajusteMes(arenaId, competencia)
+  const totalParaAnalise = ajuste.total
 
   const todosStatusSelecionados = ALL_STATUS_PLANO.every((s) => statusFiltros.has(s))
 
@@ -190,20 +173,10 @@ export function MensalistasOverviewClient({ arenaId, competencia, overview }: Pr
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-        <Button
-          variant="outline"
-          onClick={() => setAjusteOpen(true)}
-          className="h-11 gap-2 rounded-xl font-bold"
-          title="Ajustar as mensalidades do mês pelos jogos de cada recorrência"
-        >
-          <SlidersHorizontal className="h-4 w-4 text-arena-button" />
-          Ajustar mensalidades do mês
-          {totalParaAnalise > 0 && (
-            <span className="rounded-full bg-arena-button px-2 py-0.5 text-[11px] font-black text-white">
-              {totalParaAnalise}
-            </span>
-          )}
-        </Button>
+        {totalParaAnalise > 0 && <Button variant="outline" onClick={ajuste.abrir} className="h-11 gap-2 rounded-xl font-bold">
+          <AlertTriangleIcon className="h-4 w-4" />
+          Ver pendências ({totalParaAnalise})
+        </Button>}
         <div className="flex items-center bg-gray-50 rounded-xl p-1 border border-arena-navy-800/5">
           <Button
             variant="ghost"
@@ -233,16 +206,29 @@ export function MensalistasOverviewClient({ arenaId, competencia, overview }: Pr
         </div>
       </div>
 
-      <AjustarMensalidadesMesModal
-        open={ajusteOpen}
-        onClose={() => setAjusteOpen(false)}
-        onApplied={() => {
-          setRecontar((n) => n + 1)
-          router.refresh()
-        }}
+      <PendenciasMensalistasModal
+        open={ajuste.aberto}
+        onClose={ajuste.fechar}
+        onRetry={() => { ajuste.atualizar(); router.refresh() }}
         arenaId={arenaId}
-        competenciaInicial={competencia}
+        competencia={competencia}
+        linhas={ajuste.linhas}
+        carregando={ajuste.carregando}
+        erro={ajuste.erro}
       />
+
+      {ajuste.carregando ? (
+        <p role="status" className="text-sm text-arena-navy-800/60">
+          Preparando as reservas e cobranças deste mês…
+        </p>
+      ) : ajuste.erro ? (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <p className="text-sm font-medium text-amber-900">
+            Não foi possível verificar as pendências deste mês.
+          </p>
+          <Button variant="outline" onClick={ajuste.atualizar}>Tentar novamente</Button>
+        </div>
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard

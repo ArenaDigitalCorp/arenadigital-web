@@ -125,6 +125,7 @@ export const reajusteMesLoteSchema = z.object({
         novoValor: z.number().finite().min(0).max(100_000_000),
         /** Valor da mensalidade que o gestor viu — o banco ignora a linha se ele mudou. */
         valorEsperado: z.number().finite().min(0).max(100_000_000),
+        revisaoEsperada: z.number().int().positive().optional(),
       })
     )
     .min(1, 'Selecione ao menos um ajuste')
