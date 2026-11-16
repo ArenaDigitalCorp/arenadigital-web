@@ -65,6 +65,7 @@ export interface AppHomeContent {
 }
 
 export interface MobilePromotion {
+  reach_km?: number
   id: string
   arena_id: string
   court_id: string | null
@@ -138,6 +139,7 @@ export interface OpenGameInput {
 }
 
 export interface MobileOpenGame {
+  reach_km?: number
   id: string
   booking_id: string | null
   arena_id: string
