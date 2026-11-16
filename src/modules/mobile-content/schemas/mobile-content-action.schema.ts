@@ -22,6 +22,7 @@ export const appHomeContentActionSchema = z.object({
 }).strict()
 
 export const arenaPromotionActionSchema = z.object({
+  reach_km: z.number().int().min(0).max(30).optional(),
   id: z.string().uuid().optional(),
   court_id: optionalUuid,
   sport_id: optionalUuid,
@@ -53,6 +54,7 @@ export const arenaHighlightActionSchema = z.object({
 }).strict()
 
 export const openGameActionSchema = z.object({
+  reach_km: z.number().int().min(0).max(30).optional(),
   id: z.string().uuid().optional(),
   booking_id: optionalUuid,
   sport_id: z.string().uuid(),

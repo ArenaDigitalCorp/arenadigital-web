@@ -27,6 +27,7 @@ export const publicationSchema = z.object({
   priority: z.number(),
   city_id: z.number().nullable(),
   sport_id: z.string().nullable(),
+  reach_km: z.number().int().min(0).max(30).default(30),
   created_at: z.string(),
 });
 export type Publication = z.infer<typeof publicationSchema>;

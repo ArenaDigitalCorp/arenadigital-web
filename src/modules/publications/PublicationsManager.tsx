@@ -1,4 +1,5 @@
 "use client";
+import { PublicationReach } from "./PublicationReach";
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useState, useRef } from "react";
 import {
@@ -99,6 +100,7 @@ const newDraft = (arenaId: string | null) => ({
   priority: 0,
   city_id: null as number | null,
   sport_id: "",
+  reach_km: 30,
 });
 function PublicationImage({
   url,
@@ -263,6 +265,7 @@ export function PublicationsManager({
       cta_label: item.cta_label ?? "",
       cta_url: item.cta_url ?? "",
       sport_id: item.sport_id ?? "",
+      reach_km: item.reach_km ?? 30,
       starts_at: localInput(item.starts_at),
       ends_at: localInput(item.ends_at),
     });
@@ -349,6 +352,7 @@ export function PublicationsManager({
           starts_at: dateValue(draft.starts_at, original?.starts_at),
           ends_at: dateValue(draft.ends_at, original?.ends_at),
           sport_id: draft.sport_id || null,
+          reach_km: draft.reach_km,
         },
       });
       if (!result.success) {
@@ -725,8 +729,9 @@ export function PublicationsManager({
                     />
                   </label>
                 )}
+                {draft.arena_id && <PublicationReach value={draft.reach_km} onChange={(value) => setDraft({ ...draft, reach_km: value })} />}
                 <label className={field}>
-                  Modalidade
+                  Modalidade (informativa)
                   <PublicationSelect
                     label="Modalidade"
                     value={draft.sport_id}
