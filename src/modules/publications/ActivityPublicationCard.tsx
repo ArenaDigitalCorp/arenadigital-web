@@ -1,6 +1,7 @@
 "use client";
 
 import { CalendarDays, Pause, Pencil, Play, UsersRound } from "lucide-react";
+import { gamePublicationCopy } from "./game-notes";
 import { Button } from "@/components/ui/button";
 import type { MobileOpenGame, MobilePromotion } from "@/modules/mobile-content/types/mobile-content.types";
 
@@ -21,15 +22,16 @@ export function ActivityPublicationCard({ item, author, now, disabled, onEdit, o
   const promotion = "title" in item ? item : null;
   const game = "date" in item ? item : null;
   const status = activityStatus(item, now);
+  const copy = gamePublicationCopy(game?.notes);
   const date = (value: string) => new Date(value).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
   return (
-    <article className="flex flex-col gap-5 rounded-2xl border border-slate-200 bg-white p-5 transition hover:border-slate-300 sm:flex-row">
-      <div className="grid aspect-[375/176] w-full shrink-0 place-items-center overflow-hidden rounded-xl bg-slate-100 text-slate-400 sm:aspect-auto sm:h-28 sm:w-40">
+    <article className="grid grid-cols-[64px_minmax(0,1fr)] gap-4 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-[112px_minmax(0,1fr)] sm:p-5">
+      <div className="grid h-16 place-items-center overflow-hidden rounded-md bg-slate-100 text-slate-400 sm:h-20">
         {promotion?.image_url ? (
           // Existing publication images may come from the arena's external media storage.
           // eslint-disable-next-line @next/next/no-img-element
           <img src={promotion.image_url} alt="" className="h-full w-full object-cover" />
-        ) : game ? <UsersRound className="size-8" /> : <CalendarDays className="size-8" />}
+        ) : game ? <UsersRound className="size-6" /> : <CalendarDays className="size-6" />}
       </div>
       <div className="min-w-0 flex-1">
         <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -38,14 +40,14 @@ export function ActivityPublicationCard({ item, author, now, disabled, onEdit, o
           </span>
           <span className="text-xs text-slate-400">{promotion ? "Horário disponível" : "Jogo aberto"} · {author}</span>
         </div>
-        <h3 className="break-words font-semibold text-arena-navy-950">{promotion?.title ?? `Jogo de ${game?.sports?.name ?? "esporte"}`}</h3>
-        <p className="mt-1 line-clamp-2 break-words text-sm text-slate-500">{promotion?.description ?? game?.notes}</p>
-        <p className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
+        <h3 className="break-words text-sm font-bold leading-5 text-arena-navy-800">{promotion?.title ?? (copy.title || `Jogo de ${game?.sports?.name ?? "esporte"}`)}</h3>
+        <p className="mt-1 line-clamp-2 break-words text-sm text-slate-500">{promotion?.description ?? copy.description}</p>
+        <p className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
           <CalendarDays className="size-3.5" />
           {promotion ? `${date(promotion.starts_at)} — ${promotion.ends_at ? date(promotion.ends_at) : "Sem data final"}` : game ? `${new Date(`${game.date}T12:00:00`).toLocaleDateString("pt-BR")} · ${game.start_time.slice(0, 5)} às ${game.end_time.slice(0, 5)}` : ""}
         </p>
         {game && <p className="mt-2 text-xs text-slate-500">Responsável: {game.atleta?.name ?? "Atleta"} · {game.current_players}/{game.needed_players} participantes{game.visibility !== "public" ? " · Visibilidade restrita" : ""}</p>}
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-3 flex flex-wrap gap-2">
           {promotion && (promotion.active || status !== "Encerrada") && (
             <Button variant="outline" size="sm" disabled={disabled} onClick={onToggle}>
               {promotion.active ? <Pause /> : <Play />}{promotion.active ? "Retirar do ar" : "Publicar"}

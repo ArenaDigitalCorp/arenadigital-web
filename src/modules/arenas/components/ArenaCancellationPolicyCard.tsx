@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from "react"
 import {
-    AlertTriangle,
     CheckCircle2,
+    ChevronDown,
+    Pencil,
     Clock3,
     FilePenLine,
     Loader2,
@@ -127,8 +128,8 @@ function PolicyTiers({ tiers }: { tiers: ArenaCancellationPolicyTier[] }) {
         .slice()
         .sort((left, right) => right.minimumHoursBeforeStart - left.minimumHoursBeforeStart)
     return (
-        <div className="space-y-3">
-            <div className="flex flex-wrap gap-2">
+        <div className="space-y-2">
+            <div className="divide-y divide-slate-100">
                 {sortedTiers.map((tier, index) => {
                     const upperThreshold = sortedTiers[index - 1]?.minimumHoursBeforeStart
                     const rangeLabel = upperThreshold === undefined
@@ -137,9 +138,9 @@ function PolicyTiers({ tiers }: { tiers: ArenaCancellationPolicyTier[] }) {
                             ? `Menos de ${upperThreshold}h antes do início`
                             : `De ${tier.minimumHoursBeforeStart}h até menos de ${upperThreshold}h antes do início`
                     return (
-                        <div key={tier.minimumHoursBeforeStart} className="min-w-40 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+                        <div key={tier.minimumHoursBeforeStart} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2">
                             <p className="text-xs text-slate-500">{rangeLabel}</p>
-                            <p className="mt-1 text-sm font-semibold text-arena-navy-800">{tier.refundPercentage}% de reembolso</p>
+                            <p className="text-sm font-semibold text-arena-navy-800">{tier.refundPercentage}% de reembolso</p>
                         </div>
                     )
                 })}
@@ -154,6 +155,7 @@ export function ArenaCancellationPolicyCard({ arenaId, initialSettings, onSettin
     const [rows, setRows] = useState<EditableTier[]>(() => rowsFromSettings(initialSettings))
     const [busy, setBusy] = useState<BusyOperation>(null)
     const [publishDialogOpen, setPublishDialogOpen] = useState(false)
+    const [editorOpen, setEditorOpen] = useState(!initialSettings.currentPolicy)
 
     const normalizedRows = useMemo(() => parsedTiers(rows), [rows])
     const isDirty = settings.draftPolicy
@@ -211,6 +213,7 @@ export function ArenaCancellationPolicyCard({ arenaId, initialSettings, onSettin
             if (!response.success) throw new Error(response.error)
             applySettings(response.data)
             setPublishDialogOpen(false)
+            setEditorOpen(false)
             toast.success("Política publicada para novas reservas online.")
         } catch (error) {
             toast.error(error instanceof Error ? error.message : "Não foi possível publicar a política.")
@@ -229,45 +232,38 @@ export function ArenaCancellationPolicyCard({ arenaId, initialSettings, onSettin
                 <div>
                     <div className="flex items-center gap-2.5">
                         <span className="grid size-6 shrink-0 place-items-center rounded-full bg-arena-button text-xs font-bold text-white" aria-hidden="true">2</span>
-                        <h3 id="cancellation-policy-title" className="text-base font-bold text-arena-navy-800">Política de cancelamento</h3>
+                        <h3 id="cancellation-policy-title" className="text-sm font-bold text-arena-navy-800">Política de cancelamento</h3>
                     </div>
-                    <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                        Defina quanto o atleta recebe de volta conforme a antecedência do cancelamento.
-                    </p>
+
                 </div>
+                <div className="flex flex-wrap items-center gap-3">
                 <Badge className={settings.currentPolicy
                     ? "border-emerald-200 bg-emerald-50 text-emerald-800"
                     : "border-amber-200 bg-amber-50 text-amber-800"}
                 >
                     {settings.currentPolicy ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Clock3 className="h-3.5 w-3.5" />}
-                    {settings.currentPolicy ? `Versão ${settings.currentPolicy.version} publicada` : "Publicação pendente"}
+                    {settings.currentPolicy ? "Publicada" : "Publicação pendente"}
                 </Badge>
+                {settings.currentPolicy && <Button type="button" variant="outline" size="sm" disabled={busy !== null} aria-expanded={editorOpen} aria-controls="policy-editor" onClick={() => setEditorOpen(!editorOpen)}>
+                    {editorOpen ? <ChevronDown className="size-4 rotate-180" /> : <Pencil className="size-4" />}{editorOpen ? "Fechar edição" : "Editar política"}
+                </Button>}
+                </div>
             </div>
 
             <div className="mt-5 space-y-5">
                 {settings.currentPolicy ? (
                     <div className="space-y-3">
-                        <div className="flex flex-wrap items-end justify-between gap-3">
-                            <div>
-                                <p className="text-sm font-semibold text-arena-navy-800">Regra vigente</p>
-                                <p className="mt-1 text-xs leading-5 text-slate-500">
-                                    Publicada em {formatPublishedAt(settings.currentPolicy.publishedAt)}. Reservas já contratadas preservam a versão aceita.
-                                </p>
-                            </div>
-                            {settings.publishedVersions.length > 1 && (
-                                <span className="text-xs text-slate-500">
-                                    {settings.publishedVersions.length - 1} versão(ões) anterior(es) preservada(s)
-                                </span>
-                            )}
-                        </div>
                         <PolicyTiers tiers={settings.currentPolicy.tiers} />
                     </div>
                 ) : (
-                    <div className="flex gap-2.5 rounded-lg border border-amber-200 bg-amber-50/50 px-3 py-3 text-xs leading-5 text-amber-900">
-                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                        <p>Publique a primeira política para liberar o pagamento online. Pré-reservas não exigem esta etapa. Nenhum valor sugerido será ativado automaticamente.</p>
-                    </div>
+                    <p className="text-sm text-slate-500">Defina as regras de reembolso para suas reservas online.</p>
                 )}
+                {settings.currentPolicy && <details className="text-xs text-slate-500">
+                    <summary className="w-fit cursor-pointer underline-offset-4 hover:underline">Detalhes da publicação</summary>
+                    <p className="mt-2 leading-5">Versão {settings.currentPolicy.version} · {formatPublishedAt(settings.currentPolicy.publishedAt)}. Reservas anteriores mantêm a política aceita.</p>
+                    {settings.publishedVersions.length > 1 && <p className="mt-1">{settings.publishedVersions.length - 1} versão(ões) anterior(es) preservada(s).</p>}
+                </details>}
+                <div id="policy-editor" hidden={Boolean(settings.currentPolicy) && !editorOpen}>
 
                 {!settings.draftPolicy ? (
                     <div className="flex flex-col items-start justify-between gap-3 rounded-lg border border-dashed border-slate-300 bg-slate-50/70 px-4 py-4 sm:flex-row sm:items-center">
@@ -287,20 +283,18 @@ export function ArenaCancellationPolicyCard({ arenaId, initialSettings, onSettin
                         <div className="flex flex-wrap items-center justify-between gap-2">
                             <div>
                                 <p className="text-sm font-semibold text-arena-navy-800">Rascunho da versão {settings.draftPolicy.version}</p>
-                                <p className="mt-1 text-xs leading-5 text-slate-500">
-                                    A maior antecedência compatível será aplicada. Abaixo da menor regra, o reembolso é zero.
-                                </p>
+
                             </div>
                             <span role="status" className="text-xs text-slate-500">{isDirty ? "Alterações não salvas" : "Rascunho salvo"}</span>
                         </div>
 
                         <fieldset disabled={busy !== null} className="space-y-3">
                             <legend className="sr-only">Regras de cancelamento</legend>
-                            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                            <div className="max-w-2xl space-y-2">
                                 {rows.map((row, index) => (
-                                    <div key={row.key} className="relative rounded-lg border border-slate-200 bg-slate-50/70 p-3 pr-10">
+                                    <div key={row.key} className="relative rounded-lg border border-slate-200 p-3 pr-10">
                                         <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Regra {index + 1}</p>
-                                        <div className="space-y-2.5">
+                                        <div className="flex flex-wrap gap-x-5 gap-y-3">
                                             <div className="flex items-center gap-2">
                                                 <Label htmlFor={`hours-${row.key}`} className="sr-only">Antecedência da regra {index + 1} (horas)</Label>
                                                 <Input
@@ -342,7 +336,7 @@ export function ArenaCancellationPolicyCard({ arenaId, initialSettings, onSettin
                             </div>
                             <Button
                                 type="button" variant="outline" size="sm"
-                                className="border-dashed border-orange-300 bg-orange-50/40 text-orange-700 hover:bg-orange-50"
+                                className="text-arena-navy-800"
                                 disabled={busy !== null || rows.length >= 100}
                                 onClick={() => setRows((current) => [
                                     ...current,
@@ -350,14 +344,14 @@ export function ArenaCancellationPolicyCard({ arenaId, initialSettings, onSettin
                                 ])}
                             >
                                 <Plus className="h-4 w-4" />
-                                Adicionar nova regra
+                                Adicionar regra
                             </Button>
                         </fieldset>
 
                         {normalizedRows && fallbackSummary(normalizedRows) && (
                             <p role="status" className="rounded-lg bg-slate-50 px-3 py-2.5 text-xs leading-5 text-slate-600">{fallbackSummary(normalizedRows)}</p>
                         )}
-                        <p className="text-xs leading-5 text-slate-500">Salvar o rascunho não altera a política vigente. Publique a nova versão para aplicá-la às próximas reservas.</p>
+                        <p className="text-xs leading-5 text-slate-500">As alterações só valem para novas reservas após a publicação.</p>
                         <div className="flex flex-wrap justify-end gap-2">
                             <Button type="button" variant="outline" disabled={busy !== null || !isDirty || !normalizedRows} onClick={() => void handleSaveDraft()}>
                                 {busy === "save" && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -373,6 +367,7 @@ export function ArenaCancellationPolicyCard({ arenaId, initialSettings, onSettin
                         </div>
                     </div>
                 )}
+                </div>
             </div>
 
             <Dialog open={publishDialogOpen} onOpenChange={setPublishDialogOpen}>

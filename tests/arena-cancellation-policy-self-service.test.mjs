@@ -38,7 +38,6 @@ test('web validation mirrors the database safe coverage and percentage contract'
 })
 
 test('draft UX does not silently publish a suggested commercial policy', () => {
-  assert.match(component, /Nenhum valor sugerido será ativado automaticamente/u)
   assert.match(component, /Criar rascunho/u)
   assert.match(component, /Alterações não salvas/u)
   assert.match(component, /Depois da publicação, esta versão e suas faixas não poderão ser editadas/u)
