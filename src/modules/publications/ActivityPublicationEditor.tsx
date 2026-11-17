@@ -1,4 +1,5 @@
 "use client";
+import { gamePublicationCopy, updateGamePublicationDescription } from "./game-notes";
 import { PublicationReach } from "./PublicationReach";
 /* eslint-disable @next/next/no-img-element */
 
@@ -35,7 +36,7 @@ type Props = {
 };
 
 const field = "block space-y-2 text-sm font-medium text-arena-navy-800";
-const primary = "bg-arena-button text-white hover:bg-arena-button-hover";
+const primary = "h-10 rounded-md bg-arena-button px-4 text-sm font-bold text-white shadow-none hover:bg-arena-button-hover";
 const typeOptions = [
   ...Object.entries(kinds).map(([value, label]) => ({ value, label })),
   { value: "availability", label: "Horário disponível" },
@@ -110,7 +111,7 @@ function ActivityEditorForm({
         ? localInput(promotion?.ends_at)
         : `${game?.date ?? today}T${game?.end_time.slice(0, 5) ?? "20:00"}`,
       neededPlayers: String(game?.needed_players ?? 1),
-      notes: game?.notes ?? "",
+      notes: gamePublicationCopy(game?.notes).description,
     };
   });
   const [busy, setBusy] = useState(false);
@@ -221,7 +222,7 @@ function ActivityEditorForm({
           start_time: startTime,
           end_time: endTime,
           needed_players: neededPlayers,
-          notes: draft.notes.trim() || null,
+          notes: updateGamePublicationDescription(game?.notes, draft.notes),
         });
         if (!result.success) throw new Error(result.error);
       }
@@ -235,16 +236,16 @@ function ActivityEditorForm({
 
   return (
     <section aria-label="Editor de publicação" className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-      <form onSubmit={save} aria-busy={disabled} className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-100 px-5 py-5 sm:px-7">
-          <h2 className="text-lg font-semibold text-arena-navy-950">{editing ? "Editar publicação" : "Nova publicação"}</h2>
+      <form onSubmit={save} aria-busy={disabled} className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-100 p-4 sm:p-5">
+          <h2 className="font-heading text-base font-bold text-arena-navy-800">{editing ? "Editar publicação" : "Nova publicação"}</h2>
           <p className="mt-1 text-sm text-slate-500">Publicado por <strong className="font-medium text-arena-navy-800">{author}</strong></p>
         </div>
-        {error && <div role="alert" className="m-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 sm:mx-7">{error}</div>}
+        {error && <div role="alert" className="m-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 sm:mx-5">{error}</div>}
         <fieldset disabled={disabled} className="divide-y divide-slate-100">
-          <section className="space-y-5 p-5 sm:p-7">
+          <section className="space-y-4 p-4 sm:p-5">
             <div>
-              <h3 className="font-semibold text-arena-navy-950">{availability ? "Conteúdo" : "Detalhes do jogo"}</h3>
+              <h3 className="text-sm font-semibold text-arena-navy-800">{availability ? "Conteúdo" : "Detalhes do jogo"}</h3>
               <p className="mt-1 text-sm text-slate-500">{availability ? "Divulgue os horários disponíveis da sua arena." : "Convide atletas para completar um jogo na sua arena."}</p>
             </div>
             <div className="max-w-xs">
@@ -267,14 +268,14 @@ function ActivityEditorForm({
                   <button
                     type="button" disabled={disabled} aria-busy={uploading}
                     aria-label={draft.imageUrl ? "Trocar imagem da publicação" : "Selecionar imagem da publicação"}
-                    className="group flex min-h-40 w-full flex-col items-center justify-center gap-3 overflow-hidden rounded-xl border-2 border-dashed border-slate-200 bg-slate-50/70 p-5 text-center transition hover:border-arena-button hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arena-button disabled:cursor-wait disabled:opacity-60"
+                    className="group flex min-h-40 w-full flex-col items-center justify-center gap-3 overflow-hidden rounded-lg border-2 border-dashed border-slate-200 bg-slate-50/70 p-5 text-center transition hover:border-arena-button hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arena-button disabled:cursor-wait disabled:opacity-60"
                     onClick={() => fileRef.current?.click()}
                     onDragOver={(event) => event.preventDefault()}
                     onDrop={(event) => { event.preventDefault(); if (!disabled) void upload(event.dataTransfer.files?.[0]); }}
                   >
                     {draft.imageUrl
                       ? <ActivityImage key={draft.imageUrl} url={draft.imageUrl} alt="Imagem selecionada" className="max-h-40 max-w-full rounded-lg object-contain" />
-                      : <span className="grid size-11 place-items-center rounded-xl border border-slate-200 bg-white text-arena-button"><ImagePlus className="size-5" /></span>}
+                      : <span className="grid size-11 place-items-center rounded-lg border border-slate-200 bg-white text-arena-button"><ImagePlus className="size-5" /></span>}
                     <span className="text-sm font-semibold text-arena-navy-800">{uploading ? "Enviando imagem…" : draft.imageUrl ? "Clique para trocar a imagem" : "Clique para escolher ou arraste uma imagem"}</span>
                     <span className="text-xs font-normal text-slate-500">JPG, PNG ou WebP · até 5 MB</span>
                   </button>
@@ -282,30 +283,30 @@ function ActivityEditorForm({
                 </div>
               </>
             ) : (
-              <div className="grid gap-5 sm:grid-cols-2">
-                <PublicationReach value={Number(draft.reachKm)} onChange={(value) => update("reachKm", String(value))} disabled={disabled} />
-              <label className={field}>Modalidade
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className={field}>Modalidade
                   <PublicationSelect label="Modalidade" value={draft.sportId} onChange={(value) => update("sportId", value)} options={[{ value: "", label: "Selecione a modalidade" }, ...sportOptions.map((sport) => ({ value: sport.id, label: sport.name }))]} disabled={disabled} />
                 </label>
                 <label className={field}>Responsável pelo jogo
                   <PublicationSelect label="Responsável pelo jogo" value={draft.ownerId} onChange={(value) => update("ownerId", value)} options={[{ value: "", label: "Selecione um atleta" }, ...athleteOptions.map((athlete) => ({ value: athlete.id, label: athlete.name }))]} disabled={disabled} />
                 </label>
                 {!athleteOptions.length && <p className="text-sm text-slate-500 sm:col-span-2">Cadastre um atleta na arena para selecioná-lo como responsável pelo jogo.</p>}
+                <div className="sm:col-span-2"><PublicationReach value={Number(draft.reachKm)} onChange={(value) => update("reachKm", String(value))} disabled={disabled} /></div>
               </div>
             )}
           </section>
-          <section className="space-y-5 p-5 sm:p-7">
+          <section className="space-y-4 p-4 sm:p-5">
             <div>
-              <h3 className="font-semibold text-arena-navy-950">{availability ? "Período de exibição" : "Quando será o jogo"}</h3>
+              <h3 className="text-sm font-semibold text-arena-navy-800">{availability ? "Período de exibição" : "Quando será o jogo"}</h3>
               <p className="mt-1 text-sm text-slate-500">{availability ? "Defina quando a divulgação poderá aparecer no app." : "Escolha o início e o fim do jogo no mesmo dia."}</p>
             </div>
-            <div className="grid gap-5 lg:grid-cols-2">
+            <div className="grid gap-4 lg:grid-cols-2">
               <PublicationDateField label="Início" value={draft.startsAt} onChange={(value) => update("startsAt", value)} disabled={disabled} />
               <PublicationDateField label="Fim" value={draft.endsAt} onChange={(value) => update("endsAt", value)} disabled={disabled} optional={availability} />
             </div>
             <p className="text-xs text-slate-400">{availability ? "Horários no fuso do seu dispositivo." : "Informe os horários locais da arena."}</p>
           </section>
-          <section className="space-y-5 p-5 sm:p-7">
+          <section className="space-y-4 p-4 sm:p-5">
             {availability ? (
               <>
               <PublicationReach value={Number(draft.reachKm)} onChange={(value) => update("reachKm", String(value))} disabled={disabled} />
@@ -324,7 +325,7 @@ function ActivityEditorForm({
               </>
             )}
           </section>
-          <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-50/60 p-5 sm:px-7">
+          <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-50/60 p-4 sm:px-5">
             <p className="max-w-sm text-xs leading-relaxed text-slate-500">{editing ? "As alterações mantêm a situação atual da publicação." : availability ? "A divulgação aparecerá no app durante o período definido." : "O jogo será publicado para os atletas encontrarem e participarem."}</p>
             <div className="flex items-center gap-2">
               <Button type="button" variant="outline" onClick={onCancel} disabled={disabled}>Cancelar</Button>
@@ -335,16 +336,16 @@ function ActivityEditorForm({
       </form>
       <aside className="space-y-4 xl:sticky xl:top-6">
         <div className="flex items-center gap-2 text-sm font-medium text-slate-500"><Eye className="size-4" />Prévia no app</div>
-        <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <article className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center gap-3 border-b border-slate-100 p-4">
             <span className="grid size-9 shrink-0 place-items-center rounded-full bg-arena-navy-950 text-white">{availability ? <Megaphone className="size-4" /> : <UsersRound className="size-4" />}</span>
-            <div className="min-w-0"><p className="truncate text-sm font-semibold text-arena-navy-950">{author}</p><p className="text-xs text-slate-400">{availability ? "Horário disponível" : "Jogo aberto"}</p></div>
+            <div className="min-w-0"><p className="truncate text-sm font-semibold text-arena-navy-800">{author}</p><p className="text-xs text-slate-400">{availability ? "Horário disponível" : "Jogo aberto"}</p></div>
           </div>
           {availability && (draft.imageUrl
             ? <ActivityImage key={draft.imageUrl} url={draft.imageUrl} alt="Prévia da imagem da publicação" className="aspect-[375/176] w-full object-cover" />
             : <div className="grid aspect-[375/176] place-items-center bg-slate-100 text-slate-300"><ImagePlus className="size-10" /></div>)}
           <div className="space-y-3 p-5">
-            <h3 className="break-words font-semibold text-arena-navy-950">{availability ? draft.title || "Título da publicação" : sportName ? `Jogo de ${sportName}` : "Seu próximo jogo"}</h3>
+            <h3 className="break-words text-sm font-semibold text-arena-navy-800">{availability ? draft.title || "Título da publicação" : gamePublicationCopy(game?.notes).title || (sportName ? `Jogo de ${sportName}` : "Seu próximo jogo")}</h3>
             {!availability && <>
               <p className="flex items-center gap-2 text-sm text-slate-500"><CalendarDays className="size-4 shrink-0" />{previewDay} · {draft.startsAt.slice(11)} às {draft.endsAt.slice(11)}</p>
               <p className="flex items-center gap-2 text-sm text-slate-500"><UsersRound className="size-4 shrink-0" />{draft.neededPlayers || "0"} {draft.neededPlayers === "1" ? "vaga para atleta" : "vagas para atletas"}</p>

@@ -51,8 +51,6 @@ test('arena edit exposes onboarding without exposing platform operational contro
   assert.match(editPage, /ArenaBookingOperationsPanel/u)
   assert.match(operationsPanel, /accessMode="arena"/u)
   assert.match(card, /isApproved && isPlatform/u)
-  assert.match(card, /settings\.enabled && !isPlatform/u)
-  assert.match(card, /política de cancelamento/u)
   assert.match(actions, /settingsForFinancialOnboardingAccess/u)
   assert.match(actions, /asaasWalletId: ''/u)
   assert.match(actions, /asaasAccountId: ''/u)

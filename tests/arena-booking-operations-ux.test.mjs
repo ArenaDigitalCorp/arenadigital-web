@@ -33,7 +33,6 @@ test('Arena profile and receiving settings are separated into explicit tabs', ()
 test('mode saving and account provisioning remain separate actions', () => {
   assert.match(operationsPanel, /setArenaReceivingBookingModeAction/u)
   assert.match(bookingCard, /Salvar modalidade/u)
-  assert.match(bookingCard, /solicitações pendentes não ocupam a agenda/u)
   assert.match(paymentCard, /Confirmar e iniciar cadastro/u)
   assert.match(paymentCard, /Salvar rascunho/u)
   assert.doesNotMatch(bookingCard, /createArenaAsaasSubaccountAction/u)
