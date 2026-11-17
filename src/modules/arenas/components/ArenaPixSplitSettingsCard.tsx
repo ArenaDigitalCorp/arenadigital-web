@@ -628,18 +628,6 @@ export function ArenaPixSplitSettingsCard({
                 </form>
             )}
 
-            {settings.enabled && !isPlatform && (
-                <div className="mt-7 grid gap-3 border-y border-emerald-200 bg-emerald-50/70 px-4 py-4 sm:grid-cols-[auto_1fr] sm:items-start">
-                    <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-700" aria-hidden="true" />
-                    <div>
-                        <p className="text-sm font-bold text-emerald-950">Conta de recebimento aprovada</p>
-                        <p className="mt-1 text-xs leading-5 text-emerald-800">
-                            A conta está pronta para receber. O pagamento online depende também da política de cancelamento publicada e da solicitação de ativação da Arena.
-                        </p>
-                    </div>
-                </div>
-            )}
-
             {settings.onboardingStarted && !settings.enabled && (
                 <div className="mt-7 border-t border-slate-200 pt-5 text-sm text-slate-500">
                     {isApproved

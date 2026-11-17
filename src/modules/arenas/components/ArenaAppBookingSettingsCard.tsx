@@ -37,9 +37,8 @@ export function ArenaAppBookingSettingsCard({ selectedMode, savedMode, setup, bu
       })}
     </div>
     {selectedMode==='online_payment' ? <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2.5 text-xs leading-relaxed text-sky-900">
-      {savedMode==='online_payment' ? 'Pagamento online ativo. Você pode preparar uma nova versão da política sem alterar as condições das reservas existentes.' : pending ? 'Solicitação enviada. A modalidade atual permanece ativa durante a análise. O pagamento online será ativado após a aprovação da conta e a publicação da política.' : <>Prepare a política e a conta abaixo. Ao solicitar o pagamento online, a modalidade atual será mantida durante a análise. O <strong>Pagamento online</strong> será ativado após a aprovação.</>}
-    </div> : <div className="flex flex-wrap items-center justify-between gap-3">
-      <p className="max-w-xl text-xs leading-relaxed text-slate-500">{pending ? 'Você pode alterar a modalidade atual sem interromper a análise. O pagamento online será ativado após a aprovação.' : selectedMode==='pre_booking' ? 'Na pré-reserva, solicitações pendentes não ocupam a agenda. O horário é bloqueado quando a arena aprova.' : 'Política e conta de recebimento aparecem ao selecionar Pagamento online. Seus dados salvos são preservados.'}</p>
+      Para ativar o pagamento online, preencha os dados e envie os documentos solicitados abaixo. Depois, clique em <strong>Solicitar pagamento online</strong> e acompanhe a análise da solicitação. A modalidade será liberada para uso no aplicativo após a aprovação.
+    </div> : <div className="flex justify-end">
       <Button type="button" className="bg-arena-button text-white hover:bg-arena-button-hover" disabled={busy||!setup||selectedMode===savedMode} onClick={()=>onSave(selectedMode)}>{busy?<Loader2 className="size-4 animate-spin"/>:<Check className="size-4"/>}Salvar modalidade</Button>
     </div>}
     {pending&&<div className="flex justify-end"><Button type="button" variant="outline" disabled={busy} onClick={onCancel}>Cancelar solicitação online</Button></div>}
