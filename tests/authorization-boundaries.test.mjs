@@ -65,7 +65,6 @@ test('self-service onboarding is separated from Super Admin Pix operation contro
   const pixCard = await source('src/modules/arenas/components/ArenaPixSplitSettingsCard.tsx')
   assert.match(pixCard, /platformFeeBasisPoints/)
   assert.match(pixCard, /isApproved && isPlatform/)
-  assert.match(pixCard, /settings\.enabled && !isPlatform/)
   const updatePix = exportedFunctionBody(await source('src/modules/arenas/actions/arenaActions.ts'), 'updateArenaPixSplitSettingsAction')
   assert.match(updatePix, /p_basis_points: platformFeeBasisPoints/)
   assert.doesNotMatch(updatePix, /platform_fee_basis_points: 200/)

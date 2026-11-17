@@ -1,4 +1,6 @@
 "use client";
+import { DashboardPage, DashboardPageHeader } from "@/components/dashboard/DashboardPageShell";
+import { gamePublicationCopy } from "./game-notes";
 import { PublicationReach } from "./PublicationReach";
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useState, useRef } from "react";
@@ -405,7 +407,7 @@ export function PublicationsManager({
     }
   }
   const disabled = busy || uploading;
-  const primary = "bg-arena-button text-white hover:bg-arena-button-hover";
+  const primary = "h-10 rounded-md bg-arena-button px-4 text-sm font-bold text-white shadow-none hover:bg-arena-button-hover";
   const author = platform ? "Arena Digital" : (arenas[0]?.name ?? "Sua arena");
   const moderating = platform && scope === "arenas";
   const scopedItems = items.filter(
@@ -424,7 +426,7 @@ export function PublicationsManager({
     ...openGames.map((item) => ({ kind: "open_game" as const, item })),
   ].filter(({ item }) =>
     (filter === "Todas" || activityStatus(item, now) === filter) &&
-    ("title" in item ? `${item.title} ${item.description ?? ""}` : `${item.sports?.name ?? "Jogo"} ${item.notes ?? ""} ${item.atleta?.name ?? ""}`)
+    ("title" in item ? `${item.title} ${item.description ?? ""}` : `${item.sports?.name ?? "Jogo"} ${gamePublicationCopy(item.notes).title} ${gamePublicationCopy(item.notes).description} ${item.atleta?.name ?? ""}`)
       .toLocaleLowerCase("pt-BR").includes(search.toLocaleLowerCase("pt-BR")),
   ).sort((a, b) => b.item.created_at.localeCompare(a.item.created_at));
   const update = (key: string, value: unknown) =>
@@ -444,21 +446,12 @@ export function PublicationsManager({
     { value: "go_to_perfil", label: "Ir para perfil" },
   ];
   return (
-    <main className="mx-auto max-w-7xl space-y-6 px-4 pb-8 pt-14 sm:p-6">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
-            {platform ? "Área admin" : "Painel da arena"} · {author}
-          </p>
-          <h1 className="font-heading text-2xl font-bold tracking-tight text-arena-navy-950 sm:text-3xl">
-            Publicações
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-500">
-            {platform
-              ? "Crie conteúdos da Arena Digital e acompanhe as publicações das arenas."
-              : "Publique conteúdos, horários disponíveis e jogos da sua arena para os atletas."}
-          </p>
-        </div>
+    <DashboardPage className="pt-12 md:pt-0">
+      <DashboardPageHeader
+        icon={Megaphone}
+        title="Publicações"
+        description={platform ? "Gerencie os conteúdos da Arena Digital e das arenas." : "Novidades, horários e jogos da sua arena no aplicativo."}
+        actions={<>
         {!draft && !activityDraft && !moderating && (
           <Button
             className={primary}
@@ -473,7 +466,7 @@ export function PublicationsManager({
             Nova publicação
           </Button>
         )}
-        {draft && (
+        {(draft || activityDraft) && (
           <Button
             variant="outline"
             disabled={disabled}
@@ -483,11 +476,12 @@ export function PublicationsManager({
             Voltar às publicações
           </Button>
         )}
-      </header>
+        </>}
+      />
       {error && (
         <div
           role="alert"
-          className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"
+          className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800"
         >
           {error}
         </div>
@@ -495,7 +489,7 @@ export function PublicationsManager({
       {notice && (
         <div
           role="status"
-          className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900"
+          className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900"
         >
           {notice}
         </div>
@@ -523,10 +517,10 @@ export function PublicationsManager({
         >
           <form
             onSubmit={save}
-            className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+            className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm"
           >
-            <div className="border-b border-slate-100 px-5 py-5 sm:px-7">
-              <h2 className="text-lg font-semibold text-arena-navy-950">
+            <div className="border-b border-slate-100 p-4 sm:p-5">
+              <h2 className="font-heading text-base font-bold text-arena-navy-800">
                 {draft.id ? "Editar publicação" : "Nova publicação"}
               </h2>
               <p className="mt-1 text-sm text-slate-500">
@@ -537,9 +531,9 @@ export function PublicationsManager({
               </p>
             </div>
             <fieldset disabled={disabled} className="divide-y divide-slate-100">
-              <section className="space-y-5 p-5 sm:p-7">
+              <section className="space-y-4 p-4 sm:p-5">
                 <div>
-                  <h3 className="font-semibold text-arena-navy-950">
+                  <h3 className="text-sm font-semibold text-arena-navy-800">
                     Conteúdo
                   </h3>
                   <p className="mt-1 text-sm text-slate-500">
@@ -609,7 +603,7 @@ export function PublicationsManager({
                         : "Selecionar imagem da publicação"
                     }
                     aria-busy={uploading}
-                    className="group flex min-h-40 w-full flex-col items-center justify-center gap-3 overflow-hidden rounded-xl border-2 border-dashed border-slate-200 bg-slate-50/70 p-5 text-center transition hover:border-arena-button hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arena-button disabled:cursor-wait disabled:opacity-60"
+                    className="group flex min-h-40 w-full flex-col items-center justify-center gap-3 overflow-hidden rounded-lg border-2 border-dashed border-slate-200 bg-slate-50/70 p-5 text-center transition hover:border-arena-button hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-arena-button disabled:cursor-wait disabled:opacity-60"
                     onClick={() => fileRef.current?.click()}
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={(e) => {
@@ -625,7 +619,7 @@ export function PublicationsManager({
                         className="max-h-40 max-w-full rounded-lg object-contain"
                       />
                     ) : (
-                      <span className="grid size-11 place-items-center rounded-xl border border-slate-200 bg-white text-arena-button">
+                      <span className="grid size-11 place-items-center rounded-lg border border-slate-200 bg-white text-arena-button">
                         <ImagePlus className="size-5" />
                       </span>
                     )}
@@ -654,16 +648,16 @@ export function PublicationsManager({
                   )}
                 </div>
               </section>
-              <section className="space-y-5 p-5 sm:p-7">
+              <section className="space-y-4 p-4 sm:p-5">
                 <div>
-                  <h3 className="font-semibold text-arena-navy-950">
+                  <h3 className="text-sm font-semibold text-arena-navy-800">
                     Período de exibição
                   </h3>
                   <p className="mt-1 text-sm text-slate-500">
                     Defina quando o conteúdo poderá aparecer no app.
                   </p>
                 </div>
-                <div className="grid gap-5 lg:grid-cols-2">
+                <div className="grid gap-4 lg:grid-cols-2">
                   <PublicationDateField
                     label="Início"
                     value={draft.starts_at}
@@ -683,16 +677,16 @@ export function PublicationsManager({
                   após publicar.
                 </p>
               </section>
-              <section className="space-y-5 p-5 sm:p-7">
+              <section className="space-y-4 p-4 sm:p-5">
                 <div>
-                  <h3 className="font-semibold text-arena-navy-950">
+                  <h3 className="text-sm font-semibold text-arena-navy-800">
                     Botão e público
                   </h3>
                   <p className="mt-1 text-sm text-slate-500">
                     Escolha o próximo passo de quem visualizar a publicação.
                   </p>
                 </div>
-                <div className="grid gap-5 sm:grid-cols-2">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <label className={field}>
                     Ação do botão
                     <PublicationSelect
@@ -744,7 +738,7 @@ export function PublicationsManager({
                   />
                 </label>
                 {platform && (
-                  <details className="rounded-xl border border-slate-200 p-4">
+                  <details className="rounded-lg border border-slate-200 p-4">
                     <summary className="cursor-pointer text-sm font-medium text-arena-navy-800">
                       Segmentação e prioridade{" "}
                       <span className="ml-1 font-normal text-slate-400">
@@ -813,7 +807,7 @@ export function PublicationsManager({
                   </details>
                 )}
               </section>
-              <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-50/60 p-5 sm:px-7">
+              <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-50/60 p-4 sm:px-5">
                 <p className="max-w-sm text-xs leading-relaxed text-slate-500">
                   Salvar mantém a publicação fora do ar. Revise o conteúdo e
                   publique quando estiver pronto.
@@ -833,13 +827,13 @@ export function PublicationsManager({
               <Eye className="size-4" />
               Prévia no app
             </div>
-            <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <article className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
               <div className="flex items-center gap-3 border-b border-slate-100 p-4">
                 <span className="grid size-9 shrink-0 place-items-center rounded-full bg-arena-navy-950 text-white">
                   <Megaphone className="size-4" />
                 </span>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-arena-navy-950">
+                  <p className="truncate text-sm text-sm font-semibold text-arena-navy-800">
                     {author}
                   </p>
                   <p className="text-xs text-slate-400">{kinds[draft.kind]}</p>
@@ -858,7 +852,7 @@ export function PublicationsManager({
                 </div>
               )}
               <div className="space-y-3 p-5">
-                <h3 className="break-words font-semibold text-arena-navy-950">
+                <h3 className="break-words text-sm font-bold leading-5 text-arena-navy-800">
                   {draft.title || "Título da publicação"}
                 </h3>
                 <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-500">
@@ -932,30 +926,24 @@ export function PublicationsManager({
           >
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="font-semibold text-arena-navy-950">
-                  {moderating ? "Moderação das arenas" : "Suas publicações"}
-                </h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  {moderating
-                    ? "As arenas criam seus conteúdos. Aqui você pode remover do app quando necessário."
-                    : "Gerencie o que está no ar, agendado ou pausado."}
-                </p>
+                <h2 className="text-sm font-bold text-arena-navy-800">{moderating ? "Moderação das arenas" : "Suas publicações"} <span className="ml-1 font-normal text-slate-500">({visible.length + visibleActivities.length})</span></h2>
+                {moderating && <p className="mt-1 text-xs text-slate-500">Revise os conteúdos publicados pelas arenas.</p>}
               </div>
               <Button
                 variant="ghost"
                 disabled={disabled}
                 onClick={() => void refresh()}
-                className="text-slate-500"
+                className="h-9 text-xs text-slate-500"
               >
                 <RefreshCw className={busy ? "animate-spin" : ""} />
                 Atualizar
               </Button>
             </div>
-            <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:flex-row">
+            <div className="flex flex-col gap-3 sm:flex-row">
               <div className="relative flex-1">
                 <Search className="pointer-events-none absolute left-3 top-3 size-4 text-slate-400" />
                 <Input
-                  className="h-10 border-0 bg-slate-50 pl-9 shadow-none"
+                  className="h-10 border-slate-200 bg-white pl-9 text-sm shadow-none"
                   aria-label="Buscar publicações"
                   placeholder={
                     moderating
@@ -993,17 +981,17 @@ export function PublicationsManager({
                 return (
                   <article
                     key={item.id}
-                    className="flex flex-col gap-5 rounded-2xl border border-slate-200 bg-white p-5 transition hover:border-slate-300 sm:flex-row"
+                    className="grid grid-cols-[64px_minmax(0,1fr)] gap-4 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-[112px_minmax(0,1fr)] sm:p-5"
                   >
-                    <div className="aspect-[375/176] w-full shrink-0 overflow-hidden rounded-xl bg-slate-100 sm:aspect-auto sm:h-28 sm:w-40">
-                      {item.image_url && (
+                    <div className="h-16 overflow-hidden rounded-md bg-slate-100 sm:h-20">
+                      {item.image_url ? (
                         <PublicationImage
                           key={item.image_url}
                           url={item.image_url}
                           alt=""
                           className="h-full w-full object-cover"
                         />
-                      )}
+                      ) : <div className="grid h-full place-items-center text-slate-400"><Megaphone className="size-6" /></div>}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -1019,13 +1007,13 @@ export function PublicationsManager({
                           {item.arena_name ?? "Arena Digital"}
                         </span>
                       </div>
-                      <h3 className="break-words font-semibold text-arena-navy-950">
+                      <h3 className="break-words text-sm font-bold leading-5 text-arena-navy-800">
                         {item.title}
                       </h3>
                       <p className="mt-1 line-clamp-2 break-words text-sm text-slate-500">
                         {item.description}
                       </p>
-                      <p className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
+                      <p className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
                         <CalendarDays className="size-3.5" />
                         {new Date(item.starts_at).toLocaleString("pt-BR", {
                           dateStyle: "short",
@@ -1044,7 +1032,7 @@ export function PublicationsManager({
                           Removida pela plataforma: {item.blocked_reason}
                         </p>
                       )}
-                      <div className="mt-4 flex flex-wrap gap-2">
+                      <div className="mt-3 flex flex-wrap gap-2">
                         {!moderationOnly && (
                           <>
                             {item.active ? (
@@ -1184,7 +1172,7 @@ export function PublicationsManager({
               ))}
             </div>
             {!visible.length && !visibleActivities.length && (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-5 py-14 text-center">
+              <div className="rounded-lg border border-dashed border-slate-200 bg-white px-5 py-14 text-center">
                 <span className="mx-auto mb-4 grid size-12 place-items-center rounded-full bg-slate-50 text-slate-400">
                   <Megaphone className="size-5" />
                 </span>
@@ -1226,7 +1214,7 @@ export function PublicationsManager({
           if (!open && !disabled) setBlock(null);
         }}
       >
-        <DialogContent className="rounded-2xl" showCloseButton={!disabled}>
+        <DialogContent className="rounded-lg" showCloseButton={!disabled}>
           <DialogHeader>
             <DialogTitle>Remover publicação do app?</DialogTitle>
             <DialogDescription>
@@ -1234,7 +1222,7 @@ export function PublicationsManager({
               a liberação da plataforma. O histórico será preservado.
             </DialogDescription>
           </DialogHeader>
-          <div className="rounded-xl bg-slate-50 p-3 text-sm">
+          <div className="rounded-lg bg-slate-50 p-3 text-sm">
             <p className="font-medium text-arena-navy-950">{block?.title}</p>
             <p className="mt-1 text-slate-500">{block?.arena_name}</p>
           </div>
@@ -1282,7 +1270,7 @@ export function PublicationsManager({
           if (!open) setHistory(null);
         }}
       >
-        <DialogContent className="max-h-[85dvh] overflow-y-auto rounded-2xl">
+        <DialogContent className="max-h-[85dvh] overflow-y-auto rounded-lg">
           <DialogHeader>
             <DialogTitle>Histórico da publicação</DialogTitle>
             <DialogDescription>{history?.title}</DialogDescription>
@@ -1317,6 +1305,6 @@ export function PublicationsManager({
           )}
         </DialogContent>
       </Dialog>
-    </main>
+    </DashboardPage>
   );
 }
