@@ -112,7 +112,7 @@ export function ProfilesPanel({ arenaId, management }: { arenaId: string; manage
       const members = management.members.filter(m => m.profile_id === p.id)
       return <article key={p.id} className="flex flex-col rounded-xl border bg-card p-5">
         <h2 className="text-lg font-semibold">{p.name}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{roles[p.base_role]} · {p.resources.length} recursos</p>
+        <p className="mt-1 text-sm text-muted-foreground">{roles[p.base_role]} · {p.resources.length} {p.resources.length === 1 ? 'recurso' : 'recursos'}</p>
         <details className="my-4 border-y py-2 text-sm"><summary className="cursor-pointer">{p.member_count === 1 ? '1 pessoa vinculada' : p.member_count + ' pessoas vinculadas'}</summary>
           {members.length ? <ul className="mt-2 space-y-1">{members.map(m => <li key={m.id}>{m.name || m.email} · {m.status}</li>)}</ul>
             : <p className="mt-2 text-muted-foreground">Nenhum vínculo.</p>}
