@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { assertArenaAdminAccess } from '@/lib/server-auth'
+import { assertArenaResourceAccess } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { SupabaseFinanceRepository } from '@/modules/finance/repositories/SupabaseFinanceRepository'
 import { format } from 'date-fns'
@@ -17,7 +17,7 @@ export default async function FinanceDashboard({
     const { tutorial } = await searchParams
 
     try {
-        await assertArenaAdminAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'finance.overview')
     } catch {
         redirect('/dashboard/settings/arenas')
     }

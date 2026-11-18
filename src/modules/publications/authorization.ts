@@ -29,6 +29,7 @@ export async function authorizePublicationScope(
       "Esta ação não está disponível no contexto da arena.",
     );
   }
+  // This session-bound RPC checks the profile grant and explicit arena relationship.
   const client = await createSupabaseServerClient();
   const { data, error } = await client.rpc("can_author_home_publication", {
     p_arena_id: arenaId,
@@ -36,6 +37,6 @@ export async function authorizePublicationScope(
   if (error) throw new Error("Não foi possível verificar seu vínculo com a arena.");
   if (data !== true)
     throw new AuthorizationError(
-      "Somente o dono ou gestor desta arena pode gerenciar suas publicações.",
+      "Seu perfil não tem acesso às publicações desta arena.",
     );
 }

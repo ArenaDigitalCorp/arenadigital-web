@@ -89,7 +89,7 @@ test('partial edits cannot erase a company legal name or introduce CNPJ without 
   const { updateArenaAction } = loadTypescriptModule('src/modules/arenas/actions/arenaActions.ts', {
     'server-only': {}, 'next/cache': { revalidatePath() {} },
     '@/lib/supabase-server': { getSupabaseAdmin: () => client },
-    '@/lib/server-auth': { assertArenaAdminAccess: async () => ({ dbUserId: 'manager-test' }) },
+    '@/lib/server-auth': { assertArenaResourceAccess: async (id, key) => { assert.deepEqual([id, key], ['arena-test', 'settings.arena']); return { dbUserId: 'manager-test' } } },
     '@/modules/arenas/services/asaas-baas.service': {},
   })
   assert.equal((await updateArenaAction('arena-test', { legal_name: null })).success, false)

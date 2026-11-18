@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
-import { assertArenaAdminAccess } from '@/lib/server-auth'
+import { assertArenaResourceAccess } from '@/lib/server-auth'
 import { getPaymentStatusReportAction } from '@/modules/reports/actions/reportActions'
-import { getArenaByIdAction } from '@/modules/arenas/actions/arenaActions'
+import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { getArenaBillingAddress } from '@/modules/arenas/usecases/get-arena-billing-address.usecase'
 import { StatusPagamentosPageClient } from '@/modules/reports/components/StatusPagamentosPageClient'
 import type { PaymentStatusArenaInfo } from '@/modules/reports/types/report.types'
@@ -15,7 +15,7 @@ export default async function StatusPagamentosPage({
   const { arenaId } = await params
 
   try {
-    await assertArenaAdminAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'reports.payments')
   } catch {
     redirect('/dashboard/settings/arenas')
   }
@@ -26,7 +26,7 @@ export default async function StatusPagamentosPage({
 
   const [result, arenaResult, billingAddress] = await Promise.all([
     getPaymentStatusReportAction(arenaId, { startDate, endDate }),
-    getArenaByIdAction(arenaId),
+    getSupabaseAdmin().from('arenas').select('name,phone,email').eq('id', arenaId).maybeSingle(),
     getArenaBillingAddress(arenaId),
   ])
 

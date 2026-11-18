@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import type { AccessProfile } from "@/modules/access/types";
 import { StandardModal } from "@/components/ui/standard-modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +18,7 @@ type UserFormData = {
     name: string;
     email: string;
     senha: string;
-    role: string;
+    profileId: string;
     stationId: string;
     status: string;
 };
@@ -25,7 +26,7 @@ type UserFormData = {
 type EditableArenaUser = {
     name?: string | null;
     email?: string | null;
-    role?: string | null;
+    profileId?: string | null;
     stationId?: string | null;
     status?: string | null;
 };
@@ -34,49 +35,30 @@ interface UserFormModalProps {
     isOpen: boolean;
     onClose: () => void;
     user?: EditableArenaUser | null;
+    profiles: AccessProfile[];
     stations: Array<{ id: string; name: string }>;
     onSave: (data: UserFormData) => Promise<void>;
 }
 
-export function UserFormModal({ isOpen, onClose, user, stations, onSave }: UserFormModalProps) {
+export function UserFormModal(props: UserFormModalProps) {
+    return props.isOpen ? <UserForm {...props} /> : null;
+}
+
+function UserForm({ isOpen, onClose, user, profiles, stations, onSave }: UserFormModalProps) {
     const isEditMode = !!user;
 
     const [isLoading, setIsLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
 
-    // Note: status is not in the layout, we keep it as "Ativo" hidden
     const [formData, setFormData] = useState({
-        name: "",
-        email: "",
+        name: user?.name ?? "",
+        email: user?.email ?? "",
         senha: "",
-        role: "Atendente",
-        stationId: "",
-        status: "Ativo"
+        profileId: user?.profileId ?? profiles.find(p => p.base_role === 'Atendente' && p.is_default)?.id ?? profiles[0]?.id ?? "",
+        stationId: user?.stationId ?? "",
+        status: user?.status && ['inativo','inactive'].includes(user.status.toLowerCase()) ? "Inativo" : "Ativo",
     });
-
-    useEffect(() => {
-        if (user && isOpen) {
-            setFormData({
-                name: user.name || "",
-                email: user.email || "",
-                senha: "", // always empty on edit
-                role: user.role || "Atendente",
-                stationId: user.stationId || "",
-                status: user.status || "Ativo",
-            });
-            setShowPassword(false);
-        } else if (isOpen) {
-            setFormData({
-                name: "",
-                email: "",
-                senha: "",
-                role: "Atendente",
-                stationId: "",
-                status: "Ativo"
-            });
-            setShowPassword(false);
-        }
-    }, [user, isOpen]);
+    const profile = profiles.find(p => p.id === formData.profileId);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -123,6 +105,7 @@ export function UserFormModal({ isOpen, onClose, user, stations, onSave }: UserF
                             <Label htmlFor="name" className="text-sm font-medium text-arena-navy-800">Nome</Label>
                             <Input
                                 id="name"
+                                readOnly={isEditMode}
                                 placeholder="Informa o nome do usuário"
                                 value={formData.name}
                                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -135,6 +118,7 @@ export function UserFormModal({ isOpen, onClose, user, stations, onSave }: UserF
                             <Label htmlFor="email" className="text-sm font-medium text-arena-navy-800">E-mail</Label>
                             <Input
                                 id="email"
+                                readOnly={isEditMode}
                                 type="email"
                                 placeholder="Informa o e-mail do usuário"
                                 value={formData.email}
@@ -150,12 +134,11 @@ export function UserFormModal({ isOpen, onClose, user, stations, onSave }: UserF
                                 <Input
                                     id="senha"
                                     type={showPassword ? "text" : "password"}
-                                    placeholder="Crie uma senha segura"
+                                    placeholder="Senha inicial de uma conta nova"
                                     value={formData.senha}
                                     onChange={(e) => setFormData({ ...formData, senha: e.target.value })}
                                     className="bg-white border-slate-300 text-slate-800 w-full pr-10 placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-slate-400"
                                     minLength={8}
-                                    required
                                 />
                                 <button
                                     type="button"
@@ -165,34 +148,38 @@ export function UserFormModal({ isOpen, onClose, user, stations, onSave }: UserF
                                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                 </button>
                             </div>
-                            <p className="text-xs text-slate-500">{STRONG_PASSWORD_HELP}</p>
+                            <p className="text-xs text-slate-500">Para contas existentes, deixe em branco. {STRONG_PASSWORD_HELP}</p>
                         </div>}
 
                         <div className="space-y-1.5">
                             <Label htmlFor="role" className="text-sm font-medium text-arena-navy-800">Perfil</Label>
                             <Select
-                                value={formData.role}
-                                onValueChange={(value) => setFormData({ ...formData, role: value, stationId: value === "Caixa" ? formData.stationId : "" })}
+                                value={formData.profileId}
+                                onValueChange={(value) => setFormData({ ...formData, profileId: value, stationId: profiles.find(p => p.id === value)?.base_role === "Caixa" ? formData.stationId : "" })}
                             >
-                                <SelectTrigger className="bg-white border-slate-300 text-slate-800 w-full focus-visible:ring-1 focus-visible:ring-slate-400">
+                                <SelectTrigger id="role" className="bg-white border-slate-300 text-slate-800 w-full focus-visible:ring-1 focus-visible:ring-slate-400">
                                     <SelectValue placeholder="Selecione o perfil" />
                                 </SelectTrigger>
                                 <SelectContent className="bg-white border-slate-200 text-slate-800 rounded-xl shadow-lg">
-                                    <SelectItem value="Gestor" className="hover:bg-slate-100 cursor-pointer focus:bg-slate-100 focus:text-slate-900">Administrador</SelectItem>
-                                    <SelectItem value="Atendente" className="hover:bg-slate-100 cursor-pointer focus:bg-slate-100 focus:text-slate-900">Usuário comum</SelectItem>
-                                    <SelectItem value="Caixa" className="hover:bg-slate-100 cursor-pointer focus:bg-slate-100 focus:text-slate-900">Caixa</SelectItem>
+                                    {profiles.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                         </div>
 
-                        {formData.role === "Caixa" && (
+                        {isEditMode && <label className="block space-y-1.5 text-sm font-medium">Status
+                            <select className="block h-9 w-full rounded border border-slate-300 px-3" value={formData.status}
+                                onChange={e => setFormData({ ...formData, status: e.target.value })}>
+                                <option>Ativo</option><option>Inativo</option>
+                            </select>
+                        </label>}
+                        {profile?.base_role === "Caixa" && (
                             <div className="space-y-1.5">
                                 <Label htmlFor="stationId" className="text-sm font-medium text-arena-navy-800">Estação vinculada</Label>
                                 <Select
                                     value={formData.stationId}
                                     onValueChange={(value) => setFormData({ ...formData, stationId: value })}
                                 >
-                                    <SelectTrigger className="bg-white border-slate-300 text-slate-800 w-full focus-visible:ring-1 focus-visible:ring-slate-400">
+                                    <SelectTrigger id="stationId" className="bg-white border-slate-300 text-slate-800 w-full focus-visible:ring-1 focus-visible:ring-slate-400">
                                         <SelectValue placeholder="Selecione a estação" />
                                     </SelectTrigger>
                                     <SelectContent className="bg-white border-slate-200 text-slate-800 rounded-xl shadow-lg">

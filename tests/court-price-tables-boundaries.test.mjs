@@ -41,9 +41,7 @@ test('toda server action de tabela de preço passa por autorização de arena', 
     'nova action exige revisão de autorização neste teste'
   )
 
-  const asserts =
-    (priceTableActions.match(/await assertArenaAdminAccess\(/g)?.length ?? 0) +
-    (priceTableActions.match(/await assertArenaBackofficeAccess\(/g)?.length ?? 0)
+  const asserts = priceTableActions.match(/await assertArenaResourceAccess\(/g)?.length ?? 0
   assert.equal(asserts, exported.length, 'uma checagem de arena por action')
 
   // Toda action que recebe courtId também valida que ele pertence à arena.
@@ -56,13 +54,13 @@ test('toda server action de tabela de preço passa por autorização de arena', 
   )
 })
 
-test('leitura do modal usa backoffice; escrita e edição de espaço usam admin', () => {
+test('leitura do modal aceita recursos de reserva, escrita exige o recurso Espaços', () => {
   const optionsAction = priceTableActions.slice(
     priceTableActions.indexOf('export async function listCourtPriceTableOptionsAction')
   )
   assert.match(
     optionsAction.slice(0, 400),
-    /assertArenaBackofficeAccess/,
+    /assertArenaResourceAccess\(arenaId, 'spaces', 'bookings.single', 'bookings.recurring'\)/,
     'a lista do BookingModal não pode exigir admin (Atendente também reserva)'
   )
 
@@ -79,7 +77,7 @@ test('leitura do modal usa backoffice; escrita e edição de espaço usam admin'
     )
     assert.match(
       body.slice(0, 400),
-      /assertArenaAdminAccess/,
+      /assertArenaResourceAccess\(arenaId, 'spaces'\)/,
       `${action} deve exigir admin`
     )
   }

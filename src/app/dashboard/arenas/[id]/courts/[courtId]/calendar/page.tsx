@@ -1,4 +1,4 @@
-import { assertArenaBackofficeAccess, assertCourtAccess } from '@/lib/server-auth'
+import { assertCourtAccess, assertArenaResourceAccess } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { SupabaseBookingRepository } from '@/modules/bookings/repositories/SupabaseBookingRepository'
 import { CourtCalendarPageClient } from '@/modules/bookings/components/CourtCalendarPageClient'
@@ -12,8 +12,9 @@ import { startOfDay, addDays, subDays } from 'date-fns'
 export default async function CourtCalendarPage({ params }: { params: Promise<{ id: string; courtId: string }> }) {
     const { id: arenaId, courtId } = await params
 
+    let access: Awaited<ReturnType<typeof assertArenaResourceAccess>>
     try {
-        await assertArenaBackofficeAccess(arenaId)
+        access = await assertArenaResourceAccess(arenaId, 'bookings.single', 'bookings.recurring')
         await assertCourtAccess(courtId, arenaId)
     } catch {
         redirect(`/dashboard/arenas/${arenaId}`)
@@ -32,7 +33,7 @@ export default async function CourtCalendarPage({ params }: { params: Promise<{ 
             .eq('id', courtId)
             .eq('arena_id', arenaId)
             .single(),
-        new SupabaseBookingRepository(supabase).findByCourt(courtId, todayStart, todayEnd),
+        new SupabaseBookingRepository(supabase, access.resources).findByCourt(courtId, todayStart, todayEnd),
     ])
 
     if (courtRes.error || !courtRes.data) redirect(`/dashboard/arenas/${arenaId}`)

@@ -42,11 +42,13 @@ O menu lateral (`src/components/dashboard/Sidebar.tsx`) é o "índice" da aplica
 | Financeiro | `/dashboard/finance/[arenaId]` | `finance` |
 | Relatórios › Atletas e clientes | `/dashboard/reports/[arenaId]/clientes-overview` | `reports` |
 | Relatórios › Pagamentos | `/dashboard/reports/[arenaId]/status-pagamentos` | `reports` |
+| Configurações › Perfis e permissões | `/dashboard/settings/profiles/[arenaId]` | `access` |
 | Configurações › Usuários | `/dashboard/settings/users/[arenaId]` | `users` |
 | Configurações › Assinatura | `/dashboard/settings/subscription/[arenaId]` | `payments` |
 | Configurações › Perfil da Arena | `/dashboard/settings/arenas` | `arenas` |
+| Configurações › Dados de recebimento | `/dashboard/arenas/[id]/edit?tab=receiving` | `arenas` + `finance` |
 
-> O menu se adapta ao papel: um **Caixa** vê apenas "Minha estação" (ou "Estações"); **Relatórios** ficam ocultos para Caixa; **Configurações** só aparecem para Admin (Owner/Gestor).
+> O menu da arena reflete os recursos do perfil atribuído ao vínculo ativo. O titular edita os perfis. O papel-base de Caixa mantém a restrição de estação.
 
 ---
 
@@ -58,19 +60,20 @@ Definidos em `src/lib/server-auth.ts`. Toda action chama um destes "porteiros" a
 |---|---|
 | **Owner** | Dono da arena (`arenas.owner_id`). Acesso total. |
 | **Gestor** | Administrador vinculado (`arena_users.role = 'Gestor'`). |
-| **Atendente** | Operacional. Sem acesso a áreas administrativas. |
+| **Atendente** | Operacional, com os recursos que o titular atribuir ao perfil. |
 | **Caixa** | Restrito a uma estação específica (`assignedStationId`). |
 
 | Função guard | Quem passa | Usada em |
 |---|---|---|
 | `requireAuthenticatedDbUser()` | Qualquer usuário logado e provisionado | Base de tudo |
-| `assertArenaAccess()` | Qualquer membro da arena (inclui Caixa) | Estações, comandas, catálogo (leitura) |
-| `assertArenaBackofficeAccess()` | Todos **menos Caixa** | Maioria das operações de gestão |
-| `assertArenaAdminAccess()` | Apenas Owner/Gestor | Espaços, relatórios, config |
+| `assertArenaAccess()` | Titular ou vínculo ativo | Validação do vínculo e escopo da arena |
+| `assertArenaResourceAccess()` | Vínculo com um dos recursos aceitos, ou titular | Páginas, consultas e operações dos submenus |
+| `assertArenaCaixaAccess()` | Titular ou vínculo com o recurso Caixa financeiro | Operações do caixa financeiro |
+| `assertArenaAdminAccess()` | Owner/Gestor com o recurso exigido | Vínculos, recebimento e operações privilegiadas |
 | `assertArenaOwnerAccess()` | Apenas Owner | Operações críticas |
 | `assert{Court,Booking,Product,Station,StationOrder,Rotativo}Access()` | Valida que o recurso pertence à arena do usuário | Operações por ID |
 
-Há também um **serviço de auditoria** (`src/modules/audit/audit-log.service.ts`): grava eventos em `audit_logs` de forma "fire-and-forget" (falha de auditoria nunca derruba a operação). Hoje é usado principalmente pelo módulo de pagamentos.
+O titular consulta as últimas 100 alterações em **Perfis e permissões › Histórico de acessos**. O banco grava cada mudança de perfil ou vínculo na mesma transação, com o responsável e os valores anteriores e posteriores. O módulo de pagamentos usa o serviço de auditoria de `src/modules/audit/audit-log.service.ts`.
 
 ---
 
@@ -291,10 +294,10 @@ Equipe que opera a arena.
 
 | Pode | Ação | Detalhe |
 |---|---|---|
-| **Criar usuário** | `createArenaUserAction` | Cria no Auth (auto-confirmado) + vincula à arena com papel; Caixa exige estação |
-| **Editar** | `updateArenaUserAction` | Atualiza nome/senha/papel/estação/status |
-| **Excluir** | `deleteArenaUserAction` | Desvincula; se for o último vínculo, apaga de `users` e do Auth |
-| Consultar | `getArenaUsersAction` | Lista a equipe da arena |
+| **Criar usuário** | `createArenaUserAction` | Cria no Auth (auto-confirmado) + vincula à arena com perfil da própria arena. Novos Caixas exigem estação |
+| **Editar** | `updateArenaUserAction` | Atualiza perfil, estação e status do vínculo |
+| **Excluir** | `deleteArenaUserAction` | Remove apenas o vínculo da pessoa com esta arena |
+| Consultar | `get_arena_access_management` | Lista a equipe e os perfis disponíveis nesta arena |
 | Resolver signup | `resolveSelfServiceArenaSignup` | Consulta o catálogo antes de criar um tenant; cria cliente oculto somente quando não há correspondência e inicia o trial após o provisionamento |
 
 **Conecta com:** `auth` (signup chama a resolução transacional), `platform-admin` (fila de reivindicações), `stations` (Caixa ↔ estação) e `payments` (trial somente após aprovação/provisionamento).
@@ -378,7 +381,7 @@ Cobrança da plataforma (a arena paga para usar o Arena Digital). É o módulo m
 4. **Estoque** é movimentado pelas comandas (saída ao vender, entrada ao cancelar) e por entradas manuais no catálogo.
 5. **Relatórios e Dashboard** apenas leem e consolidam o que os outros módulos produzem.
 6. **Pagamentos** controla o acesso comercial: sem plano válido, não dá para criar novos espaços.
-7. **Permissões** (server-auth) embrulham cada action: Caixa fica preso à sua estação; áreas administrativas exigem Owner/Gestor.
+7. **Permissões** (server-auth) embrulham cada action: os recursos pertencem ao perfil em cada arena. A operação de estações pelo Caixa e as operações privilegiadas mantêm verificações específicas.
 
 ---
 

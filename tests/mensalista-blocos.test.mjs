@@ -305,7 +305,7 @@ test('a criação por blocos vai pelo RPC atômico, sem escrita direta em tabela
   const actions = read('../src/modules/bookings/actions/mensalistaActions.ts')
 
   assert.match(actions, /create_monthly_plan_blocks_atomic/)
-  assert.match(actions, /await assertArenaBackofficeAccess\(arenaId\)/)
+  assert.match(actions, /await assertArenaResourceAccess\(arenaId, 'bookings.recurring'\)/)
   // Cada espaço dos blocos é validado contra a arena antes de chamar o RPC.
   assert.match(actions, /for \(const courtId of courtIds\) \{\s*await assertCourtAccess\(/)
   // Nada de insert direto em planos_mensalista_blocos pela camada web.

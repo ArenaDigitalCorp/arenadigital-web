@@ -56,7 +56,7 @@ test('platform identities require explicit ownership or membership to access are
   assert.doesNotMatch(adminArenaPage, /\/dashboard\/arenas\/\$\{arena\.id\}/)
 })
 
-test('admin-only screens use the same server guard as their mutations', async () => {
+test('tenant screens check their corresponding ACL resource', async () => {
   const pages = [
     'src/app/dashboard/arenas/[id]/spaces/new/page.tsx',
     'src/app/dashboard/arenas/[id]/spaces/[spaceId]/edit/page.tsx',
@@ -67,8 +67,10 @@ test('admin-only screens use the same server guard as their mutations', async ()
     'src/app/dashboard/settings/users/[arenaId]/page.tsx',
   ]
 
-  for (const page of pages) {
-    assert.match(await source(page), /assertArenaAdminAccess\(/, `${page} must be admin-only`)
+  const resources = ['spaces', 'spaces', 'finance.overview', 'reports.customers', 'reports.payments', 'catalog', 'settings.users']
+  for (const [index, page] of pages.entries()) {
+    const contents = await source(page)
+    assert.match(contents, new RegExp((resources[index] === 'settings.users' ? 'assertArenaAdminAccess' : 'assertArenaResourceAccess') + "\\((?:arenaId|id), '" + resources[index] + "'"), page)
   }
 
   const arenaClient = await source('src/modules/arenas/components/ArenaDetailPageClient.tsx')

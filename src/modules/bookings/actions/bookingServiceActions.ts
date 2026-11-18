@@ -1,7 +1,9 @@
 "use server"
 
+import { assertSingleBookingAccess } from "../lib/booking-authorization"
+
 import { getSupabaseAdmin } from "@/lib/supabase-server"
-import { assertArenaBackofficeAccess, assertBookingAccess } from "@/lib/server-auth"
+import { assertArenaResourceAccess } from "@/lib/server-auth"
 import { revalidatePath } from "next/cache"
 
 export type BookingServiceLineDTO = {
@@ -24,8 +26,8 @@ export async function getBookingServicesAction(
     bookingId: string
 ): Promise<{ success: boolean; data?: BookingServiceLineDTO[]; error?: string }> {
     try {
-        await assertArenaBackofficeAccess(arenaId)
-        await assertBookingAccess(bookingId, arenaId)
+        await assertArenaResourceAccess(arenaId, 'bookings.single')
+        await assertSingleBookingAccess(bookingId, arenaId)
         const supabase = getSupabaseAdmin()
         const { data, error } = await supabase
             .from("booking_services")
@@ -47,8 +49,8 @@ export async function replaceBookingServicesAction(
     lines: { product_id: string; quantity: number }[]
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        await assertArenaBackofficeAccess(arenaId)
-        await assertBookingAccess(bookingId, arenaId)
+        await assertArenaResourceAccess(arenaId, 'bookings.single')
+        await assertSingleBookingAccess(bookingId, arenaId)
         const supabase = getSupabaseAdmin()
         const safeLines = lines.map(({ product_id, quantity }) => ({ product_id, quantity }))
         const { error } = await supabase.rpc("replace_booking_services_atomic", {

@@ -70,7 +70,8 @@ for (const failure of ['error', 'throw']) {
 function pageFixture({ denied = false, gated = false } = {}) {
   const h = rotativoFixture({ gated })
   const { default: Page } = loadTypescriptModule('src/app/dashboard/rotativo/[arenaId]/page.tsx', {
-    '@/lib/server-auth': { async assertArenaBackofficeAccess(id) {
+    '@/lib/server-auth': { async assertArenaResourceAccess(id, key) {
+      assert.equal(key, 'rotativo')
       assert.equal(id, arenaId)
       if (denied) throw new Error('Forbidden')
     } },

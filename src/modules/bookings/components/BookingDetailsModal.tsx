@@ -69,6 +69,15 @@ export function BookingDetailsModal({ isOpen, onClose, onSuccess, onEdit, bookin
 
     if (!booking || !court) return null
 
+    if (booking.horario_indisponivel) return (
+        <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+            <DialogContent className="rounded-2xl sm:max-w-md">
+                <DialogHeader><DialogTitle>Horário ocupado</DialogTitle></DialogHeader>
+                <p>{format(parseISO(booking.start_time), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })} · {court.name}</p>
+            </DialogContent>
+        </Dialog>
+    )
+
     if (booking.horario_protegido) return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
             <DialogContent className="rounded-2xl sm:max-w-md">

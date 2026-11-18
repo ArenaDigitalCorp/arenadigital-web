@@ -28,8 +28,8 @@ test('arena exposes the three modes and distinguishes selection from effective s
 })
 
 test('request queue is tenant-authorized and reviews only through the service RPC', () => {
-  assert.match(action, /assertArenaBackofficeAccess\(arenaId\)/u)
-  assert.match(action, /assertArenaBackofficeAccess\(parsed\.arenaId\)/u)
+  assert.match(action, /assertArenaResourceAccess\(arenaId, 'bookings.requests'\)/u)
+  assert.match(action, /assertArenaResourceAccess\(parsed\.arenaId, 'bookings.requests'\)/u)
   assert.match(action, /the previous DB during the[\s\S]*\.select\('\*'\)/u)
   assert.match(action, /appBookingModeAcceptsPreBookings/u)
   assert.match(action, /rpc\([\s\S]*'review_app_booking_request'/u)

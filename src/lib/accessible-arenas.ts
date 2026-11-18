@@ -1,5 +1,5 @@
 import { fetchArenaMembershipsByUser } from '@/lib/arena-users'
-import { getPlatformAccessLevel } from '@/lib/server-auth'
+import { getPlatformAccessLevel, loadArenaResources } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { loadOwnedArenas } from '@/lib/owned-arenas'
 import type { ArenaSummary } from '@/lib/dashboard-bootstrap.types'
@@ -24,7 +24,7 @@ export async function loadAccessibleArenas(dbUserId: string): Promise<ArenaSumma
     throw new Error(`Failed to load linked arenas: ${linkedArenasResult.error.message}`)
   }
 
-  const arenaMap = new Map<string, ArenaSummary>()
+  const arenaMap = new Map<string, Omit<ArenaSummary, 'resources'>>()
 
   for (const arena of ownedArenasResult.data ?? []) {
     arenaMap.set(arena.id, {
@@ -52,5 +52,6 @@ export async function loadAccessibleArenas(dbUserId: string): Promise<ArenaSumma
     })
   }
 
-  return [...arenaMap.values()].sort((a, b) => a.name.localeCompare(b.name))
+  const arenas = [...arenaMap.values()].sort((a, b) => a.name.localeCompare(b.name))
+  return Promise.all(arenas.map(async arena => ({ ...arena, resources: await loadArenaResources(arena.id) })))
 }

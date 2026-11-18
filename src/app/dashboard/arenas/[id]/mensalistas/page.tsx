@@ -1,4 +1,4 @@
-import { assertArenaBackofficeAccess } from '@/lib/server-auth'
+import { assertArenaResourceAccess } from '@/lib/server-auth'
 import { redirect } from 'next/navigation'
 import { MensalistasOverviewClient } from '@/modules/mensalistas/components/MensalistasOverviewClient'
 import { MensalistasPageClient } from '@/modules/bookings/components/MensalistasPageClient'
@@ -17,7 +17,7 @@ export default async function MensalistasPage({
   const { tutorial, competencia } = await searchParams
 
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'bookings.recurring')
   } catch {
     redirect('/dashboard/settings/arenas')
   }

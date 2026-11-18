@@ -2,7 +2,7 @@
 
 import { SupabaseAthleteRepository } from '@/modules/athletes/repositories/SupabaseAthleteRepository'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { assertArenaBackofficeAccess, requireAuthenticatedDbUser } from '@/lib/server-auth'
+import { requireAuthenticatedDbUser, assertArenaResourceAccess } from '@/lib/server-auth'
 import {
     linkAthleteSchema,
     linkExistingAthleteSchema,
@@ -98,7 +98,7 @@ export async function lookupAthleteByCpfAction(formData: {
     }
 
     try {
-        await assertArenaBackofficeAccess(parsed.data.arenaId)
+        await assertArenaResourceAccess(parsed.data.arenaId, 'athletes')
         const supabase = getSupabaseAdmin()
         const athlete = await findAthleteByCpf(supabase, parsed.data.cpf, parsed.data.arenaId)
         return { success: true, data: athlete }
@@ -119,7 +119,7 @@ export async function linkExistingAthleteToArenaAction(formData: {
 
     try {
         await requireAuthenticatedDbUser()
-        await assertArenaBackofficeAccess(parsed.data.arenaId)
+        await assertArenaResourceAccess(parsed.data.arenaId, 'athletes')
 
         const repo = new SupabaseAthleteRepository(getSupabaseAdmin())
         await repo.linkToArena({
@@ -161,7 +161,7 @@ export async function linkAthlete(formData: {
 
     try {
         await requireAuthenticatedDbUser()
-        await assertArenaBackofficeAccess(parsed.data.arenaId)
+        await assertArenaResourceAccess(parsed.data.arenaId, 'athletes')
 
         const supabase = getSupabaseAdmin()
         const cleanCpf = onlyDigits(parsed.data.cpf)
@@ -292,7 +292,7 @@ export async function getAthletesPageAction(input: unknown): Promise<
 > {
     try {
         const parsed = athletePageSchema.parse(input)
-        await assertArenaBackofficeAccess(parsed.arenaId)
+        await assertArenaResourceAccess(parsed.arenaId, 'athletes')
         const data = await fetchAthletePage(getSupabaseAdmin(), parsed.arenaId, parsed)
         return { success: true, data }
     } catch (err) {
@@ -303,7 +303,7 @@ export async function getAthletesPageAction(input: unknown): Promise<
 
 export async function getAthletesByArenaAction(arenaId: string, searchTerm?: string) {
     try {
-        await assertArenaBackofficeAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'athletes')
         const repo = new SupabaseAthleteRepository(getSupabaseAdmin())
         const data = await repo.findByArena(arenaId, searchTerm)
         return { success: true, data }

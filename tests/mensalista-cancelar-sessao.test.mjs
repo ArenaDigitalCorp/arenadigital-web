@@ -112,7 +112,7 @@ test('a tela avisa quando a sugestão caiu na tabela padrão', () => {
 test('as duas actions novas exigem backoffice da arena', () => {
   for (const fn of ['quoteSessaoMensalistaAction', 'cancelarSessaoMensalistaAction']) {
     const body = actions.slice(actions.indexOf(`export async function ${fn}`))
-    assert.match(body.slice(0, 700), /await assertArenaBackofficeAccess\(/, `${fn} sem checagem`)
+    assert.match(body.slice(0, 700), /await assertArenaResourceAccess\(/, `${fn} sem checagem`)
   }
   assert.match(actions, /await requireAuthenticatedDbUser\(\)/)
 })

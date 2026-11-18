@@ -1,14 +1,11 @@
 'use server'
 
+import { assertSingleBookingAccess } from "../lib/booking-authorization"
+
 import { revalidatePath } from 'next/cache'
 import { ZodError } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import {
-  assertArenaBackofficeAccess,
-  assertArenaScopedResourceAccess,
-  assertBookingAccess,
-  requireAuthenticatedDbUser,
-} from '@/lib/server-auth'
+import { assertArenaScopedResourceAccess, requireAuthenticatedDbUser, assertArenaResourceAccess } from '@/lib/server-auth'
 import {
   locacaoDoRateio,
   sortCobrancas,
@@ -97,6 +94,7 @@ async function bookingIdOfCobranca(arenaId: string, cobrancaId: string): Promise
     .eq('id', cobrancaId)
     .single()
   if (error || !data) throw new Error('Participante do rateio não encontrado')
+  await assertSingleBookingAccess(data.booking_id, arenaId)
   return data.booking_id
 }
 
@@ -105,8 +103,8 @@ export async function getRateioAction(
   bookingId: string
 ): Promise<ActionResult<RateioSnapshot>> {
   try {
-    await assertArenaBackofficeAccess(arenaId)
-    await assertBookingAccess(bookingId, arenaId)
+    await assertArenaResourceAccess(arenaId, 'bookings.single')
+    await assertSingleBookingAccess(bookingId, arenaId)
     return { success: true, data: await loadSnapshot(arenaId, bookingId) }
   } catch (err) {
     return { success: false, error: errorMessage(err, 'Erro ao carregar o rateio') }
@@ -120,8 +118,8 @@ export async function configurarRateioAction(input: {
 }): Promise<ActionResult<RateioSnapshot>> {
   try {
     const parsed = configurarRateioSchema.parse(input)
-    await assertArenaBackofficeAccess(parsed.arenaId)
-    await assertBookingAccess(parsed.bookingId, parsed.arenaId)
+    await assertArenaResourceAccess(parsed.arenaId, 'bookings.single')
+    await assertSingleBookingAccess(parsed.bookingId, parsed.arenaId)
     const { dbUserId } = await requireAuthenticatedDbUser()
 
     const { error } = await getSupabaseAdmin().rpc('configure_booking_rateio_atomic', {
@@ -144,8 +142,8 @@ export async function adicionarParticipanteRateioAction(
 ): Promise<ActionResult<RateioSnapshot>> {
   try {
     const parsed = adicionarParticipanteRateioSchema.parse(input)
-    await assertArenaBackofficeAccess(parsed.arenaId)
-    await assertBookingAccess(parsed.bookingId, parsed.arenaId)
+    await assertArenaResourceAccess(parsed.arenaId, 'bookings.single')
+    await assertSingleBookingAccess(parsed.bookingId, parsed.arenaId)
     const { dbUserId } = await requireAuthenticatedDbUser()
 
     const { error } = await getSupabaseAdmin().rpc('add_booking_rateio_participante_atomic', {
@@ -170,8 +168,8 @@ export async function atualizarValoresRateioAction(
 ): Promise<ActionResult<RateioSnapshot>> {
   try {
     const parsed = atualizarValoresRateioSchema.parse(input)
-    await assertArenaBackofficeAccess(parsed.arenaId)
-    await assertBookingAccess(parsed.bookingId, parsed.arenaId)
+    await assertArenaResourceAccess(parsed.arenaId, 'bookings.single')
+    await assertSingleBookingAccess(parsed.bookingId, parsed.arenaId)
     const { dbUserId } = await requireAuthenticatedDbUser()
 
     const { error } = await getSupabaseAdmin().rpc('update_booking_rateio_valores_atomic', {
@@ -195,7 +193,7 @@ export async function removerParticipanteRateioAvulsoAction(input: {
 }): Promise<ActionResult<RateioSnapshot & { valorRevertido: number }>> {
   try {
     const parsed = removerParticipanteRateioSchema.parse(input)
-    await assertArenaBackofficeAccess(parsed.arenaId)
+    await assertArenaResourceAccess(parsed.arenaId, 'bookings.single')
     const bookingId = await bookingIdOfCobranca(parsed.arenaId, parsed.cobrancaId)
     const { dbUserId } = await requireAuthenticatedDbUser()
 
@@ -227,7 +225,7 @@ export async function registrarPagamentoRateioAction(
 ): Promise<ActionResult<RateioSnapshot>> {
   try {
     const parsed = registrarPagamentoRateioSchema.parse(input)
-    await assertArenaBackofficeAccess(parsed.arenaId)
+    await assertArenaResourceAccess(parsed.arenaId, 'bookings.single')
     const bookingId = await bookingIdOfCobranca(parsed.arenaId, parsed.cobrancaId)
     const { dbUserId } = await requireAuthenticatedDbUser()
 

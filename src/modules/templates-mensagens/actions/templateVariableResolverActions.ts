@@ -3,7 +3,7 @@
 import { format, parseISO, startOfMonth } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { getSupabaseAdmin } from "@/lib/supabase-server"
-import { assertArenaAdminAccess } from "@/lib/server-auth"
+import { assertArenaResourceAccess } from "@/lib/server-auth"
 import { getMensalistaDetailAction } from "@/modules/mensalistas/actions/mensalistaActions"
 import { getArenaCancellationPolicySettingsAction } from "@/modules/arenas/actions/cancellationPolicyActions"
 import {
@@ -55,7 +55,7 @@ export async function resolveMessageTemplateAction(
     rawMessage: string
 ): Promise<{ success: boolean; data?: ResolvedTemplatePreview; error?: string }> {
     try {
-        await assertArenaAdminAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'settings.templates')
         const tokensUsados = new Set(rawMessage.match(TOKEN_PATTERN) ?? [])
         const warnings: string[] = []
         const supabase = getSupabaseAdmin()

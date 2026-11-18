@@ -13,19 +13,19 @@ function exportedFunctionBody(contents, name) {
   return next === -1 ? contents.slice(start) : contents.slice(start, next)
 }
 
-test('reading transaction categories is open to any active arena member', async () => {
+test('reading transaction categories is available to the three authorized financial resources', async () => {
   const actions = await source('src/modules/finance/actions/transactionCategoryActions.ts')
-  assert.match(exportedFunctionBody(actions, 'getTransactionCategoriesAction'), /assertArenaAccess\(arenaId\)/)
+  assert.match(exportedFunctionBody(actions, 'getTransactionCategoriesAction'), /assertArenaResourceAccess\(arenaId, 'finance.settings', 'finance.cash', 'finance.overview'\)/)
 })
 
-test('writing transaction categories (create/update/delete) is admin-only', async () => {
+test('writing transaction categories (create/update/delete) requires financial settings', async () => {
   const actions = await source('src/modules/finance/actions/transactionCategoryActions.ts')
   for (const name of [
     'createTransactionCategoryAction',
     'updateTransactionCategoryAction',
     'deleteTransactionCategoryAction',
   ]) {
-    assert.match(exportedFunctionBody(actions, name), /assertArenaAdminAccess\(arenaId\)/, `${name} must require admin access`)
+    assert.match(exportedFunctionBody(actions, name), /assertArenaResourceAccess\(arenaId, 'finance.settings'\)/, `${name} must require financial settings`)
   }
 })
 

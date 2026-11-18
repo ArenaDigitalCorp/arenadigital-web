@@ -2,10 +2,7 @@
 
 import type { Database } from '@/types/supabase.types'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import {
-  assertArenaBackofficeAccess,
-  requireAuthenticatedDbUser,
-} from '@/lib/server-auth'
+import { requireAuthenticatedDbUser, assertArenaResourceAccess } from '@/lib/server-auth'
 import { revalidatePath } from 'next/cache'
 import { differenceInCalendarDays, format, parseISO, startOfMonth } from 'date-fns'
 import {
@@ -105,7 +102,7 @@ export async function getMensalistasOverviewAction(
   competencia: string
 ): Promise<{ success: boolean; data?: MensalistasOverview; error?: string }> {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'bookings.recurring')
     const { dbUserId } = await requireAuthenticatedDbUser()
     const parsedArena = uuidSchema.parse(arenaId)
     const parsedComp = competenciaSchema.parse(competencia)
@@ -324,7 +321,7 @@ export async function getMensalistaDetailAction(
   competencia: string
 ): Promise<{ success: boolean; data?: MensalistaDetalhe; error?: string }> {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'bookings.recurring')
     const { dbUserId } = await requireAuthenticatedDbUser()
     const parsedArena = uuidSchema.parse(arenaId)
     const parsedAthlete = uuidSchema.parse(athleteId)
@@ -771,7 +768,7 @@ export async function configureRateioAction(
 ): Promise<{ success: boolean; data?: { cobrancas: CobrancaRow[] }; error?: string }> {
   try {
     const parsed = configureRateioSchema.parse(input)
-    await assertArenaBackofficeAccess(parsed.arenaId)
+    await assertArenaResourceAccess(parsed.arenaId, 'bookings.recurring')
     const { dbUserId } = await requireAuthenticatedDbUser()
 
     const supabase = getSupabaseAdmin()
@@ -818,7 +815,7 @@ export async function removerParticipanteRateioAction(
 ): Promise<{ success: boolean; data?: RemoverParticipanteRateioResult; error?: string }> {
   try {
     const parsed = removerParticipanteRateioSchema.parse(input)
-    await assertArenaBackofficeAccess(parsed.arenaId)
+    await assertArenaResourceAccess(parsed.arenaId, 'bookings.recurring')
     const { dbUserId } = await requireAuthenticatedDbUser()
 
     const { data, error } = await getSupabaseAdmin().rpc(
@@ -861,7 +858,7 @@ export async function registrarPagamentoAction(
 ): Promise<{ success: boolean; data?: RegistrarPagamentoResult; error?: string }> {
   try {
     const parsed = registrarPagamentoSchema.parse(input)
-    await assertArenaBackofficeAccess(parsed.arenaId)
+    await assertArenaResourceAccess(parsed.arenaId, 'bookings.recurring')
     const { dbUserId } = await requireAuthenticatedDbUser()
 
     const { data, error } = await getSupabaseAdmin().rpc(
@@ -905,7 +902,7 @@ export async function lancarCreditoAction(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const parsed = lancarCreditoSchema.parse(input)
-    await assertArenaBackofficeAccess(parsed.arenaId)
+    await assertArenaResourceAccess(parsed.arenaId, 'bookings.recurring')
     const { dbUserId } = await requireAuthenticatedDbUser()
 
     const { error } = await getSupabaseAdmin().rpc(
@@ -937,7 +934,7 @@ export async function retirarCreditoAction(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const parsed = retirarCreditoSchema.parse(input)
-    await assertArenaBackofficeAccess(parsed.arenaId)
+    await assertArenaResourceAccess(parsed.arenaId, 'bookings.recurring')
     const { dbUserId } = await requireAuthenticatedDbUser()
 
     const { error } = await getSupabaseAdmin().rpc(
@@ -969,7 +966,7 @@ export async function setEncerramentoAction(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const parsed = setEncerramentoSchema.parse(input)
-    await assertArenaBackofficeAccess(parsed.arenaId)
+    await assertArenaResourceAccess(parsed.arenaId, 'bookings.recurring')
     const { dbUserId } = await requireAuthenticatedDbUser()
 
     const { error } = await getSupabaseAdmin().rpc(
@@ -1110,7 +1107,7 @@ export async function reajustarValorPlanoAction(
 ): Promise<{ success: boolean; data?: ReajustarValorResult; error?: string }> {
   try {
     const parsed = reajustarValorSchema.parse(input)
-    await assertArenaBackofficeAccess(parsed.arenaId)
+    await assertArenaResourceAccess(parsed.arenaId, 'bookings.recurring')
     const { dbUserId } = await requireAuthenticatedDbUser()
 
     const { data, error } = await getSupabaseAdmin().rpc(
@@ -1186,7 +1183,7 @@ export async function pausarPlanoMensalistaAction(
 ): Promise<{ success: boolean; data?: PausarPlanoResult; error?: string }> {
   try {
     const parsed = pausarPlanoSchema.parse(input)
-    await assertArenaBackofficeAccess(parsed.arenaId)
+    await assertArenaResourceAccess(parsed.arenaId, 'bookings.recurring')
     const { dbUserId } = await requireAuthenticatedDbUser()
 
     const { data, error } = await getSupabaseAdmin().rpc(
@@ -1232,7 +1229,7 @@ export async function removerPausaMensalistaAction(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const parsed = removerPausaSchema.parse(input)
-    await assertArenaBackofficeAccess(parsed.arenaId)
+    await assertArenaResourceAccess(parsed.arenaId, 'bookings.recurring')
     const { dbUserId } = await requireAuthenticatedDbUser()
 
     const { error } = await getSupabaseAdmin().rpc(
@@ -1266,7 +1263,7 @@ export async function getReajusteMesPreviewAction(
   competencia: string
 ): Promise<{ success: boolean; data?: ReajusteMesPreview; error?: string }> {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'bookings.recurring')
     const { dbUserId } = await requireAuthenticatedDbUser()
     const parsedArena = uuidSchema.parse(arenaId)
     const parsedComp = competenciaSchema.parse(competencia)
@@ -1344,7 +1341,7 @@ export async function aplicarReajusteMesLoteAction(
 ): Promise<{ success: boolean; data?: ReajusteMesLoteResultado; error?: string }> {
   try {
     const parsed = reajusteMesLoteSchema.parse(input)
-    await assertArenaBackofficeAccess(parsed.arenaId)
+    await assertArenaResourceAccess(parsed.arenaId, 'bookings.recurring')
     const { dbUserId } = await requireAuthenticatedDbUser()
 
     const { data, error } = await getSupabaseAdmin().rpc(

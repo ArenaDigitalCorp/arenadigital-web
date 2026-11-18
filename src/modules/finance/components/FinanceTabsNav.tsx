@@ -4,16 +4,17 @@ import { usePathname, useRouter } from "next/navigation";
 import { DashboardTabs } from "@/components/dashboard/DashboardTabs";
 
 const TABS = [
-    { key: "visao-geral", label: "Visão geral", path: "" },
-    { key: "caixa", label: "Caixa", path: "/caixa" },
-    { key: "cadastros-auxiliares", label: "Cadastros Auxiliares", path: "/cadastros-auxiliares" },
+    { resource: "finance.overview", key: "visao-geral", label: "Visão geral", path: "" },
+    { resource: "finance.cash", key: "caixa", label: "Caixa", path: "/caixa" },
+    { resource: "finance.settings", key: "cadastros-auxiliares", label: "Cadastros Auxiliares", path: "/cadastros-auxiliares" },
 ] as const;
 
 interface Props {
     arenaId: string;
+    resources: string[];
 }
 
-export function FinanceTabsNav({ arenaId }: Props) {
+export function FinanceTabsNav({ arenaId, resources }: Props) {
     const pathname = usePathname();
     const router = useRouter();
     const base = `/dashboard/finance/${arenaId}`;
@@ -26,7 +27,7 @@ export function FinanceTabsNav({ arenaId }: Props) {
                 const tab = TABS.find((t) => t.key === value);
                 if (tab) router.push(`${base}${tab.path}`);
             }}
-            tabs={TABS.map((tab) => ({ label: tab.label, value: tab.key }))}
+            tabs={TABS.filter(tab => resources.includes(tab.resource)).map((tab) => ({ label: tab.label, value: tab.key }))}
         />
     );
 }

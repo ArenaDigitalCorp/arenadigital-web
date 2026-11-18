@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { assertArenaAccess } from '@/lib/server-auth'
+import { assertArenaResourceAccess } from '@/lib/server-auth'
 import { FinanceTabsNav } from '@/modules/finance/components/FinanceTabsNav'
 
 export default async function FinanceLayout({
@@ -11,15 +11,16 @@ export default async function FinanceLayout({
 }) {
     const { arenaId } = await params
 
+    let access
     try {
-        await assertArenaAccess(arenaId)
+        access = await assertArenaResourceAccess(arenaId, 'finance.overview', 'finance.cash', 'finance.settings')
     } catch {
         redirect('/dashboard/settings/arenas')
     }
 
     return (
         <div className="space-y-6">
-            <FinanceTabsNav arenaId={arenaId} />
+            <FinanceTabsNav arenaId={arenaId} resources={access.resources} />
             {children}
         </div>
     )

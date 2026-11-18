@@ -46,18 +46,22 @@ export function ArenaProvider({ children, initialArenas }: { children: React.Rea
         : { status: 'idle' });
     const bootstrapUserId = useRef(initialArenas ? dbUser?.id : undefined);
 
-    const fetchArenas = useCallback(async () => {
+    const newestRequest = useRef(0);
+    const lastPath = useRef(pathname);
+    const fetchArenas = useCallback(async (background = false) => {
+        const request = ++newestRequest.current;
         if (!dbUser) {
             dispatch({ type: 'FETCH_SUCCESS', payload: [] });
             setSelectedArena("");
             return;
         }
 
-        dispatch({ type: 'FETCH_START' });
+        if (!background) dispatch({ type: 'FETCH_START' });
         try {
-            const response = await fetch('/api/arenas', { credentials: 'same-origin' });
+            const response = await fetch('/api/arenas', { credentials: 'same-origin', cache: 'no-store' });
             if (!response.ok) throw new Error('Falha ao carregar arenas');
             const data: Arena[] = await response.json();
+            if (request !== newestRequest.current) return;
             dispatch({ type: 'FETCH_SUCCESS', payload: data });
             setSelectedArena((currentArenaId) => {
                 if (currentArenaId && data.some((arena) => arena.id === currentArenaId)) {
@@ -66,6 +70,7 @@ export function ArenaProvider({ children, initialArenas }: { children: React.Rea
                 return data[0]?.id ?? "";
             });
         } catch (err) {
+            if (request !== newestRequest.current) return;
             const message = err instanceof Error ? err.message : 'Erro ao carregar arenas'
             dispatch({ type: 'FETCH_ERROR', message });
         }
@@ -76,6 +81,19 @@ export function ArenaProvider({ children, initialArenas }: { children: React.Rea
         bootstrapUserId.current = undefined;
         fetchArenas();
     }, [dbUser?.id, fetchArenas]);
+
+    useEffect(() => {
+        if (lastPath.current === pathname) return;
+        lastPath.current = pathname;
+        void fetchArenas(true);
+    }, [pathname, fetchArenas]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const refreshPermissions = () => { void fetchArenas(true); };
+        window.addEventListener('focus', refreshPermissions);
+        return () => window.removeEventListener('focus', refreshPermissions);
+    }, [fetchArenas]);
 
     useEffect(() => {
         if (state.status !== 'success') return;

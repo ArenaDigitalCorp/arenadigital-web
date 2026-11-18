@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { assertArenaAdminAccess } from '@/lib/server-auth'
+import { assertArenaResourceAccess } from '@/lib/server-auth'
 import { getTransactionCategoriesAction } from '@/modules/finance/actions/transactionCategoryActions'
 import { CadastrosAuxiliaresPageClient } from '@/modules/finance/components/CadastrosAuxiliaresPageClient'
 
@@ -7,7 +7,7 @@ export default async function CadastrosAuxiliaresPage({ params }: { params: Prom
     const { arenaId } = await params
 
     try {
-        await assertArenaAdminAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'finance.settings')
     } catch {
         redirect('/dashboard/settings/arenas')
     }

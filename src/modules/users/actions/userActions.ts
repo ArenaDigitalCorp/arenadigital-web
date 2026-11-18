@@ -1,34 +1,20 @@
 "use server";
 
-import {
-    fetchArenaUserLink,
-    fetchArenaUsersForArena,
-    getArenaUsersStationColumnErrorMessage,
-    isArenaUsersStationColumnMissingError
-} from "@/lib/arena-users";
-import { assertArenaAdminAccess, assertStationAccess } from "@/lib/server-auth";
+import { revalidatePath } from "next/cache";
+import { assertArenaAdminAccess } from "@/lib/server-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-server";
 import { findUserByAuthUserId, findUserByEmail, normalizeEmail } from "@/lib/account-identity";
 import { isStrongPassword } from "@/lib/password-policy";
+import { accessRpc, loadAccessManagement } from "@/modules/access/server";
+import type { AccessMember } from "@/modules/access/types";
 
 type ArenaUserFormData = {
     email: string;
-    login?: string;
     name: string;
     password?: string;
-    role: string;
+    profileId: string;
     stationId?: string | null;
     senha?: string;
-    status: string;
-};
-
-type ArenaUserListItem = {
-    arenaUserId: string;
-    email: string;
-    id: string;
-    name: string;
-    role: string;
-    stationId: string | null;
     status: string;
 };
 
@@ -36,312 +22,89 @@ type ActionResult<T = undefined> =
     | { success: true; data?: T; user?: T }
     | { success: false; error: string };
 
-type ArenaUserQueryRow = {
-    id: string;
-    role: string;
-    station_id: string | null;
-    status: string;
-    created_at: string;
-    user_id: string;
-    users: {
-        id: string;
-        name: string | null;
-        email: string;
-    } | null;
-};
-
-type ArenaUserLinkRow = {
-    id: string;
-    arena_id: string;
-    station_id: string | null;
-    user_id: string;
-};
-
 function getErrorMessage(error: unknown) {
-    if (error instanceof Error) {
-        return error.message;
-    }
-
-    return "Erro desconhecido";
+    return error instanceof Error ? error.message : 'Não foi possível alterar o vínculo.';
 }
 
-function assertValidArenaUserFormData(data: ArenaUserFormData) {
-    if (data.name.trim().length < 2) {
-        throw new Error('Informe o nome do usuário.');
-    }
-
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(data.email))) {
-        throw new Error('Informe um e-mail válido.');
-    }
-
-    if (!['Gestor', 'Atendente', 'Caixa'].includes(data.role)) {
-        throw new Error('Papel de usuário inválido.');
-    }
-
-    if (!['Ativo', 'Inativo', 'ativo', 'inativo', 'active', 'inactive'].includes(data.status)) {
-        throw new Error('Status de usuário inválido.');
-    }
+async function authorize(arenaId: string) {
+    return assertArenaAdminAccess(arenaId, 'settings.users');
 }
 
-async function getArenaUserLinkOrThrow(arenaId: string, arenaUserId: string): Promise<ArenaUserLinkRow> {
-    const { data, error } = await fetchArenaUserLink(getSupabaseAdmin(), arenaId, arenaUserId);
-
-    if (error) {
-        throw new Error(`Erro ao carregar vínculo do usuário: ${error.message}`);
-    }
-
-    return data as ArenaUserLinkRow;
+function getMember(members: AccessMember[], arenaUserId: string, userId: string) {
+    const member = members.find(m => m.id === arenaUserId && m.user_id === userId);
+    if (!member) throw new Error('Vínculo do usuário não corresponde à arena informada.');
+    return member;
 }
 
-export async function createArenaUserAction(arenaId: string, data: ArenaUserFormData): Promise<ActionResult<{ email: string; id: string; name: string | null; role: string | null; usesExistingCredentials: boolean }>> {
-    let createdAuthUserId: string | null = null;
-    let existingUserLinkedToCreatedAuth: string | null = null;
+async function prepareAssignment(arenaId: string, data: ArenaUserFormData) {
+    await authorize(arenaId);
+    const management = await loadAccessManagement(arenaId);
+    const profile = management.profiles.find(p => p.id === data.profileId);
+    if (!profile) throw new Error('Este perfil não está disponível para atribuição.');
+    if (!['Ativo', 'Inativo'].includes(data.status)) throw new Error('Status inválido.');
+    const stationId = profile.base_role === 'Caixa' ? data.stationId ?? null : null;
+    return { management, profile, stationId };
+}
 
+export async function createArenaUserAction(arenaId: string, data: ArenaUserFormData): Promise<ActionResult<{usesExistingCredentials: boolean}>> {
     try {
-        await assertArenaAdminAccess(arenaId);
-        assertValidArenaUserFormData(data);
-
-        if (data.role === 'Caixa' && !data.stationId) {
-            throw new Error('Selecione a estação vinculada ao caixa.');
-        }
-        if (data.role === 'Caixa' && data.stationId) {
-            await assertStationAccess(data.stationId, arenaId);
-        }
+        const { management, profile, stationId } = await prepareAssignment(arenaId, data);
+        if (profile.base_role === 'Caixa' && !stationId) throw new Error('Selecione a estação do caixa.');
+        const name = data.name.trim();
+        const email = normalizeEmail(data.email);
+        if (name.length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('Informe um nome e e-mail válidos.');
+        if (management.members.some(m => normalizeEmail(m.email) === email)) throw new Error('Esta pessoa já possui um vínculo. Edite o acesso existente.');
 
         const supabase = getSupabaseAdmin();
-        const email = normalizeEmail(data.email);
-        if (!email) {
-            throw new Error('E-mail é obrigatório.');
+        // Validate the station before provisioning an identity. The ACL RPC checks it again when saving.
+        if (stationId) {
+            const station = await supabase.from('stations').select('id').eq('arena_id', arenaId).eq('id', stationId).maybeSingle();
+            if (station.error || !station.data) throw new Error('Estação inválida para esta arena.');
         }
-
         let newUser = await findUserByEmail(supabase, email);
         const usesExistingCredentials = Boolean(newUser?.auth_user_id);
-
         if (!newUser?.auth_user_id) {
+            if (newUser) throw new Error('Esta pessoa já possui um cadastro. Peça que ative o próprio acesso antes de vinculá-la.');
             const password = data.senha || data.password;
-            if (!password) {
-                throw new Error('Senha é obrigatória para criar um novo usuário.');
-            }
-            if (!isStrongPassword(password)) {
-                throw new Error('A senha não atende aos requisitos de segurança.');
-            }
-
-            // 1. Criar usuário no Supabase Auth (auto-confirmado, criado por admin)
-            const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-                email,
-                password,
-                email_confirm: true,
-                user_metadata: { firstName: data.name.trim(), name: data.name.trim() },
+            if (!password || !isStrongPassword(password)) throw new Error('Informe uma senha que atenda aos requisitos de segurança.');
+            const { data: authData, error } = await supabase.auth.admin.createUser({
+                email, password, email_confirm: true, user_metadata: { firstName: name, name },
             });
-
-            if (authError || !authData.user) {
-                throw new Error(`Erro ao criar usuário no Auth: ${authError?.message ?? 'desconhecido'}`);
-            }
-            createdAuthUserId = authData.user.id;
-            if (newUser) existingUserLinkedToCreatedAuth = newUser.id;
-
-            // 2. O trigger cria ou reconcilia public.users pelo e-mail.
+            if (error || !authData.user) throw new Error('Não foi possível provisionar a identidade da pessoa.');
+            const createdAuthUserId = authData.user.id;
             newUser = await findUserByAuthUserId(supabase, createdAuthUserId);
-            if (!newUser) throw new Error('A identidade foi criada, mas o usuário local não foi provisionado.');
-        } else if (data.name && !newUser.name) {
-            const { data: updatedUser, error: updateUserError } = await supabase
-                .from('users')
-                .update({ name: data.name })
-                .eq('id', newUser.id)
-                .select('id, email, name, cpf, role')
-                .single();
-            if (updateUserError) throw updateUserError;
-            newUser = updatedUser;
+            if (!newUser) throw new Error('Identidade criada. Tente vincular o usuário novamente.');
         }
-
-        if (!newUser) {
-            throw new Error('Não foi possível resolver o usuário da arena.');
-        }
-
-        // 3. Insert/update arena_users table
-        const arenaUserPayload = {
-            arena_id: arenaId,
-            user_id: newUser.id,
-            role: data.role,
-            station_id: data.role === 'Caixa' ? data.stationId ?? null : null,
-            status: data.status,
-        };
-
-        let { error: arenaUserError } = await supabase
-            .from('arena_users')
-            .upsert(arenaUserPayload, { onConflict: 'arena_id,user_id' });
-
-        if (isArenaUsersStationColumnMissingError(arenaUserError)) {
-            if (data.role === 'Caixa') {
-                throw new Error(getArenaUsersStationColumnErrorMessage());
-            }
-
-            ({ error: arenaUserError } = await supabase
-                .from('arena_users')
-                .upsert({
-                    arena_id: arenaId,
-                    user_id: newUser.id,
-                    role: data.role,
-                    status: data.status,
-                }, { onConflict: 'arena_id,user_id' }));
-        }
-
-        if (arenaUserError) {
-            console.error("Supabase arena user error:", arenaUserError);
-            throw new Error(`Erro ao vincular usuário à arena: ${arenaUserError.message}`);
-        }
-
-        return {
-            success: true,
-            user: {
-                ...newUser,
-                usesExistingCredentials,
-            },
-        };
-    } catch (error: unknown) {
-        if (createdAuthUserId) {
-            const supabase = getSupabaseAdmin();
-            if (existingUserLinkedToCreatedAuth) {
-                await supabase
-                    .from('users')
-                    .update({ auth_user_id: null })
-                    .eq('id', existingUserLinkedToCreatedAuth)
-                    .eq('auth_user_id', createdAuthUserId);
-            } else {
-                await supabase.from('users').delete().eq('id', createdAuthUserId);
-            }
-            await supabase.auth.admin.deleteUser(createdAuthUserId).catch(() => null);
-        }
-        console.error("Error creating arena user:", error);
+        await accessRpc('set_arena_member_access', { p_arena_id: arenaId, p_user_id: newUser.id, p_profile_id: profile.id, p_status: data.status, p_station_id: stationId, p_expected_member_id: null });
+        revalidatePath('/dashboard', 'layout');
+        return { success: true, user: { usesExistingCredentials } };
+    } catch (error) {
         return { success: false, error: getErrorMessage(error) };
     }
 }
 
 export async function updateArenaUserAction(arenaId: string, arenaUserId: string, userId: string, data: ArenaUserFormData): Promise<ActionResult> {
     try {
-        await assertArenaAdminAccess(arenaId);
-        assertValidArenaUserFormData(data);
-
-        if (data.role === 'Caixa' && !data.stationId) {
-            throw new Error('Selecione a estação vinculada ao caixa.');
-        }
-        if (data.role === 'Caixa' && data.stationId) {
-            await assertStationAccess(data.stationId, arenaId);
-        }
-
-        const supabase = getSupabaseAdmin();
-        const arenaUser = await getArenaUserLinkOrThrow(arenaId, arenaUserId);
-        if (arenaUser.user_id !== userId) {
-            throw new Error('Vínculo do usuário não corresponde à arena informada');
-        }
-
-        // Senha é uma credencial global e não pode ser redefinida por um gestor
-        // de arena, sobretudo quando a mesma identidade participa de outras arenas.
-        if (data.senha) {
-            throw new Error('A senha deve ser alterada pelo próprio usuário no fluxo de recuperação de acesso.');
-        }
-
-        // Atualizar nome em public.users
-        if (data.name) {
-            await supabase
-                .from('users')
-                .update({ name: data.name })
-                .eq('id', userId);
-        }
-
-        // Update arena_users table
-        let { error: arenaUserError } = await supabase
-            .from('arena_users')
-            .update({
-                role: data.role,
-                station_id: data.role === 'Caixa' ? data.stationId ?? null : null,
-                status: data.status,
-            })
-            .eq('id', arenaUserId)
-            .eq('arena_id', arenaId)
-            .eq('user_id', userId);
-
-        if (isArenaUsersStationColumnMissingError(arenaUserError)) {
-            if (data.role === 'Caixa') {
-                throw new Error(getArenaUsersStationColumnErrorMessage());
-            }
-
-            ({ error: arenaUserError } = await supabase
-                .from('arena_users')
-                .update({
-                    role: data.role,
-                    status: data.status,
-                })
-                .eq('id', arenaUserId)
-                .eq('arena_id', arenaId)
-                .eq('user_id', userId));
-        }
-
-        if (arenaUserError) {
-            throw new Error(`Erro ao atualizar vínculo: ${arenaUserError.message}`);
-        }
-
+        const { management, profile, stationId } = await prepareAssignment(arenaId, data);
+        getMember(management.members, arenaUserId, userId);
+        if (data.senha) throw new Error('A senha deve ser alterada pelo próprio usuário no fluxo de recuperação de acesso.');
+        await accessRpc('set_arena_member_access', { p_arena_id: arenaId, p_user_id: userId, p_profile_id: profile.id, p_status: data.status, p_station_id: stationId, p_expected_member_id: arenaUserId });
+        revalidatePath('/dashboard', 'layout');
         return { success: true };
-    } catch (error: unknown) {
-        console.error("Error updating arena user:", error);
+    } catch (error) {
         return { success: false, error: getErrorMessage(error) };
     }
 }
 
 export async function deleteArenaUserAction(arenaId: string, arenaUserId: string, userId: string): Promise<ActionResult> {
     try {
-        await assertArenaAdminAccess(arenaId);
-
-        const supabase = getSupabaseAdmin();
-        const arenaUser = await getArenaUserLinkOrThrow(arenaId, arenaUserId);
-        if (arenaUser.user_id !== userId) {
-            throw new Error('Vínculo do usuário não corresponde à arena informada');
-        }
-
-        const { error } = await supabase.rpc('remove_arena_user_membership_atomic', {
-            p_arena_id: arenaId,
-            p_arena_user_id: arenaUserId,
-            p_user_id: userId,
-        });
-        if (error) throw new Error(`Erro ao desvincular usuário: ${error.message}`);
-
+        await authorize(arenaId);
+        const management = await loadAccessManagement(arenaId);
+        getMember(management.members, arenaUserId, userId);
+        await accessRpc('remove_arena_member_access', { p_arena_id: arenaId, p_user_id: userId, p_expected_member_id: arenaUserId });
+        revalidatePath('/dashboard', 'layout');
         return { success: true };
-    } catch (error: unknown) {
-        console.error("Error deleting arena user:", error);
-        return { success: false, error: getErrorMessage(error) };
-    }
-}
-
-export async function getArenaUsersAction(arenaId: string): Promise<ActionResult<ArenaUserListItem[]>> {
-    try {
-        await assertArenaAdminAccess(arenaId);
-
-        const supabase = getSupabaseAdmin();
-        const { data, error } = await fetchArenaUsersForArena(supabase, arenaId);
-
-        if (error) {
-            throw new Error(error.message);
-        }
-
-        // Transform data to flat format for easy table rendering
-        const formattedData = ((data ?? []) as unknown as ArenaUserQueryRow[])
-            .filter((item) => item.users !== null)
-            .map((item) => {
-                const linkedUser = item.users!;
-                return {
-                    arenaUserId: item.id,
-                    id: linkedUser.id,
-                    name: linkedUser.name ?? '',
-                    email: linkedUser.email,
-                    role: item.role,
-                    stationId: item.station_id,
-                    status: item.status,
-                };
-            });
-
-        return { success: true, data: formattedData };
-    } catch (error: unknown) {
-        console.error("Error fetching arena users:", error);
+    } catch (error) {
         return { success: false, error: getErrorMessage(error) };
     }
 }

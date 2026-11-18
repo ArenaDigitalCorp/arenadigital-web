@@ -21,7 +21,7 @@ function fixture({denied=false,fail=false}={}){
  }};return q}
  const client={from:query,rpc(name,args){assert.equal(args.p_arena_id,arena);return query(name==='list_atleta_perfis'?'profiles':'recurrences')}}
  const imports={
-  '@/lib/server-auth':{async assertArenaBackofficeAccess(id){assert.equal(id,arena);if(denied)throw Error('Denied')},requireAuthenticatedDbUser:async()=>({dbUserId:'user'})},
+  '@/lib/server-auth':{async assertArenaResourceAccess(id, key){assert.equal(key,'classes');assert.equal(id,arena);if(denied)throw Error('Denied')},requireAuthenticatedDbUser:async()=>({dbUserId:'user'})},
   '@/lib/supabase-server':{getSupabaseAdmin:()=>client},'next/cache':{revalidatePath(){}},
  }
  return {actions:loadTypescriptModule('src/modules/turmas/actions.ts',imports),calls,members,former,formerProfessor}

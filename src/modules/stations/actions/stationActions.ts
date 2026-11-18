@@ -1,14 +1,14 @@
 "use server"
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { assertArenaAccess, assertArenaAdminAccess, assertArenaBackofficeAccess, assertStationAccess } from '@/lib/server-auth'
+import { assertArenaAdminAccess, assertStationAccess, assertArenaResourceAccess } from '@/lib/server-auth'
 import { fetchAllSupabaseRows } from '@/lib/supabase-pagination'
 import type { StationOrdersFilters } from '@/modules/stations/types/station.types'
 import { isStationStatus } from '@/modules/stations/station-status'
 
 export async function getStationsWithMetricsAction(arenaId: string) {
     try {
-        const access = await assertArenaAccess(arenaId)
+        const access = await assertArenaResourceAccess(arenaId, 'stations')
         const supabase = getSupabaseAdmin()
 
         if (!access.isOwner && access.role === 'Caixa' && !access.assignedStationId) {
@@ -184,7 +184,7 @@ export async function getStationByIdAction(arenaId: string, stationId: string) {
 
 export async function getStationTypesAction(arenaId: string) {
     try {
-        await assertArenaBackofficeAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'stations')
         const { data, error } = await getSupabaseAdmin()
             .from('station_types')
             .select('*')
@@ -201,7 +201,7 @@ export async function getStationTypesAction(arenaId: string) {
 /** Estações reais da arena (catálogo / produtos), com tipo para persistir em `products`. */
 export async function getArenaStationsForCatalogAction(arenaId: string) {
     try {
-        await assertArenaBackofficeAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'catalog')
         const { data, error } = await getSupabaseAdmin()
             .from('stations')
             .select(`id, name, station_type_id, station_type:station_types(id, name)`)
@@ -219,7 +219,7 @@ export async function getArenaStationsForCatalogAction(arenaId: string) {
 
 export async function createStationAction(arenaId: string, input: { name: string; status: string; station_type_id: string }) {
     try {
-        await assertArenaAdminAccess(arenaId)
+        await assertArenaAdminAccess(arenaId, 'stations')
         if (!isStationStatus(input.status)) throw new Error('Status de estação inválido')
         const { data, error } = await getSupabaseAdmin()
             .from('stations')
@@ -237,7 +237,7 @@ export async function createStationAction(arenaId: string, input: { name: string
 
 export async function updateStationAction(arenaId: string, stationId: string, input: Partial<{ name: string; status: string; station_type_id: string }>) {
     try {
-        await assertArenaAdminAccess(arenaId)
+        await assertArenaAdminAccess(arenaId, 'stations')
         await assertStationAccess(stationId, arenaId)
         if (input.status !== undefined && !isStationStatus(input.status)) throw new Error('Status de estação inválido')
         const { data, error } = await getSupabaseAdmin()
