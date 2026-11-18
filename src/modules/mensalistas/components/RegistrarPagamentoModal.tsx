@@ -170,7 +170,7 @@ export function RegistrarPagamentoModal({
 
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-arena-navy-800/60 uppercase">
-                Valor (dinheiro)
+                Valor (somente o que está recebendo)
               </label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-arena-navy-800/40 text-sm">
@@ -183,6 +183,15 @@ export function RegistrarPagamentoModal({
                   className="pl-9"
                 />
               </div>
+              {creditoDisponivel > 0 && (
+                <p className="text-[11px] text-arena-navy-800/40">
+                  Caso queira utilizar algum valor do crédito disponível, subtraia
+                  parcial ou totalmente no campo <strong>Valor</strong> de acordo
+                  com o crédito aplicado. Ex.: Se quiser registrar um pagamento de
+                  100 e queira utilizar 30 de crédito disponível, coloque no campo{' '}
+                  <strong>Valor</strong>: 70 e no campo <strong>Aplicar crédito</strong>: 30.
+                </p>
+              )}
             </div>
 
             {creditoDisponivel > 0 && (
