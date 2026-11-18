@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useTransition } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import {
@@ -73,7 +73,7 @@ export function MovimentacaoEstacoesPageClient({
   initialStations,
 }: Props) {
   const [rows, setRows] = useState<StationMovementRow[]>(initialRows)
-  const [stations] = useState<StationFilterOption[]>(initialStations)
+  const [stations, setStations] = useState<StationFilterOption[]>(initialStations)
 
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -91,12 +91,13 @@ export function MovimentacaoEstacoesPageClient({
     return () => clearTimeout(handle)
   }, [customer])
 
-  const isFirstRender = useState(() => ({ current: true }))[0]
+  const isFirstRender = useRef(true)
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false
       return
     }
+    let current = true
     startTransition(async () => {
       const result = await getStationMovementReportAction(arenaId, {
         startDate: dateFrom || undefined,
@@ -107,13 +108,17 @@ export function MovimentacaoEstacoesPageClient({
         status: status === 'todos' ? undefined : (status as StationMovementRow['status']),
         paymentStatus: paymentStatus === 'todos' ? undefined : (paymentStatus as StationMovementPaymentStatus),
       })
-      if (result.success) {
-        setRows(result.rows ?? [])
-        setPage(1)
+      if (!current) return
+      const availableStations = result.stations ?? []
+      setRows(result.rows ?? [])
+      setStations(availableStations)
+      setPage(1)
+      if (stationId !== 'todos' && !availableStations.some(station => station.id === stationId)) {
+        setStationId('todos')
       }
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateFrom, dateTo, stationId, debouncedCustomer, paymentMethod, status, paymentStatus])
+    return () => { current = false }
+  }, [arenaId, dateFrom, dateTo, stationId, debouncedCustomer, paymentMethod, status, paymentStatus])
 
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
   const paginatedRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)

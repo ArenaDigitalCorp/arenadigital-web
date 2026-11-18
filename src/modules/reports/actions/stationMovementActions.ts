@@ -33,7 +33,10 @@ export async function getStationMovementReportAction(
   error?: string
 }> {
   try {
-    await assertArenaResourceAccess(arenaId, 'reports.stations')
+    const access = await assertArenaResourceAccess(arenaId, 'reports.stations')
+    if (access.role === 'Caixa' && !access.assignedStationId) {
+      return { success: true, rows: [], stations: [] }
+    }
     const supabase = getSupabaseAdmin()
 
     let query = supabase
@@ -43,33 +46,35 @@ export async function getStationMovementReportAction(
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
 
+    let stationsQuery = supabase.from('stations').select('id, name').eq('arena_id', arenaId).order('name', { ascending: true })
+    if (access.role === 'Caixa' && access.assignedStationId) {
+      query = query.eq('station_id', access.assignedStationId)
+      stationsQuery = stationsQuery.eq('id', access.assignedStationId)
+    }
+
     if (filters.startDate) query = query.gte('created_at', filters.startDate)
     if (filters.endDate) query = query.lte('created_at', filters.endDate + 'T23:59:59')
     if (filters.stationId) query = query.eq('station_id', filters.stationId)
     if (filters.status) query = query.eq('status', filters.status)
 
     const term = (filters.customer ?? '').trim()
-    if (term) {
-      const safe = term.replace(/[,()"\\]/g, ' ').replace(/\s+/g, ' ').trim()
-      const conditions: string[] = []
-      if (safe) {
-        conditions.push(`customer_name.ilike."*${safe}*"`)
-        const { data: atletas, error: atletaError } = await supabase
-          .from('atleta')
-          .select('id')
-          .ilike('nome_perfil', `%${safe}%`)
-          .limit(200)
-        if (atletaError) throw new Error(atletaError.message)
-        const atletaIds = (atletas ?? []).map((a) => a.id)
-        if (atletaIds.length > 0) conditions.push(`atleta_id.in.(${atletaIds.join(',')})`)
-      }
-      if (conditions.length === 0) return { success: true, rows: [], stations: [] }
+    const safe = term.replace(/[,()"\\]/g, ' ').replace(/\s+/g, ' ').trim()
+    if (safe) {
+      const conditions = [`customer_name.ilike."*${safe}*"`]
+      const { data: atletas, error: atletaError } = await supabase
+        .from('atleta')
+        .select('id')
+        .ilike('nome_perfil', `%${safe}%`)
+        .limit(200)
+      if (atletaError) throw new Error(atletaError.message)
+      const atletaIds = (atletas ?? []).map((a) => a.id)
+      if (atletaIds.length > 0) conditions.push(`atleta_id.in.(${atletaIds.join(',')})`)
       query = query.or(conditions.join(','))
     }
 
     const [ordersResult, stationsResult] = await Promise.all([
-      fetchAllSupabaseRows(query),
-      supabase.from('stations').select('id, name').eq('arena_id', arenaId).order('name', { ascending: true }),
+      term && !safe ? { data: [], error: null } : fetchAllSupabaseRows(query),
+      stationsQuery,
     ])
 
     if (ordersResult.error) throw new Error(ordersResult.error.message)
