@@ -1,11 +1,22 @@
 'use server'
 
-import { assertArenaBackofficeAccess } from '@/lib/server-auth'
+import { loadArenaResources } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import type { ArenaNotification, ArenaNotificationType } from '@/modules/notifications/types/notification.types'
 
 const NOTIFICATION_COLUMNS =
   'id, arena_id, type, title, body, payload, entity_type, entity_id, atleta_id, read_at, created_at'
+
+const notificationResources = {
+  booking_created: 'bookings.single',
+  rotativo_inscricao: 'rotativo',
+  open_game_created: 'dashboard',
+} as const
+
+async function visibleNotificationTypes(arenaId: string) {
+  const resources = await loadArenaResources(arenaId)
+  return (Object.keys(notificationResources) as ArenaNotificationType[]).filter(type => resources.includes(notificationResources[type]))
+}
 
 interface ListOptions {
   limit?: number
@@ -19,18 +30,19 @@ export async function getArenaNotificationsAction(
   options: ListOptions = {}
 ): Promise<{ success: boolean; data?: ArenaNotification[]; unreadCount?: number; error?: string }> {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    const types = await visibleNotificationTypes(arenaId)
     const supabase = getSupabaseAdmin()
 
     let query = supabase
       .from('arena_notifications')
       .select(NOTIFICATION_COLUMNS)
       .eq('arena_id', arenaId)
+      .in('type', types)
       .order('created_at', { ascending: false })
       .limit(options.limit ?? 30)
 
     if (options.onlyUnread) query = query.is('read_at', null)
-    if (options.types?.length) query = query.in('type', options.types)
+    if (options.types?.length) query = query.in('type', options.types.filter(type => types.includes(type)))
 
     const [listResult, countResult] = await Promise.all([
       query,
@@ -38,6 +50,7 @@ export async function getArenaNotificationsAction(
         .from('arena_notifications')
         .select('id', { count: 'exact', head: true })
         .eq('arena_id', arenaId)
+        .in('type', types)
         .is('read_at', null),
     ])
 
@@ -60,7 +73,7 @@ export async function markNotificationReadAction(
   notificationId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    const types = await visibleNotificationTypes(arenaId)
     const supabase = getSupabaseAdmin()
 
     const { error } = await supabase
@@ -68,6 +81,7 @@ export async function markNotificationReadAction(
       .update({ read_at: new Date().toISOString() })
       .eq('id', notificationId)
       .eq('arena_id', arenaId)
+      .in('type', types)
       .is('read_at', null)
 
     if (error) throw new Error(error.message)
@@ -82,13 +96,14 @@ export async function markAllNotificationsReadAction(
   arenaId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    const types = await visibleNotificationTypes(arenaId)
     const supabase = getSupabaseAdmin()
 
     const { error } = await supabase
       .from('arena_notifications')
       .update({ read_at: new Date().toISOString() })
       .eq('arena_id', arenaId)
+      .in('type', types)
       .is('read_at', null)
 
     if (error) throw new Error(error.message)

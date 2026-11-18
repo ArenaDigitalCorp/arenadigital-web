@@ -1,7 +1,7 @@
 "use server"
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { requireAuthenticatedDbUser, assertArenaAccess, assertArenaAdminAccess } from '@/lib/server-auth'
+import { requireAuthenticatedDbUser, assertArenaResourceAccess } from '@/lib/server-auth'
 import type {
     ProductCategory,
     ProductCategoryKind,
@@ -11,7 +11,7 @@ import { revalidatePath } from 'next/cache'
 
 export async function getCategoriesByArenaAction(arenaId: string) {
     try {
-        await assertArenaAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'catalog')
         const { data, error } = await getSupabaseAdmin()
             .from('product_categories')
             .select('*')
@@ -33,7 +33,7 @@ export async function createCategoryAction(
     input: { name: string; kind: ProductCategoryKind }
 ) {
     try {
-        await assertArenaAdminAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'catalog')
         const { dbUserId } = await requireAuthenticatedDbUser()
         const name = input.name.trim()
         if (name.length < 2) throw new Error('Nome da categoria deve ter pelo menos 2 caracteres')
@@ -62,7 +62,7 @@ export async function updateCategoryAction(
     input: { name?: string; active?: boolean; sort_order?: number }
 ) {
     try {
-        await assertArenaAdminAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'catalog')
         const patch: UpdateProductCategoryDTO = { updated_at: new Date().toISOString() }
         if (input.name !== undefined) {
             const name = input.name.trim()
@@ -106,7 +106,7 @@ export async function updateCategoryAction(
 
 export async function deleteCategoryAction(arenaId: string, categoryId: string) {
     try {
-        await assertArenaAdminAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'catalog')
         const supabase = getSupabaseAdmin()
 
         const { count, error: countError } = await supabase

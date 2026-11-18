@@ -32,7 +32,7 @@ function exportedFunctionBody(name) {
 
 test('arena Owner or Gestor can create, read and sync their own financial onboarding', () => {
   assert.match(actions, /function assertArenaFinancialOnboardingAccess/u)
-  assert.match(accessService, /assertArenaAdminAccess\(arenaId\)/u)
+  assert.match(accessService, /assertArenaAdminAccess\(arenaId, 'settings.receiving'\)/u)
   assert.match(accessService, /assertPlatformSuperAdminAccess\(\)/u)
   assert.match(actions, /return assertFinancialOnboardingAccess\(arenaId\)/u)
   assert.match(exportedFunctionBody('getArenaPixSplitSettingsAction'), /assertArenaFinancialOnboardingAccess/u)

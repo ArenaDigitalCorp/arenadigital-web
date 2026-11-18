@@ -1,3 +1,4 @@
+import { loadAccessibleArenas } from '@/lib/accessible-arenas'
 import { redirect } from 'next/navigation'
 import { requireAuthenticatedDbUser } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
@@ -8,27 +9,14 @@ export default async function SettingsArenasPage() {
     const { dbUserId } = await requireAuthenticatedDbUser()
     const supabase = getSupabaseAdmin()
 
-    const { data: linkedRows, error: linkedError } = await supabase
-        .from('arena_users')
-        .select('arena_id')
-        .eq('user_id', dbUserId)
-        .in('status', ['Ativo', 'ativo', 'active'])
-        .eq('role', 'Gestor')
-
-    if (linkedError) {
-        throw new Error(`Erro ao carregar arenas vinculadas: ${linkedError.message}`)
-    }
-
-    const linkedArenaIds = linkedRows?.map((row) => row.arena_id) ?? []
+    const targets = await loadAccessibleArenas(dbUserId)
+    const visibleIds = targets.filter(arena => arena.resources.includes('settings.arena')).map(arena => arena.id)
     const repo = new SupabaseArenaRepository(supabase)
-    const arenas = await repo.findByOwnerId(dbUserId)
-    const visibleArenas = arenas.filter(
-        (arena) => arena.owner_id === dbUserId || linkedArenaIds.includes(arena.id)
-    )
+    const visibleArenas = await Promise.all(visibleIds.map(id => repo.findRegistrationById(id)))
 
     if (visibleArenas.length === 0) {
         redirect('/dashboard')
     }
 
-    return <ArenasSettingsClient initialArenas={visibleArenas} />
+    return <ArenasSettingsClient initialArenas={visibleArenas.filter(arena => arena !== null)} />
 }

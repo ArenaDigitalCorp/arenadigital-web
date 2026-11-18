@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import test from 'node:test'
 import ts from 'typescript'
+import * as arenaResources from '../src/lib/arena-resources.ts'
 import * as permissions from '../src/lib/arena-permissions.ts'
 
 function load(path, imports) {
@@ -50,13 +51,14 @@ function harness({ level = 'super_admin', owns = true, status = 'Ativo', role = 
   const auth = load('src/lib/server-auth.ts', {
     '@/lib/owned-arenas': ownedArenas,
     react: { cache: fn => fn },
-    '@/lib/supabase/server': { createSupabaseServerClient: async () => ({ auth: {
+    '@/lib/supabase/server': { createSupabaseServerClient: async () => ({ rpc: async () => ({ data: { resources: ['dashboard'] }, error: null }), auth: {
       getUser: async () => ({ data: { user: { id: 'auth-test' } }, error: null }),
     } }) },
     '@/lib/arena-users': memberships,
     '@/lib/supabase-server': { getSupabaseAdmin: () => supabase },
     '@/lib/account-identity': { resolveAuthenticatedDbUser: async () => ({ id: userId }) },
     '@/lib/arena-permissions': permissions,
+    '@/lib/arena-resources': arenaResources,
   })
   const accessibleArenas = load('src/lib/accessible-arenas.ts', {
     '@/lib/owned-arenas': ownedArenas,

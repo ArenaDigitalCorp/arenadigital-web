@@ -167,7 +167,7 @@ export async function getArenaCancellationPolicySettingsAction(
     arenaId: string,
 ): Promise<CancellationPolicyActionResult> {
     try {
-        await assertArenaAdminAccess(arenaId)
+        await assertArenaAdminAccess(arenaId, 'settings.receiving')
         return { success: true, data: await loadArenaCancellationPolicySettings(arenaId) }
     } catch (error) {
         return {
@@ -182,7 +182,7 @@ export async function createArenaCancellationPolicyDraftAction(
     arenaId: string,
 ): Promise<CancellationPolicyActionResult> {
     try {
-        await assertArenaAdminAccess(arenaId)
+        await assertArenaAdminAccess(arenaId, 'settings.receiving')
         const existingSettings = await loadArenaCancellationPolicySettings(arenaId)
         if (existingSettings.draftPolicy) {
             return { success: true, data: existingSettings }
@@ -211,7 +211,7 @@ export async function saveArenaCancellationPolicyDraftAction(
     tiers: ArenaCancellationPolicyTier[],
 ): Promise<CancellationPolicyActionResult> {
     try {
-        await assertArenaAdminAccess(arenaId)
+        await assertArenaAdminAccess(arenaId, 'settings.receiving')
         const settings = await loadArenaCancellationPolicySettings(arenaId)
         if (settings.draftPolicy?.id !== policyId) {
             throw new Error("O rascunho informado não pertence a esta Arena ou já foi publicado.")
@@ -244,7 +244,7 @@ export async function publishArenaCancellationPolicyAction(
     policyId: string,
 ): Promise<CancellationPolicyActionResult> {
     try {
-        await assertArenaAdminAccess(arenaId)
+        await assertArenaAdminAccess(arenaId, 'settings.receiving')
         const settings = await loadArenaCancellationPolicySettings(arenaId)
         if (settings.draftPolicy?.id !== policyId) {
             throw new Error("O rascunho informado não pertence a esta Arena ou já foi publicado.")

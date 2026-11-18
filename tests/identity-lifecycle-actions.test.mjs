@@ -9,15 +9,15 @@ function exportedFunctionBody(contents, functionName) {
   return contents.slice(start, next === -1 ? contents.length : next)
 }
 
-test('arena user deletion delegates membership and identity cleanup to one transaction', async () => {
+test('removing access removes only the expected arena membership', async () => {
   const contents = await readFile(
     new URL('../src/modules/users/actions/userActions.ts', import.meta.url),
     'utf8',
   )
   const deletion = exportedFunctionBody(contents, 'deleteArenaUserAction')
 
-  assert.match(deletion, /assertArenaAdminAccess\(arenaId\)/)
-  assert.match(deletion, /rpc\('remove_arena_user_membership_atomic'/)
+  assert.match(deletion, /await authorize\(arenaId\)/)
+  assert.match(deletion, /accessRpc\('remove_arena_member_access'.*p_expected_member_id: arenaUserId/)
   assert.doesNotMatch(deletion, /from\('arena_users'\)\s*\.delete/)
   assert.doesNotMatch(deletion, /auth\.admin\.deleteUser/)
 })

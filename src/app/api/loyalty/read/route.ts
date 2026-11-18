@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { assertArenaBackofficeAccess, AuthorizationError } from '@/lib/server-auth'
+import { AuthorizationError, assertArenaResourceAccess } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { SupabaseLoyaltyRepository } from '@/modules/loyalty/repositories/SupabaseLoyaltyRepository'
 import { loyaltyPageReadSchema } from '@/modules/loyalty/lib/page-read'
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403, headers })
     }
     const input = loyaltyPageReadSchema.parse(await request.json().catch(() => null))
-    const access = await assertArenaBackofficeAccess(input.arenaId)
+    const access = await assertArenaResourceAccess(input.arenaId, 'loyalty')
     if (input.userId !== access.dbUserId) {
       return NextResponse.json({ success: false, error: 'Sua sessão foi alterada. Entre novamente.' }, { status: 409, headers })
     }

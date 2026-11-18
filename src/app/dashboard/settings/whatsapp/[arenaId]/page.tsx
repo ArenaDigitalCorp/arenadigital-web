@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { assertArenaAdminAccess } from '@/lib/server-auth'
+import { assertArenaResourceAccess } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { getAgentSettingsAction } from '@/modules/ai-agent/actions/agentActions'
 import { ArenaAiAgentSettingsCard } from '@/modules/ai-agent/components/ArenaAiAgentSettingsCard'
@@ -12,7 +12,7 @@ export default async function SettingsWhatsappPage({
     const { arenaId } = await params
 
     try {
-        await assertArenaAdminAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'settings.whatsapp')
     } catch {
         redirect('/dashboard/settings/arenas')
     }

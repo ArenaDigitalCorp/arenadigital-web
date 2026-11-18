@@ -1,7 +1,7 @@
 "use server"
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { assertArenaAdminAccess } from '@/lib/server-auth'
+import { assertArenaResourceAccess } from '@/lib/server-auth'
 import { fetchAllSupabaseRows } from '@/lib/supabase-pagination'
 import type {
   StationMovementRow,
@@ -33,7 +33,7 @@ export async function getStationMovementReportAction(
   error?: string
 }> {
   try {
-    await assertArenaAdminAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'reports.stations')
     const supabase = getSupabaseAdmin()
 
     let query = supabase

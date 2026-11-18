@@ -10,7 +10,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { canManageArena } from "@/lib/arena-permissions";
 import { cn } from "@/lib/utils";
 
 export function ArenaSelector({ isCollapsed }: { isCollapsed?: boolean }) {
@@ -23,7 +22,7 @@ export function ArenaSelector({ isCollapsed }: { isCollapsed?: boolean }) {
         if (arenaId === selectedArena || !arenas.some((arena) => arena.id === arenaId)) return;
         setSelectedArena(arenaId);
         const target = arenas.find((arena) => arena.id === arenaId);
-        router.push(pathname.startsWith("/dashboard/publications") && target && canManageArena(target)
+        router.push(pathname.startsWith("/dashboard/publications") && target && target.resources.includes('publications')
             ? `/dashboard/publications/${arenaId}`
             : "/dashboard");
     };

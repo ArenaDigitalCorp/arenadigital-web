@@ -1,13 +1,13 @@
 'use server';
 
 import { getSupabaseAdmin } from '@/lib/supabase-server';
-import { requireAuthenticatedDbUser, assertArenaAccess, assertArenaAdminAccess } from '@/lib/server-auth';
+import { requireAuthenticatedDbUser, assertArenaResourceAccess } from '@/lib/server-auth'
 import type { TransactionCategory, UpdateTransactionCategoryDTO } from '@/modules/finance/types/finance.types';
 import { revalidatePath } from 'next/cache';
 
 export async function getTransactionCategoriesAction(arenaId: string) {
   try {
-    await assertArenaAccess(arenaId);
+    await assertArenaResourceAccess(arenaId, 'finance.settings', 'finance.cash', 'finance.overview');
     const { data, error } = await getSupabaseAdmin()
       .from('transaction_categories')
       .select('*')
@@ -29,7 +29,7 @@ export async function createTransactionCategoryAction(
   input: { name: string; type: 'entrada' | 'saída' }
 ) {
   try {
-    await assertArenaAdminAccess(arenaId);
+    await assertArenaResourceAccess(arenaId, 'finance.settings');
     const { dbUserId } = await requireAuthenticatedDbUser();
     const name = input.name.trim();
     if (name.length < 2) throw new Error('Nome da categoria deve ter pelo menos 2 caracteres');
@@ -58,7 +58,7 @@ export async function updateTransactionCategoryAction(
   input: { name?: string; active?: boolean; sort_order?: number }
 ) {
   try {
-    await assertArenaAdminAccess(arenaId);
+    await assertArenaResourceAccess(arenaId, 'finance.settings');
     const patch: UpdateTransactionCategoryDTO = { updated_at: new Date().toISOString() };
     if (input.name !== undefined) {
       const name = input.name.trim();
@@ -90,7 +90,7 @@ export async function updateTransactionCategoryAction(
 
 export async function deleteTransactionCategoryAction(arenaId: string, categoryId: string) {
   try {
-    await assertArenaAdminAccess(arenaId);
+    await assertArenaResourceAccess(arenaId, 'finance.settings');
     const supabase = getSupabaseAdmin();
 
     const { data: category, error: categoryError } = await supabase

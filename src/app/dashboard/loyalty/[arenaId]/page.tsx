@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { assertArenaBackofficeAccess } from '@/lib/server-auth'
+import { assertArenaResourceAccess } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { SupabaseArenaRepository } from '@/modules/arenas/repositories/SupabaseArenaRepository'
 import { SupabaseLoyaltyRepository } from '@/modules/loyalty/repositories/SupabaseLoyaltyRepository'
@@ -17,7 +17,7 @@ export default async function FidelityPage({
     const { tutorial } = await searchParams
 
     try {
-        await assertArenaBackofficeAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'loyalty')
     } catch {
         redirect('/dashboard/settings/arenas')
     }

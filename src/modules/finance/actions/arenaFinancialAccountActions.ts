@@ -29,7 +29,7 @@ async function invokeArenaFinancial<T>(
   body: Record<string, unknown>,
   fallback: string,
 ): Promise<T> {
-  await assertArenaAdminAccess(arenaId)
+  await assertArenaAdminAccess(arenaId, 'settings.receiving')
   const supabase = await createSupabaseServerClient()
   const { data, error } = await supabase.functions.invoke('arena-financial-operations', {
     body: { ...body, arenaId },

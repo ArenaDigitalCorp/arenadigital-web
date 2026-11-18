@@ -1,6 +1,6 @@
 "use client"
 import React, { useState } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 
 import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -11,7 +11,6 @@ import { useArena } from "@/contexts/ArenaContext"
 
 export default function AthletesPage({ params }: { params: Promise<{ arenaId: string }> }) {
     const resolvedParams = React.use(params);
-    const router = useRouter()
     const searchParams = useSearchParams()
     const { arenas } = useArena()
     const [isModalOpen, setIsModalOpen] = useState(false)
@@ -19,11 +18,7 @@ export default function AthletesPage({ params }: { params: Promise<{ arenaId: st
 
     const currentArena = arenas.find((arena) => arena.id === resolvedParams.arenaId)
 
-    React.useEffect(() => {
-        if (currentArena?.role === 'Caixa' && currentArena.assignedStationId) {
-            router.replace(`/dashboard/arenas/${resolvedParams.arenaId}/stations/${currentArena.assignedStationId}`)
-        }
-    }, [currentArena, resolvedParams.arenaId, router])
+    if (!currentArena?.resources.includes('athletes')) return null
 
     return (
         <div className="space-y-8">

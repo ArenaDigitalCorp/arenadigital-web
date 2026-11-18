@@ -1,7 +1,9 @@
 "use server"
 
+import { assertSingleBookingAccess } from "../lib/booking-authorization"
+
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { assertArenaBackofficeAccess, assertBookingAccess } from '@/lib/server-auth'
+import { assertArenaResourceAccess } from '@/lib/server-auth'
 
 export type BookingParticipantRow = {
     id: string
@@ -16,8 +18,8 @@ export async function getBookingParticipantsAction(
     bookingId: string
 ): Promise<{ success: boolean; data?: BookingParticipantRow[]; error?: string }> {
     try {
-        await assertArenaBackofficeAccess(arenaId)
-        await assertBookingAccess(bookingId, arenaId)
+        await assertArenaResourceAccess(arenaId, 'bookings.single')
+        await assertSingleBookingAccess(bookingId, arenaId)
         const supabase = getSupabaseAdmin()
         const { data, error } = await supabase
             .from('booking_participants')
@@ -40,7 +42,7 @@ export type SyncBookingParticipantsInput = {
     valorPorParticipante?: number | null
 }
 
-export async function syncBookingParticipantsForBooking(
+async function syncBookingParticipantsForBooking(
     supabase: ReturnType<typeof getSupabaseAdmin>,
     bookingId: string,
     input: SyncBookingParticipantsInput
@@ -122,44 +124,14 @@ export async function syncBookingParticipantsForBooking(
     }
 }
 
-export async function getParticipantSyncInputFromBooking(
-    supabase: ReturnType<typeof getSupabaseAdmin>,
-    bookingId: string,
-    fallbackResponsibleId?: string | null
-): Promise<SyncBookingParticipantsInput> {
-    const { data: parts, error } = await supabase
-        .from('booking_participants')
-        .select('atleta_id, funcao')
-        .eq('booking_id', bookingId)
-
-    if (error) throw new Error(error.message)
-    if (!parts?.length) {
-        return {
-            responsibleAthleteId: fallbackResponsibleId ?? null,
-            additionalAthleteIds: [],
-        }
-    }
-
-    const responsible =
-        parts.find((p) => p.funcao === 'responsavel')?.atleta_id ??
-        fallbackResponsibleId ??
-        null
-
-    const additional = parts
-        .filter((p) => p.funcao === 'convidado')
-        .map((p) => p.atleta_id)
-
-    return { responsibleAthleteId: responsible, additionalAthleteIds: additional }
-}
-
 export async function syncBookingParticipantsAction(
     arenaId: string,
     bookingId: string,
     input: SyncBookingParticipantsInput
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        await assertArenaBackofficeAccess(arenaId)
-        await assertBookingAccess(bookingId, arenaId)
+        await assertArenaResourceAccess(arenaId, 'bookings.single')
+        await assertSingleBookingAccess(bookingId, arenaId)
         const supabase = getSupabaseAdmin()
         await syncBookingParticipantsForBooking(supabase, bookingId, input)
         return { success: true }

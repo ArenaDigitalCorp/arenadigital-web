@@ -1,4 +1,4 @@
-import { assertArenaAdminAccess } from '@/lib/server-auth'
+import { assertArenaResourceAccess } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { SupabaseArenaRepository } from '@/modules/arenas/repositories/SupabaseArenaRepository'
 import { SupabaseProductRepository } from '@/modules/products/repositories/SupabaseProductRepository'
@@ -18,7 +18,7 @@ export default async function ArenaProductsPage({
     const { tutorial } = await searchParams
 
     try {
-        await assertArenaAdminAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'catalog')
     } catch {
         redirect('/dashboard/settings/arenas')
     }

@@ -1,4 +1,4 @@
-import { requireAuthenticatedDbUser, assertArenaAdminAccess } from '@/lib/server-auth'
+import { assertArenaResourceAccess } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { SupabaseArenaRepository } from '@/modules/arenas/repositories/SupabaseArenaRepository'
 import { ArenaForm } from '@/modules/arenas/components/ArenaForm'
@@ -31,23 +31,33 @@ export default async function EditArenaPage({
     const { id } = await params
     const { tab } = await searchParams
     const requestedTab = Array.isArray(tab) ? tab[0] : tab
-    const initialTab = requestedTab === 'receiving' ? 'receiving' : 'arena'
-
+    let access
     try {
-        await assertArenaAdminAccess(id)
+        access = await assertArenaResourceAccess(id, 'settings.arena', 'settings.receiving')
     } catch {
-        redirect('/dashboard/settings/arenas')
+        redirect('/dashboard')
     }
 
-    const { dbUserId } = await requireAuthenticatedDbUser()
-    const [arena, paymentSettings, cancellationPolicySettings, receivingSetup] = await Promise.all([
-        new SupabaseArenaRepository(getSupabaseAdmin()).findById(id),
-        getArenaPixSplitSettingsAction(id),
-        getArenaCancellationPolicySettingsAction(id),
-        getArenaReceivingSetupAction(id),
+    const canEditArena = access.resources.includes('settings.arena')
+    const canManageReceiving = (access.isOwner || access.role === 'Gestor') && access.resources.includes('settings.receiving')
+    if (!canEditArena && !canManageReceiving) redirect('/dashboard')
+    const initialTab = canManageReceiving && (requestedTab === 'receiving' || !canEditArena) ? 'receiving' : 'arena'
+    const supabase = getSupabaseAdmin()
+    const [registration, receiving] = await Promise.all([
+        canEditArena ? new SupabaseArenaRepository(supabase).findRegistrationById(id) : null,
+        canManageReceiving ? Promise.all([
+            supabase.from('arenas').select('name,legal_name,email,phone,cpf_cnpj,address,number,complement,neighborhood,zip_code,app_booking_mode,accepts_app_booking_requests').eq('id', id).single(),
+            getArenaPixSplitSettingsAction(id),
+            getArenaCancellationPolicySettingsAction(id),
+            getArenaReceivingSetupAction(id),
+        ]) : null,
     ])
-
-    if (!arena) redirect('/dashboard/settings/arenas')
+    if (canEditArena && !registration) redirect('/dashboard/settings/arenas')
+    if (receiving && (receiving[0].error || !receiving[0].data)) throw new Error('Não foi possível consultar o cadastro de recebimento.')
+    const arena = receiving?.[0].data
+    const paymentSettings = receiving?.[1]
+    const cancellationPolicySettings = receiving?.[2]
+    const receivingSetup = receiving?.[3]
 
     return (
         <div className="space-y-6">
@@ -55,38 +65,38 @@ export default async function EditArenaPage({
                 <h2 className="text-3xl font-bold tracking-tight">Editar Arena</h2>
                 <p className="text-muted-foreground">Atualize as informações da sua arena.</p>
             </div>
-            <Tabs defaultValue={initialTab} className="gap-0">
+            <Tabs key={initialTab} defaultValue={initialTab} className="gap-0">
                 <TabsList
                     variant="line"
                     aria-label="Seções de edição da Arena"
                     className="h-auto w-full justify-start gap-0 rounded-none border-b border-sky-200 p-0"
                 >
-                    <TabsTrigger
+                    {canEditArena && <TabsTrigger
                         value="arena"
                         className="h-12 flex-none rounded-none px-4 font-bold text-slate-500 after:bottom-0 after:bg-arena-navy-800 data-[state=active]:text-sky-700 sm:px-5"
                     >
                         Dados da arena
-                    </TabsTrigger>
-                    <TabsTrigger
+                    </TabsTrigger>}
+                    {canManageReceiving && <TabsTrigger
                         value="receiving"
                         className="h-12 flex-none rounded-none px-4 font-bold text-slate-500 after:bottom-0 after:bg-arena-navy-800 data-[state=active]:text-arena-navy-800 sm:px-5"
                     >
                         Dados de recebimento
-                    </TabsTrigger>
+                    </TabsTrigger>}
                 </TabsList>
 
-                <TabsContent
+                {registration && <TabsContent
                     value="arena"
                     forceMount
                     className="mt-7 data-[state=inactive]:hidden"
                 >
                     <ArenaForm
-                        ownerId={dbUserId}
-                        initialData={arena}
+                        ownerId={access.dbUserId}
+                        initialData={registration}
                     />
-                </TabsContent>
+                </TabsContent>}
 
-                <TabsContent
+                {arena && paymentSettings && cancellationPolicySettings && receivingSetup && <TabsContent
                     value="receiving"
                     forceMount
                     className="mt-7 space-y-6 data-[state=inactive]:hidden"
@@ -124,7 +134,7 @@ export default async function EditArenaPage({
                             postalCode: arena.zip_code ?? '',
                         }}
                     />}
-                </TabsContent>
+                </TabsContent>}
             </Tabs>
         </div>
     )

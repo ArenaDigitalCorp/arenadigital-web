@@ -54,7 +54,7 @@ function routeFixture({denied=false,otherUser=false,fail=false}={}){
  class AuthorizationError extends Error {status=403}
  const {POST}=loadTypescriptModule('src/app/api/loyalty/read/route.ts',{
   'next/server':{NextResponse:Response},
-  '@/lib/server-auth':{AuthorizationError,async assertArenaBackofficeAccess(id){calls.push(['auth',id]);if(denied)throw new AuthorizationError('Forbidden');return {dbUserId:otherUser?arenaId:userId}}},
+  '@/lib/server-auth':{AuthorizationError,async assertArenaResourceAccess(id, key){assert.equal(key,'loyalty');calls.push(['auth',id]);if(denied)throw new AuthorizationError('Forbidden');return {dbUserId:otherUser?arenaId:userId}}},
   '@/lib/supabase-server':{getSupabaseAdmin:()=>({})},
   '@/modules/loyalty/repositories/SupabaseLoyaltyRepository':{SupabaseLoyaltyRepository:class{
    async getStatement(...args){calls.push(['statement',...args]);if(fail)throw Error('internal credentials');return page('statement')}
@@ -83,7 +83,7 @@ for(const [route,method,size] of [['statement','getStatement',15],['top-athletes
  for(const denied of [false,true]){
   const calls=[];const {default:Page}=loadTypescriptModule(`src/app/dashboard/loyalty/[arenaId]/${route}/page.tsx`,{
    'next/navigation':{redirect(path){throw Error(`redirect:${path}`)}},
-   '@/lib/server-auth':{async assertArenaBackofficeAccess(id){calls.push('auth');assert.equal(id,arenaId);if(denied)throw Error('denied');return{dbUserId:userId}}},
+   '@/lib/server-auth':{async assertArenaResourceAccess(id, key){assert.equal(key,'loyalty');calls.push('auth');assert.equal(id,arenaId);if(denied)throw Error('denied');return{dbUserId:userId}}},
    '@/lib/supabase-server':{getSupabaseAdmin(){calls.push('db');return{}}},
    '@/modules/loyalty/repositories/SupabaseLoyaltyRepository':{SupabaseLoyaltyRepository:class{async [method](...args){calls.push(args);return page('initial')}}},
    [`@/modules/loyalty/components/${route==='statement'?'LoyaltyStatementClient':'LoyaltyTopAthletesClient'}`]:{[route==='statement'?'LoyaltyStatementClient':'LoyaltyTopAthletesClient']:'Client'},

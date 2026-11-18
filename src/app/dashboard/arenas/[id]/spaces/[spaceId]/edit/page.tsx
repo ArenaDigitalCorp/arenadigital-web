@@ -1,4 +1,4 @@
-import { assertArenaAdminAccess, assertCourtAccess } from '@/lib/server-auth'
+import { assertCourtAccess, assertArenaResourceAccess } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { CourtForm } from '@/modules/courts/components/CourtForm'
 import { Button } from '@/components/ui/button'
@@ -20,7 +20,7 @@ export default async function EditSpacePage({
     const returnTab = parseReturnTabParam(returnTabRaw)
 
     try {
-        await assertArenaAdminAccess(id)
+        await assertArenaResourceAccess(id, 'spaces')
         await assertCourtAccess(spaceId, id)
     } catch {
         redirect(`/dashboard/arenas/${id}`)

@@ -1,7 +1,7 @@
 "use server"
 
 import { getSupabaseAdmin } from "@/lib/supabase-server"
-import { assertArenaAdminAccess, assertArenaBackofficeAccess, requireAuthenticatedDbUser } from "@/lib/server-auth"
+import { assertArenaAdminAccess, requireAuthenticatedDbUser, assertArenaResourceAccess } from "@/lib/server-auth"
 import { SupabaseLoyaltyRepository } from "@/modules/loyalty/repositories/SupabaseLoyaltyRepository"
 import { revalidatePath } from "next/cache"
 import * as z from "zod"
@@ -58,7 +58,7 @@ async function recordLoyaltyTransaction(args: {
 export async function updateCurrencyName(arenaId: string, name: string) {
     try {
         await requireAuthenticatedDbUser()
-        await assertArenaAdminAccess(arenaId)
+        await assertArenaAdminAccess(arenaId, 'loyalty')
 
         const { error } = await getSupabaseAdmin()
             .from('arenas').update({ nome_moeda_virtual: name }).eq('id', arenaId)
@@ -76,7 +76,7 @@ export async function updateCurrencyName(arenaId: string, name: string) {
 export async function getLatestCreditsAction(arenaId: string) {
     try {
         await requireAuthenticatedDbUser()
-        await assertArenaBackofficeAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'loyalty')
 
         const repo = new SupabaseLoyaltyRepository(getSupabaseAdmin())
         const credits = await repo.findRecent(arenaId, 'crédito')
@@ -91,7 +91,7 @@ export async function getLatestCreditsAction(arenaId: string) {
 export async function getLatestRedemptionsAction(arenaId: string) {
     try {
         await requireAuthenticatedDbUser()
-        await assertArenaBackofficeAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'loyalty')
 
         const repo = new SupabaseLoyaltyRepository(getSupabaseAdmin())
         const redemptions = await repo.findRecentRedemptions(arenaId)
@@ -106,7 +106,7 @@ export async function getLatestRedemptionsAction(arenaId: string) {
 export async function searchAthletesAction(arenaId: string, query?: string) {
     try {
         await requireAuthenticatedDbUser()
-        await assertArenaBackofficeAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'loyalty')
 
         const repo = new SupabaseLoyaltyRepository(getSupabaseAdmin())
         const athletes = await repo.searchAthletes(arenaId, query)
@@ -121,7 +121,7 @@ export async function searchAthletesAction(arenaId: string, query?: string) {
 export async function createCreditTransactionAction(input: unknown) {
     try {
         const parsed = creditTransactionSchema.parse(input)
-        const { dbUserId } = await assertArenaAdminAccess(parsed.arenaId)
+        const { dbUserId } = await assertArenaAdminAccess(parsed.arenaId, 'loyalty')
 
         await recordLoyaltyTransaction({
             operationId: parsed.operationId,
@@ -146,7 +146,7 @@ export async function createCreditTransactionAction(input: unknown) {
 export async function createRedemptionTransactionAction(input: unknown) {
     try {
         const parsed = redemptionTransactionSchema.parse(input)
-        const { dbUserId } = await assertArenaAdminAccess(parsed.arenaId)
+        const { dbUserId } = await assertArenaAdminAccess(parsed.arenaId, 'loyalty')
 
         await recordLoyaltyTransaction({
             operationId: parsed.operationId,
@@ -171,7 +171,7 @@ export async function createRedemptionTransactionAction(input: unknown) {
 export async function getTopAthletesAction(arenaId: string) {
     try {
         await requireAuthenticatedDbUser()
-        await assertArenaBackofficeAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'loyalty')
 
         const repo = new SupabaseLoyaltyRepository(getSupabaseAdmin())
         const topAthletes = await repo.getTopAthletes(arenaId)
@@ -186,7 +186,7 @@ export async function getTopAthletesAction(arenaId: string) {
 export async function getLoyaltyDashboardDataAction(arenaId: string) {
     try {
         await requireAuthenticatedDbUser()
-        await assertArenaBackofficeAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'loyalty')
 
         const repo = new SupabaseLoyaltyRepository(getSupabaseAdmin())
         const [credits, redemptions, topAthletes] = await Promise.all([
@@ -206,7 +206,7 @@ export async function getLoyaltyDashboardDataAction(arenaId: string) {
 export async function getAthletesWithBalanceAction(arenaId: string, page = 1, pageSize = 10, query?: string) {
     try {
         await requireAuthenticatedDbUser()
-        await assertArenaBackofficeAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'loyalty')
 
         const repo = new SupabaseLoyaltyRepository(getSupabaseAdmin())
         const result = await repo.getAthletesWithBalance(arenaId, page, pageSize, query)
@@ -221,7 +221,7 @@ export async function getAthletesWithBalanceAction(arenaId: string, page = 1, pa
 export async function getStatementAction(arenaId: string, page = 1, pageSize = 10, filters?: { athleteName?: string, startDate?: string, endDate?: string }) {
     try {
         await requireAuthenticatedDbUser()
-        await assertArenaBackofficeAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'loyalty')
 
         const repo = new SupabaseLoyaltyRepository(getSupabaseAdmin())
         const result = await repo.getStatement(arenaId, page, pageSize, filters)

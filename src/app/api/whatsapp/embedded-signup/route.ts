@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import * as z from 'zod'
-import { AuthorizationError, assertArenaAdminAccess } from '@/lib/server-auth'
+import { AuthorizationError, assertArenaResourceAccess } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { logAuditEvent } from '@/modules/audit/audit-log.service'
 import { MetaWhatsAppClient } from '@/modules/ai-agent/providers/whatsapp/MetaWhatsAppClient'
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { dbUserId } = await assertArenaAdminAccess(parsed.arenaId)
+    const { dbUserId } = await assertArenaResourceAccess(parsed.arenaId, 'settings.whatsapp')
 
     const accessToken = await exchangeCodeForToken(parsed.code)
     await new MetaWhatsAppClient().subscribeAppToWaba({ wabaId: parsed.wabaId, accessToken })

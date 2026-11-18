@@ -3,7 +3,7 @@ import test from 'node:test'
 import { loadTypescriptModule } from './helpers/load-typescript-module.mjs'
 
 const actor = { dbUserId: 'fixture-user' }
-const auth = { assertArenaAdminAccess: async () => actor, assertArenaCaixaAccess: async () => actor,
+const auth = { assertArenaResourceAccess: async (id, key) => { assert.deepEqual([id, key], ['arena', 'catalog']); return actor }, assertArenaCaixaAccess: async () => actor,
   assertProductAccess: async () => 'arena', assertArenaScopedResourceAccess: async () => {}, requireAuthenticatedDbUser: async () => actor }
 
 test('catalog server create/update rejects empty or coerced prices even when the form is bypassed', async () => {

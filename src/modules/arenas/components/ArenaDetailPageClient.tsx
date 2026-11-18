@@ -62,6 +62,7 @@ interface Props {
   initialBookings: Booking[];
   initialTab: ArenaDashboardTab;
   canManage: boolean;
+  canOperate: boolean;
 }
 
 function getCurrentDayName() {
@@ -112,6 +113,7 @@ export function ArenaDetailPageClient({
   initialBookings,
   initialTab,
   canManage,
+  canOperate,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
@@ -164,7 +166,7 @@ export function ArenaDetailPageClient({
   };
 
   const handleTabChange = (tab: ArenaDashboardTab) => {
-    if (!canManage && tab !== 'operacao') return;
+    if (tab === 'operacao' ? !canOperate : !canManage) return;
     setActiveTab(tab);
     router.replace(tab === 'espacos' ? pathname : `${pathname}?tab=${tab}`);
   };
@@ -221,7 +223,7 @@ export function ArenaDetailPageClient({
           onChange={handleTabChange}
           tabs={[
             ...(canManage ? [{ label: 'Espaços', value: 'espacos' as const }] : []),
-            { label: 'Operação', value: 'operacao' },
+            ...(canOperate ? [{ label: 'Operação', value: 'operacao' as const }] : []),
             ...(canManage ? [{ label: 'Cadastros', value: 'cadastro' as const }] : []),
           ]}
         />
@@ -229,7 +231,7 @@ export function ArenaDetailPageClient({
         {canManage && activeTab === 'espacos' && (
           <div className="space-y-6">
             <div className="flex flex-wrap justify-end gap-3">
-              {courts.length > 0 && (
+              {canOperate && courts.length > 0 && (
                 <>
                 <Button
                   onClick={() => setIsAvailableTimesOpen(true)}
@@ -281,11 +283,10 @@ export function ArenaDetailPageClient({
                             aria-hidden
                           />
                         }
-                        ariaLabel={`Abrir calendário do espaço ${court.name}`}
-                        onClick={() =>
-                          router.push(
+                        ariaLabel={canOperate ? `Abrir calendário do espaço ${court.name}` : `Ver detalhes de ${court.name}`}
+                        onClick={() => canOperate ? router.push(
                             `/dashboard/arenas/${arenaId}/courts/${court.id}/calendar`
-                          )
+                          ) : setSelectedSpace(court)
                         }
                         actions={
                           <DropdownMenu>
@@ -351,7 +352,7 @@ export function ArenaDetailPageClient({
                         <h4 className="text-[14px] font-semibold leading-tight text-white">
                           {court.name}
                         </h4>
-                        {statusInfo.status === 'open' ? (
+                        {!canOperate ? null : statusInfo.status === 'open' ? (
                           <>
                             <div className="mt-1 flex flex-wrap items-baseline gap-x-1 gap-y-0 leading-none">
                               <span className="text-[24px] font-extrabold tracking-tight text-white">
@@ -527,7 +528,7 @@ export function ArenaDetailPageClient({
           </div>
         )}
 
-        {activeTab === 'operacao' && (
+        {canOperate && activeTab === 'operacao' && (
           courts.length === 0 ? (
             <Card className="bg-white/50 border-dashed border-2 py-20 flex flex-col items-center justify-center">
               <PlusCircle className="h-12 w-12 text-arena-navy-800/20 mb-4" />

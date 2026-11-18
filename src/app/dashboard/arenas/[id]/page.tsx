@@ -1,5 +1,4 @@
-import { assertArenaBackofficeAccess } from '@/lib/server-auth'
-import { canManageArena } from '@/lib/arena-permissions'
+import { assertArenaResourceAccess } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { SupabaseArenaRepository } from '@/modules/arenas/repositories/SupabaseArenaRepository'
 import { SupabaseBookingRepository } from '@/modules/bookings/repositories/SupabaseBookingRepository'
@@ -21,23 +20,26 @@ export default async function ArenaDetailPage({
     const { id } = await params
     const { tab, tutorial } = await searchParams
 
-    let access: Awaited<ReturnType<typeof assertArenaBackofficeAccess>>
+    let access: Awaited<ReturnType<typeof assertArenaResourceAccess>>
     try {
-        access = await assertArenaBackofficeAccess(id)
+        access = await assertArenaResourceAccess(id, 'spaces', 'bookings.single', 'bookings.recurring')
     } catch {
         redirect('/dashboard/settings/arenas')
     }
 
-    const initialTab = parseArenaDashboardTab(tab)
+    const canManage = access.resources.includes('spaces')
+    const canOperate = access.resources.includes('bookings.single') || access.resources.includes('bookings.recurring')
+    const requestedTab = parseArenaDashboardTab(tab)
+    const initialTab = canManage ? (requestedTab === 'operacao' && !canOperate ? 'espacos' : requestedTab) : 'operacao'
     if (tutorial === '1') {
         return (
             <ArenaDetailPageClient
                 arenaId={id}
                 arenaName="Arena demonstrativa"
                 initialCourts={buildTutorialCourts(id)}
-                initialBookings={buildTutorialBookings(id)}
+                initialBookings={canOperate ? buildTutorialBookings(id) : []}
                 initialTab={initialTab}
-                canManage={canManageArena(access)}
+                canManage={canManage} canOperate={canOperate}
             />
         )
     }
@@ -54,7 +56,7 @@ export default async function ArenaDetailPage({
             .select(`*, sports:court_sports(sport:sports(*))`)
             .eq('arena_id', id)
             .order('created_at', { ascending: false }),
-        new SupabaseBookingRepository(supabase).findByArena(id, startOfDay, endOfDay),
+        canOperate ? new SupabaseBookingRepository(supabase, access.resources).findByArena(id, startOfDay, endOfDay) : [],
     ])
 
     if (!arena) redirect('/dashboard/settings/arenas')
@@ -70,7 +72,7 @@ export default async function ArenaDetailPage({
             initialCourts={courts}
             initialBookings={bookings}
             initialTab={initialTab}
-            canManage={canManageArena(access)}
+            canManage={canManage} canOperate={canOperate}
         />
     )
 }
