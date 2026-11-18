@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { assertArenaBackofficeAccess, AuthorizationError } from '@/lib/server-auth'
+import { AuthorizationError, assertArenaResourceAccess } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { athletePageSchema, fetchAthletePage } from '@/modules/athletes/lib/athlete-page'
 
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403, headers })
     }
     const input = inputSchema.parse(await request.json().catch(() => null))
-    const access = await assertArenaBackofficeAccess(input.arenaId)
+    const access = await assertArenaResourceAccess(input.arenaId, 'athletes')
     // A stale browser context must never cache another account's response.
     if (access.dbUserId !== input.userId) {
       return NextResponse.json({ success: false, error: 'Sua sessão foi alterada. Entre novamente.' }, { status: 409, headers })

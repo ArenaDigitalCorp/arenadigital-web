@@ -16,7 +16,7 @@ interface EditStationPageProps {
 export default async function EditStationPage({ params }: EditStationPageProps) {
     const { id, stationId } = await params;
 
-    try { await assertArenaAdminAccess(id) } catch { redirect(`/dashboard/arenas/${id}/stations`) }
+    try { await assertArenaAdminAccess(id, 'stations') } catch { redirect(`/dashboard/arenas/${id}/stations`) }
 
     const res = await getStationByIdAction(id, stationId);
     const station = res.data;

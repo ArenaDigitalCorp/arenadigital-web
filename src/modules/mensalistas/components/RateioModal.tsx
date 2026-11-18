@@ -15,7 +15,7 @@ import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { formatCurrency } from '@/lib/format'
-import { searchAthletesAction } from '@/modules/loyalty/actions/loyaltyActions'
+import { searchBookingAthletesAction } from '@/modules/bookings/actions/bookingLookupActions'
 import {
   configureRateioAction,
   removerParticipanteRateioAction,
@@ -242,7 +242,7 @@ export function RateioModal({
     if (searchTimer.current) clearTimeout(searchTimer.current)
     searchTimer.current = setTimeout(async () => {
       setSearching(true)
-      const res = await searchAthletesAction(arenaId, query.trim())
+      const res = await searchBookingAthletesAction(arenaId, query.trim())
       setSearching(false)
       if (res.success) setResults(res.data ?? [])
     }, 300)

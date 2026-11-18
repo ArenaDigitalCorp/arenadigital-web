@@ -206,7 +206,7 @@ test('every turma action checks backoffice access and writes only through the tu
     'desvincularAlunoAction',
   ])
   const blocos = actions.split('export async function ').slice(1)
-  for (const bloco of blocos) assert.match(bloco, /await assertArenaBackofficeAccess\(/)
+  for (const bloco of blocos) assert.match(bloco, /await assertArenaResourceAccess\([^,]+, 'classes'\)/)
   for (const bloco of blocos.slice(2)) assert.match(bloco, /requireAuthenticatedDbUser\(\)/)
   for (const rpc of [
     'create_turma_atomic',

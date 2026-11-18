@@ -95,7 +95,8 @@ export function documentFlowHarness(options = {}) {
     },
     '@/lib/server-auth': {
       AuthorizationError,
-      async assertArenaAdminAccess(arenaId) {
+      async assertArenaAdminAccess(arenaId, key) {
+        if (key !== 'settings.receiving') throw Error('Expected financial settings permission')
         state.authCalls.push(arenaId)
         if (options.unauthenticated) throw new AuthorizationError('synthetic-private-auth-detail', 401)
         if (arenaId !== TEST_ARENA_ID) throw new AuthorizationError('synthetic-private-cross-arena-detail')

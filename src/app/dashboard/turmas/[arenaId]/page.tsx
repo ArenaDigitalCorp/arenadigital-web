@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { assertArenaBackofficeAccess } from '@/lib/server-auth'
+import { assertArenaResourceAccess } from '@/lib/server-auth'
 import { getTurmasPageDataAction } from '@/modules/turmas/actions'
 import { TurmasPageClient } from '@/modules/turmas/components/TurmasPageClient'
 
@@ -7,7 +7,7 @@ export default async function TurmasPage({ params }: { params: Promise<{ arenaId
   const { arenaId } = await params
 
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'classes')
   } catch {
     redirect('/dashboard/settings/arenas')
   }

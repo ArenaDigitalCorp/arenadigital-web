@@ -6,7 +6,7 @@ const setup={draft:null,desired_mode:null,intent_status:null,intent_revision:0,c
 function subject({deny=false,error=null,data=setup,cacheFailure=false}={}) {
   const calls=[]
   const loaded=loadTypescriptModule('src/modules/arenas/actions/receivingSetupActions.ts',{
-    '@/lib/server-auth':{assertArenaAdminAccess:async id=>{calls.push(['auth',id]);if(deny)throw Error('Forbidden')}},
+    '@/lib/server-auth':{assertArenaAdminAccess:async (id,key)=>{assert.equal(key,'settings.receiving');calls.push(['auth',id]);if(deny)throw Error('Forbidden')}},
     '@/lib/supabase/server':{createSupabaseServerClient:async()=>({rpc:async(name,args)=>{calls.push([name,args]);return{data,error}}})},
     'next/cache':{revalidatePath:()=>{if(cacheFailure)throw Error('Cache unavailable')}},
   })

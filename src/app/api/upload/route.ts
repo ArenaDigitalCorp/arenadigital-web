@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { uploadToR2, arenaBannerKey, spaceImageKey } from "@/lib/r2Client";
-import { AuthorizationError, assertArenaAdminAccess, assertCourtAccess } from "@/lib/server-auth";
+import { AuthorizationError, assertArenaResourceAccess, assertCourtAccess } from "@/lib/server-auth";
 import {
     UploadPolicyError,
     createUploadObjectName,
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
         });
         const accepted = validateUploadDescriptor(file);
 
-        await assertArenaAdminAccess(fields.arenaId);
+        await assertArenaResourceAccess(fields.arenaId, fields.type === 'banner' ? 'settings.arena' : 'spaces');
 
         const buffer = Buffer.from(await file.arrayBuffer());
         validateImageSignature(buffer, accepted.contentType);

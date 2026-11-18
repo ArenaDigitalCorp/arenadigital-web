@@ -16,7 +16,7 @@ export async function assertArenaFinancialOnboardingAccess(
 ): Promise<ArenaFinancialOnboardingAccess> {
   let arenaAccessError: unknown
   try {
-    const profile = await assertArenaAdminAccess(arenaId)
+    const profile = await assertArenaAdminAccess(arenaId, 'settings.receiving')
     return { dbUserId: profile.dbUserId, source: 'arena_self_service' }
   } catch (error) {
     if (!(error instanceof AuthorizationError) || error.status !== 403) throw error

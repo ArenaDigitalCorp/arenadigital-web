@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { searchAthletesAction } from '@/modules/loyalty/actions/loyaltyActions';
+import { searchBookingAthletesAction } from '@/modules/bookings/actions/bookingLookupActions';
 import { getCourtByIdAction } from '@/modules/courts/actions/courtActions';
 import { createPlanoMensalistaAction } from '@/modules/bookings/actions/mensalistaActions';
 import {
@@ -119,7 +119,7 @@ export function MensalistaModal({
     setIsSearching(true);
     searchTimeout.current = setTimeout(async () => {
       try {
-        const result = await searchAthletesAction(arenaId);
+        const result = await searchBookingAthletesAction(arenaId, value);
         if (result.success && result.data) {
           const normalizedSearch = normalizeString(value);
           const filtered = (result.data as Athlete[]).filter(

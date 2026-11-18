@@ -1,3 +1,5 @@
+import type { ArenaResource } from '@/lib/arena-resources'
+import { calendarFilter } from '../lib/booking-access'
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { IBookingRepository } from './IBookingRepository';
 import type { Booking, CreateBookingDTO, UpdateBookingDTO } from '../types/booking.types';
@@ -6,10 +8,6 @@ const WITH_RELATIONS =
     '*, courts!bookings_court_id_fkey(id, name), sports(id, name), atleta:athlete_id(id, nome_perfil, telefone), booking_services(id, booking_id, product_id, quantity, unit_price, products(id, name)), booking_participants(id, atleta_id, funcao, status, valor, pago_em, atleta:atleta_id(id, nome_perfil, telefone)), booking_cobrancas(id, atleta_id, nome, responsavel, valor_devido, valor_servicos, valor_pago, status, pago_em)' as const;
 
 type ConflictBookingRow = {
-  id: string
-  athlete_name: string | null
-  start_time: string
-  end_time: string
   status: string | null
   payment_expires_at?: string | null
 }
@@ -22,23 +20,52 @@ function isBlockingBooking(row: ConflictBookingRow): boolean {
 }
 
 export class SupabaseBookingRepository implements IBookingRepository {
-  constructor(private readonly client: SupabaseClient) {}
+  constructor(private readonly client: SupabaseClient, private readonly resources: readonly ArenaResource[]) {}
 
   private async withProtectedSlots(rows: Booking[], arenaId: string, start?: string, end?: string, courtId?: string): Promise<Booking[]> {
     if (!start || !end) return rows
+    const hasMonthly = this.resources.includes('bookings.recurring')
+    const hasSingle = this.resources.includes('bookings.single')
+    // Other workflows still need occupancy to avoid double booking. These
+    // projections expose only court/time, never identity, price or a record ID.
+    const unavailable = new Map<string, Booking>()
+    const markBusy = (court: string, from: string, to: string) => {
+      const id = `ocupado:${court}:${from}:${to}`
+      unavailable.set(id, { id, arena_id: arenaId, court_id: court, start_time: from, end_time: to,
+        athlete_name: 'Horário ocupado', status: 'reservado', horario_indisponivel: true } as Booking)
+    }
+    if (!hasSingle || !hasMonthly) {
+      const hidden = calendarFilter([hasSingle ? 'bookings.recurring' : 'bookings.single'])!
+      let query = this.client.from('bookings').select('court_id,start_time,end_time,status,payment_expires_at')
+        .eq('arena_id', arenaId).or(hidden).lt('start_time', end).gt('end_time', start)
+        .in('status', ['confirmed','reservado','pending_payment'])
+      if (courtId) query = query.eq('court_id', courtId)
+      const { data, error } = await query
+      if (error) throw new Error('Não foi possível conferir a ocupação da quadra.')
+      for (const row of data ?? []) {
+        if (isBlockingBooking(row)) markBusy(row.court_id, row.start_time, row.end_time)
+      }
+    }
     const { data, error } = await this.client.rpc('mensalista_horarios_futuros', {
       p_arena_id: arenaId, p_inicio: start, p_fim: end,
     })
     if (error) throw new Error(`Não foi possível conferir os horários dos mensalistas: ${error.message}`)
     const protectedSlots = (data ?? []) as { plano_id: string; court_id: string; inicio: string; fim: string; athlete_name: string }[]
-    const virtual = protectedSlots.filter((slot) => !courtId || slot.court_id === courtId).map((slot) => ({
-      id: `contrato:${slot.plano_id}:${slot.court_id}:${slot.inicio}`,
-      arena_id: arenaId, court_id: slot.court_id, start_time: slot.inicio, end_time: slot.fim,
-      athlete_name: slot.athlete_name, plano_mensalista_id: slot.plano_id,
-      booking_type: 'mensalista', status: 'reservado', price: null, rental_price: 0,
-      horario_protegido: true,
-    } as Booking))
-    return [...rows, ...virtual].sort((a, b) => a.start_time.localeCompare(b.start_time))
+    const virtual: Booking[] = []
+    for (const slot of protectedSlots) {
+      if (courtId && slot.court_id !== courtId) continue
+      if (!hasMonthly) {
+        markBusy(slot.court_id, slot.inicio, slot.fim)
+        continue
+      }
+      virtual.push({
+        id: `contrato:${slot.plano_id}:${slot.court_id}:${slot.inicio}`,
+        arena_id: arenaId, court_id: slot.court_id, start_time: slot.inicio, end_time: slot.fim,
+        athlete_name: slot.athlete_name, plano_mensalista_id: slot.plano_id,
+        booking_type: 'mensalista', status: 'reservado', price: null, rental_price: 0, horario_protegido: true,
+      } as Booking)
+    }
+    return [...rows, ...virtual, ...unavailable.values()].sort((a, b) => a.start_time.localeCompare(b.start_time))
   }
 
   async findByArena(arenaId: string, startDate?: string, endDate?: string): Promise<Booking[]> {
@@ -47,6 +74,8 @@ export class SupabaseBookingRepository implements IBookingRepository {
       .select('*, courts!bookings_court_id_fkey(name)')
       .eq('arena_id', arenaId);
 
+    const filter = calendarFilter(this.resources);
+    if (filter) query = query.or(filter);
     if (startDate) query = query.gte('start_time', startDate);
     if (endDate) query = query.lte('start_time', endDate);
 
@@ -61,6 +90,8 @@ export class SupabaseBookingRepository implements IBookingRepository {
       .select(WITH_RELATIONS)
       .eq('court_id', courtId);
 
+    const filter = calendarFilter(this.resources);
+    if (filter) query = query.or(filter);
     if (startDate) query = query.gte('start_time', startDate);
     if (endDate) query = query.lt('start_time', endDate);
 
@@ -72,13 +103,15 @@ export class SupabaseBookingRepository implements IBookingRepository {
   }
 
   async findByArenaWithSports(arenaId: string, startDate: string, endDate: string): Promise<Booking[]> {
-    const { data, error } = await this.client
+    let query = this.client
       .from('bookings')
       .select(WITH_RELATIONS)
       .eq('arena_id', arenaId)
       .gte('start_time', startDate)
       .lte('end_time', endDate)
-      .order('start_time', { ascending: true });
+    const filter = calendarFilter(this.resources);
+    if (filter) query = query.or(filter);
+    const { data, error } = await query.order('start_time', { ascending: true });
 
     if (error) throw new Error(`SupabaseBookingRepository.findByArenaWithSports: ${error.message}`);
     return this.withProtectedSlots((data ?? []) as unknown as Booking[], arenaId, startDate, endDate);
@@ -110,7 +143,7 @@ export class SupabaseBookingRepository implements IBookingRepository {
     const { data, error } = await query.limit(50);
 
     if (error) throw new Error(`SupabaseBookingRepository.checkConflict: ${error.message}`);
-    const conflicting = ((data ?? []) as unknown as ConflictBookingRow[]).find(isBlockingBooking);
+    const conflicting = ((data ?? []) as unknown as (ConflictBookingRow & { athlete_name: string | null })[]).find(isBlockingBooking);
     if (conflicting) {
       throw new Error(
         `Conflito de horário: já existe uma reserva para ${conflicting.athlete_name ?? 'outro atleta'} nesta quadra no período solicitado.`

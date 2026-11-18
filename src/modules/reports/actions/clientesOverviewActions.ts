@@ -1,7 +1,7 @@
 "use server"
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { assertArenaAdminAccess } from '@/lib/server-auth'
+import { assertArenaResourceAccess } from '@/lib/server-auth'
 import { fetchAllSupabaseRows } from '@/lib/supabase-pagination'
 import { subDays } from 'date-fns'
 
@@ -60,7 +60,7 @@ export async function getClientesOverviewAction(arenaId: string): Promise<{
     error?: string
 }> {
     try {
-        await assertArenaAdminAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'reports.customers')
         const supabase = getSupabaseAdmin()
 
         // Fetch all athletes linked to this arena

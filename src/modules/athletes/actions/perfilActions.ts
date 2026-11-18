@@ -1,10 +1,7 @@
 'use server'
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import {
-  assertArenaBackofficeAccess,
-  requireAuthenticatedDbUser,
-} from '@/lib/server-auth'
+import { requireAuthenticatedDbUser, assertArenaResourceAccess } from '@/lib/server-auth'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { listAllAthleteProfiles } from '@/modules/athletes/lib/list-all-athlete-profiles'
@@ -44,7 +41,7 @@ export async function getPerfilAtletaAction(
   atletaId: string
 ): Promise<{ success: boolean; data?: PerfilAtletaEstado; error?: string }> {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'athletes')
     const parsed = z.object({ arenaId: uuid, atletaId: uuid }).parse({ arenaId, atletaId })
 
     const { data, error } = await (getSupabaseAdmin() as unknown as LooseClient).rpc(
@@ -72,7 +69,7 @@ export async function setPerfilAtletaAction(
 ): Promise<{ success: boolean; data?: PerfilAtletaEstado; error?: string }> {
   try {
     const parsed = setPerfilSchema.parse(input)
-    await assertArenaBackofficeAccess(parsed.arenaId)
+    await assertArenaResourceAccess(parsed.arenaId, 'athletes')
     const { dbUserId } = await requireAuthenticatedDbUser()
 
     const { data, error } = await (getSupabaseAdmin() as unknown as LooseClient).rpc(
@@ -103,7 +100,7 @@ export async function listPerfisAtletaAction(
   arenaId: string
 ): Promise<{ success: boolean; data?: Record<string, PerfilAtleta>; error?: string }> {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'athletes')
     const parsed = z.object({ arenaId: uuid }).parse({ arenaId })
 
     const { data, error } = await listAllAthleteProfiles(getSupabaseAdmin(), parsed.arenaId)

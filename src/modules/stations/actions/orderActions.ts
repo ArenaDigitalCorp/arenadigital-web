@@ -1,7 +1,7 @@
 "use server"
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { assertArenaAccess, assertStationAccess, assertStationOrderAccess, requireAuthenticatedDbUser } from '@/lib/server-auth'
+import { assertStationAccess, assertStationOrderAccess, requireAuthenticatedDbUser, assertArenaResourceAccess } from '@/lib/server-auth'
 import { getArenaBillingAddress } from '@/modules/arenas/usecases/get-arena-billing-address.usecase'
 import { registerCustomerSchema } from '@/modules/stations/schemas/customer.schema'
 import type { Database } from '@/types/supabase.types'
@@ -31,7 +31,7 @@ function stationOrderRpc() {
 
 export async function createCustomerAction(arenaId: string, input: { name: string; cpf?: string; phone?: string; email?: string }) {
     try {
-        await assertArenaAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'stations')
         const parsed = registerCustomerSchema.parse(input)
         const { data, error } = await getSupabaseAdmin()
             .from('station_customers')
@@ -43,22 +43,6 @@ export async function createCustomerAction(arenaId: string, input: { name: strin
     } catch (err) {
         const message = err instanceof Error ? err.message : 'Erro ao criar cliente'
         return { success: false, error: message, data: null }
-    }
-}
-
-export async function getCustomersByArenaAction(arenaId: string) {
-    try {
-        await assertArenaAccess(arenaId)
-        const { data, error } = await getSupabaseAdmin()
-            .from('station_customers')
-            .select('*')
-            .eq('arena_id', arenaId)
-            .order('name', { ascending: true })
-        if (error) throw new Error(error.message)
-        return { success: true, data: data ?? [] }
-    } catch (err) {
-        const message = err instanceof Error ? err.message : 'Erro ao buscar clientes'
-        return { success: false, error: message, data: [] }
     }
 }
 
@@ -151,7 +135,7 @@ export async function createOrderWithItemsAction(
     items: OrderItemInput[]
 ) {
     try {
-        await assertArenaAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'stations')
         await assertStationAccess(orderInput.station_id, arenaId)
         const { dbUserId } = await requireAuthenticatedDbUser()
         const { data, error } = await stationOrderRpc().rpc('create_station_order_with_items', {

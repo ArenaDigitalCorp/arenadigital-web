@@ -5,8 +5,7 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import {
-  assertArenaAdminAccess,
-  assertArenaBackofficeAccess,
+  assertArenaResourceAccess,
   assertBookingAccess,
   assertCourtAccess,
   assertPlatformAdminAccess,
@@ -230,7 +229,7 @@ export async function setArenaPromotionActiveAction(
 
 export async function listArenaHighlightsAction(arenaId: string): Promise<MobileContentResult<MobileHighlight[]>> {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'publications')
     const supabase = getSupabaseAdmin() as any
     const { data, error } = await supabase
       .from('arena_highlights')
@@ -251,7 +250,7 @@ export async function upsertArenaHighlightAction(
   input: unknown
 ): Promise<MobileContentResult<MobileHighlight | null>> {
   try {
-    await assertArenaAdminAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'publications')
     const parsed = arenaHighlightActionSchema.parse(input)
     const supabase = getSupabaseAdmin() as any
     const payload = {
@@ -286,7 +285,7 @@ export async function setArenaHighlightActiveAction(
   active: boolean
 ): Promise<MobileContentResult<null>> {
   try {
-    await assertArenaAdminAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'publications')
     const supabase = getSupabaseAdmin() as any
     const { error } = await supabase
       .from('arena_highlights')

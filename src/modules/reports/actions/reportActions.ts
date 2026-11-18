@@ -1,7 +1,7 @@
 "use server"
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { assertArenaAdminAccess } from '@/lib/server-auth'
+import { assertArenaResourceAccess } from '@/lib/server-auth'
 import { fetchAllSupabaseRows } from '@/lib/supabase-pagination'
 import { lancamentoSoData } from '@/lib/format'
 import type {
@@ -784,7 +784,7 @@ export async function listRecorrenciasDoAtletaAction(
   atletaId: string
 ): Promise<{ success: boolean; data?: RecorrenciaFiltro[]; error?: string }> {
   try {
-    await assertArenaAdminAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'reports.payments')
     const loose = getSupabaseAdmin() as unknown as LooseClient
     const planoSelect =
       'id, athlete_id, athlete_name, status, dia_semana, horario_inicio, horario_fim, court:court_id(name), blocos:planos_mensalista_blocos(dia_semana, horario_inicio, horario_fim, court:court_id(name))'
@@ -858,7 +858,7 @@ export async function getPaymentStatusReportAction(
   error?: string
 }> {
   try {
-    await assertArenaAdminAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'reports.payments')
     const supabase = getSupabaseAdmin()
 
     let query = supabase

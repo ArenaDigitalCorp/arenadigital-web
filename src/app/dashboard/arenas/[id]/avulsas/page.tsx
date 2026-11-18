@@ -1,4 +1,4 @@
-import { assertArenaBackofficeAccess } from '@/lib/server-auth'
+import { assertArenaResourceAccess } from '@/lib/server-auth'
 import { redirect } from 'next/navigation'
 import { getAvulsosTodosAction, getModoPagamentoAction } from '@/modules/finance/actions/financeActions'
 import { AvulsasPageClient } from '@/modules/finance/components/AvulsasPageClient'
@@ -16,7 +16,7 @@ export default async function AvulsasPage({
     const { booking } = await searchParams
 
     try {
-        await assertArenaBackofficeAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'bookings.single')
     } catch {
         redirect('/dashboard/settings/arenas')
     }

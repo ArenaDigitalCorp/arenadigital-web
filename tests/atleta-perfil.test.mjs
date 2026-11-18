@@ -142,7 +142,7 @@ test('as RPCs de perfil são server-only', { skip: !hasDbRepo }, () => {
 test('as actions exigem backoffice da arena', () => {
   for (const fn of ['getPerfilAtletaAction', 'setPerfilAtletaAction']) {
     const corpo = perfilActions.slice(perfilActions.indexOf(`export async function ${fn}`))
-    assert.match(corpo.slice(0, 500), /await assertArenaBackofficeAccess\(/, `${fn} sem checagem`)
+    assert.match(corpo.slice(0, 500), /await assertArenaResourceAccess\([^,]+, 'athletes'\)/, `${fn} sem checagem`)
   }
   assert.match(perfilActions, /await requireAuthenticatedDbUser\(\)/)
 })

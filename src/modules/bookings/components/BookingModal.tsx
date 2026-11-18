@@ -33,7 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { searchAthletesAction } from '@/modules/loyalty/actions/loyaltyActions';
+import { searchBookingAthletesAction } from '@/modules/bookings/actions/bookingLookupActions';
 import {
   getCourtByIdAction,
   getCourtsByArenaAction,
@@ -64,17 +64,14 @@ import {
   toBookingCobranca,
 } from '@/modules/bookings/lib/booking-rateio';
 import type { Booking } from '@/modules/bookings/types/booking.types';
-import { getProductsByArenaAction } from '@/modules/products/actions/stockActions';
-import {
-  isCatalogService,
-  type Product,
-} from '@/modules/products/types/product.types';
+import { listBookingServicesAction, getBookingAthletePricingProfile } from '@/modules/bookings/actions/bookingLookupActions';
+import { useArena } from '@/contexts/ArenaContext';
 import {
   BookingServicesSection,
   sumBookingServiceLines,
   type BookingServiceLineLocal,
+  type CatalogServiceOption,
 } from '@/modules/bookings/components/BookingServicesSection';
-import { getPerfilAtletaAction } from '@/modules/athletes/actions/perfilActions';
 import type { PerfilAtleta } from '@/modules/athletes/types/perfil.types';
 import {
   createPlanoMensalistaBlocosAction,
@@ -141,7 +138,7 @@ interface AthleteSearchFieldProps {
   onSearch: (value: string) => void;
   onSelectAthlete: (athlete: Athlete) => void;
   onClearAthlete: () => void;
-  onRegisterNew: () => void;
+  onRegisterNew?: () => void;
 }
 
 function AthleteSearchField({
@@ -196,7 +193,7 @@ function AthleteSearchField({
                   </div>
                 </button>
               ))}
-              {athletes.length === 0 && !isSearching && (
+              {athletes.length === 0 && !isSearching && onRegisterNew && (
                 <button
                   type="button"
                   onClick={onRegisterNew}
@@ -273,7 +270,13 @@ export function BookingModal({
   defaultPrice,
   existingBooking = null,
 }: BookingModalProps) {
-  const [bookingType, setBookingType] = useState<'avulso' | 'mensal'>('avulso');
+  const { arenas } = useArena();
+  const resources = arenas.find((arena) => arena.id === arenaId)?.resources ?? [];
+  const canBookSingle = resources.includes('bookings.single');
+  const canBookMonthly = resources.includes('bookings.recurring');
+  const canRegisterAthlete = resources.includes('athletes');
+  const [chosenType, setBookingType] = useState<'avulso' | 'mensal'>('avulso');
+  const bookingType = !canBookSingle ? 'mensal' : !canBookMonthly ? 'avulso' : chosenType;
 
   // Shared
   const [search, setSearch] = useState('');
@@ -304,7 +307,7 @@ export function BookingModal({
     []
   );
   const [catalogServiceProducts, setCatalogServiceProducts] = useState<
-    Product[]
+    CatalogServiceOption[]
   >([]);
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceWeeks, setRecurrenceWeeks] = useState(2);
@@ -366,11 +369,10 @@ export function BookingModal({
       return;
     }
     let cancelled = false;
-    void getPerfilAtletaAction(arenaId, selectedAthlete.id).then((res) => {
+    void getBookingAthletePricingProfile(arenaId, selectedAthlete.id).then((proximo) => {
       if (cancelled) return;
       // Sem perfil legível, segue a heurística antiga — não é motivo para
       // travar a criação do plano.
-      const proximo = res.success && res.data ? res.data.perfilEfetivo : null;
       setPerfilAtleta((anterior) => {
         if (anterior !== proximo && tabelasAutomaticas.current.size > 0) {
           setPriceTableByCourt((prev) => {
@@ -591,11 +593,9 @@ export function BookingModal({
 
   useEffect(() => {
     if (!isOpen) return;
-    getProductsByArenaAction(arenaId).then((r) => {
+    listBookingServicesAction(arenaId).then((r) => {
       if (r.success && r.data) {
-        setCatalogServiceProducts(
-          (r.data as Product[]).filter((p) => isCatalogService(p))
-        );
+        setCatalogServiceProducts(r.data);
       } else {
         setCatalogServiceProducts([]);
       }
@@ -615,7 +615,7 @@ export function BookingModal({
     setIsSearching(true);
     searchTimeout.current = setTimeout(async () => {
       try {
-        const result = await searchAthletesAction(arenaId);
+        const result = await searchBookingAthletesAction(arenaId, value);
         if (result.success && result.data) {
           const normalizedSearch = normalizeString(value);
           const filtered = (result.data as Athlete[]).filter(
@@ -1770,7 +1770,7 @@ export function BookingModal({
     setIsAthleteModalOpen(false);
     try {
       setIsSearching(true);
-      const result = await searchAthletesAction(arenaId);
+      const result = await searchBookingAthletesAction(arenaId, search);
       if (result.success && result.data) {
         const normalizedSearch = normalizeString(search);
         const filtered = (result.data as Athlete[]).filter(
@@ -1804,7 +1804,7 @@ export function BookingModal({
       );
     },
     onClearAthlete: () => setSelectedAthlete(null),
-    onRegisterNew: () => setIsAthleteModalOpen(true),
+    onRegisterNew: canRegisterAthlete ? () => setIsAthleteModalOpen(true) : undefined,
   };
 
   const servicesSumDisplay = useMemo(
@@ -1852,7 +1852,7 @@ export function BookingModal({
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 sm:px-10">
             <div className="space-y-6 pb-6 sm:space-y-8 sm:pb-8">
               {/* Tipo de reserva */}
-              {!existingBooking && (
+              {!existingBooking && canBookSingle && canBookMonthly && (
                 <div className="flex items-center gap-1 rounded-xl bg-[#F1F5F9] p-1">
                   <button
                     type="button"
@@ -1912,7 +1912,7 @@ export function BookingModal({
                         participants={additionalParticipants}
                         excludeAthleteId={selectedAthlete?.id}
                         onChange={setAdditionalParticipants}
-                        onRegisterNew={() => setIsAthleteModalOpen(true)}
+                        onRegisterNew={canRegisterAthlete ? () => setIsAthleteModalOpen(true) : undefined}
                         disabled={isSaving}
                       />
                       {!isMultiBlocoAvulso && (
@@ -2409,7 +2409,7 @@ export function BookingModal({
                     participants={additionalParticipants}
                     excludeAthleteId={selectedAthlete?.id}
                     onChange={setAdditionalParticipants}
-                    onRegisterNew={() => setIsAthleteModalOpen(true)}
+                    onRegisterNew={canRegisterAthlete ? () => setIsAthleteModalOpen(true) : undefined}
                     disabled={isSaving}
                   />
 

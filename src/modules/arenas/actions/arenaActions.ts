@@ -4,13 +4,7 @@ import { setArenaReceivingBookingModeAction } from './receivingSetupActions'
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 import { getLocationPointFromAddress } from '@/lib/geocoding'
-import {
-    assertArenaAdminAccess,
-    assertArenaBackofficeAccess,
-    assertArenaCreationAccess,
-    assertArenaOwnerAccess,
-    assertPlatformSuperAdminAccess,
-} from '@/lib/server-auth'
+import { assertArenaCreationAccess, assertArenaOwnerAccess, assertPlatformSuperAdminAccess, assertArenaResourceAccess } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import type { Json } from '@/types/supabase.types'
 import { SupabaseArenaRepository } from '@/modules/arenas/repositories/SupabaseArenaRepository'
@@ -113,8 +107,8 @@ export async function deleteArenaAction(arenaId: string): Promise<{ success: boo
 
 export async function getArenaByIdAction(arenaId: string) {
     try {
-        await assertArenaBackofficeAccess(arenaId)
-        const arena = await new SupabaseArenaRepository(getSupabaseAdmin()).findById(arenaId)
+        await assertArenaResourceAccess(arenaId, 'settings.arena')
+        const arena = await new SupabaseArenaRepository(getSupabaseAdmin()).findRegistrationById(arenaId)
         return { success: true, data: arena }
     } catch (err) {
         const message = err instanceof Error ? err.message : 'Erro ao buscar arena'
@@ -196,7 +190,7 @@ export async function getMunicipioByIbgeAction(codigoIbge: number) {
 
 export async function updateArenaAction(arenaId: string, input: UpdateArenaDTO) {
     try {
-        await assertArenaAdminAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'settings.arena')
         const safeInput = arenaUpdateSchema.parse(input)
         if (safeInput.app_booking_mode !== undefined || safeInput.accepts_app_booking_requests !== undefined) {
             throw new Error('Altere a modalidade na configuração da operação de reservas.')

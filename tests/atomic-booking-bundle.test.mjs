@@ -36,9 +36,9 @@ test('server action authorizes tenant scope and allowlists bundle fields', () =>
     actions.indexOf('export async function saveBackofficeBookingBundleAction'),
     actions.indexOf('type BookingConflictRow'),
   )
-  assert.match(bundle, /assertArenaBackofficeAccess\(arenaId\)/)
+  assert.match(bundle, /assertArenaResourceAccess\(arenaId, 'bookings.single'\)/)
   assert.match(bundle, /assertCourtAccess\(input\.courtId, arenaId\)/)
-  assert.match(bundle, /assertBookingAccess\(input\.updateBookingId, arenaId\)/)
+  assert.match(bundle, /assertSingleBookingAccess\(input\.updateBookingId, arenaId\)/)
   assert.match(bundle, /p_registered_by: dbUserId/)
   assert.doesNotMatch(bundle, /p_registered_by: input\./)
   assert.match(bundle, /p_responsible_athlete_id: input\.athleteId/)

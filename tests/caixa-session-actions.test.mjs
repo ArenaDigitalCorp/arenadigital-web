@@ -88,12 +88,12 @@ test('manual lançamento mutations go through the caixa RPCs, never a direct tra
   assert.doesNotMatch(exportedFunctionBody(financeActions, 'deleteTransactionAction'), /from\('transactions'\)\.delete/)
 })
 
-test('assertArenaCaixaAccess is any active arena member, not admin-restricted', async () => {
+test('assertArenaCaixaAccess requires a grant to the financial cash register', async () => {
   const serverAuth = await source('src/lib/server-auth.ts')
   const start = serverAuth.indexOf('export async function assertArenaCaixaAccess')
   assert.ok(start >= 0)
   const body = serverAuth.slice(start, start + 200)
-  assert.match(body, /return assertArenaAccess\(arenaId\)/)
+  assert.match(body, /return assertArenaResourceAccess\(arenaId, 'finance.cash'\)/)
   assert.doesNotMatch(body, /canAccessArenaBackoffice|canManageArena/)
 })
 

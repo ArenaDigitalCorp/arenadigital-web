@@ -12,10 +12,10 @@ const [actions, schema, component, editPage, operationsPanel] = await Promise.al
 ])
 
 test('cancellation policy configuration is available in the Arena-owned settings journey', () => {
-  assert.match(editPage, /assertArenaAdminAccess\(id\)/u)
+  assert.match(editPage, /assertArenaResourceAccess\(id, 'settings.arena', 'settings.receiving'\)/u)
   assert.match(editPage, /ArenaBookingOperationsPanel/u)
   assert.match(operationsPanel, /ArenaCancellationPolicyCard/u)
-  assert.match(actions, /assertArenaAdminAccess\(arenaId\)/gu)
+  assert.match(actions, /assertArenaAdminAccess\(arenaId, 'settings.receiving'\)/gu)
   assert.match(actions, /createSupabaseServerClient/u)
   assert.doesNotMatch(actions, /assertPlatformSuperAdminAccess/u)
 })

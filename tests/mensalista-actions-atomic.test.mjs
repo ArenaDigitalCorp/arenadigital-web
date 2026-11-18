@@ -123,7 +123,7 @@ test('mensalista billing mutations use typed atomic RPCs behind server authoriza
   assert.match(source, /\.rpc\(\s*['"]reajustar_mensalidades_mes_lote_atomic['"]/)
 
   assert.equal(
-    source.match(/await assertArenaBackofficeAccess\(/g)?.length,
+    source.match(/await assertArenaResourceAccess\(/g)?.length,
     13
   )
   assert.equal(source.match(/await requireAuthenticatedDbUser\(\)/g)?.length, 13)

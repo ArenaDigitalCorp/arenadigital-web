@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { assertArenaBackofficeAccess } from '@/lib/server-auth'
+import { assertArenaResourceAccess } from '@/lib/server-auth'
 import {
   getAppBookingRequestGroupsAction,
   getAppBookingRequestsAction,
@@ -14,7 +14,7 @@ export default async function AppBookingRequestsPage({
   const { id: arenaId } = await params
 
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'bookings.requests')
   } catch {
     redirect('/dashboard')
   }

@@ -1,8 +1,6 @@
-import { fetchArenaMembershipsByUser } from '@/lib/arena-users'
+import { loadAccessibleArenas } from '@/lib/accessible-arenas'
+import type { ArenaSummary } from '@/lib/dashboard-bootstrap.types'
 import { requireAuthenticatedDbUser } from '@/lib/server-auth'
-import { getSupabaseAdmin } from '@/lib/supabase-server'
-import type { ArenaAccessRole } from '@/lib/arena-permissions'
-import { canManageArena } from '@/lib/arena-permissions'
 
 type DashboardSection =
   | 'arena'
@@ -21,134 +19,39 @@ type DashboardSection =
   | 'notifications'
   | 'publications'
 
-type AccessibleArenaTarget = {
-  arenaId: string
-  isOwner: boolean
-  role: ArenaAccessRole
-  assignedStationId: string | null
-  name: string
-}
 
-async function getAccessibleArenaTargets(): Promise<AccessibleArenaTarget[]> {
-  const { dbUserId } = await requireAuthenticatedDbUser()
-  const supabase = getSupabaseAdmin()
-
-  const [ownedArenasResult, linkedArenasResult] = await Promise.all([
-    supabase.from('arenas').select('id, name').eq('owner_id', dbUserId).order('name'),
-    fetchArenaMembershipsByUser(supabase, dbUserId, true),
-  ])
-
-  if (ownedArenasResult.error) {
-    throw new Error(`Failed to load owned arenas: ${ownedArenasResult.error.message}`)
+function sectionPath(section: DashboardSection, arena: ArenaSummary): string | null {
+  const id = arena.id
+  const has = (key: string) => arena.resources.includes(key)
+  switch (section) {
+    case 'arena': return has('spaces') ? `/dashboard/arenas/${id}` : null
+    case 'stations': return has('stations') ? `/dashboard/arenas/${id}/stations${arena.role === 'Caixa' && arena.assignedStationId ? '/' + arena.assignedStationId : ''}` : null
+    case 'finance':
+      if (has('finance.overview')) return `/dashboard/finance/${id}`
+      if (has('finance.cash')) return `/dashboard/finance/${id}/caixa`
+      return has('finance.settings') ? `/dashboard/finance/${id}/cadastros-auxiliares` : null
+    case 'reports':
+      if (has('reports.payments')) return `/dashboard/reports/${id}/status-pagamentos`
+      if (has('reports.customers')) return `/dashboard/reports/${id}/clientes-overview`
+      return has('reports.stations') ? `/dashboard/reports/${id}/movimentacao-estacoes` : null
+    case 'products': return has('catalog') ? `/dashboard/settings/products/${id}` : null
+    case 'users': return has('settings.users') && (arena.isOwner || arena.role === 'Gestor') ? `/dashboard/settings/users/${id}` : null
+    case 'subscription': return has('settings.subscription') && (arena.isOwner || arena.role === 'Gestor') ? `/dashboard/settings/subscription/${id}` : null
+    case 'whatsapp': return has('settings.whatsapp') ? `/dashboard/settings/whatsapp/${id}` : null
+    case 'templates-mensagens': return has('settings.templates') ? `/dashboard/settings/templates-mensagens/${id}` : null
+    case 'turmas': return has('classes') ? `/dashboard/turmas/${id}` : null
+    case 'notifications': return ['dashboard','rotativo','bookings.single'].some(has) ? `/dashboard/notifications/${id}` : null
+    default: return has(section) ? `/dashboard/${section}/${id}` : null
   }
-
-  if (linkedArenasResult.error) {
-    throw new Error(`Failed to load linked arenas: ${linkedArenasResult.error.message}`)
-  }
-
-  const arenaMap = new Map<string, AccessibleArenaTarget>()
-
-  for (const arena of ownedArenasResult.data ?? []) {
-    arenaMap.set(arena.id, {
-      arenaId: arena.id,
-      isOwner: true,
-      role: 'Owner',
-      assignedStationId: null,
-      name: arena.name
-    })
-  }
-
-  for (const link of linkedArenasResult.data ?? []) {
-    if (arenaMap.has(link.arena_id)) continue
-
-    const linkedArena = Array.isArray(link.arenas) ? link.arenas[0] : link.arenas
-    if (!linkedArena?.id || !linkedArena.name) continue
-    if (link.role !== 'Gestor' && link.role !== 'Atendente' && link.role !== 'Caixa') continue
-
-    arenaMap.set(linkedArena.id, {
-      arenaId: linkedArena.id,
-      isOwner: false,
-      role: link.role,
-      assignedStationId: link.station_id ?? null,
-      name: linkedArena.name
-    })
-  }
-
-  return [...arenaMap.values()].sort((a, b) => {
-    if (a.isOwner !== b.isOwner) return a.isOwner ? -1 : 1
-    return a.name.localeCompare(b.name)
-  })
 }
 
 export async function resolveDashboardDefaultRoute(section: DashboardSection): Promise<string> {
-  const arenas = await getAccessibleArenaTargets()
-
-  if (section === 'subscription') {
-    const subscriptionArena = arenas.find((arena) => arena.isOwner || arena.role === 'Gestor')
-    return subscriptionArena
-      ? `/dashboard/settings/subscription/${subscriptionArena.arenaId}`
-      : '/dashboard/settings/arenas'
+  const { dbUserId } = await requireAuthenticatedDbUser()
+  const arenas = await loadAccessibleArenas(dbUserId)
+  const sorted = [...arenas].sort((a, b) => Number(b.isOwner) - Number(a.isOwner))
+  for (const arena of sorted) {
+    const target = sectionPath(section, arena)
+    if (target) return target
   }
-
-  if (section === 'whatsapp') {
-    const adminArena = arenas.find((arena) => arena.isOwner || arena.role === 'Gestor')
-    return adminArena
-      ? `/dashboard/settings/whatsapp/${adminArena.arenaId}`
-      : '/dashboard/settings/arenas'
-  }
-
-  if (section === 'templates-mensagens') {
-    const adminArena = arenas.find((arena) => arena.isOwner || arena.role === 'Gestor')
-    return adminArena
-      ? `/dashboard/settings/templates-mensagens/${adminArena.arenaId}`
-      : '/dashboard/settings/arenas'
-  }
-
-  if (section === 'finance' || section === 'products' || section === 'users' || section === 'reports' || section === 'publications') {
-    const adminArena = arenas.find((arena) => canManageArena(arena))
-    if (!adminArena) return '/dashboard'
-
-    switch (section) {
-      case 'publications':
-        return `/dashboard/publications/${adminArena.arenaId}`
-      case 'finance':
-        return `/dashboard/finance/${adminArena.arenaId}`
-      case 'products':
-        return `/dashboard/settings/products/${adminArena.arenaId}`
-      case 'users':
-        return `/dashboard/settings/users/${adminArena.arenaId}`
-      case 'reports':
-        return `/dashboard/reports/${adminArena.arenaId}/status-pagamentos`
-    }
-  }
-
-  const primaryArena = arenas[0]
-  if (!primaryArena) {
-    return '/dashboard/settings/arenas'
-  }
-
-  if (!primaryArena.isOwner && primaryArena.role === 'Caixa') {
-    return primaryArena.assignedStationId
-      ? `/dashboard/arenas/${primaryArena.arenaId}/stations/${primaryArena.assignedStationId}`
-      : '/dashboard'
-  }
-
-  switch (section) {
-    case 'arena':
-      return `/dashboard/arenas/${primaryArena.arenaId}`
-    case 'stations':
-      return `/dashboard/arenas/${primaryArena.arenaId}/stations`
-    case 'loyalty':
-      return `/dashboard/loyalty/${primaryArena.arenaId}`
-    case 'rotativo':
-      return `/dashboard/rotativo/${primaryArena.arenaId}`
-    case 'athletes':
-      return `/dashboard/athletes/${primaryArena.arenaId}`
-    case 'turmas':
-      return `/dashboard/turmas/${primaryArena.arenaId}`
-    case 'notifications':
-      return `/dashboard/notifications/${primaryArena.arenaId}`
-    default:
-      return '/dashboard'
-  }
+  return '/dashboard'
 }

@@ -1,7 +1,7 @@
 'use server'
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { assertArenaAccess, assertArenaAdminAccess, requireAuthenticatedDbUser } from '@/lib/server-auth'
+import { requireAuthenticatedDbUser, assertArenaResourceAccess } from '@/lib/server-auth'
 import type {
   MessageTemplate,
   MessageTemplateChannel,
@@ -34,7 +34,7 @@ export async function getMessageTemplatesByArenaAction(
   channel: MessageTemplateChannel = 'whatsapp'
 ) {
   try {
-    await assertArenaAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'settings.templates')
     const { data, error } = await getSupabaseAdmin()
       .from('message_templates')
       .select('*')
@@ -56,7 +56,7 @@ export async function createMessageTemplateAction(
   channel: MessageTemplateChannel = 'whatsapp'
 ) {
   try {
-    await assertArenaAdminAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'settings.templates')
     const { dbUserId } = await requireAuthenticatedDbUser()
     const parsed = validateFormInput(input)
 
@@ -84,7 +84,7 @@ export async function updateMessageTemplateAction(
   input: MessageTemplateFormInput
 ) {
   try {
-    await assertArenaAdminAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'settings.templates')
     const parsed = validateFormInput(input)
 
     const { data, error } = await getSupabaseAdmin()
@@ -109,7 +109,7 @@ export async function updateMessageTemplateAction(
 
 export async function deleteMessageTemplateAction(arenaId: string, templateId: string) {
   try {
-    await assertArenaAdminAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'settings.templates')
     const { error } = await getSupabaseAdmin()
       .from('message_templates')
       .delete()

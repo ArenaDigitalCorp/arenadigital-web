@@ -1,7 +1,7 @@
 "use server"
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { assertArenaBackofficeAccess, assertRotativoAccess, requireAuthenticatedDbUser } from '@/lib/server-auth'
+import { assertRotativoAccess, requireAuthenticatedDbUser, assertArenaResourceAccess } from '@/lib/server-auth'
 import { SupabaseRotativoRepository } from '@/modules/rotativos/repositories/SupabaseRotativoRepository'
 import { revalidatePath } from 'next/cache'
 import {
@@ -44,7 +44,7 @@ export async function createRotativoAction(formData: unknown) {
   try {
     await requireAuthenticatedDbUser()
     const { arenaId, court_ids, ...rest } = parsed.data
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'rotativo')
 
     const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
     await repo.create({ ...rest, id_arena: arenaId, status: 'ativo' }, court_ids)
@@ -66,7 +66,7 @@ export async function updateRotativoAction(formData: unknown) {
   try {
     await requireAuthenticatedDbUser()
     const { arenaId, rotativoId, court_ids, ...rest } = parsed.data
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'rotativo')
     await assertRotativoAccess(rotativoId, arenaId)
 
     const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
@@ -83,7 +83,7 @@ export async function updateRotativoAction(formData: unknown) {
 export async function setRotativoStatusAction(arenaId: string, rotativoId: string, status: 'ativo' | 'desativado') {
   try {
     await requireAuthenticatedDbUser()
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'rotativo')
     await assertRotativoAccess(rotativoId, arenaId)
 
     const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
@@ -108,7 +108,7 @@ export async function setRotativoStatusAction(arenaId: string, rotativoId: strin
 
 export async function getRotativoByIdAction(arenaId: string, rotativoId: string) {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'rotativo')
     await assertRotativoAccess(rotativoId, arenaId)
     const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
     const data = await repo.findById(arenaId, rotativoId)
@@ -122,7 +122,7 @@ export async function getRotativoByIdAction(arenaId: string, rotativoId: string)
 export async function listRotativosAction(arenaId: string, filters: RotativoListFilters = {}) {
   try {
     await requireAuthenticatedDbUser()
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'rotativo')
 
     const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
     const { rows, total } = await repo.list(arenaId, filters)
@@ -136,7 +136,7 @@ export async function listRotativosAction(arenaId: string, filters: RotativoList
 export async function getRotativosAction(arenaId: string, date: string) {
   try {
     await requireAuthenticatedDbUser()
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'rotativo')
 
     const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
     const data = await repo.findByDate(arenaId, date)
@@ -150,7 +150,7 @@ export async function getRotativosAction(arenaId: string, date: string) {
 export async function getRotativosByMonthAction(arenaId: string, startDate: string, endDate: string) {
   try {
     await requireAuthenticatedDbUser()
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'rotativo')
 
     const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
     const data = await repo.findByMonth(arenaId, startDate, endDate)
@@ -163,7 +163,7 @@ export async function getRotativosByMonthAction(arenaId: string, startDate: stri
 
 export async function getParticipantsAction(arenaId: string, rotativoId: string) {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'rotativo')
     await assertRotativoAccess(rotativoId, arenaId)
     const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
     const data = await repo.getInscritos(arenaId, rotativoId)
@@ -183,7 +183,7 @@ export async function enrollAthleteAction(formData: unknown) {
   try {
     const { dbUserId } = await requireAuthenticatedDbUser()
     const { rotativoId, arenaId, athleteId, paymentMethod, observacao } = parsed.data
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'rotativo')
     await assertRotativoAccess(rotativoId, arenaId)
     await ensureAthleteBelongsToArena(arenaId, athleteId)
 
@@ -210,7 +210,7 @@ export async function enrollAthleteAction(formData: unknown) {
 
 export async function registerAthleteAction(arenaId: string, rotativoId: string, athleteId: string, _value: number) {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'rotativo')
     await assertRotativoAccess(rotativoId, arenaId)
     await ensureAthleteBelongsToArena(arenaId, athleteId)
     void _value
@@ -226,7 +226,7 @@ export async function registerAthleteAction(arenaId: string, rotativoId: string,
 
 export async function getRotativoCourtsAction(arenaId: string) {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'rotativo')
     const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
     const data = await repo.getCourts(arenaId)
     return { success: true, data }
@@ -237,7 +237,7 @@ export async function getRotativoCourtsAction(arenaId: string) {
 
 export async function getRotativoPacotesAction(arenaId: string) {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'rotativo')
     const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
     const data = await repo.getPacotes(arenaId)
     return { success: true, data }
@@ -255,7 +255,7 @@ export async function saveRotativoPacotesAction(formData: unknown) {
   try {
     await requireAuthenticatedDbUser()
     const { arenaId, pacotes } = parsed.data
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'rotativo')
 
     const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
     const data = await repo.savePacotes(arenaId, pacotes)
@@ -277,7 +277,7 @@ export async function launchRotativoCreditAction(formData: unknown) {
   try {
     const { dbUserId } = await requireAuthenticatedDbUser()
     const { operationId, arenaId, athleteId, quantidade, validityDays, modo_pagamento_id } = parsed.data
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'rotativo')
     await ensureAthleteBelongsToArena(arenaId, athleteId)
 
     const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
@@ -303,7 +303,7 @@ export async function launchRotativoCreditAction(formData: unknown) {
 
 export async function previewCreditPurchaseValueAction(arenaId: string, quantidade: number) {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'rotativo')
     const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
     const valor = await repo.quoteCreditPurchaseValue(arenaId, quantidade)
     return { success: true, valor }
@@ -317,7 +317,7 @@ export async function getRotativoCreditMovementsAction(
   filters: { search?: string; page?: number; pageSize?: number } = {}
 ) {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'rotativo')
     const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
     const { rows, total } = await repo.getCreditMovements(arenaId, filters)
     return { success: true, data: rows, total }
@@ -328,7 +328,7 @@ export async function getRotativoCreditMovementsAction(
 
 export async function getTopRotativoAthletesAction(arenaId: string, limit = 5) {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'rotativo')
     const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
     const data = await repo.getTopAthletesByCredit(arenaId, limit)
     return { success: true, data }
@@ -339,7 +339,7 @@ export async function getTopRotativoAthletesAction(arenaId: string, limit = 5) {
 
 export async function processExpiredRotativoCreditsAction(arenaId: string) {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'rotativo')
     const repo = new SupabaseRotativoRepository(getSupabaseAdmin())
     const processed = await repo.processExpiredCredits(arenaId)
     if (processed > 0) revalidateRotativo(arenaId)

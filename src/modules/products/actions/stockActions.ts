@@ -1,7 +1,7 @@
 "use server"
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { requireAuthenticatedDbUser, assertArenaAccess, assertArenaAdminAccess, assertArenaBackofficeAccess, assertProductAccess, assertStationOrderAccess } from '@/lib/server-auth'
+import { requireAuthenticatedDbUser, assertProductAccess, assertStationOrderAccess, assertArenaResourceAccess } from '@/lib/server-auth'
 import { SupabaseProductRepository } from '@/modules/products/repositories/SupabaseProductRepository'
 import type { CreateProductDTO, Product, UpdateProductDTO } from '@/modules/products/types/product.types'
 import { revalidatePath } from 'next/cache'
@@ -91,7 +91,7 @@ function validateCatalogBasics(name: string, price: number, status: string | nul
 
 export async function getProductsByArenaAction(arenaId: string) {
     try {
-        await assertArenaAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'catalog')
         const repo = new SupabaseProductRepository(getSupabaseAdmin())
         const data = await repo.findByArena(arenaId)
         return { success: true, data }
@@ -103,7 +103,7 @@ export async function getProductsByArenaAction(arenaId: string) {
 
 export async function createProductAction(arenaId: string, input: CreateProductDTO) {
     try {
-        await assertArenaAdminAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'catalog')
         if (input.arena_id !== arenaId) {
             throw new Error('Produto não pertence à arena informada')
         }
@@ -145,7 +145,7 @@ export async function createProductAction(arenaId: string, input: CreateProductD
 
 export async function updateProductAction(arenaId: string, productId: string, input: UpdateProductDTO) {
     try {
-        await assertArenaAdminAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'catalog')
         await assertProductAccess(productId, arenaId)
         if ('arena_id' in input && input.arena_id && input.arena_id !== arenaId) {
             throw new Error('Produto não pertence à arena informada')
@@ -207,7 +207,7 @@ export async function updateProductAction(arenaId: string, productId: string, in
 
 export async function deleteProductAction(arenaId: string, productId: string) {
     try {
-        await assertArenaAdminAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'catalog')
         await assertProductAccess(productId, arenaId)
         const repo = new SupabaseProductRepository(getSupabaseAdmin())
         await repo.delete(productId)
@@ -222,6 +222,7 @@ export async function deleteProductAction(arenaId: string, productId: string) {
 export async function getStockMovementsByProductAction(productId: string) {
     try {
         const arenaId = await assertProductAccess(productId)
+        await assertArenaResourceAccess(arenaId, 'catalog')
         const { data, error } = await getSupabaseAdmin()
             .from('product_stock_movements')
             .select(`*, user:users!product_stock_movements_registered_by_fkey(name)`)
@@ -248,7 +249,7 @@ export async function createStockEntryAction(input: {
     invoice_number?: string
 }) {
     try {
-        await assertArenaBackofficeAccess(input.arena_id)
+        await assertArenaResourceAccess(input.arena_id, 'catalog')
         const { dbUserId } = await requireAuthenticatedDbUser()
         const { data, error } = await stockRpc().rpc('register_product_stock_entry', {
             p_operation_id: input.operation_id,
@@ -279,7 +280,7 @@ export async function registerStockOutflowAction(
     referenceType = 'order_item'
 ) {
     try {
-        await assertArenaBackofficeAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'catalog')
         const { dbUserId } = await requireAuthenticatedDbUser()
         const { error } = await stockRpc().rpc('register_product_stock_outflow', {
             p_arena_id: arenaId,

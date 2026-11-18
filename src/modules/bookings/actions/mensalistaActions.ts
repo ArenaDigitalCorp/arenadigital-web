@@ -1,11 +1,7 @@
 'use server';
 
 import { getSupabaseAdmin } from '@/lib/supabase-server';
-import {
-  assertArenaBackofficeAccess,
-  assertCourtAccess,
-  requireAuthenticatedDbUser,
-} from '@/lib/server-auth';
+import { assertCourtAccess, requireAuthenticatedDbUser, assertArenaResourceAccess } from '@/lib/server-auth'
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import type { PlanoMensalistaComDetalhes } from '@/modules/bookings/types/booking.types';
@@ -144,7 +140,7 @@ export async function createPlanoMensalistaAction(
   input: CreatePlanoMensalistaInput
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await assertArenaBackofficeAccess(arenaId);
+    await assertArenaResourceAccess(arenaId, 'bookings.recurring');
     const { dbUserId } = await requireAuthenticatedDbUser();
     const parsed = createPlanoSchema.parse(input);
     await assertCourtAccess(parsed.court_id, arenaId);
@@ -204,7 +200,7 @@ export async function createPlanoMensalistaBlocosAction(
   input: CreatePlanoMensalistaBlocosInput
 ): Promise<{ success: boolean; planId?: string; error?: string }> {
   try {
-    await assertArenaBackofficeAccess(arenaId);
+    await assertArenaResourceAccess(arenaId, 'bookings.recurring');
     const { dbUserId } = await requireAuthenticatedDbUser();
     const parsed = createPlanoBlocosSchema.parse(input);
 
@@ -261,7 +257,7 @@ export async function cancelPlanoMensalistaAction(
   planoId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await assertArenaBackofficeAccess(arenaId);
+    await assertArenaResourceAccess(arenaId, 'bookings.recurring');
     const parsed = z
       .object({ arenaId: uuidSchema, planoId: uuidSchema })
       .parse({ arenaId, planoId });
@@ -291,7 +287,7 @@ export async function confirmarMesMensalistaAction(
   expectedBookingStart: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await assertArenaBackofficeAccess(arenaId);
+    await assertArenaResourceAccess(arenaId, 'bookings.recurring');
     const { dbUserId } = await requireAuthenticatedDbUser();
     const parsed = z
       .object({
@@ -338,7 +334,7 @@ export async function getPlanosMensalistaAction(
   error?: string;
 }> {
   try {
-    await assertArenaBackofficeAccess(arenaId);
+    await assertArenaResourceAccess(arenaId, 'bookings.recurring');
     const supabase = getSupabaseAdmin();
 
     let query = supabase
@@ -434,7 +430,7 @@ export async function quoteSessaoMensalistaAction(
   intervalo?: { inicio: string; fim: string }
 ): Promise<{ success: boolean; data?: SessaoMensalistaQuote; error?: string }> {
   try {
-    await assertArenaBackofficeAccess(arenaId);
+    await assertArenaResourceAccess(arenaId, 'bookings.recurring');
     const parsed = z
       .object({
         arenaId: uuidSchema,
@@ -565,7 +561,7 @@ export async function cancelarSessaoMensalistaAction(
 }> {
   try {
     const parsed = cancelarSessaoSchema.parse(input);
-    await assertArenaBackofficeAccess(parsed.arenaId);
+    await assertArenaResourceAccess(parsed.arenaId, 'bookings.recurring');
     const { dbUserId } = await requireAuthenticatedDbUser();
 
     if (parsed.lancarCredito && parsed.valorCredito <= 0) {

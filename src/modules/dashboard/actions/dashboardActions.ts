@@ -1,40 +1,13 @@
 "use server"
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { assertArenaBackofficeAccess, requireAuthenticatedDbUser } from '@/lib/server-auth'
+import { assertArenaResourceAccess, requireAuthenticatedDbUser } from '@/lib/server-auth'
+import { loadAccessibleArenas } from '@/lib/accessible-arenas'
+import { applyBookingFilter, calendarFilter, canSeeBookings } from '@/modules/bookings/lib/booking-access'
+import type { ArenaResource } from '@/lib/arena-resources'
 import { fetchAllSupabaseRows } from '@/lib/supabase-pagination'
 import { startOfMonth, endOfMonth, subMonths, startOfDay, endOfDay, addHours, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns'
 import type { DashboardStats, OccupancyPeriod, OccupancyRow } from '@/modules/dashboard/types/dashboard.types'
-
-async function resolveArenaIds(supabase: ReturnType<typeof getSupabaseAdmin>, ownerId: string, selectedArenaId: string | 'all') {
-    if (selectedArenaId === 'all') {
-        const { data: linkedArenas, error: linkedError } = await supabase
-            .from('arena_users')
-            .select('arena_id')
-            .eq('user_id', ownerId)
-            .in('status', ['Ativo', 'ativo', 'active'])
-
-        if (linkedError) {
-            throw new Error(`Failed to load linked arenas: ${linkedError.message}`)
-        }
-
-        const linkedArenaIds = linkedArenas?.map((arena) => arena.arena_id) ?? []
-
-        let query = supabase.from('arenas').select('id')
-        query = linkedArenaIds.length > 0
-            ? query.or(`owner_id.eq.${ownerId},id.in.(${linkedArenaIds.join(',')})`)
-            : query.eq('owner_id', ownerId)
-
-        const { data, error } = await query
-        if (error) {
-            throw new Error(`Failed to load arenas: ${error.message}`)
-        }
-
-        return data?.map(a => a.id) ?? []
-    }
-    if (!selectedArenaId) return []
-    return [selectedArenaId]
-}
 
 const WEEKDAY_NAMES = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado']
 
@@ -99,26 +72,40 @@ function buildOccupancyRows(
     }).sort((a, b) => a.courtName.localeCompare(b.courtName))
 }
 
+type DashboardArena = { id: string; resources: readonly string[] }
+
+// One batch for each visible combination (single, monthly, or both). Each
+// query constrains its own arena IDs so grants never bleed across tenants.
+function bookingGroups(arenas: DashboardArena[]) {
+    const groups = new Map<string | undefined, string[]>()
+    for (const arena of arenas) {
+        if (!canSeeBookings(arena.resources)) continue
+        const filter = calendarFilter(arena.resources)
+        const ids = groups.get(filter) ?? []
+        ids.push(arena.id)
+        groups.set(filter, ids)
+    }
+    return Array.from(groups, ([filter, arenaIds]) => ({ filter, arenaIds }))
+}
+
 export async function getDashboardDataAction(
     selectedArenaId: string | 'all',
     occupancyPeriod: OccupancyPeriod = 'day'
 ): Promise<{ success: boolean; stats?: DashboardStats; occupancy?: OccupancyRow[]; error?: string }> {
     try {
-        // The arena guard already authenticates the caller; do not resolve identity twice.
-        const { dbUserId } = selectedArenaId === 'all'
-            ? await requireAuthenticatedDbUser()
-            : await assertArenaBackofficeAccess(selectedArenaId)
+        const targets: DashboardArena[] = selectedArenaId === 'all'
+            ? await loadAccessibleArenas((await requireAuthenticatedDbUser()).dbUserId)
+            : [{ id: selectedArenaId, resources: (await assertArenaResourceAccess(selectedArenaId, 'dashboard')).resources }]
+        const dashboards = targets.filter(arena => arena.resources.includes('dashboard'))
+        const allowed = (...keys: ArenaResource[]) => dashboards.filter(arena =>
+            keys.every(key => arena.resources.includes(key))).map(arena => arena.id)
+        const financialArenas = allowed('finance.overview')
+        const countsByScope = bookingGroups(dashboards)
+        const athletesByScope = bookingGroups(dashboards.filter(arena => arena.resources.includes('athletes')))
+        const spaceArenas = allowed('spaces')
+        const occupancyByScope = bookingGroups(dashboards.filter(arena => arena.resources.includes('spaces')))
+        const occupancyArenas = new Set(occupancyByScope.flatMap(group => group.arenaIds))
         const supabase = getSupabaseAdmin()
-        const arenaIds = await resolveArenaIds(supabase, dbUserId, selectedArenaId)
-
-        if (arenaIds.length === 0) {
-            return {
-                success: true,
-                stats: { receita: 0, receitaChange: 0, reservas: 0, quadras: 0, ativos: 0 },
-                occupancy: [],
-            }
-        }
-
         const now = new Date()
         const todayStart = startOfDay(now).toISOString()
         const todayEnd = endOfDay(now).toISOString()
@@ -135,45 +122,54 @@ export async function getDashboardDataAction(
         // Only occupancy depends on courts. Revenue and reservation reads can
         // start immediately instead of waiting for that unrelated round trip.
         const occupancyPromise = (async () => {
-            const { data: courts } = await supabase
+            const { data: courts } = spaceArenas.length === 0 ? { data: [] } : await supabase
                 .from('courts')
                 .select('id, name, day_config, arena_id')
-                .in('arena_id', arenaIds)
+                .in('arena_id', spaceArenas)
                 .eq('status', 'ativo')
 
             const courtList = courts ?? []
-            const courtIds = courtList.map(c => c.id)
-            const occupancyBookings = courtIds.length === 0
-                ? { data: [] as { court_id: string; start_time: string; end_time: string }[], error: null }
-                : await fetchAllSupabaseRows(supabase
-                    .from('bookings')
-                    .select('court_id, start_time, end_time')
-                    .in('court_id', courtIds)
-                    .in('status', ['confirmed', 'pending'])
-                    .gte('start_time', occupancyRangeStartStr)
-                    .lte('start_time', occupancyRangeEndStr)
-                    .order('id', { ascending: true }))
-            return { courtList, occupancyBookings }
+            const bookingsByScope = await Promise.all(occupancyByScope.map(async ({ filter, arenaIds }) => {
+                const courtIds = courtList.filter(court => arenaIds.includes(court.arena_id)).map(court => court.id)
+                if (!courtIds.length) return []
+                const query = supabase.from('bookings').select('court_id, start_time, end_time')
+                    .in('arena_id', arenaIds).in('court_id', courtIds).in('status', ['confirmed', 'pending'])
+                    .gte('start_time', occupancyRangeStartStr).lte('start_time', occupancyRangeEndStr)
+                    .order('id', { ascending: true })
+                const { data, error } = await fetchAllSupabaseRows(applyBookingFilter(query, filter))
+                if (error) throw new Error(error.message)
+                return data ?? []
+            }))
+            return { courtList, occupancyBookings: bookingsByScope.flat() }
         })()
 
         const [bookingCountResult, currentMonthTx, previousMonthTx, activeAthletesResult, { courtList, occupancyBookings }] =
             await Promise.all([
-                supabase.from('bookings').select('*', { count: 'exact', head: true })
-                    .in('arena_id', arenaIds).eq('status', 'confirmed')
-                    .gte('start_time', todayStart).lte('start_time', todayEnd),
-                fetchAllSupabaseRows(supabase.from('transactions').select('total_value')
-                    .in('arena_id', arenaIds).eq('type', 'entrada')
+                Promise.all(countsByScope.map(async ({ filter, arenaIds }) => {
+                    const query = supabase.from('bookings').select('*', { count: 'exact', head: true })
+                        .in('arena_id', arenaIds).eq('status', 'confirmed')
+                        .gte('start_time', todayStart).lte('start_time', todayEnd)
+                    const { count, error } = await applyBookingFilter(query, filter)
+                    if (error) throw new Error(error.message)
+                    return count ?? 0
+                })),
+                financialArenas.length === 0 ? { data: [] } : fetchAllSupabaseRows(supabase.from('transactions').select('total_value')
+                    .in('arena_id', financialArenas).eq('type', 'entrada')
                     .gte('launch_date', currentMonthStart).lte('launch_date', currentMonthEnd)
                     .order('id', { ascending: true })),
-                fetchAllSupabaseRows(supabase.from('transactions').select('total_value')
-                    .in('arena_id', arenaIds).eq('type', 'entrada')
+                financialArenas.length === 0 ? { data: [] } : fetchAllSupabaseRows(supabase.from('transactions').select('total_value')
+                    .in('arena_id', financialArenas).eq('type', 'entrada')
                     .gte('launch_date', previousMonthStart).lte('launch_date', previousMonthEnd)
                     .order('id', { ascending: true })),
-                fetchAllSupabaseRows(supabase.from('bookings').select('athlete_id')
-                    .in('arena_id', arenaIds).eq('status', 'confirmed')
-                    .gte('start_time', currentMonthStart).lte('start_time', currentMonthEnd)
-                    .not('athlete_id', 'is', null)
-                    .order('id', { ascending: true })),
+                Promise.all(athletesByScope.map(async ({ filter, arenaIds }) => {
+                    const query = supabase.from('bookings').select('athlete_id')
+                        .in('arena_id', arenaIds).eq('status', 'confirmed').not('athlete_id', 'is', null)
+                        .gte('start_time', currentMonthStart).lte('start_time', currentMonthEnd)
+                        .order('id', { ascending: true })
+                    const { data, error } = await fetchAllSupabaseRows(applyBookingFilter(query, filter))
+                    if (error) throw new Error(error.message)
+                    return data ?? []
+                })),
                 occupancyPromise,
             ])
 
@@ -189,11 +185,11 @@ export async function getDashboardDataAction(
             stats: {
                 receita,
                 receitaChange,
-                reservas: bookingCountResult.count ?? 0,
+                reservas: bookingCountResult.reduce((total, count) => total + count, 0),
                 quadras: courtList.length,
-                ativos: new Set(activeAthletesResult.data?.map(b => b.athlete_id)).size,
+                ativos: new Set(activeAthletesResult.flat().map(b => b.athlete_id)).size,
             },
-            occupancy: buildOccupancyRows(courtList, occupancyBookings.data ?? [], occupancyPeriodDates),
+            occupancy: buildOccupancyRows(courtList.filter(c => occupancyArenas.has(c.arena_id)), occupancyBookings, occupancyPeriodDates),
         }
     } catch (err) {
         const message = err instanceof Error ? err.message : 'Erro ao carregar dashboard'

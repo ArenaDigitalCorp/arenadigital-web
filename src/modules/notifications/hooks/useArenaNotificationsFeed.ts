@@ -93,6 +93,8 @@ export function useArenaNotificationsFeed(
       if (cancelled) return
 
       if (!res.success) {
+        setNotifications([])
+        setUnreadCount(0)
         setError(res.error ?? 'Erro ao carregar notificações')
         setLoadedArenaId(arenaId)
         return
@@ -204,5 +206,5 @@ export function useArenaNotificationsFeed(
     if (!res.success) refresh()
   }, [arenaId, refresh])
 
-  return { notifications, unreadCount, isLoading, error, refresh, markAsRead, markAllAsRead }
+  return { notifications: loadedArenaId === arenaId ? notifications : [], unreadCount: loadedArenaId === arenaId ? unreadCount : 0, isLoading, error, refresh, markAsRead, markAllAsRead }
 }

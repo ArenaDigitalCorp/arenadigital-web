@@ -1,7 +1,10 @@
 "use client"
 
-import { useState, useCallback } from "react";
-import { Users, Search, Plus, MoreVertical, Edit, Trash2, Crown, UserCog, Store } from "lucide-react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import type { AccessProfile } from "@/modules/access/types";
+import { Users, Search, Plus, MoreVertical, Edit, UserMinus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { UserFormModal } from "@/modules/users/components/UserFormModal";
-import { getArenaUsersAction, createArenaUserAction, updateArenaUserAction, deleteArenaUserAction } from "@/modules/users/actions/userActions";
+import { createArenaUserAction, updateArenaUserAction, deleteArenaUserAction } from "@/modules/users/actions/userActions";
 import { cn } from "@/lib/utils";
 import { arenaDataTable } from "@/lib/arena-data-table";
 
@@ -25,6 +28,9 @@ type SelectedUser = {
     name: string;
     email: string;
     role: string;
+    profileName: string;
+    profileId: string;
+    editable: boolean;
     stationId: string | null;
     status: string;
 };
@@ -39,7 +45,7 @@ type UserFormData = {
     login?: string;
     name: string;
     password?: string;
-    role: string;
+    profileId: string;
     stationId?: string | null;
     senha?: string;
     status: string;
@@ -50,21 +56,19 @@ interface Props {
     arenaName: string;
     initialUsers: SelectedUser[];
     stations: StationOption[];
+    profiles: AccessProfile[];
+    isOwner?: boolean;
+    readOnly?: boolean;
 }
 
-export function UsersPageClient({ arenaId, arenaName, initialUsers, stations }: Props) {
-    const [users, setUsers] = useState<SelectedUser[]>(initialUsers);
+export function UsersPageClient({ arenaId, arenaName, initialUsers: users, stations, profiles, isOwner, readOnly }: Props) {
+    const router = useRouter();
     const [searchTerm, setSearchTerm] = useState("");
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedUser, setSelectedUser] = useState<SelectedUser | null>(null);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [userToDelete, setUserToDelete] = useState<SelectedUser | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
-
-    const refreshUsers = useCallback(async () => {
-        const res = await getArenaUsersAction(arenaId);
-        if (res.success) setUsers(res.data ?? []);
-    }, [arenaId]);
 
     const handleSaveUser = async (userData: UserFormData) => {
         let res;
@@ -83,7 +87,7 @@ export function UsersPageClient({ arenaId, arenaName, initialUsers, stations }: 
                         : "Usuário cadastrado com sucesso!"
             );
             setIsModalOpen(false);
-            refreshUsers();
+            router.refresh();
         } else {
             toast.error(res.error || "Erro ao salvar usuário");
         }
@@ -95,15 +99,15 @@ export function UsersPageClient({ arenaId, arenaName, initialUsers, stations }: 
         try {
             const res = await deleteArenaUserAction(arenaId, userToDelete.arenaUserId, userToDelete.id);
             if (res.success) {
-                toast.success("Usuário excluído com sucesso!");
-                setUsers(prev => prev.filter(u => u.arenaUserId !== userToDelete.arenaUserId));
+                toast.success("Acesso removido desta arena.");
+                router.refresh();
                 setIsDeleteModalOpen(false);
                 setUserToDelete(null);
             } else {
-                toast.error(res.error || "Erro ao excluir usuário");
+                toast.error(res.error || "Erro ao remover acesso");
             }
         } catch {
-            toast.error("Erro ao excluir usuário");
+            toast.error("Erro ao remover acesso");
         } finally {
             setIsDeleting(false);
         }
@@ -126,10 +130,11 @@ export function UsersPageClient({ arenaId, arenaName, initialUsers, stations }: 
                         Gerencie os usuários e permissões da arena <span className="font-semibold">{arenaName}</span>
                     </p>
                 </div>
-                <Button onClick={() => { setSelectedUser(null); setIsModalOpen(true); }} className="bg-arena-button hover:bg-arena-button-hover">
+                <div className="flex flex-wrap gap-2">{isOwner && <Button variant="outline" asChild><Link href={`/dashboard/settings/profiles/${arenaId}`}>Perfis e permissões</Link></Button>}
+                <Button disabled={readOnly || !profiles.length} onClick={() => { setSelectedUser(null); setIsModalOpen(true); }} className="bg-arena-button hover:bg-arena-button-hover">
                     <Plus className="mr-2 h-4 w-4" />
                     Cadastrar Usuário
-                </Button>
+                </Button></div>
             </div>
 
             <Card className="border-border">
@@ -171,7 +176,7 @@ export function UsersPageClient({ arenaId, arenaName, initialUsers, stations }: 
                                             <TableCell className={cn(arenaDataTable.td, "text-arena-navy-800/60")}>{user.email}</TableCell>
                                             <TableCell className={arenaDataTable.td}>
                                                 <Badge variant="outline" className="font-normal text-muted-foreground border-slate-700">
-                                                    {user.role}
+                                                    {user.profileName}
                                                 </Badge>
                                             </TableCell>
                                             <TableCell className={arenaDataTable.td}>
@@ -184,7 +189,7 @@ export function UsersPageClient({ arenaId, arenaName, initialUsers, stations }: 
                                             </TableCell>
                                             <TableCell className={arenaDataTable.tdRight}>
                                                 <div className="flex justify-end">
-                                                <DropdownMenu>
+                                                {user.editable && <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
                                                         <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-white">
                                                             <MoreVertical className="h-4 w-4" />
@@ -196,11 +201,11 @@ export function UsersPageClient({ arenaId, arenaName, initialUsers, stations }: 
                                                             Editar
                                                         </DropdownMenuItem>
                                                         <DropdownMenuItem onClick={() => { setUserToDelete(user); setIsDeleteModalOpen(true); }} className="text-rose-500 hover:bg-rose-500/10 hover:text-rose-400 cursor-pointer focus:text-rose-400 focus:bg-rose-500/10">
-                                                            <Trash2 className="h-4 w-4 mr-2" />
-                                                            Excluir
+                                                            <UserMinus className="h-4 w-4 mr-2" />
+                                                            Remover acesso
                                                         </DropdownMenuItem>
                                                     </DropdownMenuContent>
-                                                </DropdownMenu>
+                                                </DropdownMenu>}
                                                 </div>
                                             </TableCell>
                                         </TableRow>
@@ -212,58 +217,11 @@ export function UsersPageClient({ arenaId, arenaName, initialUsers, stations }: 
                 </CardContent>
             </Card>
 
-            <div className="space-y-4">
-                <div>
-                    <h3 className="text-base font-semibold">Conheça os perfis</h3>
-                    <p className="text-sm text-muted-foreground">Entenda as permissões de cada tipo de usuário</p>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <Card className="border-border">
-                        <CardContent className="p-5 flex flex-col gap-3">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-lg bg-arena-button/10">
-                                    <Crown className="h-5 w-5 text-arena-button" />
-                                </div>
-                                <span className="font-semibold text-sm">Administrador</span>
-                            </div>
-                            <p className="text-sm text-muted-foreground leading-relaxed">
-                                Perfil que possui acesso a todas as ferramentas da plataforma.
-                            </p>
-                        </CardContent>
-                    </Card>
-                    <Card className="border-border">
-                        <CardContent className="p-5 flex flex-col gap-3">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-lg bg-blue-500/10">
-                                    <UserCog className="h-5 w-5 text-blue-500" />
-                                </div>
-                                <span className="font-semibold text-sm">Usuário Comum</span>
-                            </div>
-                            <p className="text-sm text-muted-foreground leading-relaxed">
-                                Possui acesso a todas as ferramentas da plataforma, porém não pode cadastrar novos usuários.
-                            </p>
-                        </CardContent>
-                    </Card>
-                    <Card className="border-border">
-                        <CardContent className="p-5 flex flex-col gap-3">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-lg bg-emerald-500/10">
-                                    <Store className="h-5 w-5 text-emerald-500" />
-                                </div>
-                                <span className="font-semibold text-sm">Caixa</span>
-                            </div>
-                            <p className="text-sm text-muted-foreground leading-relaxed">
-                                Usuário que irá ter acesso somente à área de estações cadastradas.
-                            </p>
-                        </CardContent>
-                    </Card>
-                </div>
-            </div>
-
             <UserFormModal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 user={selectedUser}
+                profiles={profiles}
                 stations={stations}
                 onSave={handleSaveUser}
             />
@@ -271,19 +229,17 @@ export function UsersPageClient({ arenaId, arenaName, initialUsers, stations }: 
             <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
                 <DialogContent className="sm:max-w-[425px] bg-white border-slate-200 p-6 rounded-3xl shadow-xl">
                     <DialogHeader className="mb-4">
-                        <DialogTitle className="text-arena-navy-800 text-2xl font-semibold">Excluir usuário</DialogTitle>
+                        <DialogTitle className="text-arena-navy-800 text-2xl font-semibold">Remover acesso</DialogTitle>
                     </DialogHeader>
                     <div className="text-slate-600 mb-8 whitespace-pre-wrap">
-                        Tem certeza que deseja excluir este usuário? A exclusão é{'\n'}
-                        permanente e todos os seus dados serão removidos. Essa ação não{'\n'}
-                        pode ser desfeita.
+                        {userToDelete?.name} perderá o acesso a esta arena. Os outros vínculos e a conta da pessoa serão preservados.
                     </div>
                     <div className="flex justify-end gap-3 font-semibold">
                         <Button variant="outline" onClick={() => setIsDeleteModalOpen(false)} disabled={isDeleting} className="bg-white border-arena-navy-800 text-arena-navy-800 hover:bg-slate-50 px-8 rounded-lg">
                             Fechar
                         </Button>
                         <Button onClick={confirmDeleteUser} disabled={isDeleting} className="bg-arena-button hover:bg-arena-button-hover text-white px-8 rounded-lg border-0">
-                            Excluir
+                            Remover acesso
                         </Button>
                     </div>
                 </DialogContent>

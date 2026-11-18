@@ -157,7 +157,8 @@ test('read-only POST validates params, authorization and expected identity befor
   class AuthorizationError extends Error { constructor(status) { super('Denied'); this.status = status } }
   const { POST } = loadTypescriptModule('src/app/api/athletes/page/route.ts', {
     'next/server': { NextResponse: { json: (body, options) => ({ body, ...options, status: options?.status ?? 200 }) } },
-    '@/lib/server-auth': { AuthorizationError, async assertArenaBackofficeAccess(id) {
+    '@/lib/server-auth': { AuthorizationError, async assertArenaResourceAccess(id, key) {
+      assert.equal(key, 'athletes')
       assert.equal(id, arenaId)
       if (deniedStatus) throw new AuthorizationError(deniedStatus)
       return { dbUserId: userId }

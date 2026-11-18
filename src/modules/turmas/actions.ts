@@ -5,7 +5,7 @@
 import { revalidatePath } from 'next/cache'
 import { ZodError } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { assertArenaBackofficeAccess, requireAuthenticatedDbUser } from '@/lib/server-auth'
+import { requireAuthenticatedDbUser, assertArenaResourceAccess } from '@/lib/server-auth'
 import { fetchAllSupabaseRows } from '@/lib/supabase-pagination'
 import { listAllAthleteProfiles } from '@/modules/athletes/lib/list-all-athlete-profiles'
 import { traduzirErroTurma, type ErroRpc } from './erros'
@@ -101,7 +101,7 @@ function paraAtleta(row: AtletaRow, membro: boolean): Atleta {
 
 export async function getTurmasPageDataAction(arenaId: string): Promise<ResultadoTurma<TurmasPageData>> {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'classes')
     const db = loose()
 
     const [esportesRes, espacosRes, perfisRes, recorrenciasRes, turmasRes, matriculasRes] =
@@ -309,7 +309,7 @@ export async function getTurmasPageDataAction(arenaId: string): Promise<Resultad
 /** Fresh, complete selection catalogue; never a truncated list of candidates. */
 export async function getTurmasAthleteOptionsAction(arenaId: string): Promise<ResultadoTurma<Atleta[]>> {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'classes')
     const res = await fetchAllSupabaseRows<AtletaRow>(loose().from('atleta')
       .select(`${ATLETA_SELECT}, arenas_atleta!inner(id_arena, perfil_definido_em)`)
       .eq('arenas_atleta.id_arena', arenaId)
@@ -332,7 +332,7 @@ export async function criarTurmaAction(
 ): Promise<ResultadoTurma<{ turmaId: string; codigo: string; recorrenciaCriada: boolean }>> {
   try {
     const parsed = criarTurmaSchema.parse(input)
-    await assertArenaBackofficeAccess(parsed.arenaId)
+    await assertArenaResourceAccess(parsed.arenaId, 'classes')
     const { dbUserId } = await requireAuthenticatedDbUser()
 
     const { data, error } = await loose().rpc('create_turma_atomic', {
@@ -365,7 +365,7 @@ export async function editarTurmaAction(
 ): Promise<ResultadoTurma<{ codigo: string; recorrenciaCriada: boolean }>> {
   try {
     const parsed = editarTurmaSchema.parse(input)
-    await assertArenaBackofficeAccess(parsed.arenaId)
+    await assertArenaResourceAccess(parsed.arenaId, 'classes')
     const { dbUserId } = await requireAuthenticatedDbUser()
 
     const { data, error } = await loose().rpc('update_turma_atomic', {
@@ -398,7 +398,7 @@ export async function encerrarTurmaAction(input: unknown): Promise<
 > {
   try {
     const parsed = encerrarTurmaSchema.parse(input)
-    await assertArenaBackofficeAccess(parsed.arenaId)
+    await assertArenaResourceAccess(parsed.arenaId, 'classes')
     const { dbUserId } = await requireAuthenticatedDbUser()
 
     const { data, error } = await loose().rpc('encerrar_turma_atomic', {
@@ -432,7 +432,7 @@ export async function encerrarTurmaAction(input: unknown): Promise<
 export async function vincularAlunoAction(input: unknown): Promise<ResultadoTurma<{ matriculaId: string }>> {
   try {
     const parsed = vincularAlunoSchema.parse(input)
-    await assertArenaBackofficeAccess(parsed.arenaId)
+    await assertArenaResourceAccess(parsed.arenaId, 'classes')
     const { dbUserId } = await requireAuthenticatedDbUser()
 
     const { data, error } = await loose().rpc('vincular_turma_aluno_atomic', {
@@ -455,7 +455,7 @@ export async function vincularAlunoAction(input: unknown): Promise<ResultadoTurm
 export async function desvincularAlunoAction(input: unknown): Promise<ResultadoTurma<{ dataSaida: string }>> {
   try {
     const parsed = desvincularAlunoSchema.parse(input)
-    await assertArenaBackofficeAccess(parsed.arenaId)
+    await assertArenaResourceAccess(parsed.arenaId, 'classes')
     const { dbUserId } = await requireAuthenticatedDbUser()
 
     const { data, error } = await loose().rpc('desvincular_turma_aluno_atomic', {

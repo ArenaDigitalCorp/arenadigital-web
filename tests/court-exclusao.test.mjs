@@ -83,10 +83,10 @@ test('desativar usa o campo que o banco de fato checa', () => {
   assert.match(actions, /setCourtActiveAction\(arenaId: string, courtId: string, ativo: boolean\)/)
 })
 
-test('desativar continua sendo autorizado como admin da arena', () => {
+test('desativar continua sendo autorizado pelo recurso de espaços', () => {
   for (const fn of ['getCourtDeletionImpactAction', 'setCourtActiveAction', 'deleteCourtAction']) {
     const corpo = actions.slice(actions.indexOf(`export async function ${fn}`))
-    assert.match(corpo.slice(0, 400), /await assertArenaAdminAccess\(arenaId\)/, `${fn} sem admin`)
+    assert.match(corpo.slice(0, 400), /await assertArenaResourceAccess\(arenaId, 'spaces'\)/, `${fn} sem permissão`)
     assert.match(corpo.slice(0, 400), /await assertCourtAccess\(courtId, arenaId\)/, `${fn} sem escopo`)
   }
 })

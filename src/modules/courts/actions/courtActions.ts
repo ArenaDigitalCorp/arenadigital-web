@@ -1,7 +1,7 @@
 "use server"
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { assertArenaAdminAccess, assertCourtAccess } from '@/lib/server-auth'
+import { assertCourtAccess, assertArenaResourceAccess } from '@/lib/server-auth'
 import { assertCanCreateSpaceForArena } from '@/modules/payments/usecases/assert-space-entitlement.usecase'
 import type { Database } from '@/types/supabase.types'
 import {
@@ -36,7 +36,7 @@ export async function getSportsForCourtAction(): Promise<{ success: boolean; dat
 
 export async function getCourtsByArenaAction(arenaId: string) {
     try {
-        await assertArenaAdminAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'spaces', 'bookings.single', 'bookings.recurring')
         const supabase = getSupabaseAdmin()
         const { data, error } = await supabase
             .from('courts')
@@ -101,7 +101,7 @@ export async function getCourtDeletionImpactAction(
     courtId: string
 ): Promise<{ success: boolean; data?: CourtDeletionImpact; error?: string }> {
     try {
-        await assertArenaAdminAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'spaces')
         await assertCourtAccess(courtId, arenaId)
         const supabase = getSupabaseAdmin()
         const agora = new Date().toISOString()
@@ -181,7 +181,7 @@ export async function getCourtDeletionImpactAction(
  */
 export async function setCourtActiveAction(arenaId: string, courtId: string, ativo: boolean) {
     try {
-        await assertArenaAdminAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'spaces')
         await assertCourtAccess(courtId, arenaId)
 
         const { data, error } = await getSupabaseAdmin()
@@ -210,7 +210,7 @@ export async function setCourtActiveAction(arenaId: string, courtId: string, ati
  */
 export async function deleteCourtAction(arenaId: string, courtId: string) {
     try {
-        await assertArenaAdminAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'spaces')
         await assertCourtAccess(courtId, arenaId)
 
         // A tela já mostrou o levantamento, mas ela não é fronteira de segurança:
@@ -245,6 +245,7 @@ export async function deleteCourtAction(arenaId: string, courtId: string) {
 
 export async function getCourtByIdAction(arenaId: string, courtId: string) {
     try {
+        await assertArenaResourceAccess(arenaId, 'spaces', 'bookings.single', 'bookings.recurring')
         await assertCourtAccess(courtId, arenaId)
         const { data, error } = await getSupabaseAdmin()
             .from('courts')
@@ -264,7 +265,7 @@ export async function getCourtByIdAction(arenaId: string, courtId: string) {
 
 export async function createCourtAction(arenaId: string, input: CourtCreateInput, sportIds?: string[]) {
     try {
-        await assertArenaAdminAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'spaces')
         await assertCanCreateSpaceForArena(arenaId)
         const supabase = getSupabaseAdmin()
 
@@ -290,7 +291,7 @@ export async function createCourtAction(arenaId: string, input: CourtCreateInput
 
 export async function duplicateCourtAction(arenaId: string, courtId: string, newName: string) {
     try {
-        await assertArenaAdminAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'spaces')
         await assertCourtAccess(courtId, arenaId)
         await assertCanCreateSpaceForArena(arenaId)
         const supabase = getSupabaseAdmin()
@@ -367,7 +368,7 @@ export async function duplicateCourtAction(arenaId: string, courtId: string, new
 
 export async function updateCourtAction(arenaId: string, courtId: string, input: CourtUpdate, sportIds?: string[]) {
     try {
-        await assertArenaAdminAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'spaces')
         await assertCourtAccess(courtId, arenaId)
         const supabase = getSupabaseAdmin()
 

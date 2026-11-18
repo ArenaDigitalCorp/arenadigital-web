@@ -1,4 +1,4 @@
-import { assertArenaAccess } from '@/lib/server-auth'
+import { assertArenaResourceAccess } from '@/lib/server-auth'
 import { getStationsWithMetricsAction } from '@/modules/stations/actions/stationActions'
 import { StationsPageClient } from '@/modules/stations/components/StationsPageClient'
 import { redirect } from 'next/navigation'
@@ -14,10 +14,10 @@ export default async function StationsPage({
 }) {
     const { id } = await params
     const { tutorial } = await searchParams
-    let access: Awaited<ReturnType<typeof assertArenaAccess>> | null = null
+    let access: Awaited<ReturnType<typeof assertArenaResourceAccess>> | null = null
 
     try {
-        access = await assertArenaAccess(id)
+        access = await assertArenaResourceAccess(id, 'stations')
     } catch {
         redirect('/dashboard/settings/arenas')
     }

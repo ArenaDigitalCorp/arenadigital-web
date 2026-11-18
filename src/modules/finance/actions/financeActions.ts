@@ -1,11 +1,7 @@
 'use server';
 
 import { getSupabaseAdmin } from '@/lib/supabase-server';
-import {
-  assertArenaAdminAccess,
-  assertArenaCaixaAccess,
-  assertArenaScopedResourceAccess,
-} from '@/lib/server-auth';
+import { assertArenaCaixaAccess, assertArenaScopedResourceAccess, assertArenaResourceAccess } from '@/lib/server-auth'
 import { SupabaseFinanceRepository } from '@/modules/finance/repositories/SupabaseFinanceRepository';
 import { revalidatePath } from 'next/cache';
 import { transactionActionSchema } from '@/modules/finance/schemas/transaction-action.schema';
@@ -18,7 +14,7 @@ import {
 
 export async function getFinanceDashboardAction(arenaId: string) {
   try {
-    await assertArenaAdminAccess(arenaId);
+    await assertArenaResourceAccess(arenaId, 'finance.overview');
     const repo = new SupabaseFinanceRepository(getSupabaseAdmin());
     const now = new Date();
     const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -69,7 +65,7 @@ export async function getTransactionsAction(
   endDate?: string
 ) {
   try {
-    await assertArenaAdminAccess(arenaId);
+    await assertArenaResourceAccess(arenaId, 'finance.overview');
     const repo = new SupabaseFinanceRepository(getSupabaseAdmin());
     const data = await repo.findByArena(arenaId, type, startDate, endDate);
     return { success: true, data };
@@ -186,7 +182,7 @@ export type { AvulsoReservaItem, AvulsoStatus } from '@/modules/finance/lib/avul
 
 export async function getAvulsosTodosAction(arenaId: string) {
   try {
-    await assertArenaAdminAccess(arenaId);
+    await assertArenaResourceAccess(arenaId, 'bookings.single');
     const supabase = getSupabaseAdmin();
 
     const { data, error } = await supabase
@@ -208,6 +204,7 @@ export async function getAvulsosTodosAction(arenaId: string) {
       )
       .eq('arena_id', arenaId)
       .is('plano_mensalista_id', null)
+      .or('booking_type.is.null,booking_type.neq.mensalista')
       .in('status', ['reservado', 'confirmed', 'cancelled'])
       .order('start_time', { ascending: false });
 

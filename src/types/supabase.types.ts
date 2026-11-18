@@ -6436,6 +6436,7 @@ export type Database = {
       }
     }
     Functions: {
+      get_arena_acl: { Args: { p_arena_id: string }; Returns: Json }
       mensalista_horarios_futuros: {
         Args: { p_arena_id: string; p_fim: string; p_inicio: string }
         Returns: {
