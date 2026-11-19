@@ -96,7 +96,7 @@ const sections: { id?: string; title: string; blocks: Block[] }[] = [
             },
             {
                 type: "p",
-                text: "No aplicativo de atletas, a localização é opcional. Quando você autoriza o acesso, podemos salvar sua última posição para localizar arenas, jogos e atletas próximos e selecionar publicações, promoções e anúncios da sua região. Você pode alterar essa permissão nas configurações do aparelho.",
+                text: "No aplicativo de atletas, a localização é opcional. Quando você autoriza o acesso, podemos salvar sua última posição para buscar arenas por distância, ordenar resultados pela proximidade do município e selecionar publicações, promoções e anúncios da sua região. Você pode alterar essa permissão nas configurações do aparelho.",
             },
         ],
     },
