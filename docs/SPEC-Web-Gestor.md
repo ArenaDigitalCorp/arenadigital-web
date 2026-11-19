@@ -1308,16 +1308,10 @@ segue cheio e o crédito é a compensação. Coberto por teste.
 ### 21.2 Backend web
 
 `src/modules/bookings/actions/mensalistaActions.ts`
-- `quoteSessaoMensalistaAction(arenaId, bookingId)` → `{ valorSugerido, tabelaNome, origem, atletaNome, inicio, fim }`.
-  Cadeia da tabela de preço, deliberada:
-  1. `planos_mensalista.price_table_id` (snapshot de quando o plano foi criado) → `origem: 'plano'`;
-  2. tabela `tipo='mensalista'` do espaço — planos antigos não têm o snapshot, e o
-     papel é resolvido por `tipo`, nunca por nome (ver §19.8) → `origem: 'mensalista'`;
-  3. `null` ⇒ `resolve_court_price` cai na tabela padrão do espaço → `origem: 'padrao'`,
-     e a tela **avisa** o gestor para conferir.
-
-  O valor sai sempre de `resolve_court_price` no banco; não há cálculo de preço no cliente.
-- `cancelarSessaoMensalistaAction(input)` — zod + `assertArenaBackofficeAccess` +
+- `quoteSessaoMensalistaAction(arenaId, bookingId, intervalos?)` devolve a sugestão, os valores por horário e por faixa e a tabela utilizada (§41.3). Na quadra do primeiro bloco, usa a tabela registrada no plano. Se o plano não tiver a tabela dessa quadra, usa a registrada na reserva.
+- Quando só há registro da tabela de outra quadra, a cotação procura o mesmo papel na quadra do jogo (§19.8 e §25.2). Uma tabela personalizada não identifica uma equivalente em outra quadra. Nessa situação, ou se faltar a tabela Professor na quadra de um plano de professor, a tela pede o valor manual. Planos antigos sem registro usam a tabela Mensalista do espaço e, na ausência dela, a padrão, com aviso ao gestor.
+- Cada valor sugerido vem de `resolve_court_price` no banco.
+- `cancelarSessaoMensalistaAction(input)` — zod + `assertArenaResourceAccess(arenaId, 'bookings.recurring')` +
   `requireAuthenticatedDbUser`, chama a RPC e revalida as rotas do calendário **e**
   `/dashboard/arenas/[id]/mensalistas`.
 
@@ -2919,27 +2913,19 @@ service_role only.
   existente da RPC de pagamento).
 - Não toca plano, mensalidade, cobranças nem `transactions`.
 
-### 41.3 Web
+### 41.3 Seleção e crédito por faixa no painel
 
-- `cancelamento-sessao.ts`: `blocosDeHora(start, end)` (blocos de 1h a partir do
-  início; o último pode ser menor), `intervaloSelecionado(blocos, índices)` (exige
-  contiguidade; `sessaoInteira` quando todos), `descricaoCreditoHorarioCancelado`.
-- `quoteSessaoMensalistaAction(arenaId, bookingId, intervalo?)`: cota só o intervalo
-  (validado dentro da reserva) com a mesma cadeia de tabela de preço.
-- `cancelarSessaoMensalistaAction`: schema ganha `cancelInicio`/`cancelFim` e chama sempre
-  a RPC parcial (que delega no dia inteiro); devolve `parcial`.
-- `CancelarSessaoMensalistaModal`: grupo "Horários a cancelar" (blocos de 1h, todos
-  marcados por padrão), aviso/botão/descrição conforme parcial ou inteiro; a cotação é
-  refeita a cada mudança de intervalo. Remontado por abertura (`key` no
-  `BookingDetailsModal`).
+O modal usa `blocosDeHora` para oferecer blocos de uma hora e a fração final quando houver. `selecaoDeCancelamento` agrupa blocos marcados adjacentes. O gestor pode confirmar várias faixas separadas de uma vez.
+
+A cotação resolve a tabela da quadra da ocorrência conforme §21.2. Para cobrança por hora, `resolve_court_price` cota cada bloco marcado. A tela apresenta os valores por horário, o subtotal editável de cada faixa e a soma em centavos. Para cobrança fixa, uma única faixa continua usando a tarifa do início selecionado. Com várias faixas a action retorna `valorSugerido = null` e o preço da reserva inteira em `valorFixoReserva`. O gestor informa a compensação de cada faixa.
+
+Uma única faixa usa `cancel_mensalista_booking_partial_atomic` e o dia inteiro segue §21. Para várias faixas, a action verifica a permissão `bookings.recurring` e chama uma vez `cancel_mensalista_booking_ranges_atomic`. A migration aditiva `20261119120000_mensalista_cancel_ranges.sql` deve ser aplicada antes da nova web. O contrato da tela anterior continua aceito.
+
+Na mesma transação, a RPC valida a reserva e o total, preserva todos os períodos intermediários e registra cada faixa cancelada. Cada valor positivo e sua descrição entram no extrato pelo booking correspondente e, por ele, na subconta da recorrência (§42). A chave de operação recupera o recibo de uma confirmação repetida. Uma falha reverte todas as faixas e os créditos daquela confirmação.
 
 ### 41.4 Testes
 
-`tests/mensalista-cancelar-sessao.test.mjs` (blocos, contiguidade, descrição, uso da RPC
-parcial). No banco: `supabase/tests/20260929120000_mensalista_cancel_partial_session_test.sql`
-(28 asserções: início/meio/fim, horário liberado aceita nova reserva, restante continua
-bloqueado, crédito, idempotência, validações, delegação do dia inteiro) e
-`tests/mensalista-cancel-partial.test.mjs`.
+Na web, `tests/mensalista-cancelar-sessao.test.mjs` cobre a seleção e a apresentação. `tests/mensalista-cancelar-sessao-actions.test.mjs` cobre tarifas distintas, hora fracionada, seleção sem lacunas ou com lacunas, preço fixo e o contrato anterior. No banco, `supabase/tests/20260929120000_mensalista_cancel_partial_session_test.sql` cobre o cancelamento de uma faixa e `supabase/tests/20261119120000_mensalista_cancel_ranges_test.sql` cobre cancelamento em lote, disponibilidade, créditos, isolamento da operação e retentativas.
 
 ## 42. Crédito de mensalista por recorrência — subcontas (04/10/2026)
 

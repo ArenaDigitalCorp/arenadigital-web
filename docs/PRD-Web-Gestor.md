@@ -441,14 +441,16 @@ O acesso ao sistema ocorre por meio de login, disponível a partir da landing pa
 
 **Reflexo em Mensalistas (5.12):**
 - O crédito entra no extrato do mensalista com um selo **"Jogo cancelado"**, ficando claro a que se refere mesmo meses depois, e passa a somar no saldo usado para abater mensalidades.
-- Um jogo cancelado gera **no máximo um** crédito — duplo clique ou reenvio não credita duas vezes.
+- Cancelar o jogo inteiro gera no máximo um crédito. No cancelamento parcial, cada faixa separada pode gerar seu próprio lançamento. Confirmar duas vezes ou reenviar a mesma solicitação preserva os lançamentos originais.
 
 **Cancelar só parte do jogo (29/09/2026):**
 - **Caso coberto:** o mensalista tem 20:00–23:00 e avisa com antecedência que não vai jogar a primeira hora. A arena precisa liberar só aquela hora para vendê-la a outra pessoa.
 - No mesmo modal, a sessão aparece quebrada em **blocos de 1h** (ex.: 20:00–21:00, 21:00–22:00, 22:00–23:00), todos marcados por padrão (= o dia inteiro). O gestor desmarca o que o mensalista **ainda vai jogar**; o que ficar marcado é cancelado.
-- Os horários marcados precisam ser **seguidos** (início, meio ou fim do jogo). Para liberar horários separados, cancela-se um de cada vez.
+- O gestor pode marcar horários separados e confirmar uma vez. A seleção de 07h–08h e 10h–11h em uma sessão das 07h às 11h preserva a reserva das 08h às 10h.
+- Em espaços cobrados por hora, a tela discrimina o preço de cada hora marcada segundo a tabela da quadra e do plano. Se 06h–07h custa R$ 100 e 07h–08h custa R$ 120, cancelar as duas horas seguidas sugere um crédito de R$ 220. Faixas separadas têm valores e descrições editáveis independentes. Cada faixa com valor positivo gera um lançamento vinculado à sua parte cancelada no extrato. Um valor zero libera a faixa sem gerar crédito para ela.
+- Em espaços de preço fixo, uma faixa contínua ou o jogo inteiro mantém a sugestão de uma única tarifa. Para duas ou mais faixas separadas, a tela mostra o preço integral da reserva como referência e o gestor informa o crédito de cada faixa ou desmarca o lançamento.
 - O horário cancelado fica **livre imediatamente** para outra reserva (calendário, cadastro, app e oportunidades do dia). O restante do jogo continua reservado — se a hora cancelada for do meio, o jogo vira duas reservas, antes e depois dela.
-- O aviso e o botão mudam para o caso parcial ("Cancelar horário e lançar crédito"). O crédito sugerido é o valor **só das horas canceladas** pela tabela do plano, e a descrição inclui o horário: "Crédito lançado referente a jogo não realizado do dia DD/MM/AAAA (20:00 às 21:00)".
+- O aviso e o botão identificam o cancelamento parcial. A descrição de cada crédito inclui a faixa correspondente, por exemplo, "Crédito lançado referente a jogo não realizado do dia DD/MM/AAAA (20:00 às 21:00)".
 - Como no dia inteiro, plano, mensalidade e cobranças não mudam. O valor exibido na reserva que continua (ex.: R$ 300 → R$ 200) é proporcional ao tempo, apenas informativo.
 
 ---
