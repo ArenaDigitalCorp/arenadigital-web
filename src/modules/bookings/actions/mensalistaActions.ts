@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '@/lib/supabase-server';
 import { assertCourtAccess, requireAuthenticatedDbUser, assertArenaResourceAccess } from '@/lib/server-auth'
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { blocosDeHora, type BlocoHorario } from '@/modules/bookings/lib/cancelamento-sessao';
 import type { PlanoMensalistaComDetalhes } from '@/modules/bookings/types/booking.types';
 
 export interface CreatePlanoMensalistaInput {
@@ -401,33 +402,47 @@ type LooseClient = {
 };
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
+const instanteSchema = z.string().datetime({ offset: true }).transform(value => new Date(value).toISOString());
+const faixaSchema = z.object({ inicio: instanteSchema, fim: instanteSchema });
+const valorCreditoSchema = z.number().nonnegative().max(1_000_000).multipleOf(0.01);
+const descricaoCreditoSchema = z.string().trim().max(500);
+
+function faixasValidas(faixas: BlocoHorario[]): boolean {
+  return faixas.every((faixa, i) =>
+    faixa.inicio < faixa.fim && (i === 0 || faixas[i - 1].fim < faixa.inicio)
+  );
+}
+
+const selecaoSchema = z.array(faixaSchema).min(1).refine(faixasValidas, {
+  message: 'Selecione faixas válidas, em ordem, agrupando os horários seguidos.',
+});
+
+export type ValorHorario = BlocoHorario & { valor: number };
+
 export type SessaoMensalistaQuote = {
-  valorSugerido: number;
+  valorSugerido: number | null;
+  valorFixoReserva: number | null;
+  valoresPorHorario: ValorHorario[];
+  valoresPorTrecho: ValorHorario[];
+  precoFixo: boolean;
   /** Nome da tabela de preço usada na sugestão, para a tela poder dizer qual é. */
   tabelaNome: string | null;
-  origem: 'plano' | 'mensalista' | 'padrao';
+  origem: 'plano' | 'mensalista' | 'professor' | 'padrao';
   atletaNome: string | null;
   inicio: string;
   fim: string;
 };
 
 /**
- * Quanto vale a sessão que está sendo cancelada, pela tabela de preço que vale
- * para a mensalidade dele. A cadeia é deliberada:
- *
- *   1. `planos_mensalista.price_table_id` — a tabela que de fato originou o
- *      valor mensal (snapshot de quando o plano foi criado);
- *   2. a tabela `tipo='mensalista'` do espaço — planos antigos não têm o
- *      snapshot, e o papel é resolvido por `tipo`, nunca por nome;
- *   3. `null` ⇒ `resolve_court_price` cai na tabela padrão do espaço.
- *
- * O valor sai sempre de `resolve_court_price` no banco, nunca de conta no cliente.
+ * Cota os horários selecionados pela tabela do plano ou da ocorrência.
+ * Os papéis reservados têm uma tabela por espaço. Uma tabela personalizada
+ * da primeira quadra não identifica uma equivalente em outra quadra.
  */
 export async function quoteSessaoMensalistaAction(
   arenaId: string,
   bookingId: string,
   /** Só parte do jogo (cancelamento de horário); omitido = a sessão inteira. */
-  intervalo?: { inicio: string; fim: string }
+  intervalos?: BlocoHorario[] | BlocoHorario
 ): Promise<{ success: boolean; data?: SessaoMensalistaQuote; error?: string }> {
   try {
     await assertArenaResourceAccess(arenaId, 'bookings.recurring');
@@ -435,17 +450,15 @@ export async function quoteSessaoMensalistaAction(
       .object({
         arenaId: uuidSchema,
         bookingId: uuidSchema,
-        intervalo: z
-          .object({ inicio: z.string().datetime({ offset: true }), fim: z.string().datetime({ offset: true }) })
-          .optional(),
+        intervalos: selecaoSchema.optional(),
       })
-      .parse({ arenaId, bookingId, intervalo });
+      .parse({ arenaId, bookingId, intervalos: intervalos && !Array.isArray(intervalos) ? [intervalos] : intervalos });
 
     const supabase = getSupabaseAdmin() as unknown as LooseClient;
 
     const { data: booking, error: bookingError } = await supabase
       .from('bookings')
-      .select('id, court_id, start_time, end_time, plano_mensalista_id, status')
+      .select('id, court_id, start_time, end_time, plano_mensalista_id, price_table_id, courts!bookings_court_id_fkey(booking_type)')
       .eq('id', parsed.bookingId)
       .eq('arena_id', parsed.arenaId)
       .single();
@@ -456,48 +469,85 @@ export async function quoteSessaoMensalistaAction(
 
     const { data: plano, error: planoError } = await supabase
       .from('planos_mensalista')
-      .select('id, athlete_name, price_table_id')
+      .select('id, athlete_name, court_id, price_table_id')
       .eq('id', booking.plano_mensalista_id)
       .eq('arena_id', parsed.arenaId)
       .single();
     if (planoError) throw new Error(planoError.message);
 
-    let priceTableId: string | null = plano?.price_table_id ?? null;
+    // O snapshot do plano por blocos pertence à quadra do primeiro bloco.
+    let priceTableId: string | null = (plano.court_id === booking.court_id ? plano.price_table_id : null) ?? booking.price_table_id ?? null;
     let origem: SessaoMensalistaQuote['origem'] = 'plano';
 
     if (!priceTableId) {
-      const { data: mensalistaTable } = await supabase
+      let papel: 'mensalista' | 'professor' | 'padrao' = 'mensalista';
+      if (plano.price_table_id) {
+        const { data: tabelaPlano, error } = await supabase
+          .from('court_price_tables')
+          .select('tipo')
+          .eq('id', plano.price_table_id)
+          .eq('court_id', plano.court_id)
+          .maybeSingle();
+        if (error) throw new Error(error.message);
+        const tipo = tabelaPlano?.tipo;
+        if (tipo !== 'mensalista' && tipo !== 'professor' && tipo !== 'padrao') {
+          throw new Error('Não foi possível identificar a tabela da reserva nesta quadra. Informe o crédito manualmente.');
+        }
+        papel = tipo;
+      }
+      const { data: tabelaDoEspaco, error: tableError } = await supabase
         .from('court_price_tables')
         .select('id')
         .eq('court_id', booking.court_id)
-        .eq('tipo', 'mensalista')
+        .eq('tipo', papel)
         .maybeSingle();
-      if (mensalistaTable?.id) {
-        priceTableId = mensalistaTable.id;
-        origem = 'mensalista';
+      if (tableError) throw new Error(tableError.message);
+      if (tabelaDoEspaco?.id) {
+        priceTableId = tabelaDoEspaco.id;
+        origem = papel;
+      } else if (papel === 'professor') {
+        throw new Error('A quadra não tem tabela de professor. Informe o crédito manualmente.');
       } else {
         origem = 'padrao';
       }
     }
 
-    // O intervalo cotado precisa estar dentro da sessão.
-    const inicio = new Date(parsed.intervalo?.inicio ?? booking.start_time);
-    const fim = new Date(parsed.intervalo?.fim ?? booking.end_time);
-    if (
-      fim <= inicio ||
-      inicio < new Date(booking.start_time) ||
-      fim > new Date(booking.end_time)
-    ) {
-      throw new Error('O horário escolhido precisa estar dentro da reserva.');
+    const inicioReserva = new Date(booking.start_time).toISOString();
+    const fimReserva = new Date(booking.end_time).toISOString();
+    const trechos = parsed.intervalos ?? [{ inicio: inicioReserva, fim: fimReserva }];
+    if (trechos.some(trecho => trecho.inicio < inicioReserva || trecho.fim > fimReserva)) {
+      throw new Error('Os horários escolhidos precisam estar dentro da reserva.');
+    }
+    if (!booking.courts) throw new Error('Não foi possível identificar o tipo de preço do espaço.');
+
+    async function cotar(faixa: BlocoHorario): Promise<ValorHorario> {
+      const { data: valor, error } = await supabase.rpc('resolve_court_price', {
+        p_court_id: booking.court_id, p_price_table_id: priceTableId,
+        p_start: faixa.inicio, p_end: faixa.fim,
+      });
+      if (error) throw new Error(error.message);
+      if (valor == null || !Number.isFinite(Number(valor))) throw new Error('Preço do horário indisponível.');
+      return { ...faixa, valor: Number(valor) };
     }
 
-    const { data: valor, error: quoteError } = await supabase.rpc('resolve_court_price', {
-      p_court_id: booking.court_id,
-      p_price_table_id: priceTableId,
-      p_start: inicio.toISOString(),
-      p_end: fim.toISOString(),
-    });
-    if (quoteError) throw new Error(quoteError.message);
+    const precoFixo = booking.courts?.booking_type === 'unique';
+    const valoresPorHorario: ValorHorario[] = [];
+    const valoresPorTrecho: ValorHorario[] = [];
+    let valorFixoReserva: number | null = null;
+    if (precoFixo && trechos.length > 1) {
+      // A tarifa do evento inteiro é referência, não define o valor de suas partes.
+      valorFixoReserva = (await cotar({ inicio: inicioReserva, fim: fimReserva })).valor;
+    } else if (precoFixo) {
+      valoresPorTrecho.push(await cotar(trechos[0]));
+    } else {
+      for (const trecho of trechos) {
+        const valores = await Promise.all(blocosDeHora(trecho.inicio, trecho.fim).map(cotar));
+        valoresPorHorario.push(...valores);
+        const centavos = valores.reduce((soma, hora) => soma + Math.round(hora.valor * 100), 0);
+        valoresPorTrecho.push({ ...trecho, valor: centavos / 100 });
+      }
+    }
+    const totalCentavos = valoresPorTrecho.reduce((soma, trecho) => soma + Math.round(trecho.valor * 100), 0);
 
     let tabelaNome: string | null = null;
     if (priceTableId) {
@@ -512,7 +562,9 @@ export async function quoteSessaoMensalistaAction(
     return {
       success: true,
       data: {
-        valorSugerido: Number(valor) || 0,
+        valorSugerido: valorFixoReserva === null ? totalCentavos / 100 : null,
+        valorFixoReserva,
+        valoresPorHorario, valoresPorTrecho, precoFixo,
         tabelaNome,
         origem,
         atletaNome: plano?.athlete_name ?? null,
@@ -527,21 +579,39 @@ export async function quoteSessaoMensalistaAction(
   }
 }
 
-const cancelarSessaoSchema = z
-  .object({
-    arenaId: uuidSchema,
-    bookingId: uuidSchema,
-    operationId: uuidSchema,
-    lancarCredito: z.boolean(),
-    valorCredito: z.number().nonnegative().max(1_000_000),
-    descricao: z.string().trim().max(500),
-    /** Parte do jogo a cancelar (ex.: só a 1ª hora). O banco valida que está dentro da reserva. */
-    cancelInicio: z.string().datetime({ offset: true }),
-    cancelFim: z.string().datetime({ offset: true }),
-  })
-  .refine((v) => new Date(v.cancelFim) > new Date(v.cancelInicio), {
-    message: 'O horário final precisa ser depois do inicial.',
-  });
+const trechoCreditoSchema = faixaSchema.extend({
+  valorCredito: valorCreditoSchema,
+  descricao: descricaoCreditoSchema,
+});
+
+const cancelarSessaoSchema = z.object({
+  arenaId: uuidSchema,
+  bookingId: uuidSchema,
+  operationId: uuidSchema,
+  lancarCredito: z.boolean(),
+  valorCredito: valorCreditoSchema,
+  descricao: descricaoCreditoSchema,
+  intervalos: z.array(trechoCreditoSchema).min(1).refine(faixasValidas, {
+    message: 'Selecione faixas válidas, em ordem, agrupando os horários seguidos.',
+  }),
+}).refine(v => {
+  const total = v.intervalos.reduce((soma, faixa) => soma + Math.round(faixa.valorCredito * 100), 0);
+  return total === Math.round(v.valorCredito * 100) && (v.lancarCredito ? total > 0 : total === 0);
+}, { message: 'O crédito deve corresponder à soma dos valores dos horários selecionados.' });
+
+function parseCancelarSessao(input: unknown) {
+  // Uma aba aberta antes da atualização ainda envia os limites de uma única faixa.
+  if (input && typeof input === 'object' && !('intervalos' in input)
+    && 'cancelInicio' in input && 'cancelFim' in input && 'valorCredito' in input
+    && 'descricao' in input && 'lancarCredito' in input) {
+    const valorCredito = input.lancarCredito ? input.valorCredito : 0;
+    return cancelarSessaoSchema.parse({
+      ...input, valorCredito,
+      intervalos: [{ inicio: input.cancelInicio, fim: input.cancelFim, valorCredito, descricao: input.descricao }],
+    });
+  }
+  return cancelarSessaoSchema.parse(input);
+}
 
 export type CancelarSessaoInput = z.infer<typeof cancelarSessaoSchema>;
 
@@ -560,26 +630,32 @@ export async function cancelarSessaoMensalistaAction(
   error?: string;
 }> {
   try {
-    const parsed = cancelarSessaoSchema.parse(input);
+    const parsed = parseCancelarSessao(input);
     await assertArenaResourceAccess(parsed.arenaId, 'bookings.recurring');
     const { dbUserId } = await requireAuthenticatedDbUser();
 
-    if (parsed.lancarCredito && parsed.valorCredito <= 0) {
-      throw new Error('Informe um valor de crédito maior que zero.');
-    }
-
     const supabase = getSupabaseAdmin() as unknown as LooseClient;
-    const { data, error } = await supabase.rpc('cancel_mensalista_booking_partial_atomic', {
+    const args = {
       p_operation_id: parsed.operationId,
       p_arena_id: parsed.arenaId,
       p_booking_id: parsed.bookingId,
-      p_cancel_start: parsed.cancelInicio,
-      p_cancel_end: parsed.cancelFim,
       p_lancar_credito: parsed.lancarCredito,
-      p_valor_credito: parsed.lancarCredito ? parsed.valorCredito : 0,
+      p_valor_credito: parsed.valorCredito,
       p_descricao: parsed.lancarCredito ? parsed.descricao : null,
       p_registered_by: dbUserId,
-    });
+    };
+    const [primeiro] = parsed.intervalos;
+    const { data, error } = parsed.intervalos.length === 1
+      ? await supabase.rpc('cancel_mensalista_booking_partial_atomic', {
+          ...args, p_cancel_start: primeiro.inicio, p_cancel_end: primeiro.fim,
+          p_descricao: parsed.lancarCredito ? primeiro.descricao : null,
+        })
+      : await supabase.rpc('cancel_mensalista_booking_ranges_atomic', {
+          ...args, p_intervalos: parsed.intervalos.map(trecho => ({
+            inicio: trecho.inicio, fim: trecho.fim, valor_credito: trecho.valorCredito,
+            descricao: trecho.valorCredito > 0 ? trecho.descricao : null,
+          })),
+        });
     if (error) throw new Error(error.message);
 
     const result = (data ?? {}) as {
