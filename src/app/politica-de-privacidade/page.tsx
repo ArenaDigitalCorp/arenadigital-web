@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import { Footer } from "@/components/layout/Footer";
 import { Navbar } from "@/components/layout/Navbar";
 
@@ -8,7 +9,7 @@ export const metadata: Metadata = {
 };
 
 type Block =
-    | { type: "p"; text: string }
+    | { type: "p"; text: ReactNode }
     | { type: "ul"; items: string[] };
 
 const intro: string[] = [
@@ -16,7 +17,7 @@ const intro: string[] = [
     "Ao utilizar a plataforma Arena Digital, seja por meio do aplicativo móvel, portal web ou qualquer outro serviço disponibilizado, o usuário declara que leu, compreendeu e concorda com esta Política de Privacidade.",
 ];
 
-const sections: { title: string; blocks: Block[] }[] = [
+const sections: { id?: string; title: string; blocks: Block[] }[] = [
     {
         title: "1. Sobre a Arena Digital",
         blocks: [
@@ -86,12 +87,16 @@ const sections: { title: string; blocks: Block[] }[] = [
                     "Fabricante do aparelho;",
                     "Identificador do dispositivo;",
                     "Data e hora dos acessos;",
-                    "Localização aproximada (quando autorizada);",
+                    "Localização aproximada ou precisa, conforme a permissão concedida no aparelho;",
                     "Logs de utilização;",
                     "Tempo de permanência;",
                     "Páginas acessadas;",
                     "Interações realizadas.",
                 ],
+            },
+            {
+                type: "p",
+                text: "No aplicativo de atletas, a localização é opcional. Quando você autoriza o acesso, podemos salvar sua última posição para localizar arenas, jogos e atletas próximos e selecionar publicações, promoções e anúncios da sua região. Você pode alterar essa permissão nas configurações do aparelho.",
             },
         ],
     },
@@ -314,9 +319,15 @@ const sections: { title: string; blocks: Block[] }[] = [
         ],
     },
     {
+        id: "exclusao-da-conta",
         title: "11. Exclusão da conta",
         blocks: [
-            { type: "p", text: "O usuário poderá solicitar a exclusão de sua conta." },
+            { type: "p", text: "Para excluir sua conta de atleta no Arena Digital, abra Perfil, toque em Excluir conta e confirme a solicitação. Se a assinatura Arena Digital Plus estiver com renovação ativa, cancele a renovação na Google Play ou na App Store antes de excluir a conta." },
+            {
+                type: "p",
+                text: <>Você também pode solicitar a exclusão da conta e dos dados associados por e-mail, mesmo sem o aplicativo. Escreva para <a className="underline" href="mailto:contato@arenadigital.app?subject=Exclus%C3%A3o%20da%20conta%20Arena%20Digital">contato@arenadigital.app</a> e informe o e-mail cadastrado para identificarmos sua conta. Use esse canal também se precisar de ajuda para concluir a exclusão.</>,
+            },
+            { type: "p", text: "A exclusão remove o acesso à conta, a foto, o telefone, o CPF e a última localização do perfil de atleta. Se o mesmo acesso também administrar uma arena, entre em contato para regularizar esse vínculo." },
             {
                 type: "p",
                 text: "A solicitação não implica na eliminação imediata de todos os dados, pois determinadas informações poderão permanecer armazenadas para:",
@@ -449,7 +460,7 @@ export default function PrivacyPolicyPage() {
                         </section>
 
                         {sections.map((section) => (
-                            <section key={section.title} className="mb-6">
+                            <section key={section.title} id={section.id} className="mb-6 scroll-mt-32">
                                 <h2 className="mb-1 text-sm font-semibold leading-[1.5]">{section.title}</h2>
                                 {section.blocks.map((block, index) =>
                                     block.type === "p" ? (
@@ -467,7 +478,7 @@ export default function PrivacyPolicyPage() {
                             </section>
                         ))}
 
-                        <p className="mt-9 text-[10px] leading-[1.5]">Última atualização: 13/09/2026</p>
+                        <p className="mt-9 text-[10px] leading-[1.5]">Última atualização: 19/11/2026</p>
                     </div>
                 </section>
             </main>
