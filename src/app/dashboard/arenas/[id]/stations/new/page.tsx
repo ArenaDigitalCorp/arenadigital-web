@@ -15,7 +15,7 @@ export default async function NewStationPage({ params }: NewStationPageProps) {
     const { id } = await params;
 
     try {
-        await assertArenaAdminAccess(id);
+        await assertArenaAdminAccess(id, 'stations');
     } catch {
         redirect(`/dashboard/arenas/${id}/stations`);
     }

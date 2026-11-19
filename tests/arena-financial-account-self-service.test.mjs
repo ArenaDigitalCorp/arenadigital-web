@@ -16,7 +16,7 @@ function exportedFunctionBody(contents, functionName) {
 test('financial self-service operations are arena-admin scoped and delegated to the protected Edge Function', async () => {
   const actions = await source('src/modules/finance/actions/arenaFinancialAccountActions.ts')
 
-  assert.match(actions, /await assertArenaAdminAccess\(arenaId\)/u)
+  assert.match(actions, /await assertArenaAdminAccess\(arenaId, 'settings.receiving'\)/u)
   assert.match(actions, /functions\.invoke\('arena-financial-operations'/u)
 
   for (const functionName of [

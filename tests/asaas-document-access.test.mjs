@@ -13,7 +13,8 @@ function harness({ arenaError = null, platformError = null } = {}) {
       'server-only': {},
       '@/lib/server-auth': {
         AuthorizationError,
-        async assertArenaAdminAccess(arenaId) {
+        async assertArenaAdminAccess(arenaId, key) {
+          if (key !== 'settings.receiving') throw Error('Expected financial settings permission')
           calls.push({ action: 'arena', arenaId })
           if (arenaError) throw arenaError
           return { dbUserId: 'actor-test' }

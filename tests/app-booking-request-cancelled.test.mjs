@@ -18,7 +18,7 @@ test('withdrawn requests remain cancelled in arena read model, without financial
   }, rpc() { throw new Error('Cancelled requests cannot trigger a conflict or payment operation'); } };
   const { getAppBookingRequestsAction } = loadTypescriptModule('src/modules/bookings/actions/appBookingRequestActions.ts', {
     'next/cache': { revalidatePath() {} }, '@/lib/supabase-server': { getSupabaseAdmin: () => admin },
-    '@/lib/server-auth': { assertArenaBackofficeAccess: async id => { assert.equal(id, arenaId); authorized++; }, requireAuthenticatedDbUser: async () => { throw new Error('No conflict read expected'); } },
+    '@/lib/server-auth': { assertArenaResourceAccess: async (id, resource) => { assert.equal(resource, 'bookings.requests'); assert.equal(id, arenaId); authorized++; }, requireAuthenticatedDbUser: async () => { throw new Error('No conflict read expected'); } },
   });
   const result = await getAppBookingRequestsAction(arenaId);
   assert.equal(result.success, true, result.error);

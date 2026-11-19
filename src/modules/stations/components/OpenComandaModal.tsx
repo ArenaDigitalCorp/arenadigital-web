@@ -22,13 +22,12 @@ import {
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
-import { createOrderWithItemsAction, getCustomersByArenaAction } from "@/modules/stations/actions/orderActions"
-import { getProductsByArenaAction } from "@/modules/products/actions/stockActions"
-import { getAthletesByArenaAction } from "@/modules/athletes/actions/athleteActions"
-import { isCatalogService, matchesProductOrServiceSearch, normalizeCatalogStatus, type Product } from "@/modules/products/types/product.types"
+import { createOrderWithItemsAction } from "@/modules/stations/actions/orderActions"
+import { getStationSaleProducts, searchStationCustomers } from "@/modules/stations/actions/stationPickerActions"
+import { isCatalogService, matchesProductOrServiceSearch, normalizeCatalogStatus } from "@/modules/products/types/product.types"
 import { Plus, Minus, Search, Check, X, Loader2, Trash2 } from "lucide-react"
 import { Label } from "@/components/ui/label"
-import { cn, normalizeString } from "@/lib/utils"
+import { cn } from "@/lib/utils"
 import { formatCurrency } from "@/lib/format"
 import { trackAction } from "@/lib/telemetry/client"
 
@@ -37,6 +36,8 @@ const openComandaSchema = z.object({
 })
 
 type OpenComandaValues = z.infer<typeof openComandaSchema>
+
+type Product = Awaited<ReturnType<typeof getStationSaleProducts>>[number]
 
 interface SelectedItem {
     product: Product
@@ -82,8 +83,8 @@ export function OpenComandaModal({
     const loadProducts = async () => {
         setIsSearchingProducts(true)
         try {
-            const res = await getProductsByArenaAction(arenaId)
-            setAllProducts(res.data || [])
+            const products = await getStationSaleProducts(arenaId, stationId)
+            setAllProducts(products)
         } catch (error) {
             console.error("Error loading products:", error)
         } finally {
@@ -114,22 +115,7 @@ export function OpenComandaModal({
         setIsSearchingCustomers(true)
         customerSearchTimeout.current = setTimeout(async () => {
             try {
-                const [customersRes, athletesData] = await Promise.all([
-                    getCustomersByArenaAction(arenaId),
-                    getAthletesByArenaAction(arenaId) // Fetch all for frontend filtering
-                ])
-
-                const normalizedValue = normalizeString(value)
-
-                const combined = [
-                    ...(customersRes.data ?? [])
-                        .filter((c: any) => normalizeString(c.name).includes(normalizedValue))
-                        .map((c: any) => ({ id: `customer:${c.id}`, name: c.name, origin: 'station' })),
-                    ...(athletesData.data ?? [])
-                        .filter((a: any) => normalizeString(a.name).includes(normalizedValue))
-                        .map((a: any) => ({ id: `athlete:${a.id}`, name: a.name, origin: 'athlete' }))
-                ]
-
+                const combined = await searchStationCustomers(arenaId, stationId, value)
                 setFilteredCustomers(combined)
             } catch (error) {
                 console.error("Customer search error:", error)

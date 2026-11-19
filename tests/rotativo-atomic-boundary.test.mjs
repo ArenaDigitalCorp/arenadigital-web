@@ -16,7 +16,7 @@ test('rotativo financial actions delegate to atomic RPC-backed repository method
   assert.match(actions, /repo\.purchaseCreditsAtomic\(/)
   assert.match(actions, /repo\.savePacotes\(/)
   assert.match(actions, /repo\.quoteCreditPurchaseValue\(/)
-  assert.match(actions, /assertArenaBackofficeAccess\(arenaId\)[\s\S]{0,120}assertRotativoAccess\(rotativoId, arenaId\)/)
+  assert.match(actions, /assertArenaResourceAccess\(arenaId, 'rotativo'\)[\s\S]{0,120}assertRotativoAccess\(rotativoId, arenaId\)/)
   assert.doesNotMatch(actions, /SupabaseFinanceRepository/)
   assert.doesNotMatch(actions, /calculateCreditPurchaseValue/)
   assert.doesNotMatch(actions, /operationId:\s*crypto\.randomUUID\(\)/)

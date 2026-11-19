@@ -2,6 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { IArenaRepository } from './IArenaRepository';
 import type { Arena, CreateArenaDTO, UpdateArenaDTO, Sport, Comodidade } from '../types/arena.types';
 
+const REGISTRATION_FIELDS = 'id,owner_id,name,legal_name,status,address,phone,email,description,banner_url,zip_code,number,complement,neighborhood,id_municipio,cpf_cnpj,facebook,instagram,tiktok,opening_hours,created_at';
+
 const ARENA_WITH_RELATIONS = `
   *,
   sports_relation:arena_sports(sport:sports(*)),
@@ -45,6 +47,18 @@ export class SupabaseArenaRepository implements IArenaRepository {
 
     if (error) throw new Error(`SupabaseArenaRepository.findByOwnerId: ${error.message}`);
     return (data ?? []).map(mapRelations);
+  }
+
+  async findRegistrationById(id: string): Promise<Arena | null> {
+    const { data, error } = await this.client.from('arenas')
+      .select(`
+        ${REGISTRATION_FIELDS},
+        sports_relation:arena_sports(sport:sports(id,name)),
+        comodidades_relation:arena_comodidades(comodidade:comodidades(id,name))
+      `)
+      .eq('id', id).maybeSingle();
+    if (error) throw error;
+    return data ? mapRelations(data) : null;
   }
 
   async findById(id: string): Promise<Arena | null> {
@@ -93,7 +107,7 @@ export class SupabaseArenaRepository implements IArenaRepository {
       .from('arenas')
       .update(arenaData)
       .eq('id', id)
-      .select()
+      .select(REGISTRATION_FIELDS)
       .single();
 
     if (error) throw new Error(`SupabaseArenaRepository.update: ${error.message}`);

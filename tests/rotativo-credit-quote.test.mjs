@@ -339,7 +339,7 @@ test('credit action distinguishes pre-mutation rejection, definitive SQL rejecti
       '@/lib/supabase-server': { getSupabaseAdmin: () => db },
       '@/lib/server-auth': {
         requireAuthenticatedDbUser: async () => { if (authError) throw new Error(authError); return { dbUserId: id } },
-        assertArenaBackofficeAccess: async () => {},
+        assertArenaResourceAccess: async (arena, key) => { assert.deepEqual([arena, key], [id, 'rotativo']) },
       },
       'next/cache': { revalidatePath: () => { if (revalidateThrows) throw new Error('cache failed after commit') } },
     })

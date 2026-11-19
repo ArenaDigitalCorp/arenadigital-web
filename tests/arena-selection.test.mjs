@@ -91,9 +91,9 @@ for (const isCollapsed of [false, true]) {
 }
 
 for (const role of ['Owner', 'Gestor', 'Atendente', 'Caixa']) {
-  test(`switching arena within publications preserves the section only for managers: ${role}`, () => {
+  test(`switching arena within publications preserves the section according to the target arena grant: ${role}`, () => {
     const routes = []
-    const context = { arenas: [arenas[0], {...arenas[1], role, isOwner: role === 'Owner'}], selectedArena: 'arena-a', setSelectedArena: () => {}, isLoadingArenas: false }
+    const context = { arenas: [arenas[0], {...arenas[1], role, resources: role === 'Owner' || role === 'Atendente' ? ['publications'] : [], isOwner: role === 'Owner'}], selectedArena: 'arena-a', setSelectedArena: () => {}, isLoadingArenas: false }
     const { ArenaSelector } = load('src/components/dashboard/ArenaSelector.tsx', {
       '@/contexts/ArenaContext': { useArena: () => context },
       '@/lib/arena-permissions': { canManageArena: arena => arena.isOwner || arena.role === 'Gestor' },
@@ -102,6 +102,6 @@ for (const role of ['Owner', 'Gestor', 'Atendente', 'Caixa']) {
       '@/components/ui/skeleton': {Skeleton:'Skeleton'}, '@/lib/utils': {cn: () => ''},
     })
     ArenaSelector({}).props.children.props.onValueChange('arena-b')
-    assert.deepEqual(routes, [role === 'Owner' || role === 'Gestor' ? '/dashboard/publications/arena-b' : '/dashboard'])
+    assert.deepEqual(routes, [role === 'Owner' || role === 'Atendente' ? '/dashboard/publications/arena-b' : '/dashboard'])
   })
 }

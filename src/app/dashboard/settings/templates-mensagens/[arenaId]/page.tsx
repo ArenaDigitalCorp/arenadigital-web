@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { assertArenaAdminAccess } from '@/lib/server-auth'
+import { assertArenaResourceAccess } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { TemplatesMensagensPageClient } from '@/modules/templates-mensagens/components/TemplatesMensagensPageClient'
 import { getMessageTemplatesByArenaAction } from '@/modules/templates-mensagens/actions/templateMensagemActions'
@@ -12,7 +12,7 @@ export default async function SettingsTemplatesMensagensPage({
     const { arenaId } = await params
 
     try {
-        await assertArenaAdminAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'settings.templates')
     } catch {
         redirect('/dashboard/settings/arenas')
     }

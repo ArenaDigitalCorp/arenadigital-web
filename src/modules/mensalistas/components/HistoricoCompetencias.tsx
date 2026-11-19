@@ -1,5 +1,8 @@
 'use client'
 
+import { useState } from 'react'
+import { ChevronDown } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { formatCompetencia, formatCurrency } from '@/lib/format'
 import type { HistoricoCompetencia } from '../types/mensalista.types'
 
@@ -16,9 +19,22 @@ function dataHora(value: string) {
 }
 
 export function HistoricoCompetencias({ meses }: { meses: HistoricoCompetencia[] }) {
-  return <section className="rounded-2xl border border-arena-navy-800/10 bg-white p-5 sm:p-6" aria-label="Histórico por mês">
-    <h2 className="text-lg font-bold text-arena-navy-800">Histórico por mês</h2>
-    <p className="mt-1 text-sm text-arena-navy-800/60">Cálculo, cobrança e recebimentos de cada competência. Abra um mês para conferir as alterações.</p>
+  const [aberto, setAberto] = useState(false)
+  return <section className="rounded-2xl border border-arena-navy-800/10 bg-white" aria-label="Histórico por mês">
+    <button
+      type="button"
+      aria-expanded={aberto}
+      onClick={() => setAberto((v) => !v)}
+      className="flex w-full flex-wrap items-center justify-between gap-3 rounded-2xl p-5 text-left sm:p-6"
+    >
+      <span className="flex items-center gap-3">
+        <ChevronDown className={cn('h-4 w-4 flex-shrink-0 text-arena-navy-800/30 transition-transform', aberto && 'rotate-180')} />
+        <span className="text-lg font-bold text-arena-navy-800">Histórico por mês</span>
+      </span>
+      <span className="text-sm font-bold text-arena-navy-800/60">{meses.length} {meses.length === 1 ? 'mês' : 'meses'}</span>
+    </button>
+    {aberto && <div className="border-t border-arena-navy-800/5 px-5 pb-5 pt-4 sm:px-6 sm:pb-6">
+    <p className="text-sm text-arena-navy-800/60">Cálculo, cobrança e recebimentos de cada competência. Abra um mês para conferir as alterações.</p>
     {meses.length === 0 ? <p className="mt-5 text-sm text-arena-navy-800/60">Nenhuma competência registrada.</p> :
       <div className="mt-5 divide-y divide-arena-navy-800/10">
         {meses.map((mes) => <details key={mes.id} className="group py-4">
@@ -54,5 +70,6 @@ export function HistoricoCompetencias({ meses }: { meses: HistoricoCompetencia[]
           </div>
         </details>)}
       </div>}
+    </div>}
   </section>
 }

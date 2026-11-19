@@ -151,12 +151,13 @@ test('arena classification and notes are committed by one audited super-admin RP
 
 test('user mutations remain restricted to Owner or Gestor', async () => {
   const userActions = await source('src/modules/users/actions/userActions.ts')
+  assert.match(userActions, /assertArenaAdminAccess\(arenaId, 'settings.users'\)/)
   for (const name of ['createArenaUserAction', 'updateArenaUserAction', 'deleteArenaUserAction']) {
-    assert.match(exportedFunctionBody(userActions, name), /assertArenaAdminAccess\(arenaId\)/)
+    assert.match(exportedFunctionBody(userActions, name), /await (authorize|prepareAssignment)\(arenaId/)
   }
 })
 
-test('caixa lançamento mutations are open to any active arena member, not admin-only', async () => {
+test('caixa mutations require the cash grant, financial reads require their own grants', async () => {
   const financeActions = await source('src/modules/finance/actions/financeActions.ts')
   for (const name of ['createTransactionAction', 'updateTransactionAction', 'deleteTransactionAction']) {
     assert.match(exportedFunctionBody(financeActions, name), /assertArenaCaixaAccess\(arenaId\)/)
@@ -164,11 +165,13 @@ test('caixa lançamento mutations are open to any active arena member, not admin
 
   const financeReadActions = ['getFinanceDashboardAction', 'getTransactionsAction', 'getAvulsosTodosAction']
   for (const name of financeReadActions) {
-    assert.match(exportedFunctionBody(financeActions, name), /assertArenaAdminAccess\(arenaId\)/)
+    const resource = name === 'getAvulsosTodosAction' ? 'bookings.single' : 'finance.overview'
+    assert.ok(exportedFunctionBody(financeActions, name).includes(`assertArenaResourceAccess(arenaId, '${resource}')`))
+
   }
 })
 
-test('configuration mutations reject attendant-level access', async () => {
+test('configuration mutations require the grant for their area', async () => {
   const checks = [
     ['src/modules/ai-agent/actions/agentActions.ts', ['updateAgentConfigAction', 'toggleAgentAction', 'connectChannelAction', 'disconnectChannelAction']],
     ['src/modules/courts/actions/courtActions.ts', ['createCourtAction', 'updateCourtAction', 'deleteCourtAction', 'duplicateCourtAction']],
@@ -178,10 +181,11 @@ test('configuration mutations reject attendant-level access', async () => {
     ['src/modules/products/actions/priceActions.ts', ['bulkAdjustPricesAction']],
   ]
 
-  for (const [path, names] of checks) {
+  const keys = ['settings.whatsapp', 'spaces', 'stations', 'catalog', 'catalog', 'catalog']
+  for (const [i, [path, names]] of checks.entries()) {
     const contents = await source(path)
     for (const name of names) {
-      assert.match(exportedFunctionBody(contents, name), /assertArenaAdminAccess\(/, `${name} must require arena admin access`)
+      assert.match(exportedFunctionBody(contents, name), new RegExp((keys[i] === 'stations' ? 'assertArenaAdminAccess' : 'assertArenaResourceAccess') + "\\([^,]+, '" + keys[i] + "'"), name)
     }
   }
 })

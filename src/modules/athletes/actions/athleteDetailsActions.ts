@@ -1,7 +1,8 @@
 "use server"
 
+import { applyBookingFilter, calendarFilter, canSeeBookings } from '@/modules/bookings/lib/booking-access'
 import { getSupabaseAdmin } from "@/lib/supabase-server"
-import { assertArenaBackofficeAccess } from "@/lib/server-auth"
+import { assertArenaResourceAccess } from "@/lib/server-auth"
 
 export interface AthleteDetailData {
     // Perfil
@@ -86,7 +87,7 @@ export async function getAthleteDetailsAction(
     athleteId: string
 ): Promise<{ success: true; data: AthleteDetailData } | { success: false; error: string }> {
     try {
-        await assertArenaBackofficeAccess(arenaId)
+        const access = await assertArenaResourceAccess(arenaId, 'athletes')
         const supabase = getSupabaseAdmin()
 
         // Executar todas as queries em paralelo
@@ -113,7 +114,7 @@ export async function getAthleteDetailsAction(
                 .single(),
 
             // 2. Saldo fidelidade
-            supabase
+            !access.resources.includes('loyalty') ? { data: null } : supabase
                 .from("athlete_loyalty_balance")
                 .select("balance")
                 .eq("id_arena", arenaId)
@@ -121,7 +122,7 @@ export async function getAthleteDetailsAction(
                 .maybeSingle(),
 
             // 3. Reservas com quadra e esporte
-            supabase
+            !canSeeBookings(access.resources) ? { data: [] } : applyBookingFilter(supabase
                 .from("bookings")
                 .select(`
                     id, start_time, end_time, status, price,
@@ -130,8 +131,9 @@ export async function getAthleteDetailsAction(
                 `)
                 .eq("arena_id", arenaId)
                 .eq("athlete_id", athleteId)
+
                 .order("start_time", { ascending: false })
-                .limit(20),
+                .limit(20), calendarFilter(access.resources)),
 
             // 4. Esportes praticados + nível
             supabase
@@ -143,7 +145,7 @@ export async function getAthleteDetailsAction(
                 .eq("id_atleta", athleteId),
 
             // 5. Histórico fidelidade (últimas 10)
-            supabase
+            !access.resources.includes('loyalty') ? { data: [] } : supabase
                 .from("programa_fidelidade_extrato")
                 .select("id, tipo, valor, descricao, data_registro, data_vencimento")
                 .eq("id_arena", arenaId)
@@ -152,29 +154,31 @@ export async function getAthleteDetailsAction(
                 .limit(10),
 
             // 6. Rotativos
-            supabase
+            !access.resources.includes('rotativo') ? { data: [] } : supabase
                 .from("rotativo_inscricoes")
                 .select(`
                     id, valor_pago, status_pagamento, data_inscricao,
-                    rotativo:id_rotativo(id, data, hora_inicio, hora_fim, id_esporte,
+                    rotativo:rotativos!inner(id, data, hora_inicio, hora_fim, id_esporte,
                         sport:id_esporte(name)
                     )
                 `)
+                .eq("rotativo.id_arena", arenaId)
                 .eq("id_atleta", athleteId)
                 .order("data_inscricao", { ascending: false })
                 .limit(20),
 
             // 7. Comandas
-            supabase
+            !access.resources.includes('stations') || (access.role === 'Caixa' && !access.assignedStationId) ? { data: [] } : supabase
                 .from("station_orders")
                 .select("id, order_number, status, total_value, created_at, closed_at")
                 .eq("arena_id", arenaId)
                 .eq("atleta_id", athleteId)
+                .match(access.role === 'Caixa' ? { station_id: access.assignedStationId! } : {})
                 .order("created_at", { ascending: false })
                 .limit(20),
 
             // 8. Pagamentos financeiros (transactions entrada vinculadas ao atleta)
-            supabase
+            !access.resources.includes('finance.overview') ? { data: [] } : supabase
                 .from("transactions")
                 .select(`
                     id, description, category, total_value, registration_date,

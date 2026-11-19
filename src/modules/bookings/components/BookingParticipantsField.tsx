@@ -6,7 +6,7 @@ import { Search, X, Loader2, UserPlus } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { cn, normalizeString } from '@/lib/utils';
-import { searchAthletesAction } from '@/modules/loyalty/actions/loyaltyActions';
+import { searchBookingAthletesAction } from '@/modules/bookings/actions/bookingLookupActions';
 
 export interface BookingAthleteOption {
   id: string;
@@ -50,7 +50,7 @@ export function BookingParticipantsField({
     setIsSearching(true);
     searchTimeout.current = setTimeout(async () => {
       try {
-        const result = await searchAthletesAction(arenaId);
+        const result = await searchBookingAthletesAction(arenaId, value);
         if (result.success && result.data) {
           const normalizedSearch = normalizeString(value);
           const filtered = (result.data as BookingAthleteOption[]).filter(

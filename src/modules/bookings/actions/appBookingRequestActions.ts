@@ -5,10 +5,7 @@ import { z } from 'zod'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { fetchAllSupabaseRows } from '@/lib/supabase-pagination'
 import { buildBookingConflictWindows } from '@/modules/bookings/lib/app-booking-conflict-windows'
-import {
-  assertArenaBackofficeAccess,
-  requireAuthenticatedDbUser,
-} from '@/lib/server-auth'
+import { requireAuthenticatedDbUser, assertArenaResourceAccess } from '@/lib/server-auth'
 import type {
   AppBookingRequestStatus,
   AppBookingRequestGroupView,
@@ -213,7 +210,7 @@ export async function getAppBookingRequestsAction(arenaId: string, offset = 0): 
   error?: string
 }> {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'bookings.requests')
     const parsedArenaId = uuidSchema.parse(arenaId)
     const parsedOffset = offsetSchema.parse(offset)
     const supabase = getSupabaseAdmin()
@@ -288,7 +285,7 @@ export async function getAppBookingRequestGroupsAction(arenaId: string, offset =
   error?: string
 }> {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'bookings.requests')
     const parsedArenaId = uuidSchema.parse(arenaId)
     const parsedOffset = offsetSchema.parse(offset)
     const supabase = getSupabaseAdmin()
@@ -401,7 +398,7 @@ export async function reviewAppBookingRequestAction(input: {
 }> {
   try {
     const parsed = reviewSchema.parse(input)
-    await assertArenaBackofficeAccess(parsed.arenaId)
+    await assertArenaResourceAccess(parsed.arenaId, 'bookings.requests')
     const { dbUserId } = await requireAuthenticatedDbUser()
     const supabase = getSupabaseAdmin()
     const { data, error } = await supabase.rpc(

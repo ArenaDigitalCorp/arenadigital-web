@@ -25,8 +25,8 @@ import { toast } from "sonner"
 import { trackAction } from "@/lib/telemetry/client"
 import type { StationOrder } from "@/modules/stations/types/station.types"
 import { addOrderItemsAction } from "@/modules/stations/actions/orderActions"
-import { getProductsByArenaAction } from "@/modules/products/actions/stockActions"
-import { isCatalogService, matchesProductOrServiceSearch, normalizeCatalogStatus, type Product } from "@/modules/products/types/product.types"
+import { getStationSaleProducts } from "@/modules/stations/actions/stationPickerActions"
+import { isCatalogService, matchesProductOrServiceSearch, normalizeCatalogStatus } from "@/modules/products/types/product.types"
 import { Search, Check, X, Loader2, Plus, Minus, Trash2 } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
@@ -38,6 +38,8 @@ const launchItemSchema = z.object({
 
 type LaunchItemValues = z.infer<typeof launchItemSchema>
 
+type Product = Awaited<ReturnType<typeof getStationSaleProducts>>[number]
+
 interface SelectedItem {
     product: Product
     quantity: number
@@ -48,7 +50,7 @@ interface LaunchItemModalProps {
     onClose: () => void
     arenaId: string
     /** Estação atual do PDV; itens com `product.station_id` só aparecem quando bate aqui. */
-    stationId?: string
+    stationId: string
     stationTypeId?: string
     order: StationOrder | null
     onSuccess: () => void
@@ -73,13 +75,13 @@ export function LaunchItemModal({
         if (isOpen) {
             loadProducts()
         }
-    }, [isOpen, arenaId])
+    }, [isOpen, arenaId, stationId])
 
     const loadProducts = async () => {
         setIsSearchingProducts(true)
         try {
-            const res = await getProductsByArenaAction(arenaId)
-            setAllProducts(res.data || [])
+            const products = await getStationSaleProducts(arenaId, stationId)
+            setAllProducts(products)
         } catch (error) {
             console.error("Error loading products:", error)
         } finally {

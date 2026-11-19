@@ -14,11 +14,11 @@ import { fileURLToPath } from 'node:url'
 
 import {
   blocosDeHora,
-  descricaoCreditoHorarioCancelado,
+  descricaoCreditoHorariosCancelados,
   descricaoCreditoJogoCancelado,
   diaCurto,
   faixaHoraria,
-  intervaloSelecionado,
+  selecaoDeCancelamento,
 } from '../src/modules/bookings/lib/cancelamento-sessao.ts'
 
 const read = (p) => readFileSync(fileURLToPath(new URL(p, import.meta.url)), 'utf8')
@@ -91,9 +91,9 @@ test('o valor sugerido vem da tabela de preço do plano, resolvido no banco', ()
   )
   assert.ok(quote.length > 0, 'action localizada')
 
-  // cadeia: snapshot do plano → tabela do papel mensalista → padrão do espaço
-  assert.match(quote, /plano\?\.price_table_id \?\? null/)
-  assert.match(quote, /\.eq\('tipo', 'mensalista'\)/, 'o papel é resolvido por tipo, nunca por nome')
+  // Em outra quadra, os papéis reservados são identificados pelo tipo.
+  assert.match(quote, /plano\.court_id === booking\.court_id \? plano\.price_table_id/)
+  assert.match(quote, /\.eq\('tipo', papel\)/, 'o papel é resolvido por tipo, nunca por nome')
   assert.match(quote, /origem = 'padrao'/)
 
   // e o valor sai da função canônica do banco
@@ -112,14 +112,14 @@ test('a tela avisa quando a sugestão caiu na tabela padrão', () => {
 test('as duas actions novas exigem backoffice da arena', () => {
   for (const fn of ['quoteSessaoMensalistaAction', 'cancelarSessaoMensalistaAction']) {
     const body = actions.slice(actions.indexOf(`export async function ${fn}`))
-    assert.match(body.slice(0, 700), /await assertArenaBackofficeAccess\(/, `${fn} sem checagem`)
+    assert.match(body.slice(0, 700), /await assertArenaResourceAccess\(/, `${fn} sem checagem`)
   }
   assert.match(actions, /await requireAuthenticatedDbUser\(\)/)
 })
 
 test('duplo clique não credita duas vezes', { skip: !hasDbRepo }, () => {
   // no cliente: chave de idempotência por operação
-  assert.match(modal, /operationId: crypto\.randomUUID\(\)/)
+  assert.match(modal, /operacoes\.current\.get\(key\) \?\? crypto\.randomUUID\(\)/)
 
   const sql = migration()
   // no banco: um crédito por reserva, garantido por índice
@@ -211,45 +211,45 @@ test('a sessão vira blocos de 1h para o gestor escolher o que cancelar', () => 
   assert.deepEqual(quebrada.map((b) => faixaHoraria(b.inicio, b.fim)), ['20:00 às 21:00', '21:00 às 21:30'])
 })
 
-test('o intervalo cancelado precisa ser contíguo', () => {
-  const blocos = blocosDeHora('2026-09-29T20:00:00-03:00', '2026-09-29T23:00:00-03:00')
-
-  const primeira = intervaloSelecionado(blocos, [0])
-  assert.equal(primeira.ok, true)
-  assert.equal(primeira.sessaoInteira, false)
-  assert.equal(faixaHoraria(primeira.inicio, primeira.fim), '20:00 às 21:00')
-
-  const meio = intervaloSelecionado(blocos, [1])
-  assert.equal(faixaHoraria(meio.inicio, meio.fim), '21:00 às 22:00')
-
-  const tudo = intervaloSelecionado(blocos, [2, 0, 1])
-  assert.equal(tudo.sessaoInteira, true)
-
-  const separados = intervaloSelecionado(blocos, [0, 2])
-  assert.equal(separados.ok, false)
-  assert.match(separados.erro, /horários seguidos/)
-
-  assert.equal(intervaloSelecionado(blocos, []).ok, false)
+test('a seleção do vídeo preserva o intervalo das 08h às 10h e lista as duas faixas no crédito', () => {
+  const dia = '2026-11-19T07:00:00-03:00'
+  const blocos = blocosDeHora(dia, '2026-11-19T11:00:00-03:00')
+  const selecao = selecaoDeCancelamento(blocos, [3, 0, 0])
+  assert.deepEqual(selecao, { intervalos: [blocos[0], blocos[3]], sessaoInteira: false })
+  assert.equal(
+    descricaoCreditoHorariosCancelados(dia, selecao.intervalos),
+    'Crédito lançado referente a jogo não realizado do dia 19/11/2026 (07:00 às 08:00 e 10:00 às 11:00)'
+  )
 })
 
-test('a descrição do crédito parcial mantém o texto combinado e diz o horário', () => {
+test('a seleção agrupa vizinhos e preserva lacunas, a meia hora final e os blocos originais', () => {
+  const blocos = blocosDeHora('2026-11-19T07:00:00-03:00', '2026-11-19T11:30:00-03:00')
+  const originais = structuredClone(blocos)
+  assert.deepEqual(selecaoDeCancelamento(blocos, [4, 0, 3, 1, -1, 5]), {
+    intervalos: [{ inicio: blocos[0].inicio, fim: blocos[1].fim }, { inicio: blocos[3].inicio, fim: blocos[4].fim }],
+    sessaoInteira: false,
+  })
+  assert.deepEqual(selecaoDeCancelamento(blocos, [4, 1, 3, 2, 0]), {
+    intervalos: [{ inicio: blocos[0].inicio, fim: blocos[4].fim }], sessaoInteira: true,
+  })
+  assert.deepEqual(selecaoDeCancelamento(blocos, []), { intervalos: [], sessaoInteira: false })
+  assert.deepEqual(selecaoDeCancelamento(blocos, [1]), { intervalos: [blocos[1]], sessaoInteira: false })
+  assert.deepEqual(blocos, originais)
+})
+
+test('a descrição continua identificando o dia e o horário no cancelamento de uma única faixa', () => {
+  const dia = '2026-09-29T20:00:00-03:00'
   assert.equal(
-    descricaoCreditoHorarioCancelado('2026-09-29T20:00:00-03:00', '2026-09-29T21:00:00-03:00'),
+    descricaoCreditoHorariosCancelados(dia, blocosDeHora(dia, '2026-09-29T21:00:00-03:00')),
     'Crédito lançado referente a jogo não realizado do dia 29/09/2026 (20:00 às 21:00)'
   )
 })
 
-test('o cancelamento usa a RPC parcial com o intervalo escolhido', () => {
+test('a gravação escolhe uma única RPC para todos os horários da confirmação', () => {
   const body = actions.slice(actions.indexOf('export async function cancelarSessaoMensalistaAction'))
-  assert.match(body, /\.rpc\('cancel_mensalista_booking_partial_atomic'/)
-  assert.match(body, /p_cancel_start: parsed\.cancelInicio/)
-  assert.match(body, /p_cancel_end: parsed\.cancelFim/)
-  // a cotação do crédito segue a tabela do plano, agora para o intervalo escolhido
-  const quote = actions.slice(
-    actions.indexOf('export async function quoteSessaoMensalistaAction'),
-    actions.indexOf('const cancelarSessaoSchema')
-  )
-  assert.match(quote, /parsed\.intervalo\?\.inicio \?\? booking\.start_time/)
+  assert.match(body, /cancel_mensalista_booking_partial_atomic/)
+  assert.match(body, /cancel_mensalista_booking_ranges_atomic/)
+  assert.match(body, /p_intervalos: parsed.intervalos.map/)
   assert.match(modal, /aria-label="Horários a cancelar"/)
 })
 

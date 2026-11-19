@@ -20,7 +20,7 @@ function harness({ raw = '2,555', type = 'percent', rounding = 'exact', kind = '
   let stateIndex, refIndex, tree, uuidCount = 0
   const { bulkAdjustPricesAction } = load('src/modules/products/actions/priceActions.ts', {
     '@/lib/server-auth': {
-      assertArenaAdminAccess: async arena => { access.push(arena) },
+      assertArenaResourceAccess: async (arena, key) => { assert.equal(key, 'catalog'); access.push(arena) },
       requireAuthenticatedDbUser: async () => ({ dbUserId: 'user-fixture' }),
     },
     '@/lib/supabase-server': { getSupabaseAdmin: () => ({ rpc: async (name, args) => {

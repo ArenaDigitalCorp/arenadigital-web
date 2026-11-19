@@ -11,6 +11,7 @@ export type ArenaSummary = {
   name: string
   isOwner: boolean
   role: ArenaAccessRole
+  resources: string[]
   assignedStationId: string | null
 }
 

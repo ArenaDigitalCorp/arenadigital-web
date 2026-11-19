@@ -53,7 +53,7 @@ test('station customer server action validates and canonicalizes before writing'
       inserted = rows[0]
       return { select: () => ({ single: async () => ({ data: rows[0], error: null }) }) }
     } }) }) },
-    '@/lib/server-auth': { assertArenaAccess: async () => {} },
+    '@/lib/server-auth': { assertArenaResourceAccess: async (id, key) => { assert.deepEqual([id, key], ['arena', 'stations']) } },
     '@/modules/arenas/usecases/get-arena-billing-address.usecase': {},
   })
   const valid = await createCustomerAction('arena', { name: ' Teste ', cpf: contact.cpf, phone: contact.phone, email: contact.email })

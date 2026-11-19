@@ -1,7 +1,7 @@
 import { Suspense } from 'react'
 import { RotativoCreditsError } from '@/modules/rotativos/components/RotativoCreditsError'
 import { CreditosTab } from '@/modules/rotativos/components/CreditosTab'
-import { assertArenaBackofficeAccess } from '@/lib/server-auth'
+import { assertArenaResourceAccess } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { SupabaseArenaRepository } from '@/modules/arenas/repositories/SupabaseArenaRepository'
 import { SupabaseRotativoRepository } from '@/modules/rotativos/repositories/SupabaseRotativoRepository'
@@ -38,7 +38,7 @@ export default async function RotativoPage({
   const { tutorial } = await searchParams
 
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'rotativo')
   } catch {
     redirect('/dashboard/settings/arenas')
   }

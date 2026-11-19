@@ -52,40 +52,26 @@ export function blocosDeHora(startISO: string, endISO: string): BlocoHorario[] {
   return blocos
 }
 
-export type IntervaloCancelamento =
-  | { ok: true; inicio: string; fim: string; sessaoInteira: boolean }
-  | { ok: false; erro: string }
-
-/**
- * Intervalo a cancelar a partir dos blocos marcados (índices). Precisa ser
- * contíguo: a reserva é encurtada ou dividida em volta de UM intervalo.
- */
-export function intervaloSelecionado(
-  blocos: BlocoHorario[],
-  selecionados: number[]
-): IntervaloCancelamento {
-  const idx = Array.from(new Set(selecionados))
-    .filter((i) => i >= 0 && i < blocos.length)
-    .sort((a, b) => a - b)
-  if (idx.length === 0) return { ok: false, erro: 'Marque ao menos um horário para cancelar.' }
-  if (idx.some((v, i) => i > 0 && v !== idx[i - 1] + 1)) {
-    return {
-      ok: false,
-      erro: 'Marque horários seguidos. Para liberar horários separados, cancele um de cada vez.',
+/** Agrupa somente os blocos marcados que compartilham uma extremidade. */
+export function selecaoDeCancelamento(blocos: BlocoHorario[], selecionados: number[]) {
+  const indices = new Set(selecionados)
+  const marcados = blocos.filter((_, indice) => indices.has(indice))
+  const intervalos: BlocoHorario[] = []
+  for (const bloco of marcados) {
+    const anterior = intervalos.at(-1)
+    if (anterior && anterior.fim === bloco.inicio) {
+      anterior.fim = bloco.fim
+    } else {
+      intervalos.push({ ...bloco })
     }
   }
-  return {
-    ok: true,
-    inicio: blocos[idx[0]].inicio,
-    fim: blocos[idx[idx.length - 1]].fim,
-    sessaoInteira: idx.length === blocos.length,
-  }
+  return { intervalos, sessaoInteira: marcados.length > 0 && marcados.length === blocos.length }
 }
 
-/**
- * Descrição do crédito quando só parte do jogo é cancelada — o dia continua no
- * mesmo formato da descrição do dia inteiro, com o horário ao final.
- */
-export function descricaoCreditoHorarioCancelado(inicioISO: string, fimISO: string): string {
-  return `${descricaoCreditoJogoCancelado(inicioISO)} (${faixaHoraria(inicioISO, fimISO)})`
+export function listarFaixasHorarias(intervalos: BlocoHorario[]): string {
+  return new Intl.ListFormat('pt-BR').format(intervalos.map(({ inicio, fim }) => faixaHoraria(inicio, fim)))
+}
+
+export function descricaoCreditoHorariosCancelados(inicioSessao: string, intervalos: BlocoHorario[]): string {
+  return `${descricaoCreditoJogoCancelado(inicioSessao)} (${listarFaixasHorarias(intervalos)})`
 }

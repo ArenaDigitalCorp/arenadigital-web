@@ -23,7 +23,7 @@ type Result<T> = { success: true; data: T } | { success: false; error: string }
 type RpcName = 'get_arena_receiving_setup' | 'save_arena_receiving_draft' | 'set_arena_receiving_booking_mode'
 async function rpc(arenaId: string, name: RpcName, args: Record<string, unknown> = {}) {
   z.string().uuid().parse(arenaId)
-  await assertArenaAdminAccess(arenaId)
+  await assertArenaAdminAccess(arenaId, 'settings.receiving')
   const client = await createSupabaseServerClient()
   const api = client as unknown as {rpc(name:RpcName,args:Record<string,unknown>):Promise<{data:unknown;error:{message:string}|null}>}
   const result = await api.rpc(name,{p_arena_id:arenaId,...args})

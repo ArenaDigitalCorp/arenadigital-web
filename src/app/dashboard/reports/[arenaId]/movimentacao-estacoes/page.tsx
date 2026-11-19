@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { assertArenaAdminAccess } from '@/lib/server-auth'
+import { assertArenaResourceAccess } from '@/lib/server-auth'
 import { getStationMovementReportAction } from '@/modules/reports/actions/stationMovementActions'
 import { MovimentacaoEstacoesPageClient } from '@/modules/reports/components/MovimentacaoEstacoesPageClient'
 
@@ -11,7 +11,7 @@ export default async function MovimentacaoEstacoesPage({
   const { arenaId } = await params
 
   try {
-    await assertArenaAdminAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'reports.stations')
   } catch {
     redirect('/dashboard/settings/arenas')
   }

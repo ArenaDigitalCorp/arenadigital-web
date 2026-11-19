@@ -1,3 +1,4 @@
+import { isArenaResource, type ArenaResource } from '@/lib/arena-resources'
 import { cache } from 'react'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { fetchArenaMembershipByArenaAndUser } from '@/lib/arena-users'
@@ -282,6 +283,24 @@ export async function assertArenaAccess(arenaId: string): Promise<ArenaAccessPro
   }
 }
 
+// Uses the caller's JWT so that the database resolves the actor. React.cache is request-scoped.
+export const loadArenaResources = cache(async function loadArenaResources(arenaId: string): Promise<ArenaResource[]> {
+  const client = await createSupabaseServerClient()
+  const { data, error } = await client.rpc('get_arena_acl', { p_arena_id: arenaId })
+  if (error || !data || typeof data !== 'object' || Array.isArray(data) || !Array.isArray(data.resources)) {
+    throw new AuthorizationError('Não foi possível verificar as permissões da arena.')
+  }
+  return data.resources.filter(isArenaResource)
+})
+
+export async function assertArenaResourceAccess(arenaId: string, resource: ArenaResource, ...alternatives: ArenaResource[]) {
+  const [access, resources] = await Promise.all([assertArenaAccess(arenaId), loadArenaResources(arenaId)])
+  if (![resource, ...alternatives].some(key => resources.includes(key))) {
+    throw new AuthorizationError('Seu perfil não tem acesso a este recurso.')
+  }
+  return { ...access, resources }
+}
+
 export async function assertPlatformAdminAccess(): Promise<PlatformAdminProfile> {
   const currentUser = await requireAuthenticatedDbUser()
   const supabase = getSupabaseAdmin()
@@ -338,21 +357,19 @@ export async function assertArenaBackofficeAccess(arenaId: string): Promise<Aren
 
 /**
  * Protege o fluxo de Caixa (abrir/fechar sessão, lançar entrada/saída manual).
- * Equivalente a assertArenaAccess (qualquer membro ativo: Owner | Gestor | Atendente | Caixa) —
- * nomeado explicitamente para documentar que, aqui, a role de membership "Caixa"
- * é quem deve poder operar o caixa físico, diferente de assertArenaBackofficeAccess.
+ * Requer o recurso de caixa financeiro na arena selecionada.
  */
 export async function assertArenaCaixaAccess(arenaId: string): Promise<ArenaAccessProfile> {
-  return assertArenaAccess(arenaId)
+  return assertArenaResourceAccess(arenaId, 'finance.cash')
 }
 
 /**
  * Protege rotas exclusivas de Administrador (Owner | Gestor).
  * Bloqueia Caixa e Atendente.
- * Uso: Espaços, Relatórios, Configurações de Arena/Usuários.
+ * Quando a operação pertence a um submenu, exige também o recurso informado.
  */
-export async function assertArenaAdminAccess(arenaId: string): Promise<ArenaAccessProfile> {
-  const access = await assertArenaAccess(arenaId)
+export async function assertArenaAdminAccess(arenaId: string, resource?: ArenaResource): Promise<ArenaAccessProfile> {
+  const access = resource ? await assertArenaResourceAccess(arenaId, resource) : await assertArenaAccess(arenaId)
 
   if (!canManageArena(access)) {
     throw new AuthorizationError('Forbidden', 403)
@@ -372,7 +389,7 @@ export async function assertArenaOwnerAccess(arenaId: string): Promise<ArenaAcce
 }
 
 export async function assertArenaSubscriptionAccess(arenaId: string): Promise<ArenaAccessProfile> {
-  const access = await assertArenaAccess(arenaId)
+  const access = await assertArenaResourceAccess(arenaId, 'settings.subscription')
 
   if (!canManageArenaSubscription(access)) {
     throw new AuthorizationError('Forbidden', 403)
@@ -382,7 +399,7 @@ export async function assertArenaSubscriptionAccess(arenaId: string): Promise<Ar
 }
 
 async function assertStationMembershipAccess(arenaId: string, stationId: string): Promise<ArenaAccessProfile> {
-  const access = await assertArenaAccess(arenaId)
+  const access = await assertArenaResourceAccess(arenaId, 'stations')
 
   if (!access.isOwner && access.role === 'Caixa' && access.assignedStationId !== stationId) {
     throw new AuthorizationError('Forbidden', 403)

@@ -99,26 +99,26 @@ test('upload object names are canonical and cannot inherit a user path', () => {
   assert.throws(() => createUploadObjectName('../svg', 'b4000000-0000-4000-8000-000000000001'), UploadPolicyError)
 })
 
-test('upload and WhatsApp routes require arena admin scope', async () => {
+test('upload and WhatsApp routes require area-specific arena scope', async () => {
   const [uploadRoute, whatsappRoute, r2Client] = await Promise.all([
     source('src/app/api/upload/route.ts'),
     source('src/app/api/whatsapp/embedded-signup/route.ts'),
     source('src/lib/r2Client.ts'),
   ])
 
-  assert.match(uploadRoute, /assertArenaAdminAccess\(fields\.arenaId\)/)
+  assert.match(uploadRoute, /assertArenaResourceAccess\(fields\.arenaId, fields\.type === 'banner' \? 'settings.arena' : 'spaces'\)/)
   assert.match(uploadRoute, /assertCourtAccess\(fields\.spaceId, fields\.arenaId\)/)
   assert.doesNotMatch(uploadRoute, /assertArenaAccess\(/)
   assert.match(uploadRoute, /error instanceof AuthorizationError[\s\S]{0,160}status: error\.status/)
   assert.match(r2Client, /IfNoneMatch:\s*["']\*["']/)
 
-  assert.match(whatsappRoute, /assertArenaAdminAccess\(parsed\.arenaId\)/)
+  assert.match(whatsappRoute, /assertArenaResourceAccess\(parsed\.arenaId, 'settings.whatsapp'\)/)
   assert.doesNotMatch(whatsappRoute, /assertArenaBackofficeAccess/)
   assert.match(whatsappRoute, /error instanceof AuthorizationError[\s\S]{0,160}status: error\.status/)
   assert.doesNotMatch(whatsappRoute, /console\.error\([^\n]*message/)
 })
 
-test('loyalty mutations are admin-only, idempotent RPC calls', async () => {
+test('loyalty mutations are resource-authorized, idempotent RPC calls', async () => {
   const [actions, repository, sendModal, redemptionModal] = await Promise.all([
     source('src/modules/loyalty/actions/loyaltyActions.ts'),
     source('src/modules/loyalty/repositories/SupabaseLoyaltyRepository.ts'),
@@ -127,7 +127,7 @@ test('loyalty mutations are admin-only, idempotent RPC calls', async () => {
   ])
 
   assert.match(actions, /record_backoffice_loyalty_transaction/)
-  assert.match(actions, /assertArenaAdminAccess\(parsed\.arenaId\)/)
+  assert.match(actions, /assertArenaAdminAccess\(parsed\.arenaId, 'loyalty'\)/)
   assert.doesNotMatch(repository, /programa_fidelidade_extrato'[\s\S]{0,100}\.insert/)
   for (const modal of [sendModal, redemptionModal]) {
     assert.match(modal, /operationId\.current \?\?= crypto\.randomUUID\(\)/)

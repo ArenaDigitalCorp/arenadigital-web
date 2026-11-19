@@ -3,11 +3,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- court_price_table* não estão nos tipos gerados até o fim da Fase 2 */
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import {
-  assertArenaAdminAccess,
-  assertArenaBackofficeAccess,
-  assertCourtAccess,
-} from '@/lib/server-auth'
+import { assertCourtAccess, assertArenaResourceAccess } from '@/lib/server-auth'
 import { revalidatePath } from 'next/cache'
 import {
   createPriceTableSchema,
@@ -131,7 +127,7 @@ export async function listCourtPriceTablesAction(
   courtId: string,
 ): Promise<{ success: boolean; data: CourtPriceTable[]; error?: string }> {
   try {
-    await assertArenaAdminAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'spaces')
     await assertCourtAccess(courtId, arenaId)
     const supabase = loose()
 
@@ -189,7 +185,7 @@ export async function listCourtPriceTableOptionsAction(
   courtId: string,
 ): Promise<{ success: boolean; data: BookingPriceTableOption[]; error?: string }> {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'spaces', 'bookings.single', 'bookings.recurring')
     await assertCourtAccess(courtId, arenaId)
 
     const { data, error } = await loose()
@@ -228,7 +224,7 @@ export async function quoteCourtPriceAction(
   endISO: string,
 ): Promise<{ success: boolean; value: number; error?: string }> {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'spaces', 'bookings.single', 'bookings.recurring')
     await assertCourtAccess(courtId, arenaId)
 
     const start = new Date(startISO)
@@ -272,7 +268,7 @@ export async function quoteMonthlyBlocksAction(
   blocks: MonthlyBlockQuoteInput[],
 ): Promise<{ success: boolean; values: number[]; error?: string }> {
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'spaces', 'bookings.single', 'bookings.recurring')
     if (blocks.length === 0) return { success: true, values: [] }
     if (blocks.length > 40) throw new Error('Limite de 40 blocos por plano.')
 
@@ -312,7 +308,7 @@ export async function createCourtPriceTableAction(
   input: { courtId: string; nome: string },
 ): Promise<{ success: boolean; data?: CourtPriceTable; error?: string }> {
   try {
-    await assertArenaAdminAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'spaces')
     const parsed = createPriceTableSchema.parse(input)
     await assertCourtAccess(parsed.courtId, arenaId)
     const supabase = loose()
@@ -364,7 +360,7 @@ export async function deleteCourtPriceTableAction(
   tableId: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await assertArenaAdminAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'spaces')
     await assertCourtAccess(courtId, arenaId)
     const supabase = loose()
 
@@ -403,7 +399,7 @@ export async function setDefaultCourtPriceTableAction(
   tableId: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await assertArenaAdminAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'spaces')
     await assertCourtAccess(courtId, arenaId)
     const supabase = loose()
 
@@ -520,7 +516,7 @@ export async function saveDraftPriceTablesAction(
   drafts: { tipo: string; nome: string; days: PriceDayInput[] }[],
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await assertArenaAdminAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'spaces')
     await assertCourtAccess(courtId, arenaId)
     const supabase = loose()
 
@@ -579,7 +575,7 @@ export async function upsertCourtPriceTableAction(
   input: UpsertPriceTableInput,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await assertArenaAdminAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'spaces')
     const parsed = upsertPriceTableSchema.parse(input)
     await assertCourtAccess(parsed.courtId, arenaId)
     const supabase = loose()

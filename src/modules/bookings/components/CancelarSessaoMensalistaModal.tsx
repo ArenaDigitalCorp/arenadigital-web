@@ -1,8 +1,8 @@
 'use client'
 
-import { parseBrazilianDecimal } from '@/lib/format'
+import { formatDecimalInput, parseBrazilianDecimal } from '@/lib/format'
 import { DecimalInput } from '@/components/ui/decimal-input'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { format, parseISO } from 'date-fns'
 import { AlertTriangle, CalendarX2, Loader2 } from 'lucide-react'
 import {
@@ -20,12 +20,14 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import {
   blocosDeHora,
-  descricaoCreditoHorarioCancelado,
+  descricaoCreditoHorariosCancelados,
   descricaoCreditoJogoCancelado,
   diaCurto,
   diaExtenso,
   faixaHoraria,
-  intervaloSelecionado,
+  listarFaixasHorarias,
+  selecaoDeCancelamento,
+  type BlocoHorario,
 } from '@/modules/bookings/lib/cancelamento-sessao'
 import {
   cancelarSessaoMensalistaAction,
@@ -74,89 +76,104 @@ export function CancelarSessaoMensalistaModal({
   // Por padrão, o jogo inteiro — o gestor desmarca o que continua valendo.
   const [selecionados, setSelecionados] = useState<number[]>(() => blocos.map((_, i) => i))
   const [lancarCredito, setLancarCredito] = useState(true)
-  const [valor, setValor] = useState('')
-  const [descricaoEditada, setDescricaoEditada] = useState<string | null>(null)
-  const [quote, setQuote] = useState<{ key: string; data: SessaoMensalistaQuote | null } | null>(null)
+  const [ajustes, setAjustes] = useState<Record<string, { valor?: string; descricao?: string }>>({})
+  const [quote, setQuote] = useState<{ intervalos: BlocoHorario[]; data: SessaoMensalistaQuote | null } | null>(null)
   const [saving, setSaving] = useState(false)
+  const operacoes = useRef(new Map<string, string>())
+  const enviando = useRef(false)
 
-  const intervalo = intervaloSelecionado(blocos, selecionados)
-  const parcial = intervalo.ok && !intervalo.sessaoInteira
-  const cancelInicio = intervalo.ok ? intervalo.inicio : startTime
-  const cancelFim = intervalo.ok ? intervalo.fim : endTime
-  const quoteKey = intervalo.ok ? `${intervalo.inicio}|${intervalo.fim}` : null
+  const { intervalos, sessaoInteira } = useMemo(
+    () => selecaoDeCancelamento(blocos, selecionados),
+    [blocos, selecionados]
+  )
+  const temSelecao = intervalos.length > 0
+  const parcial = temSelecao && !sessaoInteira
+  const plural = intervalos.length > 1
 
   useEffect(() => {
-    if (!open || !intervalo.ok || !quoteKey) return
-    let cancelled = false
-    void quoteSessaoMensalistaAction(
-      arenaId,
-      bookingId,
-      intervalo.sessaoInteira ? undefined : { inicio: intervalo.inicio, fim: intervalo.fim }
-    ).then((res) => {
-      if (cancelled) return
-      if (!res.success || !res.data) {
-        toast.error(res.error ?? 'Não foi possível calcular o valor da sessão.')
-        setQuote({ key: quoteKey, data: null })
-        return
+    if (!open || !lancarCredito || !intervalos.length) return
+    let ativa = true
+    async function cotar() {
+      try {
+        const res = await quoteSessaoMensalistaAction(arenaId, bookingId, intervalos)
+        if (!ativa) return
+        if (!res.success || !res.data) throw new Error(res.error ?? 'Não foi possível calcular o valor da sessão.')
+        setQuote({ intervalos, data: res.data })
+      } catch (err) {
+        if (!ativa) return
+        setQuote({ intervalos, data: null })
+        toast.error(err instanceof Error ? err.message : 'Não foi possível calcular o valor da sessão.')
       }
-      setQuote({ key: quoteKey, data: res.data })
-      setValor(res.data.valorSugerido.toFixed(2))
-    })
-    return () => {
-      cancelled = true
     }
-    // intervalo é derivado de quoteKey; depender dele recriaria a cotação a cada render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, arenaId, bookingId, quoteKey])
+    void cotar()
+    return () => { ativa = false }
+  }, [open, lancarCredito, arenaId, bookingId, intervalos])
 
-  const loadingQuote = Boolean(quoteKey) && quote?.key !== quoteKey
-  const quoteAtual = quote?.key === quoteKey ? quote.data : null
-
-  const descricaoPadrao = parcial
-    ? descricaoCreditoHorarioCancelado(cancelInicio, cancelFim)
-    : descricaoCreditoJogoCancelado(startTime)
-  const descricao = descricaoEditada ?? descricaoPadrao
-
-  const valorNum = (valor.trim() === '' ? 0 : parseBrazilianDecimal(valor) ?? Number.NaN)
+  const loadingQuote = lancarCredito && temSelecao && quote?.intervalos !== intervalos
+  const quoteAtual = quote?.intervalos === intervalos ? quote.data : null
+  const creditoManual = plural && quoteAtual?.precoFixo === true
+  const horariosCancelados = listarFaixasHorarias(intervalos)
+  const descricaoDoDia = descricaoCreditoJogoCancelado(startTime)
+  const trechos = intervalos.map(({ inicio, fim }) => {
+    const key = `${inicio}/${fim}`
+    const chaveValor = creditoManual ? `manual/${key}` : key
+    const sugestao = quoteAtual?.valoresPorTrecho.find(trecho => trecho.inicio === inicio && trecho.fim === fim)
+    const valor = ajustes[chaveValor]?.valor ?? (sugestao ? formatDecimalInput(sugestao.valor) : '')
+    const descricao = ajustes[key]?.descricao ?? (sessaoInteira
+      ? descricaoDoDia
+      : descricaoCreditoHorariosCancelados(startTime, [{ inicio, fim }]))
+    const horas = quoteAtual?.valoresPorHorario.filter(hora => hora.inicio >= inicio && hora.fim <= fim) ?? []
+    return { key, chaveValor, inicio, fim, valor, valorNum: parseBrazilianDecimal(valor), descricao, horas }
+  })
+  const total = trechos.reduce((centavos, trecho) => centavos + Math.round((trecho.valorNum ?? 0) * 100), 0) / 100
+  const valoresValidos = trechos.every(trecho => trecho.valorNum !== null && trecho.valorNum >= 0)
   const dia = diaExtenso(startTime)
   const horario = faixaHoraria(startTime, endTime)
-  const horarioCancelado = faixaHoraria(cancelInicio, cancelFim)
 
-  const toggleBloco = (i: number) =>
-    setSelecionados((prev) => (prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i]))
+  const toggleBloco = (i: number) => {
+    setSelecionados(prev => prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i])
+  }
+
+  const ajustar = (key: string, campo: 'valor' | 'descricao', texto: string) =>
+    setAjustes(prev => ({ ...prev, [key]: { ...prev[key], [campo]: texto } }))
 
   const handleConfirm = async () => {
-    if (!intervalo.ok) {
-      toast.error(intervalo.erro)
+    if (enviando.current || !temSelecao || loadingQuote) return
+    if (lancarCredito && !valoresValidos) {
+      toast.error('Informe um valor válido para cada horário selecionado.')
       return
     }
-    if (lancarCredito && (!Number.isFinite(valorNum) || valorNum <= 0)) {
+    if (lancarCredito && total <= 0) {
       toast.error('Informe um valor de crédito maior que zero.')
       return
     }
+    const descricao = plural ? descricaoCreditoHorariosCancelados(startTime, intervalos) : trechos[0].descricao
+    const payload = {
+      arenaId, bookingId, lancarCredito,
+      intervalos: trechos.map(trecho => ({
+        inicio: trecho.inicio, fim: trecho.fim,
+        valorCredito: lancarCredito ? trecho.valorNum ?? 0 : 0,
+        descricao: lancarCredito ? trecho.descricao.trim() : '',
+      })),
+      valorCredito: lancarCredito ? total : 0,
+      descricao: lancarCredito ? descricao.trim() : '',
+    }
+    const key = JSON.stringify(payload)
+    // Uma resposta perdida pode chegar depois de o gestor rever outra seleção.
+    const operationId = operacoes.current.get(key) ?? crypto.randomUUID()
+    operacoes.current.set(key, operationId)
+    enviando.current = true
     setSaving(true)
     try {
-      const res = await cancelarSessaoMensalistaAction({
-        arenaId,
-        bookingId,
-        // Chave de idempotência: vira o id da linha de crédito (e, no
-        // cancelamento parcial, da parte cancelada), então um duplo clique não
-        // cancela nem credita duas vezes.
-        operationId: crypto.randomUUID(),
-        lancarCredito,
-        valorCredito: lancarCredito ? valorNum : 0,
-        descricao: lancarCredito ? descricao.trim() : '',
-        cancelInicio: new Date(intervalo.inicio).toISOString(),
-        cancelFim: new Date(intervalo.fim).toISOString(),
-      })
+      const res = await cancelarSessaoMensalistaAction({ ...payload, operationId })
       if (!res.success) throw new Error(res.error)
 
       const oQue = parcial
-        ? `Horário ${horarioCancelado} do dia ${diaCurto(startTime)} cancelado e liberado`
+        ? `${plural ? 'Horários' : 'Horário'} ${horariosCancelados} do dia ${diaCurto(startTime)} ${plural ? 'cancelados' : 'cancelado'}`
         : `Jogo do dia ${diaCurto(startTime)} cancelado`
       toast.success(
         lancarCredito
-          ? `${oQue} e ${brl(res.data?.valorCredito ?? valorNum)} de crédito lançado.`
+          ? `${oQue} e ${brl(res.data?.valorCredito ?? total)} de crédito lançado.`
           : `${oQue}.`
       )
       onSuccess()
@@ -164,6 +181,7 @@ export function CancelarSessaoMensalistaModal({
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro ao cancelar a sessão.')
     } finally {
+      enviando.current = false
       setSaving(false)
     }
   }
@@ -183,10 +201,12 @@ export function CancelarSessaoMensalistaModal({
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5">
             <p className="flex items-start gap-2 text-[13px] leading-snug text-amber-800">
               <AlertTriangle className="mt-0.5 h-4 w-4 flex-none" />
-              {parcial ? (
+              {!temSelecao ? (
+                <span>Selecione os horários que deseja liberar para outras reservas.</span>
+              ) : parcial ? (
                 <span>
-                  Você vai cancelar <strong>só {horarioCancelado}</strong> deste jogo. O restante
-                  continua reservado e o horário liberado fica disponível para outra reserva. A
+                  Você vai cancelar <strong>{horariosCancelados}</strong> deste jogo. O restante
+                  continua reservado. A
                   recorrência do mensalista continua ativa e a mensalidade do mês{' '}
                   <strong>não</strong> é alterada.
                 </span>
@@ -255,14 +275,13 @@ export function CancelarSessaoMensalistaModal({
                   )
                 })}
               </div>
-              {!intervalo.ok ? (
-                <p className="text-[11.5px] font-medium text-red-600">{intervalo.erro}</p>
+              {!temSelecao ? (
+                <p className="text-[11.5px] font-medium text-red-600">Marque ao menos um horário para cancelar.</p>
               ) : (
                 <p className="text-[11.5px] text-muted-foreground">
                   {parcial ? (
                     <>
-                      Cancela <strong>{horarioCancelado}</strong>; o jogo continua no restante do
-                      horário.
+                      {plural ? 'Horários a liberar' : 'Horário a liberar'}: <strong>{horariosCancelados}</strong>.
                     </>
                   ) : (
                     <>Todos os horários marcados: cancela o jogo inteiro.</>
@@ -278,6 +297,7 @@ export function CancelarSessaoMensalistaModal({
               <Checkbox
                 id="lancar-credito"
                 checked={lancarCredito}
+                disabled={saving}
                 onCheckedChange={(checked) => setLancarCredito(checked === true)}
                 className="mt-0.5 data-[state=checked]:border-arena-button data-[state=checked]:bg-arena-button"
               />
@@ -296,66 +316,109 @@ export function CancelarSessaoMensalistaModal({
               </div>
             </div>
 
-            {lancarCredito && (
+            {lancarCredito && temSelecao && (
               <div className="space-y-3 border-t border-arena-navy-800/5 pt-3">
-                <div className="space-y-1.5">
-                  <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                    Valor do crédito
-                  </Label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                      R$
-                    </span>
-                    <DecimalInput
-                      value={valor}
-                      onChange={(e) => setValor(e.target.value)}
-                      inputMode="decimal"
-                      disabled={loadingQuote}
-                      className="pl-9 font-semibold tabular-nums"
-                      placeholder={loadingQuote ? 'Calculando…' : '0,00'}
-                    />
-                  </div>
-                  {loadingQuote ? (
-                    <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                      Buscando o valor da hora na tabela de preço do plano…
-                    </p>
-                  ) : quoteAtual ? (
-                    <p className="text-[11px] leading-snug text-muted-foreground">
-                      Valor {parcial ? `de ${horarioCancelado}` : 'da hora reservada'}
-                      {quoteAtual.tabelaNome ? (
-                        <>
-                          {' '}
-                          pela tabela <strong>{quoteAtual.tabelaNome}</strong>
-                        </>
-                      ) : null}
-                      : <strong>{brl(quoteAtual.valorSugerido)}</strong>.
-                      {quoteAtual.origem === 'padrao' && (
-                        <>
-                          {' '}
-                          O plano não tem tabela de mensalista definida, então veio da
-                          tabela padrão do espaço — confira antes de confirmar.
-                        </>
-                      )}{' '}
-                      Você pode ajustar o valor.
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                    Descrição do crédito
-                  </Label>
-                  <Textarea
-                    value={descricao}
-                    onChange={(e) => setDescricaoEditada(e.target.value)}
-                    rows={2}
-                    className="resize-none text-sm"
-                  />
-                  <p className="text-[11px] text-muted-foreground">
-                    É o que aparece no extrato de créditos do mensalista.
+                {loadingQuote ? (
+                  <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground" role="status">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Calculando o crédito dos horários selecionados…
                   </p>
-                </div>
+                ) : quoteAtual ? (
+                  <p className="text-[11px] leading-snug text-muted-foreground">
+                    {creditoManual ? (
+                      <>
+                        {quoteAtual.valorFixoReserva !== null && (
+                          <>Preço fixo da reserva: <strong>{brl(quoteAtual.valorFixoReserva)}</strong>.{' '}</>
+                        )}
+                        {quoteAtual.tabelaNome && <>Tabela <strong>{quoteAtual.tabelaNome}</strong>.{' '}</>}
+                        Informe o crédito de cada faixa. Use zero para apenas liberar um horário.
+                      </>
+                    ) : (
+                      <>
+                        Sugestão {quoteAtual.tabelaNome ? <>pela tabela <strong>{quoteAtual.tabelaNome}</strong></> : 'da tabela de preço'}
+                        {quoteAtual.valorSugerido !== null && <> de <strong>{brl(quoteAtual.valorSugerido)}</strong></>}.
+                        {quoteAtual.precoFixo && <> Este espaço cobra preço fixo por reserva.</>}
+                        {' '}Você pode ajustar o valor.
+                      </>
+                    )}
+                    {quoteAtual.origem === 'padrao' && (
+                      <> Confira o valor pela tabela padrão do espaço.</>
+                    )}
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground">
+                    Cotação indisponível. Informe o valor para lançar o crédito.
+                  </p>
+                )}
+                {trechos.map((trecho, i) => (
+                  <fieldset key={trecho.key} className={cn('space-y-2.5', plural && 'rounded-lg border px-3 pb-3')}>
+                    {plural && (
+                      <legend className="px-1 text-xs font-semibold text-arena-navy-800">
+                        {faixaHoraria(trecho.inicio, trecho.fim)}
+                      </legend>
+                    )}
+                    {trecho.horas.length > 1 && (
+                      <dl aria-label="Crédito sugerido por horário" className="space-y-1 text-xs text-muted-foreground">
+                        {trecho.horas.map(h => (
+                          <div key={h.inicio} className="flex justify-between gap-3">
+                            <dt>{faixaHoraria(h.inicio, h.fim)}</dt>
+                            <dd className="tabular-nums">{brl(h.valor)}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    )}
+                    <div className="space-y-1.5">
+                      <Label htmlFor={`credito-valor-${i}`} className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                        Valor do crédito
+                      </Label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span>
+                        <DecimalInput
+                          id={`credito-valor-${i}`}
+                          value={loadingQuote ? '' : trecho.valor}
+                          onChange={e => ajustar(trecho.chaveValor, 'valor', e.target.value)}
+                          inputMode="decimal"
+                          disabled={saving || loadingQuote}
+                          className="pl-9 font-semibold tabular-nums"
+                          placeholder={loadingQuote ? 'Calculando…' : creditoManual ? 'Informe o valor' : '0,00'}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor={`credito-descricao-${i}`} className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                        Descrição do crédito
+                      </Label>
+                      <Textarea
+                        id={`credito-descricao-${i}`}
+                        value={trecho.descricao}
+                        onChange={e => ajustar(trecho.key, 'descricao', e.target.value)}
+                        disabled={saving}
+                        maxLength={500}
+                        rows={2}
+                        className="resize-none text-sm"
+                      />
+                    </div>
+                  </fieldset>
+                ))}
+                {plural && (
+                  <>
+                    {creditoManual ? (
+                      valoresValidos && total === 0 && (
+                        <p className="text-[11px] text-muted-foreground">
+                          Para liberar todas as faixas sem crédito, desmarque “Lançar crédito para o mensalista”.
+                        </p>
+                      )
+                    ) : (
+                      <p className="text-[11px] text-muted-foreground">
+                        Use R$ 0,00 na faixa que deseja liberar sem crédito.
+                      </p>
+                    )}
+                    <div className="flex justify-between gap-3 text-sm font-semibold text-arena-navy-800">
+                      <span>Total a lançar</span>
+                      <span className="tabular-nums">{loadingQuote || !valoresValidos ? '—' : brl(total)}</span>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -368,7 +431,7 @@ export function CancelarSessaoMensalistaModal({
           <Button
             type="button"
             onClick={handleConfirm}
-            disabled={saving || !intervalo.ok || (lancarCredito && loadingQuote)}
+            disabled={saving || !temSelecao || loadingQuote || (lancarCredito && creditoManual && (!valoresValidos || total === 0))}
             className="bg-red-500 text-white hover:bg-red-600"
           >
             {saving ? (
@@ -376,8 +439,8 @@ export function CancelarSessaoMensalistaModal({
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Cancelando…
               </>
-            ) : parcial ? (
-              lancarCredito ? 'Cancelar horário e lançar crédito' : 'Cancelar horário'
+            ) : !sessaoInteira ? (
+              `Cancelar ${plural ? 'horários' : 'horário'}${lancarCredito ? ' e lançar crédito' : ''}`
             ) : lancarCredito ? (
               'Cancelar este dia e lançar crédito'
             ) : (

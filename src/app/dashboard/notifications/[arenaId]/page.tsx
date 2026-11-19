@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { assertArenaBackofficeAccess } from '@/lib/server-auth'
+import { assertArenaResourceAccess } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { SupabaseArenaRepository } from '@/modules/arenas/repositories/SupabaseArenaRepository'
 import { getArenaNotificationsAction } from '@/modules/notifications/actions/notificationActions'
@@ -13,7 +13,7 @@ export default async function NotificationsPage({
   const { arenaId } = await params
 
   try {
-    await assertArenaBackofficeAccess(arenaId)
+    await assertArenaResourceAccess(arenaId, 'bookings.single', 'dashboard', 'rotativo')
   } catch {
     redirect('/dashboard/settings/arenas')
   }

@@ -73,7 +73,7 @@ test('rotativo actions and repository bind role, resource id and arena id', asyn
 
   for (const name of ['updateRotativoAction', 'setRotativoStatusAction', 'getRotativoByIdAction', 'getParticipantsAction']) {
     const body = exportedFunctionBody(actions, name)
-    assert.match(body, /assertArenaBackofficeAccess\(arenaId\)/, `${name} must reject Caixa`)
+    assert.match(body, /assertArenaResourceAccess\(arenaId, 'rotativo'\)/, `${name} must check rotativo permission`)
     assert.match(body, /assertRotativoAccess\(rotativoId, arenaId\)/, `${name} must bind the tenant`)
   }
 
@@ -90,13 +90,13 @@ test('booking cancellation, update and participant boundaries reject Caixa befor
 
   for (const name of ['updateBookingStatusAction', 'updateBookingAction']) {
     const body = exportedFunctionBody(bookingActions, name)
-    assert.match(body, /assertArenaBackofficeAccess\(arenaId\)/)
-    assert.match(body, /assertBookingAccess\(bookingId, arenaId\)/)
+    assert.match(body, /assertArenaResourceAccess\(arenaId, 'bookings.single'\)/)
+    assert.match(body, /assertSingleBookingAccess\(bookingId, arenaId\)/)
   }
   for (const name of ['getBookingParticipantsAction', 'syncBookingParticipantsAction']) {
     const body = exportedFunctionBody(participantActions, name)
-    assert.match(body, /assertArenaBackofficeAccess\(arenaId\)/)
-    assert.match(body, /assertBookingAccess\(bookingId, arenaId\)/)
+    assert.match(body, /assertArenaResourceAccess\(arenaId, 'bookings.single'\)/)
+    assert.match(body, /assertSingleBookingAccess\(bookingId, arenaId\)/)
   }
 })
 

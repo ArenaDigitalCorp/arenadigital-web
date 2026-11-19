@@ -145,12 +145,14 @@ test('dashboard checks the selected tenant once and starts summary reads before 
   const started = []
   const courtsPending = new Promise(resolve => { releaseCourts = resolve })
   const loaded = loadTypescriptModule('src/modules/dashboard/actions/dashboardActions.ts', {
+    '@/lib/accessible-arenas': {},
     '@/lib/server-auth': {
       async requireAuthenticatedDbUser() { authCalls++; return { dbUserId: user.id } },
-      async assertArenaBackofficeAccess(id) {
+      async assertArenaResourceAccess(id, key) {
         guardCalls++
+        assert.equal(key, 'dashboard')
         if (id !== 'arena-a') throw new Error('Forbidden')
-        return { dbUserId: user.id }
+        return { dbUserId: user.id, resources: ['dashboard','spaces','finance.overview','bookings.single','bookings.recurring','athletes'] }
       },
     },
     '@/lib/supabase-server': { getSupabaseAdmin: () => ({ from(table) {
@@ -160,7 +162,7 @@ test('dashboard checks the selected tenant once and starts summary reads before 
         gte(_, value) { start = value; return this }, lte() { return this }, not() { return this }, order() { return this },
         then(resolve, reject) {
           started.push(table)
-          if (table === 'courts') return courtsPending.then(() => ({ data: [{ id: 'court-a', name: 'Court A',
+          if (table === 'courts') return courtsPending.then(() => ({ data: [{ id: 'court-a', arena_id: 'arena-a', name: 'Court A',
             day_config: ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado']
               .map(day => ({ day, enabled: true, startTime: '08:00', endTime: '20:00' })) }], error: null })).then(resolve, reject)
           const bookingStart = new Date(); bookingStart.setHours(9, 0, 0, 0)
@@ -193,4 +195,103 @@ test('dashboard checks the selected tenant once and starts summary reads before 
   const rejected = await loaded.getDashboardDataAction('foreign-arena')
   assert.equal(rejected.success, false)
   assert.equal(rejected.error, 'Forbidden')
+})
+
+test('aggregate revenue uses both the dashboard and finance grant of each individual arena', async () => {
+  const reads = []
+  let grants = ['dashboard', 'finance.overview']
+  const loaded = loadTypescriptModule('src/modules/dashboard/actions/dashboardActions.ts', {
+    '@/lib/server-auth': { requireAuthenticatedDbUser: async () => ({ dbUserId: user.id }) },
+    '@/lib/accessible-arenas': { loadAccessibleArenas: async () => [
+      { id: 'arena-a', resources: grants },
+      { id: 'arena-b', resources: ['dashboard'] },
+      { id: 'arena-c', resources: ['finance.overview'] },
+    ] },
+    '@/lib/supabase-server': { getSupabaseAdmin: () => ({ from(table) {
+      assert.equal(table, 'transactions')
+      return {
+        select() { return this }, eq() { return this }, gte() { return this }, lte() { return this },
+        in(column, ids) { assert.equal(column, 'arena_id'); reads.push([...ids]); return this },
+        order() { return Promise.resolve({ data: [{ total_value: '27.50' }], error: null }) },
+      }
+    } }) },
+    '@/lib/supabase-pagination': { fetchAllSupabaseRows: query => Promise.resolve(query) },
+  })
+  const before = await loaded.getDashboardDataAction('all')
+  assert.equal(before.stats.receita, 27.5)
+  assert.deepEqual(reads, [['arena-a'], ['arena-a']])
+  grants = ['dashboard']
+  const after = await loaded.getDashboardDataAction('all')
+  assert.equal(after.stats.receita, 0)
+  assert.equal(reads.length, 2)
+})
+
+test('mixed grants filter counts, active athletes and occupancy by each arena and booking kind', async () => {
+  const kinds = ['singles','monthly','both','hidden']
+  const arenaIds = kinds.map(kind => 'arena-' + kind)
+  const day = new Date(); day.setHours(10,0,0,0)
+  const end = new Date(day); end.setHours(11,0,0,0)
+  const courts = arenaIds.map((id,i) => ({ arena_id: id, id: 'court-'+i, name: kinds[i],
+    day_config: ['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado']
+      .map(day => ({ day,enabled:true,startTime:'08:00',endTime:'20:00' })) }))
+  const bookings = courts.flatMap(c => ['single','monthly'].map(kind => ({arena_id:c.arena_id, court_id:c.id,
+    kind,athlete_id:c.id+'-'+kind,start_time:day.toISOString(),end_time:end.toISOString()})))
+  const resources = [['bookings.single'],['bookings.recurring'],['bookings.single','bookings.recurring'],[]]
+  const loaded = loadTypescriptModule('src/modules/dashboard/actions/dashboardActions.ts',{
+    '@/lib/server-auth': { requireAuthenticatedDbUser: async () => ({dbUserId:'user'}) },
+    '@/lib/accessible-arenas': {loadAccessibleArenas: async () => resources.map((grants,i) => ({
+      id:arenaIds[i],resources:['dashboard','spaces','athletes',...grants]}))},
+    '@/lib/supabase-pagination': { fetchAllSupabaseRows: q => Promise.resolve(q) },
+    '@/lib/supabase-server': {getSupabaseAdmin: () => ({from(table) {
+      let ids, expr,columns
+      return {
+        select(c) { columns=c;return this }, in(k,v){ if(k==='arena_id')ids=v;return this },
+        or(e){expr=e;return this},eq(){return this},gte(){return this},lte(){return this},not(){return this},order(){return this},
+        then(resolve) {
+          if(table==='courts') return resolve({data:courts.filter(c=>ids.includes(c.arena_id))})
+          assert.equal(table,'bookings')
+          assert.ok(!ids.includes('arena-hidden'))
+          const rows = bookings.filter(b=>ids.includes(b.arena_id) && (!expr ||
+            (expr.includes('booking_type.neq.mensalista') ? b.kind==='single' : b.kind==='monthly')))
+          resolve({data:columns==='*' ? null : rows,count:rows.length})
+        },
+      }
+    }})},
+  })
+  const response = await loaded.getDashboardDataAction('all')
+  assert.equal(response.success,true)
+  assert.equal(response.stats.reservas,4)
+  assert.equal(response.stats.ativos,4)
+  assert.deepEqual(Object.fromEntries(response.occupancy.map(row=>[row.courtName,row.booked])),{monthly:1,both:2,singles:1})
+})
+
+test('athlete booking history uses the same arena, athlete and booking-kind filter as the dashboard', async () => {
+  let resources
+  const returned = { single:{id:'avulso',start_time:'2026-01-01'}, monthly:{id:'mensalista',start_time:'2026-01-02'} }
+  const detail = loadTypescriptModule('src/modules/athletes/actions/athleteDetailsActions.ts', {
+    '@/lib/server-auth': { assertArenaResourceAccess: async () => ({resources}) },
+    '@/lib/supabase-server': {getSupabaseAdmin: () => ({from(table) {
+      let filter
+      const conditions = {}
+      return {
+        select(){return this},eq(key,val){conditions[key]=val;return this},order(){return this},limit(){return this},
+        or(expr){filter=expr;return this},single(){return this},
+        then(resolve) {
+          if(table==='atleta') return resolve({data:{id:'athlete',nome_perfil:'Sócio',arenas_atleta:[]}})
+          if(table!=='bookings') return resolve({data:[]})
+          assert.deepEqual(conditions,{arena_id:'arena',athlete_id:'athlete'})
+          if(!filter) return resolve({data:Object.values(returned)})
+          resolve({data:filter.includes('booking_type.neq.mensalista') ? [returned.single] : [returned.monthly]})
+        },
+      }
+    }})},
+  })
+  for(const [grants,expected] of [[[],[]],[['bookings.single'],['avulso']],[['bookings.recurring'],['mensalista']],
+    [['bookings.single','bookings.recurring'],['avulso','mensalista']]]) {
+    resources=['athletes',...grants]
+    const response=await detail.getAthleteDetailsAction('arena','athlete')
+    assert.equal(response.success,true)
+    assert.deepEqual(Array.from(response.data.reservas,b=>b.id),expected)
+    assert.equal(response.data.total_reservas,expected.length)
+  }
 })

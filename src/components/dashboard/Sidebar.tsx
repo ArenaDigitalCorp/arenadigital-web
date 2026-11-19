@@ -21,7 +21,7 @@ import {
     Megaphone,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { UserMenu } from "@/components/auth/UserMenu";
 import { Logo } from "@/components/shared/Logo";
@@ -30,7 +30,7 @@ import { useArena } from "@/contexts/ArenaContext";
 import { useDbUser } from "@/contexts/UserContext";
 import { ArenaSelector } from "./ArenaSelector";
 import { NotificationsBell } from "@/modules/notifications/components/NotificationsBell";
-import { canManageArena } from "@/lib/arena-permissions";
+
 import { trackNavigation } from "@/lib/telemetry/client";
 
 /** Item ativo do menu — ligado a `--arena-accent` em globals.css */
@@ -38,14 +38,21 @@ const navActiveText = "text-arena-accent";
 
 export function Sidebar({ className, onNavItemClick }: { className?: string, onNavItemClick?: () => void }) {
     const pathname = usePathname();
+    const searchParams = useSearchParams();
     const { isCollapsed, toggleSidebar } = useSidebar();
     const { selectedArena, selectedArenaDetails } = useArena();
     const { dbUser } = useDbUser();
 
     // Perfis de acesso
     const isCashier = selectedArenaDetails?.role === "Caixa" && !selectedArenaDetails?.isOwner;
-    const isAdmin = selectedArenaDetails ? canManageArena(selectedArenaDetails) : false;
-    const canAccessSubscription = Boolean(isAdmin);
+    const allowed = (key: string) => selectedArenaDetails?.resources.includes(key) === true;
+    const managesArena = selectedArenaDetails?.isOwner || selectedArenaDetails?.role === "Gestor";
+    const canManageUsers = managesArena && allowed("settings.users");
+    const canManageSubscription = managesArena && allowed("settings.subscription");
+    const canManageReceiving = managesArena && allowed("settings.receiving");
+    const showSettings = selectedArenaDetails?.isOwner || canManageUsers || canManageSubscription || canManageReceiving || ["settings.arena", "settings.whatsapp", "settings.templates"].some(allowed);
+    const hasBookings = ["bookings.single", "bookings.recurring", "bookings.requests"].some(allowed);
+    const hasReports = ["reports.customers", "reports.payments", "reports.stations"].some(allowed);
 
     const publicationsHref = selectedArena ? `/dashboard/publications/${selectedArena}` : "/dashboard/publications";
     const arenaHref = selectedArena ? `/dashboard/arenas/${selectedArena}` : "/dashboard/arenas";
@@ -59,31 +66,6 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
     const mensalistasHref = selectedArena ? `/dashboard/arenas/${selectedArena}/mensalistas` : "/dashboard/arenas";
     const preReservasHref = selectedArena ? `/dashboard/arenas/${selectedArena}/pre-reservas` : "/dashboard/arenas";
     const avulsasHref = selectedArena ? `/dashboard/arenas/${selectedArena}/avulsas` : "/dashboard/arenas";
-
-    // Caixa com estação atribuída → apenas "Minha Estação"
-    const cashierWithStation = isCashier && selectedArenaDetails?.assignedStationId ? [
-        {
-            icon: Store,
-            label: "Minha estação",
-            tutorialKey: "stations",
-            href: `/dashboard/arenas/${selectedArena}/stations/${selectedArenaDetails.assignedStationId}`,
-            isActive: (p: string) => p.includes(`/dashboard/arenas/${selectedArena}/stations/`),
-        },
-    ] : null;
-
-    // Caixa sem estação atribuída → apenas menu "Estações"
-    const cashierWithoutStation = isCashier && !selectedArenaDetails?.assignedStationId ? [
-        {
-            icon: Store,
-            label: "Estações",
-            tutorialKey: "stations",
-            href: stationsHref,
-            isActive: (p: string) => p.includes("/stations"),
-        },
-    ] : null;
-
-    // Item de menu efetivo para caixa
-    const cashierItems = cashierWithStation ?? cashierWithoutStation;
 
     const espacosActive = (p: string) =>
         p.startsWith("/dashboard/arenas/") &&
@@ -101,12 +83,12 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
 
     // Um único bloco de navegação: evita duplicar itens (ex.: dois “Espaços”) e mantém ordem pedida
     const mainNavItems =
-        cashierItems ??
         [
             {
                 icon: LayoutDashboard,
                 label: "Dashboard",
                 tutorialKey: "dashboard",
+                resource: "dashboard",
                 href: "/dashboard",
                 isActive: (p: string) => p === "/dashboard",
             },
@@ -114,22 +96,23 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                 icon: Calendar,
                 label: "Espaços",
                 tutorialKey: "spaces",
+                resource: "spaces",
                 href: arenaHref,
                 isActive: espacosActive,
-                requiresAdmin: true,
             },
             {
                 icon: Megaphone,
                 label: "Publicações",
                 tutorialKey: "publications",
+                resource: "publications",
                 href: publicationsHref,
                 isActive: (p: string) => p.startsWith("/dashboard/publications") || p.includes("/mobile-content"),
-                requiresAdmin: true,
             },
             {
                 icon: Medal,
                 label: "Atletas",
                 tutorialKey: "athletes",
+                resource: "athletes",
                 href: athletesHref,
                 isActive: (p: string) => p.startsWith("/dashboard/athletes/"),
             },
@@ -137,28 +120,31 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                 icon: GraduationCap,
                 label: "Turmas",
                 tutorialKey: "turmas",
+                resource: "classes",
                 href: turmasHref,
                 isActive: (p: string) => p.startsWith("/dashboard/turmas/"),
             },
             {
                 icon: Store,
-                label: "Estações",
+                label: isCashier && selectedArenaDetails?.assignedStationId ? "Minha estação" : "Estações",
                 tutorialKey: "stations",
-                href: stationsHref,
+                resource: "stations",
+                href: isCashier && selectedArenaDetails?.assignedStationId ? stationsHref + "/" + selectedArenaDetails.assignedStationId : stationsHref,
                 isActive: (p: string) => p.includes("/stations"),
             },
             {
                 icon: Package,
                 label: "Catálogo",
                 tutorialKey: "catalog",
+                resource: "catalog",
                 href: productsHref,
                 isActive: (p: string) => p.startsWith("/dashboard/settings/products/"),
-                requiresAdmin: true,
             },
             {
                 icon: RefreshCw,
                 label: "Rotativo",
                 tutorialKey: "rotativo",
+                resource: "rotativo",
                 href: rotativoHref,
                 isActive: (p: string) => p.startsWith("/dashboard/rotativo/"),
             },
@@ -166,6 +152,7 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                 icon: Star,
                 label: "Programa de fidelidade",
                 tutorialKey: "loyalty",
+                resource: "loyalty",
                 href: loyaltyHref,
                 isActive: (p: string) => p.startsWith("/dashboard/loyalty/"),
             },
@@ -173,11 +160,11 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                 icon: DollarSign,
                 label: "Financeiro",
                 tutorialKey: "finance",
-                href: financeHref,
+                resource: "finance",
+                href: allowed("finance.overview") ? financeHref : financeHref + (allowed("finance.cash") ? "/caixa" : "/cadastros-auxiliares"),
                 isActive: (p: string) => p.startsWith("/dashboard/finance/"),
-                requiresAdmin: true,
             },
-        ].filter((item) => !item.requiresAdmin || isAdmin);
+        ].filter(item => item.resource === "finance" ? ["finance.overview", "finance.cash", "finance.settings"].some(allowed) : allowed(item.resource));
 
     const settingsUsersHref = selectedArena ? `/dashboard/settings/users/${selectedArena}` : "/dashboard/settings/users";
     const settingsSubscriptionHref = selectedArena ? `/dashboard/settings/subscription/${selectedArena}` : "/dashboard/settings/subscription";
@@ -186,6 +173,7 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
     const reportsHref = selectedArena ? `/dashboard/reports/${selectedArena}/status-pagamentos` : "/dashboard/reports";
 
     const isEditingArena = !!pathname.match(/\/dashboard\/arenas\/[^\/]+\/edit$/);
+    const isReceivingActive = isEditingArena && canManageReceiving && (searchParams.get("tab") === "receiving" || !allowed("settings.arena"));
     const isSettingsActive = (pathname.includes("/settings") && !pathname.startsWith("/dashboard/settings/products")) || isEditingArena;
     const isReportsActive = pathname.startsWith("/dashboard/reports/");
     const isBookingsActive = pathname.includes("/mensalistas") || pathname.includes("/pre-reservas") || pathname.includes("/avulsas");
@@ -213,7 +201,7 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                     )}>
                         {!isCollapsed && <Logo className="scale-75 origin-left" />}
                         <div className={cn("flex items-center", isCollapsed ? "flex-col gap-2" : "gap-1")}>
-                            <NotificationsBell isCollapsed={isCollapsed} />
+                            {["dashboard", "rotativo", "bookings.single"].some(allowed) && <NotificationsBell isCollapsed={isCollapsed} />}
                             <Button
                                 variant="ghost"
                                 size="icon"
@@ -280,7 +268,7 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                             );
                         })}
 
-                        {!isCashier && (
+                        {hasBookings && (
                         <div>
                             <Button
                                 variant="ghost"
@@ -332,7 +320,7 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                         <div className="min-h-5 w-px flex-1 rounded-full bg-white/15" />
                                     </div>
                                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                                        <Button
+                                        {allowed("bookings.single") && (<Button
                                             variant="ghost"
                                             asChild
                                             className={cn(
@@ -344,8 +332,8 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                             onClick={onNavItemClick}
                                         >
                                             <Link href={avulsasHref}>Avulsos</Link>
-                                        </Button>
-                                        <Button
+                                        </Button>)}
+                                        {allowed("bookings.recurring") && (<Button
                                             variant="ghost"
                                             asChild
                                             className={cn(
@@ -357,8 +345,8 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                             onClick={onNavItemClick}
                                         >
                                             <Link href={mensalistasHref}>Mensalistas</Link>
-                                        </Button>
-                                        <Button
+                                        </Button>)}
+                                        {allowed("bookings.requests") && (<Button
                                             variant="ghost"
                                             asChild
                                             className={cn(
@@ -370,14 +358,14 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                             onClick={onNavItemClick}
                                         >
                                             <Link href={preReservasHref}>Pré-reservas</Link>
-                                        </Button>
+                                        </Button>)}
                                     </div>
                                 </div>
                             )}
                         </div>
                         )}
 
-                        {!isCashier && isAdmin && (
+                        {hasReports && (
                         <div>
                             <Button
                                 variant="ghost"
@@ -429,7 +417,7 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                         <div className="min-h-5 w-px flex-1 rounded-full bg-white/15" />
                                     </div>
                                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                                        <Button
+                                        {allowed("reports.customers") && (<Button
                                             variant="ghost"
                                             asChild
                                             className={cn(
@@ -446,8 +434,8 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                             <Link href={selectedArena ? `/dashboard/reports/${selectedArena}/clientes-overview` : "/dashboard/reports"}>
                                                 Atletas e clientes
                                             </Link>
-                                        </Button>
-                                        <Button
+                                        </Button>)}
+                                        {allowed("reports.payments") && (<Button
                                             variant="ghost"
                                             asChild
                                             className={cn(
@@ -459,8 +447,8 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                             onClick={onNavItemClick}
                                         >
                                             <Link href={reportsHref}>Pagamentos Reservas</Link>
-                                        </Button>
-                                        <Button
+                                        </Button>)}
+                                        {allowed("reports.stations") && (<Button
                                             variant="ghost"
                                             asChild
                                             className={cn(
@@ -474,14 +462,14 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                             <Link href={selectedArena ? `/dashboard/reports/${selectedArena}/movimentacao-estacoes` : "/dashboard/reports"}>
                                                 Movimentação Estações
                                             </Link>
-                                        </Button>
+                                        </Button>)}
                                     </div>
                                 </div>
                             )}
                         </div>
                         )}
 
-                        {!isCashier && isAdmin && (
+                        {showSettings && (
                         <div>
                             <Button
                                 variant="ghost"
@@ -533,7 +521,13 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                         <div className="min-h-5 w-px flex-1 rounded-full bg-white/15" />
                                     </div>
                                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                                        <Button
+                                        {selectedArenaDetails?.isOwner && (
+                                            <Button variant="ghost" asChild onClick={onNavItemClick}
+                                                className={cn("h-9 w-full justify-start px-2 text-sm font-normal", pathname.startsWith("/dashboard/settings/profiles") ? navActiveText : "text-white")}>
+                                                <Link href={`/dashboard/settings/profiles/${selectedArena}`}>Perfis e permissões</Link>
+                                            </Button>
+                                        )}
+                                        {canManageUsers && (<Button
                                             variant="ghost"
                                             asChild
                                             className={cn(
@@ -547,9 +541,9 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                             <Link href={settingsUsersHref}>
                                                 Usuários
                                             </Link>
-                                        </Button>
+                                        </Button>)}
 
-                                        {canAccessSubscription && (
+                                        {canManageSubscription && (
                                             <Button
                                                 variant="ghost"
                                                 asChild
@@ -567,12 +561,12 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                             </Button>
                                         )}
 
-                                        <Button
+                                        {allowed("settings.arena") && (<Button
                                             variant="ghost"
                                             asChild
                                             className={cn(
                                                 "h-9 w-full justify-start px-2 text-sm font-normal",
-                                                (pathname.startsWith("/dashboard/settings/arenas") || isEditingArena)
+                                                (pathname.startsWith("/dashboard/settings/arenas") || (isEditingArena && !isReceivingActive))
                                                     ? cn(navActiveText, "bg-white/5 hover:bg-white/10 hover:text-arena-accent")
                                                     : "text-white hover:bg-white/5 hover:text-white"
                                             )}
@@ -581,9 +575,16 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                             <Link href="/dashboard/settings/arenas">
                                                 Perfil da Arena
                                             </Link>
-                                        </Button>
+                                        </Button>)}
 
-                                        <Button
+                                        {canManageReceiving && (
+                                            <Button variant="ghost" asChild onClick={onNavItemClick}
+                                                className={cn("h-9 w-full justify-start px-2 text-sm font-normal", isReceivingActive ? navActiveText : "text-white")}>
+                                                <Link href={`/dashboard/arenas/${selectedArena}/edit?tab=receiving`}>Dados de recebimento</Link>
+                                            </Button>
+                                        )}
+
+                                        {allowed("settings.whatsapp") && (<Button
                                             variant="ghost"
                                             asChild
                                             className={cn(
@@ -597,9 +598,9 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                             <Link href={settingsWhatsappHref}>
                                                 WhatsApp
                                             </Link>
-                                        </Button>
+                                        </Button>)}
 
-                                        <Button
+                                        {allowed("settings.templates") && (<Button
                                             variant="ghost"
                                             asChild
                                             className={cn(
@@ -613,7 +614,7 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                                             <Link href={settingsTemplatesHref}>
                                                 Templates Mensagens
                                             </Link>
-                                        </Button>
+                                        </Button>)}
                                     </div>
                                 </div>
                             )}
@@ -633,7 +634,7 @@ export function Sidebar({ className, onNavItemClick }: { className?: string, onN
                 >
                     <UserMenu
                         showName={!isCollapsed}
-                        accountHref={settingsUsersHref}
+                        accountHref={canManageUsers ? settingsUsersHref : undefined}
                         platformAccessLevel={dbUser?.platform_access_level ?? null}
                         className={isCollapsed ? "justify-center px-0" : undefined}
                     />

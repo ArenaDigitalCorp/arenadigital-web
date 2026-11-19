@@ -89,7 +89,8 @@ export function DashboardSubscriptionGate() {
   );
 
   const canManageSubscription = Boolean(
-    selectedArenaDetails?.isOwner || selectedArenaDetails?.role === 'Gestor'
+    selectedArenaDetails?.resources.includes('settings.subscription') &&
+    (selectedArenaDetails.isOwner || selectedArenaDetails.role === 'Gestor')
   );
 
   const experimentalNotice =

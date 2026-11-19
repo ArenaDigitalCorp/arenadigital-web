@@ -1,7 +1,7 @@
 "use server"
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
-import { requireAuthenticatedDbUser, assertArenaAdminAccess, assertProductAccess } from '@/lib/server-auth'
+import { requireAuthenticatedDbUser, assertProductAccess, assertArenaResourceAccess } from '@/lib/server-auth'
 import {
     type PriceAdjustmentType,
     type PriceHistoryEntry,
@@ -12,6 +12,7 @@ import { revalidatePath } from 'next/cache'
 export async function getPriceHistoryByProductAction(productId: string) {
     try {
         const arenaId = await assertProductAccess(productId)
+        await assertArenaResourceAccess(arenaId, 'catalog')
         const { data, error } = await getSupabaseAdmin()
             .from('product_price_history')
             .select('*, user:users!product_price_history_changed_by_fkey(name)')
@@ -39,7 +40,7 @@ export interface BulkAdjustInput {
 
 export async function bulkAdjustPricesAction(arenaId: string, input: BulkAdjustInput) {
     try {
-        await assertArenaAdminAccess(arenaId)
+        await assertArenaResourceAccess(arenaId, 'catalog')
         const { dbUserId } = await requireAuthenticatedDbUser()
 
         if (!Number.isFinite(input.amount) || input.amount === 0) {
