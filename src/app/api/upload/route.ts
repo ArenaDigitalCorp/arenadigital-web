@@ -8,6 +8,7 @@ import {
     validateMultipartContentLength,
     validateUploadDescriptor,
 } from "@/lib/upload-policy";
+import { getArenaTermsStatus } from "@/modules/terms/arena-terms-actions";
 import * as z from "zod";
 
 const uploadFieldsSchema = z.discriminatedUnion("type", [
@@ -34,6 +35,10 @@ export async function POST(request: NextRequest) {
         const accepted = validateUploadDescriptor(file);
 
         await assertArenaResourceAccess(fields.arenaId, fields.type === 'banner' ? 'settings.arena' : 'spaces');
+
+        if (!(await getArenaTermsStatus(fields.arenaId)).accepted_at) {
+            return NextResponse.json({ error: "O titular precisa aceitar os Termos de Uso antes de publicar imagens da arena." }, { status: 403 });
+        }
 
         const buffer = Buffer.from(await file.arrayBuffer());
         validateImageSignature(buffer, accepted.contentType);

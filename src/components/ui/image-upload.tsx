@@ -1,96 +1,61 @@
 "use client"
 
-import { Input } from "@/components/ui/input"
 import { Image as ImageIcon } from "lucide-react"
 import Image from "next/image"
-import { useRef, useState, useEffect } from "react"
+import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
 
 interface ImageUploadProps {
     value?: string
+    file: File | null
     onChange: (file: File) => void
     disabled?: boolean
     className?: string
+    label: string
 }
 
-export function ImageUpload({ value, onChange, disabled, className }: ImageUploadProps) {
-    const [preview, setPreview] = useState<string | null>(value || null)
-    const fileInputRef = useRef<HTMLInputElement>(null)
-
+export function ImageUpload({ value, file, onChange, disabled, className, label }: ImageUploadProps) {
+    const [local, setLocal] = useState<{ file: File; url: string } | null>(null)
     useEffect(() => {
-        if (value) {
-            setPreview(value)
+        if (!file) return
+        const reader = new FileReader()
+        reader.onload = () => {
+            if (typeof reader.result === "string") setLocal({ file, url: reader.result })
         }
-    }, [value])
-
-    const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0]
-        if (file) {
-            onChange(file)
-            const reader = new FileReader()
-            reader.onloadend = () => {
-                setPreview(reader.result as string)
-            }
-            reader.readAsDataURL(file)
-        }
-    }
-
-    const handleDrop = (e: React.DragEvent) => {
-        e.preventDefault()
-        if (disabled) return
-        const file = e.dataTransfer.files?.[0]
-        if (file) {
-            onChange(file)
-            const reader = new FileReader()
-            reader.onloadend = () => {
-                setPreview(reader.result as string)
-            }
-            reader.readAsDataURL(file)
-        }
-    }
+        reader.readAsDataURL(file)
+        return () => reader.abort()
+    }, [file])
+    const preview = file && local?.file === file ? local.url : value
 
     return (
-        <div
+        <label
             className={cn(
-                "border-2 border-dashed border-gray-200 rounded-lg p-4 h-[240px] flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors relative overflow-hidden bg-arena-soft",
-                disabled && "opacity-50 cursor-not-allowed",
-                className
+                "relative flex h-[240px] cursor-pointer flex-col items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-gray-200 bg-arena-soft p-4 transition-colors hover:bg-gray-50 focus-within:ring-2 focus-within:ring-arena-button",
+                disabled && "cursor-not-allowed opacity-60", className
             )}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={handleDrop}
-            onClick={() => !disabled && fileInputRef.current?.click()}
+            onDragOver={event => event.preventDefault()}
+            onDrop={event => {
+                event.preventDefault()
+                const dropped = event.dataTransfer.files[0]
+                if (!disabled && dropped) onChange(dropped)
+            }}
         >
-            <Input
-                type="file"
-                ref={fileInputRef}
-                className="hidden"
-                accept="image/*"
-                onChange={handleImageSelect}
-                disabled={disabled}
-            />
-
+            <input type="file" className="sr-only" accept="image/*" aria-label={label} disabled={disabled} onChange={event => {
+                const selected = event.target.files?.[0]
+                if (selected) onChange(selected)
+                event.target.value = ""
+            }} />
             {preview ? (
                 <>
-                    <Image
-                        src={preview}
-                        alt="Preview"
-                        fill
-                        className="object-cover"
-                    />
-                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                        <p className="text-white font-medium">Trocar imagem</p>
-                    </div>
+                    <Image src={preview} alt={label} fill className="object-cover" />
+                    {!disabled && <span className="absolute inset-0 flex items-center justify-center bg-black/40 font-medium text-white opacity-0 hover:opacity-100">Trocar imagem</span>}
                 </>
             ) : (
-                <div className="text-center space-y-2">
-                    <div className="bg-white p-3 rounded-full shadow-sm inline-block">
-                        <ImageIcon className="w-6 h-6 text-arena-navy-800/40" />
-                    </div>
-                    <p className="text-xs text-arena-navy-800/40 px-4">
-                        Arraste ou clique aqui para inserir a foto.
-                    </p>
-                </div>
+                <span className="space-y-2 text-center">
+                    <span className="inline-block rounded-full bg-white p-3 shadow-sm"><ImageIcon aria-hidden="true" className="size-6 text-arena-navy-800/60" /></span>
+                    <span className="block px-4 text-xs text-arena-navy-800/70">Arraste ou clique para inserir a imagem.</span>
+                </span>
             )}
-        </div>
+        </label>
     )
 }

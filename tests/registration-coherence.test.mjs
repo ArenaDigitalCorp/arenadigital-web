@@ -3,6 +3,8 @@ import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import { loadTypescriptModule } from './helpers/load-typescript-module.mjs'
 
+const { ARENA_TERMS_VERSION } = loadTypescriptModule('src/modules/terms/arena-terms.ts')
+
 async function source(relativePath) {
   return readFile(new URL(`../${relativePath}`, import.meta.url), 'utf8')
 }
@@ -104,9 +106,17 @@ test('signup stores the responsible CPF independently and preserves alphanumeric
     '@/lib/observability/server': { observeServerAction: async () => ({ complete() {}, log() {} }) },
     'next/headers': { headers: async () => new Headers({ origin: 'http://localhost:3000' }) },
   })
-  const result = await startSignUpAction({ email: ' Owner@Example.COM ', password: 'Arena2026!', firstName: 'Teste', lastName: 'Gestor',
+  const signupInput = { email: ' Owner@Example.COM ', password: 'Arena2026!', firstName: 'Teste', lastName: 'Gestor',
     cpf: '529.982.247-25', phone: '(48) 99642-6091', arenaName: 'Arena Teste', arenaLegalName: 'Empresa Ltda',
-    arenaDocument: '12.ABC.345/01DE-35', addressData: { id_municipio: 4205407, cep: '88037-395' } })
+    arenaDocument: '12.ABC.345/01DE-35', addressData: { id_municipio: 4205407, cep: '88037-395' } }
+  for (const acceptedTermsVersion of [null, undefined, 'versao-antiga']) {
+    const denied = await startSignUpAction({ ...signupInput, acceptedTermsVersion })
+    assert.equal(denied.success, false)
+    assert.match(denied.error, /Termos de Uso/)
+    assert.equal(authInput, undefined)
+  }
+  const started = Date.now()
+  const result = await startSignUpAction({ ...signupInput, acceptedTermsVersion: ARENA_TERMS_VERSION })
   assert.equal(result.success, true)
   assert.equal(authInput.options.data.cpf, '52998224725')
   assert.equal(authInput.email, 'owner@example.com')
@@ -114,4 +124,31 @@ test('signup stores the responsible CPF independently and preserves alphanumeric
   assert.equal(storedMetadata.arena_signup_intent.cpf, '52998224725')
   assert.equal(storedMetadata.arena_signup_intent.arenaDocument, '12ABC34501DE35')
   assert.equal(storedMetadata.arena_signup_intent.addressData.cep, '88037395')
+  const receipt = storedMetadata.arena_signup_intent.termsAcceptance
+  assert.equal(receipt.version, ARENA_TERMS_VERSION)
+  assert.ok(Date.parse(receipt.acceptedAt) >= started && Date.parse(receipt.acceptedAt) <= Date.now())
+  assert.equal(authInput.options.data.termsAcceptance, undefined)
+})
+
+test('claim resolution uses the accepted version and original instant, and keeps legacy intents on the legacy overload', async () => {
+  const calls = []
+  const { resolveSelfServiceArenaSignup } = loadTypescriptModule('src/modules/users/services/resolve-self-service-arena-signup.ts', {
+    'server-only': {}, '@/lib/geocoding': {},
+    '@/lib/supabase-server': { getSupabaseAdmin: () => ({ rpc: async (_name, args) => {
+      calls.push(args)
+      return { data: { status: 'claim_pending' }, error: null }
+    } }) },
+    '@/modules/payments/usecases/ensure-experimental-subscription.usecase': {},
+  })
+  const input = { requesterUserId: 'requester', operationId: 'operation', arenaName: 'Arena',
+    phone: '48999999999', document: '52998224725', addressData: { id_municipio: 4205407 } }
+  const termsAcceptance = { version: ARENA_TERMS_VERSION, acceptedAt: '2026-11-20T14:00:00.000Z' }
+  assert.equal((await resolveSelfServiceArenaSignup({ ...input, termsAcceptance })).status, 'claim_pending')
+  assert.equal(calls[0].p_terms_version, termsAcceptance.version)
+  assert.equal(calls[0].p_terms_accepted_at, termsAcceptance.acceptedAt)
+  assert.equal(calls[0].p_legal_name, null)
+  await resolveSelfServiceArenaSignup(input)
+  assert.equal(Object.hasOwn(calls[1], 'p_terms_version'), false)
+  assert.equal(Object.hasOwn(calls[1], 'p_terms_accepted_at'), false)
+  assert.equal(Object.hasOwn(calls[1], 'p_legal_name'), false)
 })

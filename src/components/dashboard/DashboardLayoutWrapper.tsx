@@ -7,6 +7,7 @@ import { UserProvider } from '@/contexts/UserContext';
 import { NotificationsProvider } from '@/modules/notifications/context/NotificationsContext';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { DashboardSubscriptionGate } from '@/components/dashboard/DashboardSubscriptionGate';
+import { ArenaTermsNotice } from '@/modules/terms/ArenaTermsNotice';
 import { WelcomeTutorialDialog } from '@/components/dashboard/WelcomeTutorialDialog';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -62,6 +63,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
           <Suspense fallback={null}>
             <DashboardSubscriptionGate />
           </Suspense>
+          <ArenaTermsNotice />
           {children}
         </main>
         <Suspense fallback={null}>
