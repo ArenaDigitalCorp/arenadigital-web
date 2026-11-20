@@ -2,8 +2,10 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
+import { ARENA_TERMS_VERSION } from '../src/modules/terms/arena-terms.ts'
+
 const [terms, privacy] = await Promise.all([
-  readFile(new URL('../src/app/termos-de-uso/page.tsx', import.meta.url), 'utf8'),
+  readFile(new URL(`../src/modules/terms/versions/${ARENA_TERMS_VERSION}.json`, import.meta.url), 'utf8'),
   readFile(new URL('../src/app/politica-de-privacidade/page.tsx', import.meta.url), 'utf8'),
 ])
 

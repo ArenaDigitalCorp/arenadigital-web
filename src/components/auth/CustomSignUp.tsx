@@ -18,6 +18,8 @@ import {
 } from "@/modules/auth/actions/authActions"
 import { isValidCpf, isValidCpfOrCnpj, isValidCep, normalizeCep, normalizeCpfCnpj } from "@/lib/brasil-document"
 import { getArenaLegalNameError } from "@/modules/arenas/domain/arena-legal-name"
+import { ArenaTermsCheckbox } from "@/modules/terms/ArenaTermsCheckbox"
+import { ARENA_TERMS_VERSION } from "@/modules/terms/arena-terms"
 import { track, trackAction } from "@/lib/telemetry/client"
 
 type EstadoRow = { codigo_uf: number; nome: string; uf: string }
@@ -82,6 +84,7 @@ export function CustomSignUp() {
     const [confirmPassword, setConfirmPassword] = React.useState("")
     const [showPassword, setShowPassword] = React.useState(false)
     const [showConfirmPassword, setShowConfirmPassword] = React.useState(false)
+    const [termsAccepted, setTermsAccepted] = React.useState(false)
 
     const [pendingVerification, setPendingVerification] = React.useState(false)
     const [loading, setLoading] = React.useState(false)
@@ -101,6 +104,7 @@ export function CustomSignUp() {
         setAccountMode("email")
         setPassword("")
         setConfirmPassword("")
+        setTermsAccepted(false)
     }
 
     const handleEmailContinue = async () => {
@@ -235,6 +239,7 @@ export function CustomSignUp() {
             arenaLegalName,
             arenaDocument,
             addressData,
+            acceptedTermsVersion: termsAccepted ? ARENA_TERMS_VERSION : null,
         })
 
         setLoading(false)
@@ -557,6 +562,12 @@ export function CustomSignUp() {
                     )}
                 </div>
 
+            <ArenaTermsCheckbox
+                id="arena-signup-terms"
+                checked={termsAccepted}
+                onCheckedChange={setTermsAccepted}
+                appearance="dark"
+            />
             <Button
                 type="submit"
                 disabled={loading}

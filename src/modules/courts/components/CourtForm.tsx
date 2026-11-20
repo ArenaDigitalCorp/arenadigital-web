@@ -26,8 +26,10 @@ import { createCourtAction, updateCourtAction, getSportsForCourtAction } from "@
 import { useRouter } from "next/navigation"
 import { Textarea } from "@/components/ui/textarea"
 import { useEffect, useState, useRef } from "react"
-import { UploadCloud, X, Image as ImageIcon, Loader2 } from "lucide-react"
-import Image from "next/image"
+import { Loader2 } from "lucide-react"
+import { ImageUpload } from "@/components/ui/image-upload"
+import { MediaTermsHint } from "@/modules/terms/MediaTermsHint"
+import { useArenaTerms } from "@/modules/terms/use-arena-terms"
 import { PriceTablesConfig, type PriceTablesHandle } from "./PriceTablesConfig"
 import { courtSchema, type CourtFormValues } from "@/modules/courts/schemas/court.schema"
 import { arenaDashboardPath, type ArenaDashboardTab } from "@/lib/arena-dashboard-navigation"
@@ -73,8 +75,8 @@ export function CourtForm({ initialData, arenaId, onSuccess, returnTab = "espaco
     const [sportsLoading, setSportsLoading] = useState(true)
     const [sportsError, setSportsError] = useState<string | null>(null)
     const [imageFile, setImageFile] = useState<File | null>(null)
-    const [imagePreview, setImagePreview] = useState<string | null>(initialData?.image_url || null)
-    const fileInputRef = useRef<HTMLInputElement>(null)
+    const [removedImage, setRemovedImage] = useState(false)
+    const termsStatus = useArenaTerms(arenaId)
     const [isUploading, setIsUploading] = useState(false)
 
     // Cadastro: as 3 tabelas fixas já são preenchidas aqui e persistidas logo
@@ -122,31 +124,6 @@ export function CourtForm({ initialData, arenaId, onSuccess, returnTab = "espaco
         },
     })
 
-    const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0]
-        if (file) {
-            setImageFile(file)
-            const reader = new FileReader()
-            reader.onloadend = () => {
-                setImagePreview(reader.result as string)
-            }
-            reader.readAsDataURL(file)
-        }
-    }
-
-    const handleDrop = (e: React.DragEvent) => {
-        e.preventDefault()
-        const file = e.dataTransfer.files?.[0]
-        if (file) {
-            setImageFile(file)
-            const reader = new FileReader()
-            reader.onloadend = () => {
-                setImagePreview(reader.result as string)
-            }
-            reader.readAsDataURL(file)
-        }
-    }
-
     async function onSubmit(data: any) {
         try {
             if (priceTablesRef.current?.validate() === false) return
@@ -172,7 +149,7 @@ export function CourtForm({ initialData, arenaId, onSuccess, returnTab = "espaco
             if (initialData) {
                 // Editing: spaceId already exists — upload image first, then update.
                 // day_config/available_days/price ficam a cargo de PriceTablesConfig.
-                let imageUrl = data.image_url
+                let imageUrl = removedImage ? "" : data.image_url
                 if (imageFile) {
                     try {
                         const fd = new FormData()
@@ -191,6 +168,7 @@ export function CourtForm({ initialData, arenaId, onSuccess, returnTab = "espaco
                     }
                 }
                 const finalInput = { ...input, image_url: imageUrl }
+                if (!imageFile && !removedImage) delete finalInput.image_url
                 const res = await updateCourtAction(arenaId, initialData.id, { ...finalInput }, sportIds)
                 if (!res.success) throw new Error(res.error)
 
@@ -272,43 +250,18 @@ export function CourtForm({ initialData, arenaId, onSuccess, returnTab = "espaco
                     {/* Image Upload Column */}
                     <div className="lg:col-span-1">
                         <FormLabel className="block mb-2">Foto do espaço</FormLabel>
-                        <div
-                            className="border-2 border-dashed border-gray-200 rounded-lg p-4 h-[240px] flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors relative overflow-hidden bg-arena-soft"
-                            onDragOver={(e) => e.preventDefault()}
-                            onDrop={handleDrop}
-                            onClick={() => fileInputRef.current?.click()}
-                        >
-                            <Input
-                                type="file"
-                                ref={fileInputRef}
-                                className="hidden"
-                                accept="image/*"
-                                onChange={handleImageSelect}
-                            />
-
-                            {imagePreview ? (
-                                <>
-                                    <Image
-                                        src={imagePreview}
-                                        alt="Preview"
-                                        fill
-                                        className="object-cover"
-                                    />
-                                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                                        <p className="text-white font-medium">Trocar imagem</p>
-                                    </div>
-                                </>
-                            ) : (
-                                <div className="text-center space-y-2">
-                                    <div className="bg-white p-3 rounded-full shadow-sm inline-block">
-                                        <ImageIcon className="w-6 h-6 text-arena-navy-800/40" />
-                                    </div>
-                                    <p className="text-xs text-arena-navy-800/40 px-4">
-                                        Arraste ou clique aqui para inserir a foto do espaço.
-                                    </p>
-                                </div>
-                            )}
-                        </div>
+                        <ImageUpload
+                            label="Foto do espaço"
+                            value={removedImage ? undefined : initialData?.image_url}
+                            file={imageFile}
+                            onChange={setImageFile}
+                            disabled={!termsStatus.data?.accepted_at}
+                        />
+                        <MediaTermsHint arenaId={arenaId} />
+                        {(imageFile || (!removedImage && initialData?.image_url)) && <Button type="button" variant="link" className="px-0" onClick={() => {
+                            setImageFile(null)
+                            setRemovedImage(true)
+                        }}>Remover foto</Button>}
                     </div>
 
                     {/* Inputs Column */}
