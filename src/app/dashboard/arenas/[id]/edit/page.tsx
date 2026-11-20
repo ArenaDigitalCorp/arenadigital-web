@@ -1,6 +1,7 @@
 import { assertArenaResourceAccess } from '@/lib/server-auth'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { SupabaseArenaRepository } from '@/modules/arenas/repositories/SupabaseArenaRepository'
+import { ArenaTermsPanel } from '@/modules/terms/ArenaTermsPanel'
 import { ArenaForm } from '@/modules/arenas/components/ArenaForm'
 import { ArenaBookingOperationsPanel } from '@/modules/arenas/components/ArenaBookingOperationsPanel'
 import { getArenaPixSplitSettingsAction } from '@/modules/arenas/actions/arenaActions'
@@ -88,8 +89,9 @@ export default async function EditArenaPage({
                 {registration && <TabsContent
                     value="arena"
                     forceMount
-                    className="mt-7 data-[state=inactive]:hidden"
+                    className="mt-7 space-y-6 data-[state=inactive]:hidden"
                 >
+                    {access.isOwner && <ArenaTermsPanel key={id} arenaId={id} arenaName={registration.name} />}
                     <ArenaForm
                         ownerId={access.dbUserId}
                         initialData={registration}

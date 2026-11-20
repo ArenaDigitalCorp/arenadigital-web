@@ -25,6 +25,10 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { toast } from "sonner"
 import { createArenaAction, updateArenaAction } from "@/modules/arenas/actions/arenaActions"
 import { useRouter } from "next/navigation"
+import { ArenaTermsCheckbox } from "@/modules/terms/ArenaTermsCheckbox"
+import { ARENA_TERMS_VERSION } from "@/modules/terms/arena-terms"
+import { useArenaTerms } from "@/modules/terms/use-arena-terms"
+import { MediaTermsHint } from "@/modules/terms/MediaTermsHint"
 import { ImageUpload } from "@/components/ui/image-upload"
 import { getEstadosAction, getMunicipiosByEstadoAction, getMunicipioByIbgeAction, getComodidadesAction } from "@/modules/arenas/actions/arenaActions"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -75,6 +79,10 @@ export function ArenaForm({
     const router = useRouter()
     const [sports, setSports] = useState<any[]>([])
     const [comodidades, setComodidades] = useState<any[]>([])
+    const [termsChecked, setTermsChecked] = useState(false)
+    const termsStatus = useArenaTerms(initialData?.id)
+    const canAddMedia = !initialData || Boolean(termsStatus.data?.accepted_at)
+    const [removedBanner, setRemovedBanner] = useState(false)
     const [bannerFile, setBannerFile] = useState<File | null>(null)
     const [isUploading, setIsUploading] = useState(false)
 
@@ -311,7 +319,7 @@ export function ArenaForm({
     async function onSubmit(values: any) {
         try {
             setIsUploading(true)
-            let bannerUrl = values.banner_url
+            let bannerUrl = removedBanner ? "" : values.banner_url
 
             // Construct the final object
             // Ensure opening_hours is structurally correct if we modified it
@@ -346,12 +354,15 @@ export function ArenaForm({
                     }
                 }
 
+                if (!bannerFile && !removedBanner) delete payload.banner_url
                 const res = await updateArenaAction(initialData.id, payload)
                 if (!res.success) throw new Error(res.error)
+                setBannerFile(null)
+                setRemovedBanner(false)
                 toast.success("Arena atualizada com sucesso!")
                 router.refresh()
             } else {
-                const res = await createArenaAction({ ...payload, owner_id: ownerId })
+                const res = await createArenaAction({ ...payload, owner_id: ownerId }, termsChecked ? ARENA_TERMS_VERSION : null)
                 if (!res.success) throw new Error(res.error)
                 const createdArena = res.data
 
@@ -936,16 +947,26 @@ export function ArenaForm({
                             <FormLabel className="block mb-2">Perfil da arena</FormLabel>
                             <p className="text-xs text-muted-foreground mb-4">Gerencie as informações que irão aparecer no perfil comercial da sua arena.</p>
                             <ImageUpload
-                                value={initialData?.banner_url}
+                                label="Imagem do perfil da arena"
+                                file={bannerFile}
+                                value={removedBanner ? undefined : initialData?.banner_url}
                                 onChange={setBannerFile}
+                                disabled={!canAddMedia}
                                 className="w-full h-[300px]"
                             />
+                            {initialData ? <MediaTermsHint arenaId={initialData.id} /> :
+                                <p className="mt-2 text-sm text-muted-foreground">Envie apenas imagens que a arena tem autorização para usar.</p>}
+                            {(bannerFile || (!removedBanner && initialData?.banner_url)) && <Button type="button" variant="link" className="px-0" onClick={() => {
+                                setBannerFile(null)
+                                setRemovedBanner(true)
+                            }}>Remover imagem</Button>}
                         </div>
                     </div>
                 </div>
 
+                {!initialData && <ArenaTermsCheckbox id="termos-nova-arena" checked={termsChecked} onCheckedChange={setTermsChecked} />}
                 <div className="flex justify-end">
-                    <Button type="submit" size="lg" className="bg-arena-button hover:bg-arena-button-hover text-white min-w-[150px]" disabled={isUploading}>
+                    <Button type="submit" size="lg" className="bg-arena-button hover:bg-arena-button-hover text-white min-w-[150px]" disabled={isUploading || (!initialData && !termsChecked)}>
                         {isUploading ? "Salvando..." : "Salvar"}
                     </Button>
                 </div>

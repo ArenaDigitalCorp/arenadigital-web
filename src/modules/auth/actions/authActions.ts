@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-server"
 import { findUserByCpf, findUserByEmail, normalizeEmail, resolveAuthenticatedDbUser } from "@/lib/account-identity"
 import { isValidCpf, isValidCpfOrCnpj, isValidPhone, isValidCep, normalizeCep, normalizeCpfCnpj, normalizePhone, onlyDigits } from "@/lib/brasil-document"
 import { getArenaLegalNameError } from "@/modules/arenas/domain/arena-legal-name"
+import { ARENA_TERMS_VERSION } from "@/modules/terms/arena-terms"
 import {
     getPlatformAccessLevel,
     hasExplicitArenaAccess,
@@ -48,6 +49,7 @@ type SignUpInput = {
     arenaLegalName?: string
     arenaDocument: string
     addressData: AddressData
+    acceptedTermsVersion: string | null
 }
 
 type ActionResult<T = undefined> =
@@ -104,6 +106,8 @@ function validateArenaSignupData(input: SignUpInput) {
     if (legalNameError) return legalNameError
     if (input.addressData.cep && !isValidCep(input.addressData.cep)) return "Informe um CEP válido."
     if (!input.addressData.id_municipio) return "Selecione a cidade da arena."
+    if (!input.acceptedTermsVersion) return "Leia e aceite os Termos de Uso para cadastrar a arena."
+    if (input.acceptedTermsVersion !== ARENA_TERMS_VERSION) return "Os Termos de Uso mudaram. Atualize a página para ler e aceitar a versão vigente."
     return null
 }
 
@@ -133,6 +137,7 @@ export async function startSignUpAction(input: SignUpInput): Promise<ActionResul
     try {
         const validationError = validateArenaSignupData(input)
         if (validationError) return finishObservedAction(observation, { success: false, error: validationError })
+        const termsAcceptance = { version: ARENA_TERMS_VERSION, acceptedAt: new Date().toISOString() }
 
         const supabase = await createSupabaseServerClient()
         const admin = getSupabaseAdmin()
@@ -191,6 +196,7 @@ export async function startSignUpAction(input: SignUpInput): Promise<ActionResul
             phone,
             cpf: cleanCpf,
             addressData,
+            termsAcceptance,
         })
         const { error: intentError } = await admin.auth.admin.updateUserById(signUpData.user.id, {
             app_metadata: {
@@ -256,6 +262,7 @@ export async function provisionAfterSignUpAction(): Promise<ActionResult<SelfSer
             phone: intent.phone,
             document: intent.arenaDocument,
             addressData: intent.addressData,
+            termsAcceptance: intent.termsAcceptance,
         })
 
         const { error: consumeError } = await admin.auth.admin.updateUserById(user.id, {

@@ -1,0 +1,158 @@
+[
+  {
+    "title": "1. Sobre a plataforma",
+    "body": [
+      "A Arena Digital é uma plataforma que conecta donos de arenas esportivas e atletas, oferecendo ferramentas para gestão de quadras, organização de jogos, pagamentos e interação entre usuários.",
+      "Ao utilizar a plataforma, você concorda com estes Termos de Uso. A autorização do responsável para exibir o logo e as fotos de uma arena é registrada por aceite expresso, conforme a cláusula 5.1."
+    ]
+  },
+  {
+    "title": "2. Quem pode usar",
+    "body": [
+      "Você pode utilizar a Arena Digital se:"
+    ],
+    "list": [
+      "For maior de 18 anos ou estiver autorizado por um responsável legal",
+      "Fornecer informações verdadeiras no cadastro",
+      "Utilizar a plataforma de forma legal e responsável"
+    ]
+  },
+  {
+    "title": "3. Tipos de usuários",
+    "body": [
+      "A plataforma possui dois perfis principais:"
+    ],
+    "groups": [
+      {
+        "label": "Donos de Arena:",
+        "text": "Responsáveis pela gestão de quadras, horários, pagamentos e operação do espaço."
+      },
+      {
+        "label": "Atletas:",
+        "text": "Usuários que utilizam a plataforma para encontrar jogos, arenas, parceiros e participar de atividades esportivas."
+      }
+    ]
+  },
+  {
+    "title": "4. Funcionalidades",
+    "body": [
+      "A Arena Digital oferece, entre outros:"
+    ],
+    "list": [
+      "Gestão de quadras e reservas",
+      "Organização de jogos e eventos",
+      "Controle financeiro",
+      "Rankings, histórico e evolução de atletas",
+      "Programas de fidelidade e comunidade"
+    ],
+    "after": [
+      "As funcionalidades podem ser atualizadas, alteradas ou removidas a qualquer momento."
+    ]
+  },
+  {
+    "title": "5. Cadastro e conta",
+    "body": [
+      "Você é responsável por:"
+    ],
+    "list": [
+      "Manter a segurança da sua conta",
+      "Não compartilhar seu acesso com terceiros",
+      "Todas as atividades realizadas com seu login"
+    ],
+    "after": [
+      "A Arena Digital pode suspender ou encerrar contas em caso de uso indevido."
+    ]
+  },
+  {
+    "id": "imagens-da-arena",
+    "title": "5.1. Uso do logo e das fotos da arena",
+    "body": [
+      "Ao aceitar esta versão em nome da arena, o responsável declara que pode representá-la e que tem os direitos e as autorizações necessários para disponibilizar o logo e as fotos do perfil da arena e de seus espaços. Isso inclui, quando aplicável, autorização do fotógrafo, do titular da marca e das pessoas identificáveis nas imagens.",
+      "A arena autoriza a Arena Digital, de forma gratuita e não exclusiva, a armazenar, ajustar o tamanho e exibir esse material no site e no aplicativo para identificar a arena e apresentar seus espaços. A autorização vale a partir do aceite, enquanto o material estiver publicado, e abrange tanto as imagens já exibidas quanto as adicionadas depois. A titularidade permanece com os respectivos titulares. O uso em campanhas publicitárias externas exige autorização específica.",
+      "Antes de aceitar, confira as imagens já exibidas. Para corrigir ou retirar material, use o painel ou escreva para contato@arenadigital.app, identificando a arena e a imagem. Esse canal também atende fotógrafos, pessoas retratadas e demais titulares de direitos."
+    ]
+  },
+  {
+    "title": "6. Pagamentos",
+    "body": [
+      "Algumas funcionalidades podem ser pagas. Ao contratar um plano ou serviço, você concorda que:"
+    ],
+    "list": [
+      "Os valores serão informados previamente",
+      "A cobrança poderá ser recorrente",
+      "O não pagamento pode resultar na suspensão do acesso"
+    ]
+  },
+  {
+    "title": "6.1. Assinatura Arena Digital Plus no aplicativo",
+    "body": [
+      "A assinatura Arena Digital Plus destinada ao atleta é contratada e cobrada pela loja do dispositivo (Apple App Store ou Google Play), conforme o preço e a moeda exibidos antes da confirmação da compra."
+    ],
+    "list": [
+      "A assinatura tem renovação automática mensal até que seja cancelada",
+      "O gerenciamento e o cancelamento são realizados nas configurações de assinaturas da respectiva loja",
+      "Após o cancelamento, o acesso permanece disponível até o fim do período já pago, salvo revogação, reembolso ou determinação diferente da loja",
+      "Pedidos de reembolso são analisados pela Apple ou pelo Google conforme as regras da loja e a legislação aplicável",
+      "A exclusão da conta Arena Digital não substitui o cancelamento da assinatura na loja"
+    ]
+  },
+  {
+    "title": "6.2. Serviços financeiros e de pagamentos — Asaas",
+    "body": [
+      "Os serviços financeiros e de pagamentos disponibilizados pela integração da plataforma com o Asaas, incluindo abertura e manutenção de conta de pagamento para as arenas, emissão de cobranças Pix, processamento de pagamentos e transferências de valores, são prestados pelo ASAAS GESTÃO FINANCEIRA INSTITUIÇÃO DE PAGAMENTOS S.A. (Asaas).",
+      "Nessa integração, a Arena Digital atua como integradora tecnológica e distribuidora da experiência do produto, não sendo instituição financeira ou de pagamento, nem realizando intermediação financeira em nome próprio.",
+      "O relacionamento financeiro e de pagamentos e a responsabilidade regulatória pelos serviços acima descritos são do Asaas, nos termos da regulamentação vigente."
+    ]
+  },
+  {
+    "title": "7. Responsabilidades",
+    "body": [
+      "A Arena Digital não é responsável por:"
+    ],
+    "list": [
+      "Problemas ocorridos dentro das arenas",
+      "Cancelamentos ou conflitos entre usuários",
+      "Qualidade dos serviços prestados pelas arenas"
+    ],
+    "after": [
+      "A plataforma atua como intermediadora tecnológica."
+    ]
+  },
+  {
+    "title": "8. Conduta do usuário",
+    "body": [
+      "Você concorda em não:"
+    ],
+    "list": [
+      "Usar a plataforma para fins ilegais",
+      "Prejudicar outros usuários",
+      "Inserir informações falsas",
+      "Tentar burlar o sistema"
+    ]
+  },
+  {
+    "title": "9. Privacidade",
+    "body": [
+      "Seus dados serão utilizados para operação da plataforma e melhoria da experiência. Para mais detalhes, consulte nossa Política de Privacidade."
+    ]
+  },
+  {
+    "title": "10. Cancelamento e encerramento",
+    "body": [
+      "Você pode encerrar sua conta a qualquer momento. A Arena Digital também pode suspender ou encerrar contas que violem estes termos."
+    ]
+  },
+  {
+    "title": "11. Alterações nos termos",
+    "body": [
+      "Cada versão dos Termos fica disponível para consulta com sua data. Quando uma alteração afetar a autorização de uso de imagens da arena, o titular verá no painel um resumo da mudança e um link para ler o texto completo antes de decidir. A continuidade do uso do painel não substitui esse aceite.",
+      "A Arena Digital registra a arena, o responsável autenticado, a versão aceita e a data e hora da confirmação. O titular pode consultar seu comprovante no painel."
+    ]
+  },
+  {
+    "title": "12. Contato",
+    "body": [
+      "Em caso de dúvidas, entre em contato pelo e-mail: contato@arenadigital.app"
+    ]
+  }
+]

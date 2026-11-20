@@ -11,6 +11,11 @@ export type ArenaSignupAddress = {
   complement?: string
 }
 
+export type SignupTermsAcceptance = {
+  version: string
+  acceptedAt: string
+}
+
 export type ArenaSignupIntent = {
   version: 1
   arenaName: string
@@ -19,6 +24,7 @@ export type ArenaSignupIntent = {
   phone: string
   cpf: string
   addressData: ArenaSignupAddress
+  termsAcceptance?: SignupTermsAcceptance
 }
 
 type ArenaSignupIntentInput = Omit<ArenaSignupIntent, 'version'>
@@ -32,7 +38,16 @@ export function createArenaSignupIntent(input: ArenaSignupIntentInput): ArenaSig
     phone: input.phone.trim(),
     cpf: input.cpf.trim(),
     addressData: { ...input.addressData },
+    ...(input.termsAcceptance ? { termsAcceptance: { ...input.termsAcceptance } } : {}),
   }
+}
+
+function isTermsAcceptance(value: unknown): value is SignupTermsAcceptance {
+  if (!value || typeof value !== 'object') return false
+  const { version, acceptedAt } = value as Record<string, unknown>
+  return typeof version === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(version)
+    && typeof acceptedAt === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(acceptedAt)
+    && Number.isFinite(Date.parse(acceptedAt))
 }
 
 export function readArenaSignupIntent(appMetadata: unknown): ArenaSignupIntent | null {
@@ -49,6 +64,8 @@ export function readArenaSignupIntent(appMetadata: unknown): ArenaSignupIntent |
   if (typeof intent.phone !== 'string' || !intent.phone.trim()) return null
   if (typeof intent.cpf !== 'string') return null
   if (!intent.addressData || typeof intent.addressData !== 'object') return null
+  const termsAcceptance = intent.termsAcceptance
+  if (termsAcceptance !== undefined && !isTermsAcceptance(termsAcceptance)) return null
 
   const addressData = intent.addressData as Record<string, unknown>
   if (typeof addressData.id_municipio !== 'number') return null
@@ -60,6 +77,7 @@ export function readArenaSignupIntent(appMetadata: unknown): ArenaSignupIntent |
     phone: intent.phone,
     cpf: intent.cpf,
     addressData: addressData as ArenaSignupAddress,
+    termsAcceptance,
   })
 }
 

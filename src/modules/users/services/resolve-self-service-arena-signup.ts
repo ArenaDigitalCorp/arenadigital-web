@@ -3,7 +3,7 @@ import 'server-only'
 import { getLocationPointFromAddress } from '@/lib/geocoding'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { ensureExperimentalSubscription } from '@/modules/payments/usecases/ensure-experimental-subscription.usecase'
-import type { ArenaSignupAddress } from '@/modules/auth/lib/arena-signup-intent'
+import type { ArenaSignupAddress, SignupTermsAcceptance } from '@/modules/auth/lib/arena-signup-intent'
 
 export type SelfServiceArenaSignupStatus =
   | 'provisioned'
@@ -86,6 +86,7 @@ export async function resolveSelfServiceArenaSignup(input: {
   arenaLegalName?: string
   document: string
   addressData: ArenaSignupAddress
+  termsAcceptance?: SignupTermsAcceptance
 }): Promise<SelfServiceArenaSignupResult> {
   const addressData = await enrichAddressWithLocation(input.addressData)
   const { data, error } = await asSignupRpcClient().rpc('resolve_self_service_arena_signup', {
@@ -95,7 +96,11 @@ export async function resolveSelfServiceArenaSignup(input: {
     p_phone: input.phone,
     p_document: input.document,
     p_address_data: addressData,
-    ...(input.arenaLegalName !== undefined ? { p_legal_name: input.arenaLegalName } : {}),
+    ...(input.arenaLegalName !== undefined || input.termsAcceptance ? { p_legal_name: input.arenaLegalName ?? null } : {}),
+    ...(input.termsAcceptance ? {
+      p_terms_version: input.termsAcceptance.version,
+      p_terms_accepted_at: input.termsAcceptance.acceptedAt,
+    } : {}),
   })
 
   if (error) throw new Error(`Não foi possível resolver o cadastro da arena: ${error.message}`)

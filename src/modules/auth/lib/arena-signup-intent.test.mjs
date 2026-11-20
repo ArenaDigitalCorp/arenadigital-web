@@ -22,6 +22,16 @@ test('round-trips the server-issued arena signup intent', () => {
 
   assert.equal(parsed?.arenaName, 'Arena Centro')
   assert.equal(parsed?.addressData.id_municipio, 4209102)
+  assert.equal(parsed?.termsAcceptance, undefined)
+})
+
+test('retains the exact accepted version through a delayed callback and rejects malformed evidence', () => {
+  const termsAcceptance = { version: '2026-11-20', acceptedAt: '2026-11-20T12:30:00.000Z' }
+  const intent = createArenaSignupIntent({ ...validInput, termsAcceptance })
+  assert.deepEqual(readArenaSignupIntent({ [ARENA_SIGNUP_INTENT_KEY]: intent }).termsAcceptance, termsAcceptance)
+  for (const invalid of [true, {}, { version: termsAcceptance.version }, { ...termsAcceptance, acceptedAt: 'invalid' }]) {
+    assert.equal(readArenaSignupIntent({ [ARENA_SIGNUP_INTENT_KEY]: { ...intent, termsAcceptance: invalid } }), null)
+  }
 })
 
 test('does not treat mutable user metadata as an arena signup intent', () => {
