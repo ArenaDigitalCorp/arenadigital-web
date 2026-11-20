@@ -7908,6 +7908,24 @@ export type Database = {
         Returns: Json
       }
       leave_team: { Args: { p_team_id: string }; Returns: string }
+      list_athlete_content_reports: {
+        Args: { p_status?: string; p_before?: number; p_limit?: number }
+        Returns: {
+          sequence_id: number
+          report_id: string
+          target_type: string
+          target_id: string
+          subject_athlete_id: string | null
+          reason: string
+          details: string | null
+          content_preview: string | null
+          media_url: string | null
+          status: string
+          created_at: string
+          reviewed_at: string | null
+          review_note: string | null
+        }[]
+      }
       list_arena_claim_requests: {
         Args: { p_actor_user_id: string; p_limit?: number; p_status?: string }
         Returns: {
@@ -8368,6 +8386,10 @@ export type Database = {
           has_conflict: boolean
           start_passed: boolean
         }[]
+      }
+      review_athlete_content_report: {
+        Args: { p_report_id: string; p_action: string; p_note: string }
+        Returns: undefined
       }
       review_app_booking_request: {
         Args: {
