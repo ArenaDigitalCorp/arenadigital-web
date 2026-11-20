@@ -1,5 +1,6 @@
 "use server"
 
+import { getArenaTermsStatus } from '@/modules/terms/arena-terms-actions'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 import { assertCourtAccess, assertArenaResourceAccess } from '@/lib/server-auth'
 import { assertCanCreateSpaceForArena } from '@/modules/payments/usecases/assert-space-entitlement.usecase'
@@ -321,6 +322,12 @@ export async function duplicateCourtAction(arenaId: string, courtId: string, new
             relation.sport ? [relation.sport.id] : []
         )
 
+        const warnings: string[] = []
+        if (rest.image_url && !(await getArenaTermsStatus(arenaId)).accepted_at) {
+            delete rest.image_url
+            warnings.push('A foto poderá ser adicionada após o titular aceitar os Termos de Uso.')
+        }
+
         const { data: court, error } = await supabase
             .from('courts')
             .insert([{ ...(rest as CourtCreateInput), name: trimmedName, arena_id: arenaId }])
@@ -339,13 +346,12 @@ export async function duplicateCourtAction(arenaId: string, courtId: string, new
         // Mensalista/Professor vazias. A cópia tem que trazer as tabelas da
         // origem inteiras. Falhar aqui não desfaz o espaço já criado — o gestor
         // é avisado para revisar as tabelas em vez de copiar de novo.
-        let warning: string | undefined
         try {
             await clonePriceTablesToCourt(supabase, arenaId, courtId, court.id)
         } catch (cloneError) {
             const detail = cloneError instanceof Error ? cloneError.message : String(cloneError)
             console.error('[duplicateCourtAction] falha ao copiar tabelas de preço', detail)
-            warning = 'Espaço copiado, mas as tabelas de preço não vieram junto. Revise-as no novo espaço.'
+            warnings.push('Espaço copiado, mas as tabelas de preço não vieram junto. Revise-as no novo espaço.')
         }
 
         const { data: full } = await supabase
@@ -358,7 +364,7 @@ export async function duplicateCourtAction(arenaId: string, courtId: string, new
         return {
             success: true,
             data: normalizeCourtSports((full ?? court) as CourtRowWithSports),
-            warning,
+            warning: warnings.join(' ') || undefined,
         }
     } catch (err) {
         const message = err instanceof Error ? err.message : 'Erro ao copiar espaço'

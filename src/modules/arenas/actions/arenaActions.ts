@@ -1,5 +1,6 @@
 "use server"
 
+import { ARENA_TERMS_VERSION } from '@/modules/terms/arena-terms'
 import { setArenaReceivingBookingModeAction } from './receivingSetupActions'
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
@@ -116,9 +117,10 @@ export async function getArenaByIdAction(arenaId: string) {
     }
 }
 
-export async function createArenaAction(input: CreateArenaDTO) {
+export async function createArenaAction(input: CreateArenaDTO, acceptedTermsVersion: string | null) {
     try {
         const { dbUserId } = await assertArenaCreationAccess()
+        if (acceptedTermsVersion !== ARENA_TERMS_VERSION) throw new Error('Revise e aceite os Termos de Uso para cadastrar a arena.')
         const parsed = arenaSchema.parse(input)
         const location = (await resolveArenaLocation(parsed as unknown as Partial<CreateArenaDTO>)) ?? undefined
         const appBookingMode = normalizeAppBookingMode(
@@ -132,6 +134,7 @@ export async function createArenaAction(input: CreateArenaDTO) {
             app_booking_mode: appBookingMode,
             accepts_app_booking_requests: appBookingModeAcceptsPreBookings(appBookingMode),
             owner_id: dbUserId,
+            signup_terms_version: acceptedTermsVersion,
         } as unknown as CreateArenaDTO
         const arena = await new SupabaseArenaRepository(getSupabaseAdmin()).create(payload)
         revalidatePath('/dashboard/settings/arenas')
