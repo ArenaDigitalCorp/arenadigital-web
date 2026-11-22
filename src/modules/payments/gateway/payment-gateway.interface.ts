@@ -96,6 +96,12 @@ export type RetryFailedPaymentResult = {
   status: string
 }
 
+export type SubscriptionCancellationContext = {
+  customerId: string | null
+  currentPeriodEnd: string | null
+  isExperimental: boolean
+}
+
 export interface PaymentGateway {
   /** Identificador do provedor — usado pelo frontend pra escolher UI. */
   readonly providerName: PaymentProvider
@@ -138,8 +144,9 @@ export interface PaymentGateway {
 
   setSubscriptionCancelAtPeriodEnd(
     subscriptionId: string,
-    cancel: boolean
-  ): Promise<void>
+    cancel: boolean,
+    context?: SubscriptionCancellationContext
+  ): Promise<{ currentPeriodEnd: string | null } | void>
 
   cancelSubscriptionImmediately(subscriptionId: string): Promise<void>
 
@@ -150,13 +157,15 @@ export interface PaymentGateway {
 
   listCustomerInvoices(customerId: string, limit?: number): Promise<DomainInvoice[]>
 
+  resolveSubscriptionPaidPeriodEnd?(subscriptionId: string, customerId: string): Promise<string | null>
+
   /**
    * Após CHECKOUT_PAID: o webhook do Asaas manda `checkout.subscription` como
    * objeto (ciclo/datas), não o id `sub_...`. Só o Asaas implementa — resolve via API.
    */
   findSubscriptionIdAfterCheckoutPaid?(input: {
     customerId: string
-    arenaId: string
+    checkoutId: string
   }): Promise<string | null>
 
   // ===== Webhook =====

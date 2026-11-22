@@ -454,10 +454,19 @@ Pagamentos processados via **Asaas** — checkout hospedado externo. Após pagam
 - **Experimental expirado:** redirecionamento forçado para Assinatura.
 - **Experimental:** não pode reassinar depois de usado ou migrado para plano pago.
 - **Trocar plano:** upgrade/downgrade na mesma assinatura.
-- **Cancelar renovação:** acesso continua até fim do período pago (`cancel_at_period_end`).
+- **Cancelar assinatura:** em **Configurações → Assinatura**, o painel mostra o efeito antes da confirmação. Em até sete dias corridos da nova assinatura web paga, encerra o acesso e solicita o estorno integral no cartão, para CPF ou CNPJ. O prazo usa a data da nova contratação e da ativação do acesso quando posterior, no horário de Brasília.
+- **Após sete dias:** encerra a renovação e remove cobranças futuras do Asaas que já foram emitidas e seguem em aberto. O acesso continua até o fim do período pago.
 - **Reativar:** remove cancelamento programado antes do vencimento.
 - **Criar espaço:** bloqueado sem assinatura ativa ou acima do limite do plano.
 - Histórico de pagamentos disponível na aba **Histórico** da tela de Assinatura.
+
+Se a contratação ou a cobrança inicial precisar de conferência, o mesmo botão
+registra um protocolo em **Administração → Financeiro → Desistências de
+assinaturas**. O painel confirma a devolução após o retorno do Asaas. Após a
+tentativa registrada, a conferência consulta o mesmo estorno. Aplique as
+migrações de checkout e desistência até
+`20261122130000_arena_subscription_withdrawal_stop_claim.sql` antes de publicar
+o fluxo web.
 
 ### Perfil da Arena
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { formatCpfCnpj } from '@/lib/brasil-document'
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -25,7 +25,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ConfirmActionDialog } from '@/components/dashboard/ConfirmActionDialog';
 import {
   Table,
   TableBody,
@@ -38,8 +37,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { arenaDataTable } from '@/lib/arena-data-table';
 import { PaymentMethodCollector } from '@/modules/payments/components/PaymentMethodCollector';
+import { SubscriptionWithdrawal } from '@/modules/payments/components/SubscriptionWithdrawal';
 import type { CardCollectionContext } from '@/modules/payments/gateway/payment-gateway.interface';
 import {
+  EXPERIMENTAL_PLAN_KEY,
   PARTNER_PLAN_KEY,
   hasUnlimitedSpaces,
   type PlanKey,
@@ -144,11 +145,18 @@ function getPlanRules(plan: SubscriptionPlanOption) {
     : ['Contrato anual', 'Cobrança mensal'];
 }
 
+function hasScheduledRenewalCancellation(subscription: ArenaSubscription) {
+  return subscription.cancelAtPeriodEnd &&
+    (subscription.status === 'active' || subscription.status === 'trialing');
+}
+
 function getSubscriptionNotice(subscription: ArenaSubscription) {
-  if (subscription.cancelAtPeriodEnd && subscription.currentPeriodEnd) {
+  if (hasScheduledRenewalCancellation(subscription)) {
     return {
       title: 'Cancelamento agendado',
-      message: `O acesso segue ativo ate ${formatCalendarOrInstant(subscription.currentPeriodEnd)}. Para continuar usando, clique em "Manter assinatura".`,
+      message: subscription.currentPeriodEnd
+        ? `O acesso segue ativo até ${formatCalendarOrInstant(subscription.currentPeriodEnd)}.`
+        : 'O acesso segue ativo até o fim do período atual.',
       className: 'bg-amber-50 text-amber-700',
     };
   }
@@ -243,9 +251,9 @@ export function SubscriptionPageClient({
 }: Props) {
   const [subscription, setSubscription] =
     useState<ArenaSubscription>(initialSubscription);
+  const subscriptionRefresh = useRef(0);
   const [setupData, setSetupData] = useState<SetupData | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
-  const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [cardModalOpen, setCardModalOpen] = useState(false);
   const [selectedPlanKey, setSelectedPlanKey] = useState<UserSelectablePlanKey | null>(
     plans.some((plan) => plan.key === initialSubscription.planKey)
@@ -268,19 +276,25 @@ export function SubscriptionPageClient({
     Boolean(subscription.planKey) &&
     setupData?.planKey !== subscription.planKey;
 
-  async function refreshSubscription() {
+  async function refreshSubscription(): Promise<ArenaSubscription | null> {
+    const refreshId = ++subscriptionRefresh.current;
     try {
-      const res = await fetch(`/api/payments/subscriptions/${arenaId}`);
+      const res = await fetch(`/api/payments/subscriptions/${arenaId}`, { cache: 'no-store' });
       const data = await res.json();
 
+      if (refreshId !== subscriptionRefresh.current) return null;
       if (!res.ok) {
         toast.error(data.error ?? 'Erro ao atualizar assinatura.');
-        return;
+        return null;
       }
 
       setSubscription(data);
+      return data;
     } catch {
-      toast.error('Erro ao atualizar assinatura.');
+      if (refreshId === subscriptionRefresh.current) {
+        toast.error('Erro ao atualizar assinatura.');
+      }
+      return null;
     }
   }
 
@@ -336,43 +350,6 @@ export function SubscriptionPageClient({
         source: error instanceof Error ? 'exception' : 'unknown_error',
       });
       toast.error('Erro ao iniciar cadastro do cartao.');
-    } finally {
-      setActionLoading(false);
-    }
-  }
-
-  async function handleCancel() {
-    setActionLoading(true);
-
-    try {
-      const res = await fetch('/api/payments/subscriptions/cancel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ arenaId, action: 'cancel' }),
-      });
-
-      if (!res.ok) {
-        trackAction('subscription_cancel', 'failure', {
-          arena_id: arenaId,
-          source: 'http_error',
-        });
-        const data = await res.json();
-        toast.error(data.error ?? 'Erro ao cancelar assinatura.');
-        return;
-      }
-
-      toast.success(
-        'Assinatura cancelada. O acesso segue ativo ate o fim do periodo atual.'
-      );
-      trackAction('subscription_cancel', 'success', { arena_id: arenaId });
-      setCancelModalOpen(false);
-      await refreshSubscription();
-    } catch (error) {
-      trackAction('subscription_cancel', 'failure', {
-        arena_id: arenaId,
-        source: error instanceof Error ? 'exception' : 'unknown_error',
-      });
-      toast.error('Erro ao cancelar assinatura.');
     } finally {
       setActionLoading(false);
     }
@@ -684,32 +661,16 @@ export function SubscriptionPageClient({
                     </div>
                   )}
 
-                {(subscription.cancelAtPeriodEnd ||
-                  subscription.status === 'active') && (
-                  <div className="grid grid-cols-2 gap-x-8 pt-1">
-                    <div />
-                    <div>
-                      {subscription.cancelAtPeriodEnd ? (
-                        <button
-                          type="button"
-                          onClick={handleReactivate}
-                          disabled={actionLoading}
-                          className="text-sm text-arena-button hover:underline disabled:opacity-50"
-                        >
-                          Manter assinatura
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setCancelModalOpen(true)}
-                          disabled={actionLoading}
-                          className="text-sm text-[#1B7B8A] hover:underline disabled:opacity-50"
-                        >
-                          Cancelar assinatura
-                        </button>
-                      )}
-                    </div>
-                  </div>
+                {!isInternalSubscription && !isPartnerSubscription && (
+                  <SubscriptionWithdrawal
+                    key={arenaId}
+                    arenaId={arenaId}
+                    hasSubscription={hasSubscription}
+                    isFreeTrial={subscription.planKey === EXPERIMENTAL_PLAN_KEY}
+                    actionLoading={actionLoading}
+                    refreshSubscription={refreshSubscription}
+                    onReactivate={hasScheduledRenewalCancellation(subscription) ? handleReactivate : undefined}
+                  />
                 )}
               </CardContent>
             </Card>
@@ -763,16 +724,23 @@ export function SubscriptionPageClient({
                         O plano interno não exige cartão cadastrado.
                       </div>
                     ) : !hasSubscription ? (
-                      <Button
-                        type="button"
-                        onClick={() => handleOpenCardModal(selectedPlanKey)}
-                        disabled={actionLoading || !selectedPlan}
-                        className="bg-arena-button text-white hover:bg-arena-button-hover"
-                      >
-                        {actionLoading
-                          ? 'Aguarde...'
-                          : 'Cadastrar cartao e ativar'}
-                      </Button>
+                      <>
+                        {selectedPlan && selectedPlan.priceCents > 0 && (
+                          <p className="text-sm text-muted-foreground">
+                            Novas assinaturas contratadas com CPF ou CNPJ têm sete dias corridos para cancelamento com estorno integral. Após esse prazo, o cancelamento desativa a renovação e mantém o acesso até o fim do ciclo.
+                          </p>
+                        )}
+                        <Button
+                          type="button"
+                          onClick={() => handleOpenCardModal(selectedPlanKey)}
+                          disabled={actionLoading || !selectedPlan}
+                          className="bg-arena-button text-white hover:bg-arena-button-hover"
+                        >
+                          {actionLoading
+                            ? 'Aguarde...'
+                            : 'Cadastrar cartao e ativar'}
+                        </Button>
+                      </>
                     ) : (
                       <div className="grid grid-cols-2 gap-x-8">
                         <div />
@@ -971,16 +939,6 @@ export function SubscriptionPageClient({
         </DialogContent>
       </Dialog>
 
-      <ConfirmActionDialog
-        open={cancelModalOpen}
-        onOpenChange={setCancelModalOpen}
-        title="Cancelamento de assinatura"
-        description="Tem certeza que deseja cancelar a renovacao automatica? Seus dados permanecem salvos e o acesso continua ativo ate o fim do periodo contratado."
-        confirmLabel="Cancelar renovacao"
-        loadingLabel="Cancelando..."
-        loading={actionLoading}
-        onConfirm={handleCancel}
-      />
     </div>
   );
 }
