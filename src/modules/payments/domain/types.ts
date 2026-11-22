@@ -55,6 +55,13 @@ export type DomainInvoice = {
   attemptCount: number
 }
 
+type CheckoutEventDetails = {
+  checkoutId: string
+  customerId: string | null
+  operationId?: string | null
+  checkoutUrl?: string
+}
+
 export type DomainWebhookEvent =
   | {
       kind: 'subscription.updated'
@@ -96,23 +103,13 @@ export type DomainWebhookEvent =
       invoice: DomainInvoice
       subscriptionId: string | null
     }
-  | {
+  | (CheckoutEventDetails & {
       kind: 'checkout.paid'
       providerEventId: string
-      checkoutId: string
       subscriptionId: string | null
-      customerId: string | null
-    }
-  | {
-      kind: 'checkout.canceled'
+    })
+  | (CheckoutEventDetails & {
+      kind: 'checkout.created' | 'checkout.canceled' | 'checkout.expired'
       providerEventId: string
-      checkoutId: string
-      customerId: string | null
-    }
-  | {
-      kind: 'checkout.expired'
-      providerEventId: string
-      checkoutId: string
-      customerId: string | null
-    }
+    })
   | { kind: 'unhandled'; providerEventId: string; eventType: string }
