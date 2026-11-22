@@ -24,6 +24,14 @@ export class InvalidPlanKeyError extends PaymentApiError {
   }
 }
 
+export class SubscriptionCancellationChangedError extends PaymentApiError {
+  readonly code = 'cancellation_changed'
+
+  constructor() {
+    super(409, 'Os dados do cancelamento mudaram. Confira a assinatura e confirme novamente.')
+  }
+}
+
 export class ExperimentalPlanAlreadyUsedError extends PaymentApiError {
   constructor() {
     super(

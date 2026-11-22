@@ -51,9 +51,14 @@ export function FinanceSection({ overview }: { overview: PlatformAdminOverview }
       <PageIntro
         section="finance"
         action={(
-          <Link href="/admin/settings" className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-xs font-bold hover:border-slate-500">
-            <WalletCards className="h-4 w-4" /> Configurar recebimento
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/admin/assinaturas/desistencias" className="inline-flex h-10 items-center rounded-xl border border-slate-300 bg-white px-4 text-xs font-bold hover:border-slate-500">
+              Desistências de assinaturas
+            </Link>
+            <Link href="/admin/settings" className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-xs font-bold hover:border-slate-500">
+              <WalletCards className="h-4 w-4" /> Configurar recebimento
+            </Link>
+          </div>
         )}
       />
 

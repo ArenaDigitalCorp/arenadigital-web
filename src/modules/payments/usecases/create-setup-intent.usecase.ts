@@ -3,6 +3,7 @@ import { logAuditEvent } from '@/modules/audit/audit-log.service';
 import {
   ExperimentalPlanAlreadyUsedError,
   InvalidPlanKeyError,
+  PaymentApiError,
   PaymentConfigurationError,
 } from '@/modules/payments/errors';
 import { getPaymentGateway } from '@/modules/payments/gateway';
@@ -60,11 +61,13 @@ function getAppBaseUrl(): string {
 function buildSubscriptionCheckoutReturnUrl(
   baseUrl: string,
   arenaId: string,
-  status: 'success' | 'canceled' | 'expired'
+  status: 'success' | 'canceled' | 'expired',
+  operationId?: string,
 ): string {
   const path = `/dashboard/settings/subscription/${arenaId}/checkout-return`;
   const url = new URL(path, `${baseUrl.replace(/\/$/, '')}/`);
   url.searchParams.set('status', status);
+  if (operationId) url.searchParams.set('checkoutOperation', operationId);
   return url.toString();
 }
 
@@ -81,11 +84,13 @@ export async function createSetupIntent(
   const parsedPlanKey = planKeySchema.safeParse(selectedPlanKey);
   if (!parsedPlanKey.success) throw new InvalidPlanKeyError();
 
-  const { data: subscription } = await supabase
+  const { data: subscription, error: subscriptionError } = await supabase
     .from('arena_subscriptions')
     .select('gateway_customer_id, gateway_subscription_id, status, plan_key, experimental_started_at')
     .eq('arena_id', arenaId)
     .maybeSingle();
+
+  if (subscriptionError) throw new PaymentConfigurationError(subscriptionError.message);
 
   const requestedPlanKey = parsedPlanKey.data;
   const isSelectablePlan = userSelectablePlanKeySchema.safeParse(requestedPlanKey).success;
@@ -133,121 +138,133 @@ export async function createSetupIntent(
     throw new ExperimentalPlanAlreadyUsedError();
   }
 
-  let gatewayCustomerId: string | null =
-    subscription?.gateway_customer_id ?? null;
-
-  if (gateway.providerName === 'asaas') {
-    const customer = await gateway.createCustomer({
-      email: ownerEmail,
-      name: ownerName ?? arenaContact.name,
-      cpfCnpj: arenaContact.cpfCnpj,
-      phone: arenaContact.phone,
-      postalCode: arenaContact.postalCode,
-      addressNumber: arenaContact.addressNumber,
-      metadata: { arena_id: arenaId },
-    });
-    gatewayCustomerId = customer.id;
-  } else if (!gatewayCustomerId) {
-    const customer = await gateway.createCustomer({
-      email: ownerEmail,
-      name: ownerName ?? arenaContact.name,
-      cpfCnpj: arenaContact.cpfCnpj,
-      phone: arenaContact.phone,
-      postalCode: arenaContact.postalCode,
-      addressNumber: arenaContact.addressNumber,
-      metadata: { arena_id: arenaId },
-    });
-    gatewayCustomerId = customer.id;
-  }
-
-  const { error: upsertError } = await supabase
-    .from('arena_subscriptions')
-    .upsert(
-      {
-        arena_id: arenaId,
-        gateway_customer_id: gatewayCustomerId,
-        plan_key: planKey,
-        plan_id: plan.id,
-        status: subscription?.status ?? 'incomplete',
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'arena_id' }
-    );
-
-  if (upsertError) {
-    console.error('[payments] create-setup-intent — DB upsert failed', {
-      customerId: gatewayCustomerId,
-      error: upsertError,
-    });
-    throw new PaymentConfigurationError(upsertError.message);
-  }
-
   const baseUrl = getAppBaseUrl();
-
-  if (gateway.providerName === 'asaas' && !baseUrl.toLowerCase().startsWith('https://')) {
-    throw new PaymentConfigurationError(
-      'Asaas exige URLs de callback em HTTPS e no mesmo domínio das informações comerciais da conta. Defina NEXT_PUBLIC_APP_URL (ou APP_URL) com um endereço público https (ex.: URL do cloudflared), não http://localhost.'
-    );
-  }
-
-  const cardCollection = await gateway.prepareCardCollection({
-    customerId: gatewayCustomerId,
+  const createCustomer = () => gateway.createCustomer({
+    email: ownerEmail,
+    name: ownerName ?? arenaContact.name,
+    cpfCnpj: arenaContact.cpfCnpj,
+    phone: arenaContact.phone,
+    postalCode: arenaContact.postalCode,
+    addressNumber: arenaContact.addressNumber,
+    metadata: { arena_id: arenaId },
+  });
+  const collectCard = (customerId: string, operationId?: string) => gateway.prepareCardCollection({
+    customerId,
     arenaId,
     plan: toPlanInfo(plan),
-    successUrl: buildSubscriptionCheckoutReturnUrl(baseUrl, arenaId, 'success'),
-    cancelUrl: buildSubscriptionCheckoutReturnUrl(baseUrl, arenaId, 'canceled'),
-    expiredUrl: buildSubscriptionCheckoutReturnUrl(baseUrl, arenaId, 'expired'),
+    successUrl: buildSubscriptionCheckoutReturnUrl(baseUrl, arenaId, 'success', operationId),
+    cancelUrl: buildSubscriptionCheckoutReturnUrl(baseUrl, arenaId, 'canceled', operationId),
+    expiredUrl: buildSubscriptionCheckoutReturnUrl(baseUrl, arenaId, 'expired', operationId),
     metadata: { arena_id: arenaId, plan_key: planKey },
-    idempotencyKey: `setup-intent-${arenaId}-${planKey}-${Date.now()}`,
+    idempotencyKey: operationId ?? `setup-intent-${arenaId}-${planKey}-${Date.now()}`,
   });
 
-  if (cardCollection.provider === 'asaas-checkout') {
-    const { error: checkoutUpdateError } = await supabase
-      .from('arena_subscriptions')
-      .update({
-        gateway_checkout_id: cardCollection.checkoutId,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('arena_id', arenaId);
-
-    if (checkoutUpdateError) {
-      console.error(
-        '[payments] create-setup-intent — failed to persist gateway_checkout_id',
-        { checkoutId: cardCollection.checkoutId, error: checkoutUpdateError }
+  let gatewayCustomerId: string;
+  let cardCollection: CardCollectionContext;
+  if (gateway.providerName === 'asaas') {
+    if (!baseUrl.toLowerCase().startsWith('https://')) {
+      throw new PaymentConfigurationError(
+        'O Asaas exige URLs de retorno em HTTPS. Configure NEXT_PUBLIC_APP_URL (ou APP_URL) com o endereço público do painel.'
       );
-      throw new PaymentConfigurationError(checkoutUpdateError.message);
     }
 
-    const { error: attemptError } = await supabase
-      .from('payment_checkout_attempts')
+    const { data, error } = await supabase.rpc('claim_asaas_subscription_checkout', {
+      p_arena_id: arenaId,
+      p_plan_key: planKey,
+      p_plan_id: plan.id,
+      p_created_by: actorId ?? null,
+    });
+    if (error) throw new PaymentConfigurationError(error.message);
+    const claim = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+
+    if (claim.state === 'ready'
+      && typeof claim.checkout_id === 'string'
+      && typeof claim.checkout_url === 'string'
+      && typeof claim.gateway_customer_id === 'string') {
+      return {
+        provider: 'asaas',
+        cardCollection: {
+          provider: 'asaas-checkout',
+          checkoutId: claim.checkout_id,
+          checkoutUrl: claim.checkout_url,
+        },
+        customerId: claim.gateway_customer_id,
+        planKey,
+        planLabel: plan.label,
+        priceCents: plan.price_cents,
+      };
+    }
+    if (claim.state === 'different_plan') {
+      throw new PaymentApiError(409, 'Já existe um checkout de outro plano. Cancele a sessão anterior ou aguarde o encerramento antes de trocar de plano.');
+    }
+    if (claim.state === 'pending') {
+      throw new PaymentApiError(409, 'Já existe um checkout em processamento. Aguarde a confirmação do Asaas antes de tentar novamente.');
+    }
+    if (claim.state !== 'claimed' || typeof claim.operation_id !== 'string') {
+      throw new PaymentConfigurationError('Resposta inválida ao reservar checkout.');
+    }
+
+    const operationId = claim.operation_id;
+    const abandon = async (definitiveRejection: boolean) => {
+      const { error: abandonError } = await supabase.rpc('abandon_asaas_subscription_checkout', {
+        p_operation_id: operationId,
+        p_definitive_rejection: definitiveRejection,
+      });
+      if (abandonError) throw new PaymentConfigurationError(abandonError.message);
+    };
+
+    try {
+      gatewayCustomerId = (await createCustomer()).id;
+      const { data: started, error: startError } = await supabase.rpc('start_asaas_subscription_checkout', {
+        p_operation_id: operationId,
+        p_gateway_customer_id: gatewayCustomerId,
+      });
+      if (startError) throw new PaymentConfigurationError(startError.message);
+      if (!started) throw new PaymentApiError(409, 'A sessão mudou durante a abertura do checkout. Tente novamente.');
+    } catch (preparationError) {
+      await abandon(false);
+      throw preparationError;
+    }
+
+    try {
+      cardCollection = await collectCard(gatewayCustomerId, operationId);
+    } catch (checkoutError) {
+      // These responses document a rejected creation. Timeouts, unrecognized
+      // responses and 5xx leave the operation reserved for reconciliation.
+      if (checkoutError instanceof PaymentApiError && [400, 401].includes(checkoutError.statusCode)) {
+        await abandon(true);
+      }
+      throw checkoutError;
+    }
+
+    if (cardCollection.provider !== 'asaas-checkout') {
+      throw new PaymentConfigurationError('Resposta inválida do checkout Asaas.');
+    }
+    const { data: attached, error: attachError } = await supabase.rpc('attach_asaas_subscription_checkout', {
+      p_operation_id: operationId,
+      p_checkout_id: cardCollection.checkoutId,
+      p_gateway_customer_id: gatewayCustomerId,
+      p_checkout_url: cardCollection.checkoutUrl,
+    });
+    if (attachError) throw new PaymentConfigurationError(attachError.message);
+    if (!attached) throw new PaymentConfigurationError('O checkout criado ainda precisa ser conciliado.');
+  } else {
+    gatewayCustomerId = subscription?.gateway_customer_id ?? (await createCustomer()).id;
+    const { error: upsertError } = await supabase
+      .from('arena_subscriptions')
       .upsert(
         {
-          provider: 'asaas',
-          checkout_id: cardCollection.checkoutId,
           arena_id: arenaId,
+          gateway_customer_id: gatewayCustomerId,
           plan_key: planKey,
           plan_id: plan.id,
-          status: 'created',
-          gateway_customer_id: gatewayCustomerId,
-          replaces_gateway_subscription_id:
-            subscription?.gateway_subscription_id ?? null,
-          created_by_user_id: actorId ?? null,
-          metadata: {
-            reused_customer: Boolean(subscription?.gateway_customer_id),
-            previous_plan_key: subscription?.plan_key ?? null,
-          },
+          status: subscription?.status ?? 'incomplete',
           updated_at: new Date().toISOString(),
         },
-        { onConflict: 'provider,checkout_id' }
+        { onConflict: 'arena_id' }
       );
-
-    if (attemptError) {
-      console.error(
-        '[payments] create-setup-intent — failed to persist checkout attempt',
-        { checkoutId: cardCollection.checkoutId, error: attemptError }
-      );
-      throw new PaymentConfigurationError(attemptError.message);
-    }
+    if (upsertError) throw new PaymentConfigurationError(upsertError.message);
+    cardCollection = await collectCard(gatewayCustomerId);
   }
 
   await logAuditEvent({
