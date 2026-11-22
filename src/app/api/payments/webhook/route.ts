@@ -7,7 +7,8 @@ import type {
 } from '@/modules/payments/domain/types'
 import {
   InvalidWebhookSignatureError,
-  MissingWebhookSignatureError
+  MissingWebhookSignatureError,
+  PaymentApiError,
 } from '@/modules/payments/errors'
 import { getPaymentGateway } from '@/modules/payments/gateway'
 import { AsaasGateway } from '@/modules/payments/gateway/asaas.gateway'
@@ -18,6 +19,7 @@ import {
 } from '@/modules/payments/repositories/subscription-plans.repository'
 import { planAccessEndIso } from '@/modules/payments/subscription-rules'
 import { syncArenaBillingSnapshotFromGateway } from '@/modules/payments/usecases/sync-arena-billing-snapshot.usecase'
+import { reconcileSubscriptionWithdrawalFromAsaas } from '@/modules/payments/usecases/subscription-withdrawal.usecase'
 import type { Database, Json } from '@/types/supabase.types'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -70,6 +72,7 @@ function eventGatewaySubscriptionId(event: DomainWebhookEvent) {
 
 function eventGatewayCheckoutId(event: DomainWebhookEvent) {
   switch (event.kind) {
+    case 'checkout.created':
     case 'checkout.paid':
     case 'checkout.canceled':
     case 'checkout.expired':
@@ -77,6 +80,20 @@ function eventGatewayCheckoutId(event: DomainWebhookEvent) {
     default:
       return null
   }
+}
+
+async function attachAsaasCheckoutEvent(event: DomainWebhookEvent) {
+  if (!('checkoutId' in event) || !event.checkoutId || !event.operationId
+    || !event.customerId || !event.checkoutUrl) return false
+
+  const { data, error } = await getSupabaseAdmin().rpc('attach_asaas_subscription_checkout', {
+    p_operation_id: event.operationId,
+    p_checkout_id: event.checkoutId,
+    p_gateway_customer_id: event.customerId,
+    p_checkout_url: event.checkoutUrl,
+  })
+  if (error) throw error
+  return data === true
 }
 
 function isUniqueViolation(error: unknown) {
@@ -100,7 +117,7 @@ async function beginWebhookProcessing(input: {
   provider: string
   event: DomainWebhookEvent
   rawBody: string
-}): Promise<{ id: string; shouldProcess: boolean }> {
+}): Promise<{ id: string; attempt: number; shouldProcess: boolean }> {
   const supabase = getSupabaseAdmin()
   const now = new Date().toISOString()
   const payload = safeParseWebhookPayload(input.rawBody)
@@ -125,11 +142,11 @@ async function beginWebhookProcessing(input: {
   const { data, error } = await supabase
     .from('payment_webhook_events')
     .insert(basePayload)
-    .select('id')
+    .select('id, attempts')
     .single()
 
   if (!error && data) {
-    return { id: data.id, shouldProcess: true }
+    return { id: data.id, attempt: data.attempts, shouldProcess: true }
   }
 
   if (!isUniqueViolation(error)) {
@@ -150,10 +167,10 @@ async function beginWebhookProcessing(input: {
     existing.status === 'ignored' ||
     (existing.status === 'processing' && !isProcessingStale(existing))
   ) {
-    return { id: existing.id, shouldProcess: false }
+    return { id: existing.id, attempt: existing.attempts, shouldProcess: false }
   }
 
-  const { error: updateError } = await supabase
+  const { data: claimed, error: updateError } = await supabase
     .from('payment_webhook_events')
     .update({
       ...basePayload,
@@ -162,14 +179,23 @@ async function beginWebhookProcessing(input: {
       updated_at: now,
     })
     .eq('id', existing.id)
+    .eq('status', existing.status)
+    .eq('attempts', existing.attempts)
+    .select('attempts')
+    .maybeSingle()
 
   if (updateError) throw updateError
 
-  return { id: existing.id, shouldProcess: true }
+  return {
+    id: existing.id,
+    attempt: claimed?.attempts ?? existing.attempts,
+    shouldProcess: Boolean(claimed),
+  }
 }
 
 async function finishWebhookProcessing(input: {
   id: string
+  attempt: number
   status: Extract<PaymentWebhookEventStatus, 'processed' | 'ignored'>
   arenaId?: string | null
   event?: DomainWebhookEvent
@@ -189,6 +215,8 @@ async function finishWebhookProcessing(input: {
       updated_at: now,
     })
     .eq('id', input.id)
+    .eq('attempts', input.attempt)
+    .eq('status', 'processing')
 
   if (error) {
     throw error
@@ -197,6 +225,7 @@ async function finishWebhookProcessing(input: {
 
 async function failWebhookProcessing(input: {
   id: string
+  attempt: number
   event: DomainWebhookEvent
   error: unknown
 }) {
@@ -214,6 +243,8 @@ async function failWebhookProcessing(input: {
         updated_at: now,
       })
       .eq('id', input.id)
+      .eq('attempts', input.attempt)
+      .eq('status', 'processing')
 
     return error
   } catch (error) {
@@ -243,7 +274,7 @@ export async function POST(request: NextRequest) {
     return observation.respond(new InvalidWebhookSignatureError().toNextResponse())
   }
 
-  let webhookEvent: { id: string; shouldProcess: boolean }
+  let webhookEvent: Awaited<ReturnType<typeof beginWebhookProcessing>>
   try {
     webhookEvent = await beginWebhookProcessing({
       provider: gateway.providerName,
@@ -262,6 +293,7 @@ export async function POST(request: NextRequest) {
   try {
     let arenaId: string | null = null
     let finalStatus: Extract<PaymentWebhookEventStatus, 'processed' | 'ignored'> = 'processed'
+    const attachedCheckout = gateway.providerName === 'asaas' && await attachAsaasCheckoutEvent(event)
 
     switch (event.kind) {
       case 'subscription.updated':
@@ -286,7 +318,10 @@ export async function POST(request: NextRequest) {
         break
 
       case 'invoice.refunded':
-        arenaId = await handleInvoiceRefunded(
+        arenaId = gateway.providerName === 'asaas'
+          ? await reconcileSubscriptionWithdrawalFromAsaas(event.invoice.id, event.subscriptionId)
+          : null
+        arenaId ??= await handleInvoiceRefunded(
           event.subscriptionId,
           event.invoice.id,
           event.providerEventId
@@ -309,6 +344,10 @@ export async function POST(request: NextRequest) {
         )
         break
 
+      case 'checkout.created':
+        finalStatus = attachedCheckout ? 'processed' : 'ignored'
+        break
+
       case 'checkout.paid':
         arenaId = await handleCheckoutPaid(
           event.checkoutId,
@@ -316,6 +355,7 @@ export async function POST(request: NextRequest) {
           event.customerId,
           event.providerEventId
         )
+        if (event.operationId && !arenaId) throw new Error('Paid Asaas checkout is pending local correlation')
         break
 
       case 'checkout.canceled':
@@ -341,12 +381,18 @@ export async function POST(request: NextRequest) {
 
     await finishWebhookProcessing({
       id: webhookEvent.id,
+      attempt: webhookEvent.attempt,
       status: finalStatus,
       arenaId,
       event,
     })
   } catch (error) {
-    const persistenceError = await failWebhookProcessing({ id: webhookEvent.id, event, error })
+    const persistenceError = await failWebhookProcessing({
+      id: webhookEvent.id,
+      attempt: webhookEvent.attempt,
+      event,
+      error,
+    })
     if (persistenceError) {
       observation.log('error', 'payments.webhook.failure_persistence_failed', {
         error: persistenceError,
@@ -373,10 +419,11 @@ async function updateArenaSubscriptionRecord(input: {
   arenaId: string | null
   subscriptionId: string
   payload: ArenaSubscriptionTable['Update']
+  preserveAsaasAccess?: boolean
 }) {
   const supabase = getSupabaseAdmin()
 
-  if (input.arenaId) {
+  if (input.arenaId && getPaymentGateway().providerName !== 'asaas') {
     const { data, error } = await supabase
       .from('arena_subscriptions')
       .update(input.payload)
@@ -388,10 +435,14 @@ async function updateArenaSubscriptionRecord(input: {
     if (data?.arena_id) return data.arena_id
   }
 
-  const { data, error } = await supabase
+  let update = supabase
     .from('arena_subscriptions')
     .update(input.payload)
     .eq('gateway_subscription_id', input.subscriptionId)
+  if (input.preserveAsaasAccess) {
+    update = update.eq('cancel_at_period_end', false).neq('plan_key', EXPERIMENTAL_PLAN_KEY)
+  }
+  const { data, error } = await update
     .select('arena_id')
     .maybeSingle()
 
@@ -416,6 +467,21 @@ async function handleSubscriptionUpdated(
   subscription: DomainSubscription,
   eventId: string
 ): Promise<string | null> {
+  const gateway = getPaymentGateway()
+  const isAsaas = gateway.providerName === 'asaas'
+  if (isAsaas) {
+    const arenaId = await resolveArenaIdBySubscriptionId(subscription.id)
+    if (!arenaId) return null
+    const current = await gateway.retrieveSubscription(subscription.id)
+    if (!current) throw new Error('Could not reconcile the current Asaas subscription')
+    if (current.id !== subscription.id || current.customerId !== subscription.customerId) {
+      throw new Error('Asaas subscription identity changed while reconciling an event')
+    }
+    // The renewal-cancel use case records the verified paid period and completion.
+    // A SUBSCRIPTION_UPDATED event can arrive before pending payments are removed.
+    if (current.cancelAtPeriodEnd) return arenaId
+    subscription = current
+  }
   const { matchedPlan } = await resolveSubscriptionPlan(subscription)
   const arenaId =
     subscription.metadata?.arena_id ??
@@ -435,7 +501,8 @@ async function handleSubscriptionUpdated(
   const resolvedArenaId = await updateArenaSubscriptionRecord({
     arenaId,
     subscriptionId: subscription.id,
-    payload
+    payload,
+    preserveAsaasAccess: isAsaas
   })
 
   console.info('[payments-webhook] Subscription updated', {
@@ -470,9 +537,6 @@ async function handleSubscriptionDeleted(
   eventId: string
 ): Promise<string | null> {
   const supabase = getSupabaseAdmin()
-  const arenaId =
-    subscription.metadata?.arena_id ??
-    (await resolveArenaIdBySubscriptionId(subscription.id))
 
   const canceledAt = subscription.canceledAtIso ?? new Date().toISOString()
 
@@ -484,15 +548,20 @@ async function handleSubscriptionDeleted(
     updated_at: new Date().toISOString()
   }
 
-  const query = supabase.from('arena_subscriptions').update(payload)
-  const { error } = arenaId
-    ? await query.eq('arena_id', arenaId)
-    : await query.eq('gateway_subscription_id', subscription.id)
+  const { data: updated, error } = await supabase
+    .from('arena_subscriptions')
+    .update(payload)
+    .eq('gateway_subscription_id', subscription.id)
+    .select('arena_id')
+    .maybeSingle()
 
   if (error) {
     console.error('[payments-webhook] handleSubscriptionDeleted — update failed', error)
     throw error
   }
+
+  if (!updated) return null
+  const arenaId = updated.arena_id
 
   console.info('[payments-webhook] Subscription deleted — access revoked', {
     subscription_id: subscription.id,
@@ -519,8 +588,39 @@ async function handleInvoicePaid(
 ): Promise<string | null> {
   if (!subscriptionId) return null
 
-  const subscription = await getPaymentGateway().retrieveSubscription(subscriptionId)
+  const gateway = getPaymentGateway()
+  const subscription = await gateway.retrieveSubscription(subscriptionId)
   if (!subscription) return null
+
+  if (gateway.providerName === 'asaas' && subscription.cancelAtPeriodEnd) {
+    // A current-cycle payment kept during cancellation may settle afterwards.
+    const periodEnd = await gateway.resolveSubscriptionPaidPeriodEnd?.(subscriptionId, subscription.customerId)
+    if (!periodEnd) return null
+    const supabase = getSupabaseAdmin()
+    const { data: existing, error: readError } = await supabase
+      .from('arena_subscriptions')
+      .select('arena_id, plan_key, current_period_end, cancel_at_period_end')
+      .eq('gateway_subscription_id', subscriptionId)
+      .maybeSingle()
+    if (readError) throw readError
+    if (!existing?.cancel_at_period_end || existing.plan_key === EXPERIMENTAL_PLAN_KEY
+      || (existing.current_period_end && Date.parse(existing.current_period_end) >= Date.parse(periodEnd))) {
+      return existing?.arena_id ?? null
+    }
+    const update = supabase
+      .from('arena_subscriptions')
+      .update({ status: 'active', current_period_end: periodEnd, updated_at: new Date().toISOString() })
+      .eq('gateway_subscription_id', subscriptionId)
+      .eq('cancel_at_period_end', true)
+    const { data: renewed, error } = await (existing.current_period_end
+      ? update.eq('current_period_end', existing.current_period_end)
+      : update.is('current_period_end', null)
+    ).select('arena_id').maybeSingle()
+    if (error) throw error
+    if (!renewed) throw new Error('Asaas subscription changed while recording a paid period')
+    await syncArenaBillingSnapshotFromGateway(renewed.arena_id)
+    return renewed.arena_id
+  }
 
   const arenaId =
     subscription.metadata?.arena_id ??
@@ -541,7 +641,8 @@ async function handleInvoicePaid(
   const resolvedArenaId = await updateArenaSubscriptionRecord({
     arenaId,
     subscriptionId,
-    payload
+    payload,
+    preserveAsaasAccess: gateway.providerName === 'asaas'
   })
 
   console.info('[payments-webhook] Invoice paid — access renewed', {
@@ -585,14 +686,20 @@ async function handleInvoicePaymentFailed(
 
   const supabase = getSupabaseAdmin()
   const arenaId = await resolveArenaIdBySubscriptionId(subscriptionId)
+  const gateway = getPaymentGateway()
+  const isAsaas = gateway.providerName === 'asaas'
+  if (isAsaas) {
+    if (!arenaId) return null
+    const subscription = await gateway.retrieveSubscription(subscriptionId)
+    if (!subscription) throw new Error('Could not reconcile the Asaas subscription for a failed payment')
+    if (subscription.cancelAtPeriodEnd) return arenaId
+  }
 
-  const updateQuery = supabase
+  const update = supabase
     .from('arena_subscriptions')
     .update({ status: 'past_due', updated_at: new Date().toISOString() })
-
-  const { error } = arenaId
-    ? await updateQuery.eq('arena_id', arenaId)
-    : await updateQuery.eq('gateway_subscription_id', subscriptionId)
+    .eq('gateway_subscription_id', subscriptionId)
+  const { error } = await (isAsaas ? update.eq('cancel_at_period_end', false) : update)
 
   if (error) {
     console.error('[payments-webhook] handleInvoicePaymentFailed — update failed', error)
@@ -632,14 +739,16 @@ async function handleCheckoutPaid(
 
   const supabase = getSupabaseAdmin()
 
-  const { data: attempt } = await supabase
+  const { data: attempt, error: attemptReadError } = await supabase
     .from('payment_checkout_attempts')
-    .select('arena_id, plan_id, plan_key, gateway_customer_id, replaces_gateway_subscription_id')
+    .select('arena_id, plan_id, plan_key, gateway_customer_id, replaces_gateway_subscription_id, result_gateway_subscription_id, paid_at, metadata')
     .eq('provider', 'asaas')
     .eq('checkout_id', checkoutId)
     .maybeSingle()
 
-  const { data: subscriptionRecord } = attempt
+  if (attemptReadError) throw attemptReadError
+
+  const { data: subscriptionRecord, error: subscriptionReadError } = attempt
     ? await supabase
         .from('arena_subscriptions')
         .select('arena_id, plan_id, plan_key, gateway_customer_id, gateway_subscription_id')
@@ -650,6 +759,8 @@ async function handleCheckoutPaid(
         .select('arena_id, plan_id, plan_key, gateway_customer_id, gateway_subscription_id')
         .eq('gateway_checkout_id', checkoutId)
         .maybeSingle()
+
+  if (subscriptionReadError) throw subscriptionReadError
 
   const record = subscriptionRecord
     ? {
@@ -669,9 +780,19 @@ async function handleCheckoutPaid(
     return null
   }
 
-  let resolvedSubscriptionId = normalizeGatewaySubscriptionIdFromWebhook(subscriptionId)
+  const metadata = attempt?.metadata && typeof attempt.metadata === 'object' && !Array.isArray(attempt.metadata)
+    ? attempt.metadata
+    : {}
+  if (metadata.reconciliation_required === 'concurrent_paid_checkout') return record.arena_id
 
-  const effectiveCustomerId = customerId ?? record.gateway_customer_id
+  const confirmedSubscriptionId = attempt?.result_gateway_subscription_id
+  const superseded = Boolean(confirmedSubscriptionId && record.gateway_subscription_id !== confirmedSubscriptionId)
+  let resolvedSubscriptionId =
+    confirmedSubscriptionId ?? normalizeGatewaySubscriptionIdFromWebhook(subscriptionId)
+  if (customerId && record.gateway_customer_id && customerId !== record.gateway_customer_id) {
+    throw new Error('Asaas customer does not match the checkout attempt')
+  }
+  const effectiveCustomerId = record.gateway_customer_id ?? customerId
   const gateway = getPaymentGateway()
   if (
     !resolvedSubscriptionId &&
@@ -680,71 +801,118 @@ async function handleCheckoutPaid(
   ) {
     resolvedSubscriptionId = await gateway.findSubscriptionIdAfterCheckoutPaid({
       customerId: effectiveCustomerId,
-      arenaId: record.arena_id,
+      checkoutId,
     })
   }
 
-  const fullSubscription = resolvedSubscriptionId
-    ? await gateway.retrieveSubscriptionWithPaymentMethod(resolvedSubscriptionId)
-    : null
+  if (!resolvedSubscriptionId || !effectiveCustomerId) {
+    throw new Error('Could not identify the Asaas subscription for the paid checkout')
+  }
 
-  const isExperimentalPlan = record.plan_key === EXPERIMENTAL_PLAN_KEY
   const activatedAt = new Date()
-  const payload: ArenaSubscriptionTable['Update'] & {
-    experimental_started_at?: string
-  } = {
-    status: 'active',
-    gateway_subscription_id: resolvedSubscriptionId ?? null,
-    ...(effectiveCustomerId ? { gateway_customer_id: effectiveCustomerId } : {}),
-    current_period_end:
-      isExperimentalPlan
-        ? planAccessEndIso(EXPERIMENTAL_PLAN_KEY, activatedAt)
-        : fullSubscription?.primaryItem?.currentPeriodEndIso ?? null,
-    cancel_at_period_end: false,
-    canceled_at: null,
-    ...(isExperimentalPlan
-      ? { experimental_started_at: activatedAt.toISOString() }
-      : {}),
-    updated_at: new Date().toISOString(),
+  if (!superseded && record.gateway_subscription_id !== resolvedSubscriptionId) {
+    const expectedSubscriptionId = attempt
+      ? attempt.replaces_gateway_subscription_id
+      : record.gateway_subscription_id
+    const fullSubscription = await gateway.retrieveSubscription(resolvedSubscriptionId)
+    if (fullSubscription?.customerId !== effectiveCustomerId) {
+      throw new Error('Could not confirm the Asaas subscription customer')
+    }
+
+    if (attempt && record.gateway_subscription_id !== expectedSubscriptionId) {
+      // The checkout was paid at the gateway. Preserve the current plan and
+      // record the separate recurrence for reconciliation instead of retrying
+      // a permanent conflict on the provider's webhook queue.
+      const { error } = await supabase
+        .from('payment_checkout_attempts')
+        .update({
+          status: 'paid',
+          result_gateway_subscription_id: resolvedSubscriptionId,
+          paid_at: attempt.paid_at ?? activatedAt.toISOString(),
+          updated_at: activatedAt.toISOString(),
+          metadata: {
+            ...metadata,
+            reconciliation_required: 'concurrent_paid_checkout',
+            current_gateway_subscription_id: record.gateway_subscription_id,
+          },
+        })
+        .eq('provider', 'asaas')
+        .eq('checkout_id', checkoutId)
+        .is('result_gateway_subscription_id', null)
+      if (error) throw error
+
+      await logAuditEvent({
+        entityType: 'arena_subscription',
+        entityId: record.arena_id,
+        action: 'subscription.checkout_reconciliation_required',
+        actorId: eventId,
+        actorType: 'payment_webhook',
+        metadata: { gateway_checkout_id: checkoutId, gateway_subscription_id: resolvedSubscriptionId },
+      })
+      return record.arena_id
+    }
+
+    const isExperimentalPlan = record.plan_key === EXPERIMENTAL_PLAN_KEY
+    const periodEnd = isExperimentalPlan
+      ? planAccessEndIso(EXPERIMENTAL_PLAN_KEY, activatedAt)
+      : fullSubscription.primaryItem?.currentPeriodEndIso
+    if (fullSubscription.status !== 'active' || !periodEnd || !Number.isFinite(Date.parse(periodEnd))) {
+      throw new Error('Asaas subscription is not active with a known billing period')
+    }
+
+    const payload: ArenaSubscriptionTable['Update'] = {
+      plan_key: record.plan_key,
+      plan_id: record.plan_id,
+      status: 'active',
+      gateway_subscription_id: resolvedSubscriptionId,
+      gateway_customer_id: effectiveCustomerId,
+      current_period_end: periodEnd,
+      cancel_at_period_end: false,
+      canceled_at: null,
+      ...(isExperimentalPlan ? { experimental_started_at: activatedAt.toISOString() } : {}),
+      updated_at: activatedAt.toISOString(),
+    }
+
+    const update = supabase.from('arena_subscriptions').update(payload).eq('arena_id', record.arena_id)
+    const { data: updated, error } = await (
+      expectedSubscriptionId === null
+        ? update.is('gateway_subscription_id', null)
+        : update.eq('gateway_subscription_id', expectedSubscriptionId)
+    ).select('arena_id').maybeSingle()
+    if (error) throw error
+    if (!updated) throw new Error('Subscription changed while confirming the Asaas checkout')
   }
 
-  const { error } = await supabase
-    .from('arena_subscriptions')
-    .update(payload)
-    .eq('arena_id', record.arena_id)
-
-  if (error) {
-    console.error('[payments-webhook] handleCheckoutPaid — update failed', error)
-    throw error
+  if (attempt && !confirmedSubscriptionId) {
+    const { error } = await supabase
+      .from('payment_checkout_attempts')
+      .update({
+        status: 'paid',
+        result_gateway_subscription_id: resolvedSubscriptionId,
+        paid_at: attempt.paid_at ?? activatedAt.toISOString(),
+        updated_at: activatedAt.toISOString(),
+      })
+      .eq('provider', 'asaas')
+      .eq('checkout_id', checkoutId)
+      .is('result_gateway_subscription_id', null)
+    if (error) throw error
   }
 
-  await supabase
-    .from('payment_checkout_attempts')
-    .update({
-      status: 'paid',
-      result_gateway_subscription_id: resolvedSubscriptionId,
-      paid_at: activatedAt.toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq('provider', 'asaas')
-    .eq('checkout_id', checkoutId)
-
-  await syncArenaBillingSnapshotFromGateway(record.arena_id)
-
-  const replacedSubscriptionId =
-    attempt?.replaces_gateway_subscription_id ??
-    (record.gateway_subscription_id &&
-    record.gateway_subscription_id !== resolvedSubscriptionId
-      ? record.gateway_subscription_id
-      : null)
+  const replacedSubscriptionId = attempt
+    ? attempt.replaces_gateway_subscription_id
+    : record.gateway_subscription_id
 
   if (
     replacedSubscriptionId &&
-    resolvedSubscriptionId &&
-    replacedSubscriptionId !== resolvedSubscriptionId
+    replacedSubscriptionId !== resolvedSubscriptionId &&
+    (!superseded || replacedSubscriptionId !== record.gateway_subscription_id)
   ) {
     try {
-      await gateway.cancelSubscriptionImmediately(replacedSubscriptionId)
+      try {
+        await gateway.cancelSubscriptionImmediately(replacedSubscriptionId)
+      } catch (error) {
+        if (!(error instanceof PaymentApiError && error.statusCode === 404)) throw error
+      }
       await logAuditEvent({
         entityType: 'arena_subscription',
         entityId: record.arena_id,
@@ -772,6 +940,10 @@ async function handleCheckoutPaid(
       throw err
     }
   }
+
+  if (superseded) return record.arena_id
+
+  await syncArenaBillingSnapshotFromGateway(record.arena_id)
 
   if (resolvedSubscriptionId && gateway instanceof AsaasGateway) {
     const parsedKey = planKeySchema.safeParse(record.plan_key)
@@ -836,6 +1008,7 @@ async function handleCheckoutClosed(
     })
     .eq('provider', 'asaas')
     .eq('checkout_id', checkoutId)
+    .eq('status', 'created')
     .select('arena_id, plan_key, plan_id')
     .maybeSingle()
 
@@ -878,14 +1051,20 @@ async function handleInvoiceActionRequired(
 
   const supabase = getSupabaseAdmin()
   const arenaId = await resolveArenaIdBySubscriptionId(subscriptionId)
+  const gateway = getPaymentGateway()
+  const isAsaas = gateway.providerName === 'asaas'
+  if (isAsaas) {
+    if (!arenaId) return null
+    const subscription = await gateway.retrieveSubscription(subscriptionId)
+    if (!subscription) throw new Error('Could not reconcile the Asaas subscription for a payment under review')
+    if (subscription.cancelAtPeriodEnd) return arenaId
+  }
 
-  const updateQuery = supabase
+  const update = supabase
     .from('arena_subscriptions')
     .update({ status: 'incomplete', updated_at: new Date().toISOString() })
-
-  const { error } = arenaId
-    ? await updateQuery.eq('arena_id', arenaId)
-    : await updateQuery.eq('gateway_subscription_id', subscriptionId)
+    .eq('gateway_subscription_id', subscriptionId)
+  const { error } = await (isAsaas ? update.eq('cancel_at_period_end', false) : update)
 
   if (error) {
     console.error('[payments-webhook] handleInvoiceActionRequired — update failed', error)
@@ -921,21 +1100,12 @@ async function handleInvoiceRefunded(
 ): Promise<string | null> {
   if (!subscriptionId) return null
 
-  const supabase = getSupabaseAdmin()
-  const arenaId = await resolveArenaIdBySubscriptionId(subscriptionId)
-
-  const updateQuery = supabase
-    .from('arena_subscriptions')
-    .update({ status: 'past_due', updated_at: new Date().toISOString() })
-
-  const { error } = arenaId
-    ? await updateQuery.eq('arena_id', arenaId)
-    : await updateQuery.eq('gateway_subscription_id', subscriptionId)
-
-  if (error) {
-    console.error('[payments-webhook] handleInvoiceRefunded — update failed', error)
-    throw error
-  }
+  const arenaId = await updateArenaSubscriptionRecord({
+    arenaId: null,
+    subscriptionId,
+    payload: { status: 'past_due', updated_at: new Date().toISOString() },
+  })
+  if (!arenaId) return null
 
   console.warn('[payments-webhook] Invoice refunded', {
     subscription_id: subscriptionId,
@@ -969,13 +1139,10 @@ async function handleInvoiceChargeback(
   const supabase = getSupabaseAdmin()
   const arenaId = await resolveArenaIdBySubscriptionId(subscriptionId)
 
-  const updateQuery = supabase
+  const { error } = await supabase
     .from('arena_subscriptions')
     .update({ status: 'unpaid', updated_at: new Date().toISOString() })
-
-  const { error } = arenaId
-    ? await updateQuery.eq('arena_id', arenaId)
-    : await updateQuery.eq('gateway_subscription_id', subscriptionId)
+    .eq('gateway_subscription_id', subscriptionId)
 
   if (error) {
     console.error('[payments-webhook] handleInvoiceChargeback — update failed', error)

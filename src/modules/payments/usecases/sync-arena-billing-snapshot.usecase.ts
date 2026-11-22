@@ -33,6 +33,7 @@ export async function syncArenaBillingSnapshotFromGateway(
       updated_at: new Date().toISOString(),
     })
     .eq('arena_id', arenaId)
+    .eq('gateway_subscription_id', subId)
 
   if (error) {
     console.error('[payments] syncArenaBillingSnapshotFromGateway failed', {

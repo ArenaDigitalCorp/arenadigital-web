@@ -6436,6 +6436,32 @@ export type Database = {
       }
     }
     Functions: {
+      claim_asaas_subscription_checkout: {
+        Args: {
+          p_arena_id: string
+          p_plan_key: string
+          p_plan_id: string
+          p_created_by: string | null
+        }
+        Returns: Json
+      }
+      start_asaas_subscription_checkout: {
+        Args: { p_operation_id: string; p_gateway_customer_id: string }
+        Returns: boolean
+      }
+      abandon_asaas_subscription_checkout: {
+        Args: { p_operation_id: string; p_definitive_rejection: boolean }
+        Returns: boolean
+      }
+      attach_asaas_subscription_checkout: {
+        Args: {
+          p_operation_id: string
+          p_checkout_id: string
+          p_gateway_customer_id: string
+          p_checkout_url: string
+        }
+        Returns: boolean
+      }
       get_arena_acl: { Args: { p_arena_id: string }; Returns: Json }
       mensalista_horarios_futuros: {
         Args: { p_arena_id: string; p_fim: string; p_inicio: string }
@@ -6514,6 +6540,73 @@ export type Database = {
       }
       list_arena_data_cleanups: {
         Args: { p_actor_user_id: string; p_arena_id?: string | null; p_before_created_at?: string | null; p_before_id?: string | null }
+        Returns: Json
+      }
+      request_arena_subscription_withdrawal: {
+        Args: { p_arena_id: string; p_actor_auth_id: string; p_provider: string }
+        Returns: Json
+      }
+      get_my_arena_subscription_withdrawal: {
+        Args: { p_arena_id: string }
+        Returns: Json
+      }
+      get_arena_subscription_withdrawal_policy: {
+        Args: { p_arena_id: string; p_actor_auth_id: string }
+        Returns: Json
+      }
+      decide_arena_subscription_withdrawal_automatically: {
+        Args: {
+          p_arena_id: string
+          p_actor_auth_id: string
+          p_checkout_id: string
+          p_gateway_customer_id: string
+          p_gateway_subscription_id: string
+          p_gateway_payment_id: string
+          p_amount_cents: number
+          p_first_paid_at: string
+        }
+        Returns: Json
+      }
+      list_arena_subscription_withdrawals_for_review: {
+        Args: { p_reviewer_auth_id: string; p_request_id?: string; p_limit?: number }
+        Returns: Json
+      }
+      review_arena_subscription_withdrawal: {
+        Args: {
+          p_request_id: string
+          p_reviewer_auth_id: string
+          p_decision: string
+          p_reason_code: string
+          p_gateway_customer_id?: string
+          p_gateway_subscription_id?: string
+          p_gateway_payment_id?: string
+          p_amount_cents?: number
+          p_first_paid_at?: string
+        }
+        Returns: Json
+      }
+      record_arena_subscription_withdrawal_renewal_stopped: {
+        Args: { p_request_id: string; p_gateway_subscription_id: string }
+        Returns: boolean
+      }
+      claim_arena_subscription_withdrawal_refund: {
+        Args: { p_request_id: string }
+        Returns: Json
+      }
+      claim_arena_subscription_withdrawal_stop: {
+        Args: { p_request_id: string }
+        Returns: Json
+      }
+      complete_arena_subscription_withdrawal: {
+        Args: { p_request_id: string; p_gateway_payment_id: string; p_amount_cents: number }
+        Returns: boolean
+      }
+      escalate_arena_subscription_withdrawal: {
+        Args: { p_request_id: string; p_error_code: string }
+        Returns: boolean
+      }
+      find_arena_subscription_withdrawal_refund: {
+        Args: { p_gateway_payment_id: string }
         Returns: Json
       }
       _insert_monthly_plan_month_bookings: {
