@@ -196,3 +196,51 @@ test('a status response during cancellation cannot replace pending state or clea
   assert.equal(h.get('ModeCard').props.savedMode, 'disabled')
   h.unmount()
 })
+
+test('a fiscal pending flag guides setup, permits the request and follows automatic activation', async () => {
+  const before = setup({ desired_mode: null, intent_status: null, intent_revision: 0, missing: ['fiscal_setup'] })
+  const h = harness({ initialSetup: before, documentationStatus: 'APPROVED' })
+  h.choose('online_payment')
+  assert.match(text(h.render()), /Configuração fiscal da NFS-e pendente.*contabilidade.*equipe Arena Digital.*subconta Asaas/)
+  assert.equal(h.button('Solicitar pagamento online').props.disabled, false)
+
+  h.button('Atualizar status do Pix').props.onClick()
+  assert.equal(h.button('Atualizando status…').props.disabled, true)
+  assert.equal(h.reads.length, 1)
+  assert.equal(h.mutations.length, 0)
+  h.reads[0].resolve({ success: true, data: before })
+  await h.settle()
+
+  h.button('Solicitar pagamento online').props.onClick()
+  assert.equal(h.mutations[0].mode, 'online_payment')
+  h.mutations[0].resolve({ success: true, data: setup({ missing: ['fiscal_setup'] }) })
+  await h.settle()
+  assert.equal(h.get('ModeCard').props.savedMode, 'pre_booking')
+  assert.match(text(h.render()), /Pix online será ativado automaticamente/)
+  assert.ok(h.button('Atualizar status do Pix'), 'The pending status remains visible with the current modality selected')
+
+  h.tick()
+  h.reads[1].resolve({ success: true, data: setup({ active_mode: 'online_payment', intent_status: 'activated', ready: true, missing: [] }) })
+  await h.settle()
+  assert.equal(h.get('ModeCard').props.savedMode, 'online_payment')
+  assert.match(text(h.render()), /Pagamento online ativado/)
+  assert.doesNotMatch(text(h.render()), /Configuração fiscal da NFS-e pendente/)
+  h.unmount()
+})
+
+test('an existing online mode with a fiscal blocker explains the pause in new Pix bookings', () => {
+  const h = harness({ initialSetup: setup({ active_mode: 'online_payment', intent_status: 'activated', missing: ['fiscal_setup'] }) })
+  assert.match(text(h.render()), /Novas reservas por Pix aguardam a regularização fiscal/)
+  assert.equal(h.button('Solicitar pagamento online'), undefined)
+  assert.equal(h.mutations.length, 0)
+  h.unmount()
+})
+
+test('a legacy readiness response without the fiscal flag renders the existing request flow', () => {
+  const h = harness({ initialSetup: setup({ active_mode: 'disabled', intent_status: null }), documentationStatus: 'APPROVED' })
+  h.choose('online_payment')
+  assert.doesNotMatch(text(h.render()), /Configuração fiscal da NFS-e pendente/)
+  assert.equal(h.button('Atualizar status do Pix'), undefined)
+  assert.equal(h.button('Solicitar pagamento online').props.disabled, false)
+  h.unmount()
+})

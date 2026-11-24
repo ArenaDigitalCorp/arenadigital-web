@@ -309,7 +309,7 @@ export function ArenaAsaasDocumentsPanel({ arenaId, refreshKey, onUploaded, disa
             {!loading && !error && groups && groups.length > 0 && (
                 <p role="status" className={cn("mt-3 rounded-lg px-3 py-2 text-xs leading-5", documentsSubmitted ? "bg-emerald-50 text-emerald-800" : "bg-slate-50 text-slate-600")}>
                     {documentsSubmitted
-                        ? "Envios confirmados. A solicitação de pagamento online também exige a política publicada; a ativação aguarda a aprovação da conta."
+                        ? "Envios confirmados. Com a política publicada, você pode solicitar pagamento online e acompanhar a ativação."
                         : "Conclua o envio de todos os documentos solicitados antes de solicitar pagamento online. Escolher um arquivo ainda não confirma o envio."}
                 </p>
             )}

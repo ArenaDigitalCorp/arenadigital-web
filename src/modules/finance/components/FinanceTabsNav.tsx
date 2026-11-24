@@ -6,6 +6,7 @@ import { DashboardTabs } from "@/components/dashboard/DashboardTabs";
 const TABS = [
     { resource: "finance.overview", key: "visao-geral", label: "Visão geral", path: "" },
     { resource: "finance.cash", key: "caixa", label: "Caixa", path: "/caixa" },
+    { resource: "finance.overview", key: "notas-fiscais", label: "Notas fiscais", path: "/notas-fiscais" },
     { resource: "finance.settings", key: "cadastros-auxiliares", label: "Cadastros Auxiliares", path: "/cadastros-auxiliares" },
 ] as const;
 
@@ -22,6 +23,7 @@ export function FinanceTabsNav({ arenaId, resources }: Props) {
 
     return (
         <DashboardTabs
+            className="gap-5 overflow-x-auto pt-12 sm:gap-8 md:pt-0 [&>button]:shrink-0"
             value={active}
             onChange={(value) => {
                 const tab = TABS.find((t) => t.key === value);
