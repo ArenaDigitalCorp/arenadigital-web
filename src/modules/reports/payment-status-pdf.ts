@@ -15,8 +15,15 @@ import type {
   PaymentStatusArenaInfo,
   PaymentStatusAthleteSummary,
   PaymentStatusCreditRow,
+  PaymentStatusConciliacao,
 } from '@/modules/reports/types/report.types'
-import { buildAppliedFiltersDescription, formatArenaAddressLine, type AppliedFiltersInput } from '@/modules/reports/payment-status-pdf-data'
+import {
+  buildAppliedFiltersDescription,
+  buildExtratoResumoLinhas,
+  formatArenaAddressLine,
+  type AppliedFiltersInput,
+} from '@/modules/reports/payment-status-pdf-data'
+import { abaterCreditoNoExtrato } from '@/modules/reports/extrato-tabela'
 
 const LOGO_URL = '/logo_arena_front_bgbranco.png'
 /** 625×211 — a mesma proporção do arquivo, para não distorcer ao redimensionar. */
@@ -73,6 +80,7 @@ export interface GeneratePaymentStatusPdfInput {
   creditos?: PaymentStatusCreditRow[]
   /** Saldo atual de crédito do atleta (extrato) — entra no "Resumo do mês" quando há saldo. */
   creditoSaldo?: number | null
+  conciliacoes?: PaymentStatusConciliacao[]
   formatDate: (iso: string) => string
   formatHorario: (row: PaymentStatusRow) => string
   /** Presente no extrato por hora: acrescenta a coluna "Dia" (Seg, Ter…). */
@@ -93,6 +101,7 @@ export async function generatePaymentStatusPdf(input: GeneratePaymentStatusPdfIn
     extratoDoAtleta,
     creditos = [],
     creditoSaldo = null,
+    conciliacoes = [],
     formatDate,
     formatHorario,
     formatDiaSemana,
@@ -183,25 +192,25 @@ export async function generatePaymentStatusPdf(input: GeneratePaymentStatusPdfIn
 
     doc.setFont('helvetica', 'normal')
     doc.setTextColor(70)
-    const r = extratoDoAtleta.resumo
-    const partes = r
-      ? [
-          `Horas no mês: ${formatHoras(r.horas)}`,
-          `Total do mês: ${formatCurrency(r.devido)}`,
-          `Pago: ${formatCurrency(r.pago)}`,
-          `Em aberto: ${formatCurrency(r.emAberto)}`,
-          `Situação: ${r.status}`,
-        ]
-      : ['Nenhum valor em aberto ou pago neste período.']
-    if (creditoSaldo != null && Math.abs(creditoSaldo) >= 0.01) {
-      partes.push(
-        filtros.recorrenciaLabel
-          ? `Saldo de crédito nesta recorrência: ${formatCurrency(creditoSaldo)}`
-          : `Saldo de crédito: ${formatCurrency(creditoSaldo)}`
-      )
+    const linhasDoResumo = buildExtratoResumoLinhas({
+      resumo: extratoDoAtleta.resumo,
+      conciliacoes,
+      abatimento: abaterCreditoNoExtrato(creditoSaldo, extratoDoAtleta.resumo),
+      porRecorrencia: Boolean(filtros.recorrenciaLabel),
+      dataDoSaldo: new Date().toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        timeZone: 'America/Sao_Paulo',
+      }),
+      formatCurrency,
+      formatHoras,
+    })
+    for (const partes of linhasDoResumo) {
+      const quebradas = doc.splitTextToSize(partes.join('     ·     '), pageWidth - marginX * 2)
+      doc.text(quebradas, marginX, y)
+      y += quebradas.length * 11 + 3
     }
-    doc.text(partes.join('     ·     '), marginX, y)
-    y += 20
+    y += 6
   } else {
     // ── Resumo do período — os mesmos totais dos cards da tela ───────────────
     doc.setFont('helvetica', 'bold')
