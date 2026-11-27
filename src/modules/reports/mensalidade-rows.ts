@@ -37,6 +37,7 @@ export interface MensalidadeContexto {
   competencia: string
   valorTotal: number
   status: string
+  rateio?: boolean
   /** Responsável pelo plano — usado para casar com o filtro de Perfil de Atleta. */
   atletaId: string | null
   atleta: string | null

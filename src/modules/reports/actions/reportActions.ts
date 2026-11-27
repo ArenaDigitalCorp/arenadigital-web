@@ -13,6 +13,7 @@ import type {
   AthleteDebtSummary,
   PaymentStatusAthleteSummary,
   PaymentStatusCreditRow,
+  PaymentStatusConciliacao,
   RecorrenciaFiltro,
 } from '@/modules/reports/types/report.types'
 import { PAYMENT_STATUS_SUMMARY_EXCLUDED_SERVICOS } from '@/modules/reports/types/report.types'
@@ -37,6 +38,18 @@ import {
   type AthleteContribution,
 } from '@/modules/reports/athlete-summary'
 import { buildUsageLines, saoPauloWallClock } from '@/modules/reports/usage-lines'
+import {
+  conciliarMensalidade,
+  ehSessaoDePlanoCancelado,
+  papelDoPlano,
+  resumoPeloTotalDaTabela,
+  totalDoExtratoPelaTabela,
+  tabelasDaReservaAvulsa,
+  tabelasDaSessao,
+  type ConciliacaoDaMensalidade,
+  type PlanoComTabela,
+  type TabelaDePreco,
+} from '@/modules/reports/extrato-tabela'
 import {
   buildMensalistaCreditRows,
   type MensalistaCreditoMovimento,
@@ -116,11 +129,14 @@ interface CourtPricing {
   bookingType: 'hourly' | 'unique'
   /** Grade por id de tabela — o snapshot gravado na reserva/plano. */
   porTabela: Map<string, CourtPriceDay[]>
-  /** Grade por tipo ('mensalista', 'professor', …) — plano antigo, sem snapshot. */
-  porTipo: Map<string, CourtPriceDay[]>
-  /** Grade da tabela padrão do espaço: último recurso antes de desistir. */
-  padrao: CourtPriceDay[] | null
 }
+
+interface ArenaPricing {
+  porEspaco: Map<string, CourtPricing>
+  tabelas: Map<string, TabelaDePreco>
+}
+
+const EMPTY_ARENA_PRICING: ArenaPricing = { porEspaco: new Map(), tabelas: new Map() }
 
 function hhmm(value: string | null | undefined): string {
   return (value ?? '').slice(0, 5)
@@ -133,7 +149,7 @@ function hhmm(value: string | null | undefined): string {
 async function loadArenaPricing(
   loose: LooseClient,
   arenaId: string
-): Promise<Map<string, CourtPricing>> {
+): Promise<ArenaPricing> {
   const [{ data: courts }, { data: tables }] = await Promise.all([
     loose.from('courts').select('id, booking_type').eq('arena_id', arenaId),
     loose
@@ -209,21 +225,23 @@ async function loadArenaPricing(
     pricing.set(court.id, {
       bookingType: court.booking_type === 'unique' ? 'unique' : 'hourly',
       porTabela: new Map(),
-      porTipo: new Map(),
-      padrao: null,
     })
   }
 
+  const tabelas = new Map<string, TabelaDePreco>()
   for (const table of tableRows) {
     const court = pricing.get(table.court_id)
     if (!court) continue
-    const days = daysByTable.get(table.id) ?? []
-    court.porTabela.set(table.id, days)
-    court.porTipo.set(table.tipo, days)
-    if (table.is_default) court.padrao = days
+    court.porTabela.set(table.id, daysByTable.get(table.id) ?? [])
+    tabelas.set(table.id, {
+      id: table.id,
+      courtId: table.court_id,
+      tipo: table.tipo,
+      isDefault: Boolean(table.is_default),
+    })
   }
 
-  return pricing
+  return { porEspaco: pricing, tabelas }
 }
 
 /**
@@ -320,28 +338,15 @@ async function loadHorarioDaRecorrencia(
   return horarios
 }
 
-/**
- * Preço da hora de uma reserva de mensalista. A cascata é a mesma de
- * `quoteSessaoMensalistaAction`: snapshot da reserva → snapshot do plano →
- * tabela do tipo mensalista do espaço → tabela padrão. A padrão também entra
- * como rede quando a tabela escolhida existe mas está sem grade — Mensalista e
- * Professor nascem vazias, e uma linha zerada no extrato seria pior que o
- * preço padrão do espaço.
- */
 function buildPrecoDaHora(
   pricing: CourtPricing | undefined,
-  tableIds: (string | null | undefined)[],
-  tipoPreferido: string | null,
+  tableIds: string[],
   startISO: string,
   endISO: string
 ): (instant: Date) => number | null {
   if (!pricing) return () => null
 
-  const candidatos: (CourtPriceDay[] | null)[] = [
-    ...tableIds.map((id) => (id ? pricing.porTabela.get(id) ?? null : null)),
-    tipoPreferido ? pricing.porTipo.get(tipoPreferido) ?? null : null,
-    pricing.padrao,
-  ]
+  const candidatos = tableIds.map((id) => pricing.porTabela.get(id) ?? null)
 
   const wallStart = saoPauloWallClock(new Date(startISO))
   const wallEnd = saoPauloWallClock(new Date(endISO))
@@ -407,7 +412,7 @@ async function loadMensalidadesDaCompetencia(
 
   let mensalidadeQuery = loose
     .from('mensalista_mensalidades')
-    .select('id, plano_id, athlete_id, competencia, valor_total, status')
+    .select('id, plano_id, athlete_id, competencia, valor_total, status, rateio')
     .eq('arena_id', arenaId)
     .eq('competencia', competencia)
   if (opts.atletaId) mensalidadeQuery = mensalidadeQuery.eq('athlete_id', opts.atletaId)
@@ -453,7 +458,7 @@ async function loadMensalidadesDaCompetencia(
   }
 
   return mensalidades.map(
-    (m: { id: string; plano_id: string; competencia: string; valor_total: number; status: string }) => {
+    (m: { id: string; plano_id: string; competencia: string; valor_total: number; status: string; rateio?: boolean | null }) => {
       const plano = planoMap.get(m.plano_id) as
         | {
             athlete_id?: string | null
@@ -473,6 +478,7 @@ async function loadMensalidadesDaCompetencia(
         competencia: m.competencia,
         valorTotal: Number(m.valor_total ?? 0),
         status: m.status,
+        rateio: Boolean(m.rateio),
         atletaId: plano?.athlete_id ?? null,
         atleta: plano?.athlete_name ?? null,
         telefone: plano?.atleta?.telefone ?? null,
@@ -591,6 +597,71 @@ interface MensalidadeDoExtrato {
   resumo: ReturnType<typeof resumoDaMensalidade>
   /** Parte do valor do mês que cabe a cada reserva (id → valor). */
   partes: Map<string, number>
+  professor: boolean
+  conciliacao: ConciliacaoDaMensalidade
+  resumoDoExtrato: ReturnType<typeof resumoDaMensalidade>
+  cobradaPelaTabela: boolean
+  canceladasComCredito: Set<string>
+  reservas: Map<string, ReservaComTabela>
+}
+
+interface PlanoDoExtrato extends PlanoComTabela {
+  status: string | null
+}
+
+const PLANO_SEM_TABELA: PlanoComTabela = { courtId: null, priceTableId: null }
+
+interface ReservaComTabela {
+  court_id: string
+  price_table_id?: string | null
+  start_time: string
+  end_time: string
+}
+
+function precoDaReserva(
+  arenaPricing: ArenaPricing,
+  plano: PlanoComTabela | null,
+  reserva: ReservaComTabela
+): (instant: Date) => number | null {
+  const tableIds = plano
+    ? tabelasDaSessao({
+        plano,
+        bookingCourtId: reserva.court_id,
+        bookingPriceTableId: reserva.price_table_id ?? null,
+        tabelas: arenaPricing.tabelas,
+      })
+    : tabelasDaReservaAvulsa(reserva.court_id, arenaPricing.tabelas)
+  return buildPrecoDaHora(arenaPricing.porEspaco.get(reserva.court_id), tableIds, reserva.start_time, reserva.end_time)
+}
+
+function valorPelaTabela(arenaPricing: ArenaPricing, plano: PlanoComTabela, reserva: ReservaComTabela): number | null {
+  const linhas = buildUsageLines({
+    startISO: reserva.start_time,
+    endISO: reserva.end_time,
+    precoDaHora: precoDaReserva(arenaPricing, plano, reserva),
+    bookingType: arenaPricing.porEspaco.get(reserva.court_id)?.bookingType ?? 'hourly',
+  })
+  if (linhas.length === 0 || linhas.some((l) => l.valor == null)) return null
+  return round2(linhas.reduce((total, l) => total + (l.valor ?? 0), 0))
+}
+
+async function loadReservasComCredito(loose: LooseClient, arenaId: string, bookingIds: string[]): Promise<Set<string>> {
+  const comCredito = new Set<string>()
+  for (let i = 0; i < bookingIds.length; i += 150) {
+    const { data, error } = await loose
+      .from('mensalista_creditos')
+      .select('booking_id')
+      .eq('arena_id', arenaId)
+      .in('booking_id', bookingIds.slice(i, i + 150))
+    if (error) {
+      console.error(`[getPaymentStatusReportAction] créditos das canceladas: ${error.message}`)
+      continue
+    }
+    for (const c of (data ?? []) as { booking_id: string | null }[]) {
+      if (c.booking_id) comCredito.add(c.booking_id)
+    }
+  }
+  return comCredito
 }
 
 /** Contribuição de uma mensalidade (visão agregada) para o resumo por atleta: vale o responsável pelo plano. */
@@ -614,7 +685,7 @@ function contribuicaoDaMensalidade(
 /**
  * No extrato por hora, a reserva de mensalista herda da mensalidade do seu mês
  * o status (pago/pendente/cancelado) e o valor — o devido do mês rateado pela
- * duração das reservas não canceladas do plano naquele mês.
+ * duração das reservas do plano naquele mês.
  *
  * As reservas do rateio vêm de uma consulta própria, sem os filtros da tela:
  * com Espaço filtrado, um plano de dois blocos mostraria só um, e ratear o mês
@@ -626,7 +697,9 @@ function contribuicaoDaMensalidade(
 async function loadMensalidadesDoExtrato(
   loose: LooseClient,
   arenaId: string,
-  bookings: { plano_mensalista_id: string | null; start_time: string }[]
+  bookings: { plano_mensalista_id: string | null; start_time: string }[],
+  arenaPricing: ArenaPricing,
+  planos: Map<string, PlanoDoExtrato>
 ): Promise<Map<string, MensalidadeDoExtrato>> {
   const extrato = new Map<string, MensalidadeDoExtrato>()
 
@@ -659,7 +732,7 @@ async function loadMensalidadesDoExtrato(
   const { data: reservasDoPlano, error } = await fetchAllSupabaseRows(
     loose
       .from('bookings')
-      .select('id, plano_mensalista_id, start_time, end_time, status')
+      .select('id, plano_mensalista_id, court_id, price_table_id, start_time, end_time, status')
       .eq('arena_id', arenaId)
       .in('plano_mensalista_id', [...new Set(mensalidades.map((m) => m.planoId))])
       .gte('start_time', inicioDoDiaSP(competencias[0]))
@@ -669,29 +742,67 @@ async function loadMensalidadesDoExtrato(
   )
   if (error) console.error(`[getPaymentStatusReportAction] reservas do extrato: ${error.message}`)
 
-  const reservasPorChave = new Map<string, { id: string; inicioISO: string; horas: number }[]>()
-  for (const r of (reservasDoPlano ?? []) as {
+  type ReservaDoPlano = {
     id: string
     plano_mensalista_id: string
+    court_id: string
+    price_table_id: string | null
     start_time: string
-    end_time: string | null
+    end_time: string
     status: string | null
-  }[]) {
-    if (r.status === 'cancelled' || !r.end_time) continue
+    horas: number
+  }
+  const reservasPorChave = new Map<string, ReservaDoPlano[]>()
+  for (const r of (reservasDoPlano ?? []) as (Omit<ReservaDoPlano, 'end_time' | 'horas'> & { end_time: string | null })[]) {
+    if (!r.end_time) continue
     const horas = (new Date(r.end_time).getTime() - new Date(r.start_time).getTime()) / 3_600_000
     const chave = `${r.plano_mensalista_id}:${competenciaDe(r.start_time)}`
     const lista = reservasPorChave.get(chave) ?? []
-    lista.push({ id: r.id, inicioISO: r.start_time, horas })
+    lista.push({ ...r, end_time: r.end_time, horas })
     reservasPorChave.set(chave, lista)
   }
+
+  const canceladas = [...reservasPorChave.values()].flat().filter((r) => r.status === 'cancelled').map((r) => r.id)
+  const comCredito = await loadReservasComCredito(loose, arenaId, canceladas)
 
   for (const m of mensalidades) {
     const chave = `${m.planoId}:${m.competencia}`
     const resumo = resumoDaMensalidade(m)
+    const plano = planos.get(m.planoId) ?? PLANO_SEM_TABELA
+    const professor = papelDoPlano(plano, arenaPricing.tabelas) === 'professor'
+    const reservas = reservasPorChave.get(chave) ?? []
+    const partes = ratearMensalidadeNasReservas(
+      resumo.devido,
+      reservas.map((r) => ({ id: r.id, inicioISO: r.start_time, horas: r.horas }))
+    )
+    const conciliacao = conciliarMensalidade(
+      resumo.devido,
+      reservas.map((r) => ({
+        horas: r.horas,
+        cancelada: r.status === 'cancelled',
+        valor: professor ? valorPelaTabela(arenaPricing, plano, r) : partes.get(r.id) ?? null,
+        comCredito: comCredito.has(r.id),
+      })),
+      professor
+    )
+    const totalDoExtrato = totalDoExtratoPelaTabela({
+      professor,
+      rateio: Boolean(m.rateio),
+      mensalidadeEmAberto: m.status !== 'cancelado' && resumo.status === 'Pendente',
+      totalPelaTabela: conciliacao.totalPelaTabela,
+    })
     extrato.set(chave, {
       mensalidade: m,
       resumo,
-      partes: ratearMensalidadeNasReservas(resumo.devido, reservasPorChave.get(chave) ?? []),
+      partes,
+      professor,
+      conciliacao,
+      resumoDoExtrato: resumoPeloTotalDaTabela(resumo, totalDoExtrato),
+      cobradaPelaTabela: totalDoExtrato != null,
+      canceladasComCredito: new Set(
+        reservas.filter((r) => r.status === 'cancelled' && comCredito.has(r.id)).map((r) => r.id)
+      ),
+      reservas: new Map(reservas.map((r) => [r.id, r])),
     })
   }
 
@@ -855,6 +966,7 @@ export async function getPaymentStatusReportAction(
   creditos?: PaymentStatusCreditRow[]
   /** Saldo atual de crédito do atleta filtrado (da subconta, com recorrência filtrada); `null` sem atleta. */
   creditoSaldo?: number | null
+  conciliacoes?: PaymentStatusConciliacao[]
   error?: string
 }> {
   try {
@@ -1088,11 +1200,11 @@ export async function getPaymentStatusReportAction(
     // Grade de preço só é necessária no extrato, e só para reserva de mensalista
     // (o avulso vale o que foi cobrado nele). Os planos entram para resolver o
     // snapshot de tabela de quem foi criado com tabela escolhida (ex.: Professor).
-    const pricingPorEspaco = detalharPorHora
+    const arenaPricing = detalharPorHora
       ? await loadArenaPricing(supabase as unknown as LooseClient, arenaId)
-      : new Map<string, CourtPricing>()
+      : EMPTY_ARENA_PRICING
 
-    const tabelaPorPlano = new Map<string, string | null>()
+    const planosDoExtrato = new Map<string, PlanoDoExtrato>()
     if (detalharPorHora) {
       const planoIds = [
         ...new Set(
@@ -1101,13 +1213,23 @@ export async function getPaymentStatusReportAction(
             .filter((id: string | null): id is string => Boolean(id))
         ),
       ]
-      if (planoIds.length > 0) {
-        const { data: planos } = await (supabase as unknown as LooseClient)
+      for (let i = 0; i < planoIds.length; i += 150) {
+        const { data: planos, error: planosError } = await (supabase as unknown as LooseClient)
           .from('planos_mensalista')
-          .select('id, price_table_id')
-          .in('id', planoIds)
-        for (const plano of (planos ?? []) as { id: string; price_table_id: string | null }[]) {
-          tabelaPorPlano.set(plano.id, plano.price_table_id)
+          .select('id, court_id, price_table_id, status')
+          .in('id', planoIds.slice(i, i + 150))
+        if (planosError) throw new Error(planosError.message)
+        for (const plano of (planos ?? []) as {
+          id: string
+          court_id: string | null
+          price_table_id: string | null
+          status: string | null
+        }[]) {
+          planosDoExtrato.set(plano.id, {
+            courtId: plano.court_id,
+            priceTableId: plano.price_table_id,
+            status: plano.status,
+          })
         }
       }
     }
@@ -1117,7 +1239,9 @@ export async function getPaymentStatusReportAction(
       ? await loadMensalidadesDoExtrato(
           supabase as unknown as LooseClient,
           arenaId,
-          bookingsFiltradas as { plano_mensalista_id: string | null; start_time: string }[]
+          bookingsFiltradas as { plano_mensalista_id: string | null; start_time: string }[],
+          arenaPricing,
+          planosDoExtrato
         )
       : new Map<string, MensalidadeDoExtrato>()
 
@@ -1126,6 +1250,7 @@ export async function getPaymentStatusReportAction(
     const contribuicoesExtras: AthleteContribution[] = []
     const linhasSemDinheiroProprio = new Set<string>()
     const mensalidadesNoResumo = new Set<string>()
+    const conciliacoes: PaymentStatusConciliacao[] = []
 
     const bookingRows: PaymentStatusRow[] = []
     for (const b of bookingsFiltradas as any[]) {
@@ -1151,7 +1276,7 @@ export async function getPaymentStatusReportAction(
         detalharPorHora && ehMensal && b.start_time
           ? mensalidadesDoExtrato.get(`${b.plano_mensalista_id}:${competenciaDe(b.start_time)}`)
           : undefined
-      if (doExtrato) status = statusDaReservaDeMensalista(b.status, doExtrato.resumo.status)
+      if (doExtrato) status = statusDaReservaDeMensalista(b.status, doExtrato.resumoDoExtrato.status)
 
       const base = {
         // Reserva de quem não tem cadastro guarda o nome digitado pelo gestor —
@@ -1182,15 +1307,19 @@ export async function getPaymentStatusReportAction(
         continue
       }
 
-      const pricing = pricingPorEspaco.get(b.court_id)
+      const pricing = arenaPricing.porEspaco.get(b.court_id)
+      const plano = ehMensal ? planosDoExtrato.get(b.plano_mensalista_id) ?? null : null
 
       if (doExtrato) {
-        // Sessão cancelada fica sem valor: não entrou no rateio do mês.
-        const parte = b.status === 'cancelled' ? null : doExtrato.partes.get(b.id) ?? null
+        const cancelada = b.status === 'cancelled'
+        const cobradaPelaTabela = doExtrato.professor && (!cancelada || doExtrato.canceladasComCredito.has(b.id))
         const linhasDoMes = buildUsageLines({
           startISO: b.start_time,
           endISO: b.end_time,
-          valorReserva: parte,
+          valorReserva: cancelada || doExtrato.professor ? null : doExtrato.partes.get(b.id) ?? null,
+          precoDaHora: cobradaPelaTabela
+            ? precoDaReserva(arenaPricing, plano ?? PLANO_SEM_TABELA, doExtrato.reservas.get(b.id) ?? b)
+            : null,
           bookingType: pricing?.bookingType ?? 'hourly',
         })
         linhasDoMes.forEach((linha, index) => {
@@ -1215,13 +1344,30 @@ export async function getPaymentStatusReportAction(
           }
         })
 
-        const { mensalidade, resumo } = doExtrato
+        const { mensalidade, resumo, resumoDoExtrato, conciliacao } = doExtrato
         if (!mensalidadesNoResumo.has(mensalidade.id)) {
           mensalidadesNoResumo.add(mensalidade.id)
-          contribuicoesExtras.push(contribuicaoDaMensalidade(mensalidade, resumo))
+          contribuicoesExtras.push(contribuicaoDaMensalidade(mensalidade, resumoDoExtrato))
+          conciliacoes.push({
+            mensalidadeId: mensalidade.id,
+            planoId: mensalidade.planoId,
+            atletaId: mensalidade.atletaId,
+            atleta: mensalidade.atleta,
+            competencia: mensalidade.competencia,
+            professor: doExtrato.professor,
+            cobradaPelaTabela: doExtrato.cobradaPelaTabela,
+            rateio: Boolean(mensalidade.rateio),
+            planoAtivo: plano?.status === 'ativo',
+            mensalidadeStatus: resumo.status,
+            pago: resumo.pago,
+            emAberto: resumo.emAberto,
+            ...conciliacao,
+          })
         }
         continue
       }
+
+      if (ehSessaoDePlanoCancelado({ ehMensal, cancelada: b.status === 'cancelled', statusDoPlano: plano?.status })) continue
 
       const linhas = buildUsageLines({
         startISO: b.start_time,
@@ -1231,15 +1377,7 @@ export async function getPaymentStatusReportAction(
         valorReserva: ehMensal ? null : valor,
         valorFallback: valor,
         bookingType: pricing?.bookingType ?? 'hourly',
-        // `bookings.price_table_id` existe no banco mas ninguém escreve nele
-        // ainda (só o plano guarda o snapshot), então a cascata começa no plano.
-        precoDaHora: buildPrecoDaHora(
-          pricing,
-          [ehMensal ? tabelaPorPlano.get(b.plano_mensalista_id) ?? null : null],
-          ehMensal ? 'mensalista' : null,
-          b.start_time,
-          b.end_time
-        ),
+        precoDaHora: precoDaReserva(arenaPricing, ehMensal ? plano ?? PLANO_SEM_TABELA : null, b),
       })
 
       linhas.forEach((linha, index) => {
@@ -1482,7 +1620,18 @@ export async function getPaymentStatusReportAction(
     }
     const sports: SportFilter[] = [...sportsMap.values()]
 
-    return { success: true, rows, summary, courts, sports, athleteDebt, athleteSummaries, creditos, creditoSaldo }
+    return {
+      success: true,
+      rows,
+      summary,
+      courts,
+      sports,
+      athleteDebt,
+      athleteSummaries,
+      creditos,
+      creditoSaldo,
+      conciliacoes,
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro ao buscar relatório'
     return { success: false, error: message }
