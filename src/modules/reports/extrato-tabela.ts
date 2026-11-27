@@ -247,3 +247,20 @@ export function ehSessaoDePlanoCancelado(input: {
 }): boolean {
   return input.ehMensal && input.cancelada && input.statusDoPlano === 'cancelado'
 }
+
+export function reservasDoRateioDaMensalidade<T extends { status: string | null }>(reservas: T[]): T[] {
+  const ativas = reservas.filter((r) => r.status !== 'cancelled')
+  return ativas.length > 0 ? ativas : reservas
+}
+
+export function valorDaLinhaDoExtrato(input: {
+  cobradaPelaTabela: boolean
+  cancelada: boolean
+  canceladaComCredito: boolean
+  parte: number | null
+}): { valorReserva: number | null; pelaTabela: boolean } {
+  if (input.cobradaPelaTabela) {
+    return { valorReserva: null, pelaTabela: !input.cancelada || input.canceladaComCredito }
+  }
+  return { valorReserva: input.cancelada ? null : input.parte, pelaTabela: false }
+}

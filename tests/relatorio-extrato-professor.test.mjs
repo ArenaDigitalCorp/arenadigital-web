@@ -9,13 +9,16 @@ import {
   ehSessaoDePlanoCancelado,
   papelDoPlano,
   podeAjustarMensalidadeDoProfessor,
+  reservasDoRateioDaMensalidade,
   resumoPeloTotalDaTabela,
   totalDoExtratoPelaTabela,
   tabelasDaReservaAvulsa,
   tabelasDaSessao,
+  valorDaLinhaDoExtrato,
 } from '../src/modules/reports/extrato-tabela.ts'
 import { matchPriceDay, priceAtInstant } from '../src/modules/courts/lib/court-price-resolver.ts'
 import { buildExtratoResumoLinhas } from '../src/modules/reports/payment-status-pdf-data.ts'
+import { ratearMensalidadeNasReservas } from '../src/modules/reports/mensalidade-rows.ts'
 
 const tabelas = new Map(
   [
@@ -482,4 +485,78 @@ test('sem saldo de crédito o resumo fica só com os totais', () => {
     formatHoras: horas,
   })
   assert.equal(linhas.length, 1)
+})
+
+test('mensalidade cobrada pela tabela: a linha sai da tabela, e a cancelada só quando tem crédito', () => {
+  const linha = (cancelada, canceladaComCredito) =>
+    valorDaLinhaDoExtrato({ cobradaPelaTabela: true, cancelada, canceladaComCredito, parte: 81.25 })
+  assert.deepEqual(linha(false, false), { valorReserva: null, pelaTabela: true })
+  assert.deepEqual(linha(true, true), { valorReserva: null, pelaTabela: true })
+  assert.deepEqual(linha(true, false), { valorReserva: null, pelaTabela: false })
+})
+
+test('professor com mês fechado, rateio ou sem preço continua com a parte da mensalidade, como mensalista comum', () => {
+  const linha = (cancelada) =>
+    valorDaLinhaDoExtrato({ cobradaPelaTabela: false, cancelada, canceladaComCredito: cancelada, parte: 81.25 })
+  assert.deepEqual(linha(false), { valorReserva: 81.25, pelaTabela: false })
+  assert.deepEqual(linha(true), { valorReserva: null, pelaTabela: false })
+})
+
+test('a mensalidade se divide só entre as reservas não canceladas, e as linhas somam o devido', () => {
+  const reservas = [
+    { id: 'a', status: 'confirmed', inicioISO: '2026-11-03T22:00:00Z', horas: 1 },
+    { id: 'b', status: 'cancelled', inicioISO: '2026-11-10T22:00:00Z', horas: 1 },
+    { id: 'c', status: 'confirmed', inicioISO: '2026-11-17T22:00:00Z', horas: 2 },
+  ]
+  const ativas = reservasDoRateioDaMensalidade(reservas)
+  assert.deepEqual(ativas.map((r) => r.id), ['a', 'c'])
+  const partes = ratearMensalidadeNasReservas(840, ativas)
+  assert.equal(partes.get('b'), undefined)
+  assert.equal(partes.get('a') + partes.get('c'), 840)
+  const c = conciliarMensalidade(
+    840,
+    reservas.map((r) => ({ horas: r.horas, cancelada: r.status === 'cancelled', valor: partes.get(r.id) ?? null, comCredito: false }))
+  )
+  assert.equal(c.diferenca, 0)
+  assert.equal(c.explicacao, null)
+})
+
+test('mês com todas as reservas canceladas: as linhas ficam sem valor e o PDF diz que as horas foram canceladas', () => {
+  const reservas = [
+    { id: 'a', status: 'cancelled', inicioISO: '2026-11-04T22:00:00Z', horas: 1 },
+    { id: 'b', status: 'cancelled', inicioISO: '2026-11-11T22:00:00Z', horas: 1 },
+  ]
+  const partes = ratearMensalidadeNasReservas(480, reservasDoRateioDaMensalidade(reservas))
+  for (const r of reservas) {
+    assert.deepEqual(
+      valorDaLinhaDoExtrato({ cobradaPelaTabela: false, cancelada: true, canceladaComCredito: false, parte: partes.get(r.id) ?? null }),
+      { valorReserva: null, pelaTabela: false }
+    )
+  }
+  const c = conciliarMensalidade(
+    480,
+    reservas.map((r) => ({ horas: r.horas, cancelada: true, valor: partes.get(r.id) ?? null, comCredito: false }))
+  )
+  assert.equal(c.uso, 0)
+  assert.equal(c.diferenca, 480)
+  assert.equal(c.explicacao, '2h canceladas sem crédito')
+})
+
+test('mensalista comum com o mês todo cancelado não ganha ajuste de mensalidade', () => {
+  const c = conciliarMensalidade(480, [
+    { horas: 2, cancelada: true, valor: 240, comCredito: false },
+    { horas: 2, cancelada: true, valor: 240, comCredito: false },
+  ])
+  assert.equal(c.ajusteSugerido, 0)
+  assert.equal(
+    podeAjustarMensalidadeDoProfessor({
+      ...c,
+      professor: false,
+      rateio: false,
+      planoAtivo: true,
+      mensalidadeStatus: 'Pendente',
+      pago: 0,
+    }),
+    false
+  )
 })

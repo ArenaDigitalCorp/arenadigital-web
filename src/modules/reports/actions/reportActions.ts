@@ -42,10 +42,12 @@ import {
   conciliarMensalidade,
   ehSessaoDePlanoCancelado,
   papelDoPlano,
+  reservasDoRateioDaMensalidade,
   resumoPeloTotalDaTabela,
   totalDoExtratoPelaTabela,
   tabelasDaReservaAvulsa,
   tabelasDaSessao,
+  valorDaLinhaDoExtrato,
   type ConciliacaoDaMensalidade,
   type PlanoComTabela,
   type TabelaDePreco,
@@ -685,7 +687,7 @@ function contribuicaoDaMensalidade(
 /**
  * No extrato por hora, a reserva de mensalista herda da mensalidade do seu mês
  * o status (pago/pendente/cancelado) e o valor — o devido do mês rateado pela
- * duração das reservas do plano naquele mês.
+ * duração das reservas não canceladas do plano naquele mês.
  *
  * As reservas do rateio vêm de uma consulta própria, sem os filtros da tela:
  * com Espaço filtrado, um plano de dois blocos mostraria só um, e ratear o mês
@@ -773,7 +775,7 @@ async function loadMensalidadesDoExtrato(
     const reservas = reservasPorChave.get(chave) ?? []
     const partes = ratearMensalidadeNasReservas(
       resumo.devido,
-      reservas.map((r) => ({ id: r.id, inicioISO: r.start_time, horas: r.horas }))
+      reservasDoRateioDaMensalidade(reservas).map((r) => ({ id: r.id, inicioISO: r.start_time, horas: r.horas }))
     )
     const conciliacao = conciliarMensalidade(
       resumo.devido,
@@ -1311,13 +1313,17 @@ export async function getPaymentStatusReportAction(
       const plano = ehMensal ? planosDoExtrato.get(b.plano_mensalista_id) ?? null : null
 
       if (doExtrato) {
-        const cancelada = b.status === 'cancelled'
-        const cobradaPelaTabela = doExtrato.professor && (!cancelada || doExtrato.canceladasComCredito.has(b.id))
+        const { valorReserva, pelaTabela } = valorDaLinhaDoExtrato({
+          cobradaPelaTabela: doExtrato.cobradaPelaTabela,
+          cancelada: b.status === 'cancelled',
+          canceladaComCredito: doExtrato.canceladasComCredito.has(b.id),
+          parte: doExtrato.partes.get(b.id) ?? null,
+        })
         const linhasDoMes = buildUsageLines({
           startISO: b.start_time,
           endISO: b.end_time,
-          valorReserva: cancelada || doExtrato.professor ? null : doExtrato.partes.get(b.id) ?? null,
-          precoDaHora: cobradaPelaTabela
+          valorReserva,
+          precoDaHora: pelaTabela
             ? precoDaReserva(arenaPricing, plano ?? PLANO_SEM_TABELA, doExtrato.reservas.get(b.id) ?? b)
             : null,
           bookingType: pricing?.bookingType ?? 'hourly',
