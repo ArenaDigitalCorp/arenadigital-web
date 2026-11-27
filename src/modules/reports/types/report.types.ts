@@ -178,3 +178,29 @@ export type AthleteDebtSummary = {
   mensal: number
   avulso: number
 }
+
+export type PaymentStatusConciliacao = {
+  mensalidadeId: string
+  planoId: string
+  atletaId: string | null
+  atleta: string | null
+  competencia: string
+  professor: boolean
+  cobradaPelaTabela: boolean
+  rateio: boolean
+  planoAtivo: boolean
+  mensalidadeStatus: PaymentStatusRow['status']
+  pago: number
+  emAberto: number
+  mensalidade: number
+  uso: number
+  horasUso: number
+  diferenca: number
+  horasCanceladas: number
+  horasCanceladasSemCredito: number
+  horasCanceladasComCredito: number
+  horasSemPreco: number
+  totalPelaTabela: number | null
+  explicacao: string | null
+  ajusteSugerido: number | null
+}

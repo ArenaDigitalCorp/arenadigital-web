@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { format, getDay, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import Link from 'next/link'
 import {
+  AlertTriangle,
   CheckCircle,
   Clock,
   XCircle,
@@ -52,6 +54,12 @@ import {
   buildPaymentStatusSheetData,
 } from '@/modules/reports/payment-status-export'
 import { buildAppliedFiltersDescription } from '@/modules/reports/payment-status-pdf-data'
+import {
+  abaterCreditoNoExtrato,
+  podeAjustarMensalidadeDoProfessor,
+  type AbatimentoDoCredito,
+} from '@/modules/reports/extrato-tabela'
+import { reajustarValorPlanoAction } from '@/modules/mensalistas/actions/mensalistaActions'
 import { PERFIL_LABEL, PERFIS_ATLETA, type PerfilAtleta } from '@/modules/athletes/types/perfil.types'
 import type {
   PaymentStatusRow,
@@ -62,6 +70,7 @@ import type {
   PaymentStatusArenaInfo,
   PaymentStatusAthleteSummary,
   PaymentStatusCreditRow,
+  PaymentStatusConciliacao,
   RecorrenciaFiltro,
 } from '@/modules/reports/types/report.types'
 
@@ -338,6 +347,7 @@ interface Props {
   initialEndDate: string
   arenaInfo: PaymentStatusArenaInfo
   initialCreditos?: PaymentStatusCreditRow[]
+  podeEditarMensalistas?: boolean
 }
 
 /** Combobox de atleta único, com busca — casa reserva/mensalidade como responsável ou participante. */
@@ -554,6 +564,130 @@ function sortAthleteSummaries(
   })
 }
 
+function motivoSemAjuste(c: PaymentStatusConciliacao): string {
+  if (c.rateio) return 'mensalidade com rateio: ajuste em Mensalistas'
+  if (!c.planoAtivo) return 'plano não está ativo: ajuste em Mensalistas'
+  if (c.pago >= 0.01) {
+    return c.mensalidade > (c.ajusteSugerido ?? 0)
+      ? 'já tem pagamento ou crédito: lance a diferença como crédito em Mensalistas'
+      : 'já tem pagamento ou crédito: cobre a diferença em Mensalistas'
+  }
+  return 'ajuste em Mensalistas'
+}
+
+function MensalidadeDeProfessorAviso({
+  arenaId,
+  competencia,
+  monthLabel,
+  conciliacoes,
+  podeEditarMensalistas,
+  onAjustada,
+}: {
+  arenaId: string
+  competencia: string
+  monthLabel: string
+  conciliacoes: PaymentStatusConciliacao[]
+  podeEditarMensalistas: boolean
+  onAjustada: () => void
+}) {
+  const [ajustando, setAjustando] = useState<string | null>(null)
+  const divergentes = conciliacoes.filter(
+    (c) => c.professor && c.mensalidadeStatus === 'Pendente' && Math.abs(c.diferenca) >= 0.01
+  )
+  if (divergentes.length === 0) return null
+
+  async function ajustar(c: PaymentStatusConciliacao) {
+    if (c.ajusteSugerido == null) return
+    setAjustando(c.mensalidadeId)
+    try {
+      const res = await reajustarValorPlanoAction({
+        operationId: crypto.randomUUID(),
+        arenaId,
+        planoId: c.planoId,
+        novoValor: c.ajusteSugerido,
+        escopo: 'somente_mes',
+        competencia: c.competencia,
+        observacao: `Ajuste pela tabela de professor${c.explicacao ? ` (${c.explicacao})` : ''}`,
+        creditoAplicado: 0,
+        creditoOperationId: null,
+      })
+      if (!res.success) throw new Error(res.error ?? 'Erro ao ajustar a mensalidade')
+      if ((res.data?.mensalidadesAtualizadas ?? 0) === 0) {
+        throw new Error(
+          res.data?.ignoradasPagamento
+            ? 'A mensalidade já tem pagamento ou crédito lançado. Ajuste em Mensalistas.'
+            : res.data?.ignoradasRateio
+              ? 'A mensalidade tem rateio. Ajuste em Mensalistas.'
+              : 'Nenhuma mensalidade foi ajustada.'
+        )
+      }
+      toast.success(`Mensalidade de ${c.atleta ?? 'atleta'} ajustada para ${formatCurrency(c.ajusteSugerido)}`)
+      onAjustada()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao ajustar a mensalidade')
+    } finally {
+      setAjustando(null)
+    }
+  }
+
+  return (
+    <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+      <div className="flex items-start gap-3">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+        <div className="min-w-0 flex-1 space-y-2">
+          <p className="font-bold">Mensalidade de professor diferente da tabela</p>
+          <p>
+            A hora do professor vale a tabela de professor do espaço, só nas horas usadas. Ajuste a mensalidade de{' '}
+            {monthLabel} para que Mensalistas, o extrato e os pagamentos usem o mesmo valor.
+          </p>
+          <ul className="space-y-2">
+            {divergentes.map((c) => {
+              const podeAjustar = podeAjustarMensalidadeDoProfessor(c)
+              return (
+                <li key={c.mensalidadeId} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="font-semibold">{c.atleta ?? 'Atleta'}</span>
+                  <span className="min-w-0 break-words">
+                    {c.totalPelaTabela == null
+                      ? `${formatHoras(c.horasSemPreco)} ${c.explicacao ?? ''} · o extrato segue a mensalidade de ${formatCurrency(c.mensalidade)}`
+                      : `em Mensalistas ${formatCurrency(c.mensalidade)} · pela tabela ${formatCurrency(c.totalPelaTabela)}${c.explicacao ? ` · ${c.explicacao}` : ''}${c.cobradaPelaTabela ? ' · o extrato já cobra pela tabela' : ' · o extrato segue a mensalidade'}`}
+                  </span>
+                  {podeEditarMensalistas && c.totalPelaTabela != null && podeAjustar && c.ajusteSugerido != null && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
+                      disabled={ajustando !== null}
+                      onClick={() => ajustar(c)}
+                    >
+                      {ajustando === c.mensalidadeId && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
+                      Ajustar para {formatCurrency(c.ajusteSugerido)}
+                    </Button>
+                  )}
+                  {podeEditarMensalistas && c.totalPelaTabela != null && !podeAjustar && (
+                    <span className="text-amber-700">{motivoSemAjuste(c)}</span>
+                  )}
+                  {!podeEditarMensalistas && c.totalPelaTabela != null && (
+                    <span className="text-amber-700">peça a quem gerencia Mensalistas para ajustar</span>
+                  )}
+                  {podeEditarMensalistas && c.atletaId && (
+                    <Link
+                      href={`/dashboard/arenas/${arenaId}/mensalistas/${c.atletaId}?competencia=${competencia}`}
+                      className="font-semibold underline underline-offset-2"
+                    >
+                      Ver mensalista
+                    </Link>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /**
  * "Quem deve quanto" no período: uma linha por atleta com o total do mês, o
  * que já entrou e o que falta. Respeita o filtro de Status (atleta Pendente =
@@ -750,6 +884,7 @@ function MensalistaCreditsCard({
   monthLabel,
   saldo,
   saldoLabel,
+  abatimento,
   recolhido,
   onToggle,
 }: {
@@ -759,9 +894,12 @@ function MensalistaCreditsCard({
   saldo: number | null
   /** "Saldo atual" ou, com recorrência filtrada, "Saldo nesta recorrência". */
   saldoLabel: string
+  abatimento: AbatimentoDoCredito | null
   recolhido: boolean
   onToggle: () => void
 }) {
+  const mostraAbatimento =
+    abatimento != null && (abatimento.abatido >= 0.01 || abatimento.pagoAlemDoTotal >= 0.01)
   return (
     <Card className="rounded-lg border border-slate-100 bg-white shadow-sm overflow-hidden">
       <div
@@ -781,9 +919,18 @@ function MensalistaCreditsCard({
           </div>
         </SectionToggle>
         {saldo != null && (
-          <p className="text-xs text-arena-navy-800/50">
-            {saldoLabel}: <span className="font-bold text-sky-600">{formatCurrency(saldo)}</span>
-          </p>
+          <div className="text-right text-xs text-arena-navy-800/50">
+            <p>
+              {saldoLabel}: <span className="font-bold text-sky-600">{formatCurrency(saldo)}</span>
+            </p>
+            {mostraAbatimento && abatimento && (
+              <p className="mt-0.5">
+                Abatendo o extrato: a pagar{' '}
+                <span className="font-bold text-arena-navy-800">{formatCurrency(abatimento.aPagar)}</span> · crédito
+                restante <span className="font-bold text-sky-600">{formatCurrency(abatimento.restante)}</span>
+              </p>
+            )}
+          </div>
         )}
       </div>
       <div id="creditos-mensalista" className={cn('overflow-x-auto px-6', recolhido && 'hidden')}>
@@ -860,6 +1007,7 @@ export function StatusPagamentosPageClient({
   initialStartDate,
   arenaInfo,
   initialCreditos = [],
+  podeEditarMensalistas = false,
 }: Props) {
   const now = new Date()
   const currentMonth = format(now, 'yyyy-MM')
@@ -871,6 +1019,7 @@ export function StatusPagamentosPageClient({
     useState<PaymentStatusAthleteSummary[]>(initialAthleteSummaries)
   const [creditos, setCreditos] = useState<PaymentStatusCreditRow[]>(initialCreditos)
   const [creditoSaldo, setCreditoSaldo] = useState<number | null>(null)
+  const [conciliacoes, setConciliacoes] = useState<PaymentStatusConciliacao[]>([])
   const [courts] = useState<CourtFilter[]>(initialCourts)
   const [sports] = useState<SportFilter[]>(initialSports)
 
@@ -890,6 +1039,11 @@ export function StatusPagamentosPageClient({
   const [statusFiltro, setStatusFiltro] = useState<'todos' | PaymentStatusRow['status']>('todos')
   const [rateio, setRateio] = useState(false)
   const [detalharPorHora, setDetalharPorHora] = useState(false)
+  const abatimentoDoAtleta = useMemo(() => {
+    if (!detalharPorHora || !atleta) return null
+    const resumo = athleteSummaries.find((s) => s.atletaId === atleta.id) ?? null
+    return abaterCreditoNoExtrato(creditoSaldo, resumo)
+  }, [detalharPorHora, atleta, athleteSummaries, creditoSaldo])
   const [page, setPage] = useState(1)
   const [isPending, startTransition] = useTransition()
   const [isExportingPdf, setIsExportingPdf] = useState(false)
@@ -972,6 +1126,7 @@ export function StatusPagamentosPageClient({
         setAthleteSummaries(result.athleteSummaries ?? [])
         setCreditos(result.creditos ?? [])
         setCreditoSaldo(result.creditoSaldo ?? null)
+        setConciliacoes(result.conciliacoes ?? [])
         setPage(1)
       }
     })
@@ -1173,6 +1328,7 @@ export function StatusPagamentosPageClient({
         extratoDoAtleta: { nome: atletaNome, resumo: resumoDoAtleta },
         creditos: result.creditos ?? [],
         creditoSaldo: result.creditoSaldo ?? null,
+        conciliacoes: (result.conciliacoes ?? []).filter((c) => c.atletaId === atletaId),
         formatDate,
         formatHorario,
         formatDiaSemana,
@@ -1587,6 +1743,17 @@ export function StatusPagamentosPageClient({
         </CardContent>
       </Card>
 
+      {detalharPorHora && !isPending && (
+        <MensalidadeDeProfessorAviso
+          arenaId={arenaId}
+          competencia={selectedMonth}
+          monthLabel={monthLabel}
+          conciliacoes={conciliacoes}
+          podeEditarMensalistas={podeEditarMensalistas}
+          onAjustada={() => applyFilters()}
+        />
+      )}
+
       <AthleteSummaryCard
         arenaId={arenaId}
         competencia={selectedMonth}
@@ -1843,6 +2010,7 @@ export function StatusPagamentosPageClient({
           monthLabel={monthLabel}
           saldo={creditoSaldo}
           saldoLabel={recorrenciaSelecionada ? 'Saldo nesta recorrência' : 'Saldo atual'}
+          abatimento={abatimentoDoAtleta}
           recolhido={secoesRecolhidas.creditos}
           onToggle={() => alternarSecao('creditos')}
         />

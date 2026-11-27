@@ -14,8 +14,10 @@ export default async function StatusPagamentosPage({
 }) {
   const { arenaId } = await params
 
+  let podeEditarMensalistas = false
   try {
-    await assertArenaResourceAccess(arenaId, 'reports.payments')
+    const access = await assertArenaResourceAccess(arenaId, 'reports.payments')
+    podeEditarMensalistas = access.resources.includes('bookings.recurring')
   } catch {
     redirect('/dashboard/settings/arenas')
   }
@@ -66,6 +68,7 @@ export default async function StatusPagamentosPage({
       initialEndDate={endDate}
       arenaInfo={arenaInfo}
       initialCreditos={result.creditos ?? []}
+      podeEditarMensalistas={podeEditarMensalistas}
     />
   )
 }
